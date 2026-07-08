@@ -896,7 +896,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
                     <span> / {numPages}</span>
                   </>
                 ) : (
-                  "No PDF loaded"
+                  ""
                 )}
               </span>
               <button
@@ -932,7 +932,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
                   <span> / {numPages}</span>
                 </>
               ) : (
-                "No PDF loaded"
+                ""
               )}
             </span>
           )}

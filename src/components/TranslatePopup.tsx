@@ -168,10 +168,6 @@ export default function TranslatePopup({
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
       >
-        <div className="translate-popup-source">
-          <strong>原文：</strong> {annotation.text}
-        </div>
-        <div className="translate-popup-divider" />
         {error ? (
           <p className="translate-popup-error">{error}</p>
         ) : (

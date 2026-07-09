@@ -1,0 +1,59 @@
+name: CD
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  NODE_VERSION: "20"
+
+jobs:
+  release-windows:
+    name: Release Windows executable
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # --no-bundle skips the bundling step and only produces the executable.
+      - name: Build Tauri app
+        run: npm run tauri build -- --no-bundle
+
+      - name: Locate built executable
+        id: locate_exe
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem -Path "src-tauri/target/release" -Filter "*.exe" |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if (-not $exe) {
+            throw "No executable found in src-tauri/target/release"
+          }
+          "EXE_PATH=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Upload executable to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.locate_exe.outputs.EXE_PATH }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false

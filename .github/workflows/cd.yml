@@ -38,17 +38,22 @@ jobs:
       - name: Build Tauri app
         run: npm run tauri build -- --no-bundle
 
-      - name: Locate built executable
+      - name: Locate and rename built executable
         id: locate_exe
         shell: pwsh
         run: |
-          $exe = Get-ChildItem -Path "src-tauri/target/release" -Filter "*.exe" |
+          $tag = "${{ github.ref_name }}"
+          $releaseDir = "src-tauri/target/release"
+          $exe = Get-ChildItem -Path $releaseDir -Filter "*.exe" |
             Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
           if (-not $exe) {
-            throw "No executable found in src-tauri/target/release"
+            throw "No executable found in $releaseDir"
           }
-          "EXE_PATH=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          $newName = "SpecReader light $tag.exe"
+          $newPath = Join-Path $releaseDir $newName
+          Copy-Item -Path $exe.FullName -Destination $newPath -Force
+          "EXE_PATH=$newPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Upload executable to GitHub Release
         uses: softprops/action-gh-release@v2

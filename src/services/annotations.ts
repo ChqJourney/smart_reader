@@ -4,38 +4,50 @@ export interface AnnotationPosition {
   page: number;
   x: number;
   y: number;
+  width?: number;
+  height?: number;
 }
 
 export interface Annotation {
   id: string;
-  type: "translate" | "explain";
+  type: "translate" | "explain" | "stash";
   text: string;
   position: AnnotationPosition;
   content: string;
   isStreaming: boolean;
   hidden?: boolean;
   createdAt: number;
+  stashId?: string;
+  sessionId?: string;
+  interpretedGroupSize?: number;
+  interpretedIndex?: number;
 }
 
-export async function loadAnnotations(filePath: string): Promise<Annotation[]> {
-  if (!filePath) return [];
+export interface PdfData {
+  annotations: Annotation[];
+  sessionIds: string[];
+}
+
+export async function loadPdfData(filePath: string): Promise<PdfData> {
+  if (!filePath) return { annotations: [], sessionIds: [] };
   try {
-    return await invoke<Annotation[]>("load_annotations", { filePath });
+    const result = await invoke<PdfData>("load_pdf_data", { filePath });
+    return result;
   } catch (err) {
-    console.error("Failed to load annotations:", err);
-    return [];
+    console.error("Failed to load PDF data:", err);
+    return { annotations: [], sessionIds: [] };
   }
 }
 
-export async function saveAnnotations(
+export async function savePdfData(
   filePath: string,
-  annotations: Annotation[]
+  data: PdfData
 ): Promise<void> {
   if (!filePath) return;
   try {
-    await invoke("save_annotations", { filePath, annotations });
+    await invoke("save_pdf_data", { filePath, data });
   } catch (err) {
-    console.error("Failed to save annotations:", err);
+    console.error("Failed to save PDF data:", err);
   }
 }
 
@@ -44,21 +56,23 @@ export async function getPdfHash(filePath: string): Promise<string> {
 }
 
 export function createAnnotation(
-  type: "translate" | "explain",
+  type: "translate" | "explain" | "stash",
   text: string,
   page: number,
   x: number,
-  y: number
+  y: number,
+  options?: { stashId?: string; width?: number; height?: number }
 ): Annotation {
   return {
     id: crypto.randomUUID(),
     type,
     text,
-    position: { page, x, y },
+    position: { page, x, y, width: options?.width, height: options?.height },
     content: "",
     isStreaming: true,
     hidden: type === "translate" ? false : undefined,
     createdAt: Date.now(),
+    stashId: options?.stashId,
   };
 }
 

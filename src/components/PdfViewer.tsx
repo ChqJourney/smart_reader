@@ -45,7 +45,7 @@ interface PdfViewerProps {
   onSelection?: (
     text: string,
     page: number,
-    position: { x: number; y: number; pdfX: number; pdfY: number }
+    position: { x: number; y: number; pdfX: number; pdfY: number; width?: number; height?: number }
   ) => void;
   onToggleVisibility?: () => void;
   initialState?: Partial<PdfViewerState>;
@@ -112,7 +112,7 @@ interface PdfPageProps {
   onSelection?: (
     text: string,
     page: number,
-    position: { x: number; y: number; pdfX: number; pdfY: number }
+    position: { x: number; y: number; pdfX: number; pdfY: number; width?: number; height?: number }
   ) => void;
   onVisibilityChange?: (pageNum: number, ratio: number) => void;
   annotations?: Annotation[];
@@ -398,11 +398,23 @@ function PdfPage({ pdf, pageNum, scale, shouldRender, pageViewports, onSelection
 
     if (text && onSelection) {
       const rect = wrapperRef.current!.getBoundingClientRect();
+      const bbox = selectedItems.reduce(
+        (acc, item) => ({
+          minX: Math.min(acc.minX, item.x),
+          minY: Math.min(acc.minY, item.y),
+          maxX: Math.max(acc.maxX, item.x + item.width),
+          maxY: Math.max(acc.maxY, item.y + item.height),
+        }),
+        { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
+      );
+
       onSelection(text, pageNum, {
         x: e.clientX,
         y: e.clientY,
         pdfX: (e.clientX - rect.left) / scale,
         pdfY: (e.clientY - rect.top) / scale,
+        width: bbox.maxX > bbox.minX ? (bbox.maxX - bbox.minX) / scale : undefined,
+        height: bbox.maxY > bbox.minY ? (bbox.maxY - bbox.minY) / scale : undefined,
       });
     }
   };
@@ -442,18 +454,28 @@ function PdfPage({ pdf, pageNum, scale, shouldRender, pageViewports, onSelection
           }}
         />
       )}
-      {selectedItems.map((item, idx) => (
-        <div
-          key={idx}
-          className="pdf-text-highlight"
-          style={{
-            left: item.x,
-            top: item.y,
-            width: item.width,
-            height: item.height,
-          }}
-        />
-      ))}
+      {selectedItems.length > 0 && (() => {
+        const bounds = selectedItems.reduce(
+          (acc, item) => ({
+            minX: Math.min(acc.minX, item.x),
+            minY: Math.min(acc.minY, item.y),
+            maxX: Math.max(acc.maxX, item.x + item.width),
+            maxY: Math.max(acc.maxY, item.y + item.height),
+          }),
+          { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity }
+        );
+        return (
+          <div
+            className="pdf-text-highlight"
+            style={{
+              left: bounds.minX,
+              top: bounds.minY,
+              width: bounds.maxX - bounds.minX,
+              height: bounds.maxY - bounds.minY,
+            }}
+          />
+        );
+      })()}
       <PdfAnnotations
         annotations={annotations || []}
         pageNum={pageNum}
@@ -568,7 +590,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
       setIsLoading(true);
 
       try {
-        const bytes: number[] = await invoke("read_pdf_bytes", { filePath });
+        const bytes = await invoke<ArrayBuffer>("read_pdf_bytes", { filePath });
         if (isCancelled) return;
 
         const uint8Array = new Uint8Array(bytes);
@@ -805,8 +827,8 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
 
   const goToPrevPage = () => setPageNum((p) => Math.max(1, p - 1));
   const goToNextPage = () => setPageNum((p) => Math.min(numPages, p + 1));
-  const zoomOut = () => setScale((s) => Math.max(0.5, s - 0.2));
-  const zoomIn = () => setScale((s) => s + 0.2);
+  const zoomOut = () => setScale((s) => Math.max(0.5, s - 0.05));
+  const zoomIn = () => setScale((s) => s + 0.05);
 
   // Stable ref callback for continuous-mode page wrappers
   const pageWrapperRefCallbacks = useRef<Map<number, (el: HTMLDivElement | null) => void>>(new Map());

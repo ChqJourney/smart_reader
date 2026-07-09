@@ -22,8 +22,9 @@ export default function TranslatePopup({
   const [localContent, setLocalContent] = useState(annotation.content);
   const [isStreaming, setIsStreaming] = useState(annotation.isStreaming);
   const [error, setError] = useState<string | null>(null);
-  const configRef = useRef(loadLlmConfig());
   const popupRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const accumulatedRef = useRef(localContent);
 
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -35,9 +36,14 @@ export default function TranslatePopup({
   useEffect(() => {
     if (!isStreaming || annotation.content) return;
 
-    let cancelled = false;
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const signal = controller.signal;
+
+    let accumulated = "";
 
     const runTranslation = async () => {
+      const config = loadLlmConfig();
       const prompt = buildSelectionPrompt("translate", annotation.text);
       const messages: ChatMessage[] = [
         {
@@ -48,13 +54,12 @@ export default function TranslatePopup({
         { role: "user", content: prompt },
       ];
 
-      let accumulated = "";
-
       try {
-        for await (const event of streamChatCompletion(configRef.current, messages)) {
-          if (cancelled) return;
+        for await (const event of streamChatCompletion(config, messages, signal)) {
+          if (signal.aborted) return;
           if (event.type === "chunk") {
             accumulated += event.content;
+            accumulatedRef.current = accumulated;
             setLocalContent(accumulated);
           } else if (event.type === "error") {
             setError(event.message);
@@ -62,13 +67,12 @@ export default function TranslatePopup({
           }
         }
       } catch (err) {
-        if (!cancelled) {
+        if (!signal.aborted) {
           setError(`请求失败: ${err}`);
         }
       } finally {
-        if (!cancelled) {
+        if (!signal.aborted) {
           setIsStreaming(false);
-          onUpdate({ content: accumulated, isStreaming: false });
         }
       }
     };
@@ -76,8 +80,8 @@ export default function TranslatePopup({
     runTranslation();
 
     return () => {
-      cancelled = true;
-      onUpdate({ content: accumulatedRef.current, isStreaming: false });
+      controller.abort();
+      onUpdate({ content: accumulatedRef.current });
     };
   }, []);
 
@@ -88,9 +92,6 @@ export default function TranslatePopup({
   }, [annotation.content, annotation.isStreaming]);
 
   // Debounce save while streaming
-  const accumulatedRef = useRef(localContent);
-  accumulatedRef.current = localContent;
-
   useEffect(() => {
     const timeout = setTimeout(() => {
       onUpdate({ content: localContent, isStreaming });
@@ -177,8 +178,11 @@ export default function TranslatePopup({
                 <ReactMarkdown>{localContent}</ReactMarkdown>
               </div>
             ) : null}
-            {isStreaming && !localContent && (
-              <p className="translate-popup-streaming">翻译中…</p>
+            {isStreaming && (
+              <div className={`translate-popup-loading ${localContent ? "with-content" : ""}`}>
+                <span className="loading-spinner" />
+                <span>翻译中…</span>
+              </div>
             )}
           </>
         )}

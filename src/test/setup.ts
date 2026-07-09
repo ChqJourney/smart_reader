@@ -4,13 +4,15 @@ import { afterEach, vi } from "vitest";
 
 // Clean up after each test to avoid side effects
 afterEach(() => {
+  uuidCounter = 0;
   cleanup();
 });
 
 // Mock crypto.randomUUID for deterministic tests
+let uuidCounter = 0;
 Object.defineProperty(globalThis, "crypto", {
   value: {
-    randomUUID: vi.fn(() => "test-uuid-1234"),
+    randomUUID: vi.fn(() => `test-uuid-${String(++uuidCounter).padStart(4, "0")}`),
   },
 });
 

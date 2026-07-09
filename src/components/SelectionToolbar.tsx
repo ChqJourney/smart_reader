@@ -5,10 +5,11 @@ import Icon from "./Icon";
 interface SelectionToolbarProps {
   selection: { text: string; x: number; y: number } | null;
   onAction: (action: SelectionAction, text: string) => void;
+  onAddToStash?: (text: string) => void;
   onDismiss: () => void;
 }
 
-export default function SelectionToolbar({ selection, onAction, onDismiss }: SelectionToolbarProps) {
+export default function SelectionToolbar({ selection, onAction, onAddToStash, onDismiss }: SelectionToolbarProps) {
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,6 +39,13 @@ export default function SelectionToolbar({ selection, onAction, onDismiss }: Sel
     }
   };
 
+  const handleAddToStashClick = () => {
+    if (selection?.text) {
+      onAddToStash?.(selection.text);
+      onDismiss();
+    }
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
   };
@@ -55,6 +63,15 @@ export default function SelectionToolbar({ selection, onAction, onDismiss }: Sel
       }}
       onMouseDown={handleMouseDown}
     >
+      <button
+        className="icon-btn"
+        onClick={handleAddToStashClick}
+        aria-label="加入暂存"
+        title="加入暂存"
+      >
+        <Icon name="stash" size={16} />
+        <span>加入暂存</span>
+      </button>
       <button
         className="icon-btn"
         onClick={() => handleClick("explain")}

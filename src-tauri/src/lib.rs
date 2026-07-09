@@ -35,9 +35,10 @@ async fn open_path(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn read_pdf_bytes(file_path: String) -> Result<Vec<u8>, String> {
+async fn read_pdf_bytes(file_path: String) -> Result<tauri::ipc::Response, String> {
     tauri::async_runtime::spawn_blocking(move || {
         std::fs::read(&file_path)
+            .map(tauri::ipc::Response::new)
             .map_err(|e| format!("Failed to read PDF file: {}", e))
     })
     .await
@@ -62,6 +63,7 @@ fn compute_pdf_hash(file_path: &str) -> Result<String, String> {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 struct AnnotationPosition {
     page: u32,
     x: f64,
@@ -73,6 +75,7 @@ struct AnnotationPosition {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 struct Annotation {
     id: String,
     #[serde(rename = "type")]
@@ -97,6 +100,7 @@ struct Annotation {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(rename_all = "camelCase")]
 struct PdfAnnotationsFile {
     annotations: Vec<Annotation>,
     #[serde(default)]
@@ -104,6 +108,7 @@ struct PdfAnnotationsFile {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 struct StashSource {
     tab_id: String,
     file_name: String,
@@ -115,6 +120,17 @@ struct StashSource {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct StashItem {
+    id: String,
+    source: StashSource,
+    text: String,
+    #[serde(default)]
+    created_at: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 struct InterpretationMessage {
     id: String,
     role: String,
@@ -123,9 +139,10 @@ struct InterpretationMessage {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 struct InterpretationSession {
     id: String,
-    sources: Vec<StashSource>,
+    sources: Vec<StashItem>,
     messages: Vec<InterpretationMessage>,
     #[serde(default)]
     is_streaming: bool,
@@ -333,14 +350,19 @@ mod tests {
     fn sample_session(id: &str) -> InterpretationSession {
         InterpretationSession {
             id: id.to_string(),
-            sources: vec![StashSource {
-                tab_id: "tab-1".to_string(),
-                file_name: "test.pdf".to_string(),
-                file_path: "/tmp/test.pdf".to_string(),
-                file_hash: "hash".to_string(),
-                page: 1,
-                pdf_x: 10.0,
-                pdf_y: 20.0,
+            sources: vec![StashItem {
+                id: "stash-1".to_string(),
+                source: StashSource {
+                    tab_id: "tab-1".to_string(),
+                    file_name: "test.pdf".to_string(),
+                    file_path: "/tmp/test.pdf".to_string(),
+                    file_hash: "hash".to_string(),
+                    page: 1,
+                    pdf_x: 10.0,
+                    pdf_y: 20.0,
+                },
+                text: "stash text".to_string(),
+                created_at: 1000,
             }],
             messages: vec![InterpretationMessage {
                 id: "msg-1".to_string(),
@@ -394,6 +416,78 @@ mod tests {
 
         let loaded = load_pdf_data_from_disk(base.path(), pdf_path.to_str().unwrap()).unwrap();
         assert_eq!(loaded, data);
+    }
+
+    #[test]
+    fn load_pdf_data_deserializes_camel_case_json() {
+        let base = tempfile::tempdir().unwrap();
+        let pdf_dir = tempfile::tempdir().unwrap();
+        let pdf_path = pdf_dir.path().join("test.pdf");
+        std::fs::write(&pdf_path, b"pdf content").unwrap();
+
+        let raw = r#"{
+            "annotations": [
+                {
+                    "id": "a1",
+                    "type": "explain",
+                    "text": "hello",
+                    "position": { "page": 1, "x": 10.0, "y": 20.0 },
+                    "content": "content",
+                    "isStreaming": true,
+                    "hidden": false,
+                    "createdAt": 123456,
+                    "sessionId": "s1",
+                    "stashId": null,
+                    "interpretedGroupSize": 2,
+                    "interpretedIndex": 1
+                }
+            ],
+            "sessionIds": ["s1", "s2"]
+        }"#;
+        let path = annotations_path(base.path(), pdf_path.to_str().unwrap()).unwrap();
+        std::fs::write(&path, raw).unwrap();
+
+        let loaded = load_pdf_data_from_disk(base.path(), pdf_path.to_str().unwrap()).unwrap();
+        assert_eq!(loaded.annotations.len(), 1);
+        let annotation = &loaded.annotations[0];
+        assert_eq!(annotation.id, "a1");
+        assert_eq!(annotation.annotation_type, "explain");
+        assert!(annotation.is_streaming);
+        assert_eq!(annotation.created_at, 123456);
+        assert_eq!(annotation.session_id.as_deref(), Some("s1"));
+        assert_eq!(annotation.stash_id, None);
+        assert_eq!(annotation.interpreted_group_size, Some(2));
+        assert_eq!(annotation.interpreted_index, Some(1));
+        assert_eq!(loaded.session_ids, vec!["s1".to_string(), "s2".to_string()]);
+    }
+
+    #[test]
+    fn save_pdf_data_serializes_camel_case_json() {
+        let base = tempfile::tempdir().unwrap();
+        let pdf_dir = tempfile::tempdir().unwrap();
+        let pdf_path = pdf_dir.path().join("test.pdf");
+        std::fs::write(&pdf_path, b"pdf content").unwrap();
+
+        let mut annotation = sample_annotation("1");
+        annotation.is_streaming = true;
+        annotation.created_at = 123456;
+        annotation.session_id = Some("s1".to_string());
+        annotation.interpreted_group_size = Some(2);
+        annotation.interpreted_index = Some(1);
+
+        let data = PdfAnnotationsFile {
+            annotations: vec![annotation],
+            session_ids: vec!["s1".to_string()],
+        };
+        save_pdf_data_to_disk(base.path(), pdf_path.to_str().unwrap(), data).unwrap();
+
+        let path = annotations_path(base.path(), pdf_path.to_str().unwrap()).unwrap();
+        let raw = std::fs::read_to_string(&path).unwrap();
+        assert!(raw.contains("\"sessionId\":"), "serialized annotation should use camelCase sessionId");
+        assert!(raw.contains("\"sessionIds\":"), "serialized file should use camelCase sessionIds");
+        assert!(raw.contains("\"interpretedGroupSize\":"), "serialized annotation should use camelCase interpretedGroupSize");
+        assert!(raw.contains("\"createdAt\":"), "serialized annotation should use camelCase createdAt");
+        assert!(!raw.contains("\"session_id\":"), "serialized annotation should not use snake_case session_id");
     }
 
     #[test]

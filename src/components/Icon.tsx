@@ -14,6 +14,7 @@ export type IconName =
   | "zoom-out"
   | "translate"
   | "explain"
+  | "stash"
   | "minus"
   | "chat"
   | "single-page"
@@ -22,6 +23,7 @@ export type IconName =
   | "hide-right"
   | "pdf"
   | "ai"
+  | "edit"
   | "panel-left"
   | "panel-right";
 
@@ -98,6 +100,12 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
       <path d="M8 15h4M8 17h4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
     </>
   ),
+  stash: (
+    <>
+      <path d="M5 3h10v14l-5-3-5 3V3z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+      <path d="M8 8h4" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </>
+  ),
   minus: (
     <path d="M4 10h12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
   ),
@@ -132,6 +140,11 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
   ai: (
     <>
       <path d="M10 2l2 4h4l-3 3 1 4-4-2-4 2 1-4-3-3h4z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </>
+  ),
+  edit: (
+    <>
+      <path d="M14 3l3 3-9 9H5v-3l9-9z" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </>
   ),
   "panel-left": (

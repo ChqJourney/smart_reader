@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   Annotation,
+  PdfData,
   createAnnotation,
   deleteAnnotation,
-  loadAnnotations,
-  saveAnnotations,
+  loadPdfData,
+  savePdfData,
   updateAnnotation,
 } from "../services/annotations";
 
@@ -19,70 +20,108 @@ describe("annotations service", () => {
     mockInvoke.mockReset();
   });
 
-  describe("loadAnnotations", () => {
-    it("returns empty array when filePath is empty", async () => {
-      const result = await loadAnnotations("");
-      expect(result).toEqual([]);
+  describe("loadPdfData", () => {
+    it("returns empty data when filePath is empty", async () => {
+      const result = await loadPdfData("");
+      expect(result).toEqual({ annotations: [], sessionIds: [] });
       expect(mockInvoke).not.toHaveBeenCalled();
     });
 
-    it("returns loaded annotations from backend", async () => {
-      const annotations: Annotation[] = [
-        {
-          id: "1",
-          type: "explain",
-          text: "test",
-          position: { page: 1, x: 10, y: 20 },
-          content: "content",
-          isStreaming: false,
-          createdAt: 123,
-        },
-      ];
-      mockInvoke.mockResolvedValue(annotations);
+    it("returns loaded PDF data from backend", async () => {
+      const data: PdfData = {
+        annotations: [
+          {
+            id: "1",
+            type: "explain",
+            text: "test",
+            position: { page: 1, x: 10, y: 20 },
+            content: "content",
+            isStreaming: false,
+            createdAt: 123,
+          },
+        ],
+        sessionIds: ["session-1"],
+      };
+      mockInvoke.mockResolvedValue(data);
 
-      const result = await loadAnnotations("/path/to/file.pdf");
+      const result = await loadPdfData("/path/to/file.pdf");
 
-      expect(mockInvoke).toHaveBeenCalledWith("load_annotations", {
+      expect(mockInvoke).toHaveBeenCalledWith("load_pdf_data", {
         filePath: "/path/to/file.pdf",
       });
-      expect(result).toEqual(annotations);
+      expect(result).toEqual(data);
     });
 
-    it("returns empty array when backend throws", async () => {
+    it("maps camelCase fields returned by the backend", async () => {
+      const backendResponse = {
+        annotations: [
+          {
+            id: "1",
+            type: "explain",
+            text: "test",
+            position: { page: 1, x: 10, y: 20 },
+            content: "content",
+            isStreaming: true,
+            hidden: false,
+            createdAt: 123,
+            sessionId: "session-1",
+            stashId: "stash-1",
+            interpretedGroupSize: 2,
+            interpretedIndex: 1,
+          },
+        ],
+        sessionIds: ["session-1", "session-2"],
+      };
+      mockInvoke.mockResolvedValue(backendResponse);
+
+      const result = await loadPdfData("/path/to/file.pdf");
+
+      expect(result.annotations[0].sessionId).toBe("session-1");
+      expect(result.annotations[0].stashId).toBe("stash-1");
+      expect(result.annotations[0].interpretedGroupSize).toBe(2);
+      expect(result.annotations[0].interpretedIndex).toBe(1);
+      expect(result.annotations[0].createdAt).toBe(123);
+      expect(result.sessionIds).toEqual(["session-1", "session-2"]);
+    });
+
+    it("returns empty data when backend throws", async () => {
       mockInvoke.mockRejectedValue(new Error("fail"));
 
-      const result = await loadAnnotations("/path/to/file.pdf");
+      const result = await loadPdfData("/path/to/file.pdf");
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ annotations: [], sessionIds: [] });
     });
   });
 
-  describe("saveAnnotations", () => {
+  describe("savePdfData", () => {
     it("does nothing when filePath is empty", async () => {
-      await saveAnnotations("", []);
+      await savePdfData("", { annotations: [], sessionIds: [] });
       expect(mockInvoke).not.toHaveBeenCalled();
     });
 
-    it("invokes save_annotations with filePath and annotations", async () => {
-      const annotations: Annotation[] = [
-        {
-          id: "1",
-          type: "translate",
-          text: "hello",
-          position: { page: 1, x: 0, y: 0 },
-          content: "你好",
-          isStreaming: false,
-          hidden: false,
-          createdAt: 456,
-        },
-      ];
+    it("invokes save_pdf_data with filePath and data", async () => {
+      const data: PdfData = {
+        annotations: [
+          {
+            id: "1",
+            type: "translate",
+            text: "hello",
+            position: { page: 1, x: 0, y: 0 },
+            content: "你好",
+            isStreaming: false,
+            hidden: false,
+            createdAt: 456,
+          },
+        ],
+        sessionIds: ["session-1"],
+      };
       mockInvoke.mockResolvedValue(undefined);
 
-      await saveAnnotations("/path/to/file.pdf", annotations);
+      await savePdfData("/path/to/file.pdf", data);
 
-      expect(mockInvoke).toHaveBeenCalledWith("save_annotations", {
+      expect(mockInvoke).toHaveBeenCalledWith("save_pdf_data", {
         filePath: "/path/to/file.pdf",
-        annotations,
+        data,
       });
     });
 
@@ -90,7 +129,7 @@ describe("annotations service", () => {
       mockInvoke.mockRejectedValue(new Error("fail"));
 
       await expect(
-        saveAnnotations("/path/to/file.pdf", [])
+        savePdfData("/path/to/file.pdf", { annotations: [], sessionIds: [] })
       ).resolves.toBeUndefined();
     });
   });
@@ -100,7 +139,7 @@ describe("annotations service", () => {
       const annotation = createAnnotation("explain", "text", 2, 100, 200);
 
       expect(annotation).toMatchObject({
-        id: "test-uuid-1234",
+        id: "test-uuid-0001",
         type: "explain",
         text: "text",
         position: { page: 2, x: 100, y: 200 },
@@ -116,6 +155,14 @@ describe("annotations service", () => {
 
       expect(annotation.type).toBe("translate");
       expect(annotation.hidden).toBe(false);
+    });
+
+    it("creates a stash annotation with optional stashId", () => {
+      const annotation = createAnnotation("stash", "text", 2, 100, 200, { stashId: "stash-1" });
+
+      expect(annotation.type).toBe("stash");
+      expect(annotation.hidden).toBeUndefined();
+      expect(annotation.stashId).toBe("stash-1");
     });
   });
 

@@ -14,7 +14,8 @@
 │       ├── setup.ts              # Vitest 全局 setup
 │       └── mocks/tauri.ts        # Tauri invoke mock 辅助
 ├── e2e/                          # Playwright E2E 测试
-│   └── app.spec.ts
+│   ├── app.spec.ts
+│   └── pdf-page-jump.spec.ts
 ├── playwright.config.ts          # Playwright 配置
 ├── vite.config.ts                # Vitest 配置
 └── src-tauri/src/lib.rs          # Rust 源码与测试
@@ -55,11 +56,15 @@ Vitest 配置位于 `vite.config.ts`：
 
 - **services/annotations.test.ts**：标注的 CRUD、Tauri invoke 调用。
 - **services/llm.test.ts**：LLM 配置读写、提示词构建、SSE 流解析。
+- **services/sessions.test.ts**：会话消息更新、流状态、删除。
+- **services/stash.test.ts**：暂存片段增删改。
 - **components/SelectionToolbar.test.tsx**：工具栏渲染、点击外部关闭。
 - **components/AnnotationMarker.test.tsx**：标注标记渲染、拖拽、点击。
 - **components/PdfAnnotations.test.tsx**：页面标注过滤、交互回调。
-- **components/AiChatPanel.test.tsx**：设置面板、解释流更新。
-- **App.test.tsx**：面板显隐切换、头部渲染。
+- **components/AiChatPanel.test.tsx**：设置面板、解释流更新、暂存区与追问渲染。
+- **components/CustomInterpretModal.test.tsx**：自定义解读弹窗打开、提交、关闭。
+- **components/PdfViewer.pageJump.test.tsx**：连续滚动页码跳转逻辑。
+- **App.test.tsx**：面板显隐切换、头部渲染、会话清理。
 
 ### Mock 策略
 
@@ -88,6 +93,12 @@ Vitest 配置位于 `vite.config.ts`：
 - AI 面板显隐切换。
 - 设置表单的打开与关闭。
 
+`e2e/pdf-page-jump.spec.ts` 覆盖：
+
+- 连续滚动模式下通过页码输入框跳转后，当前可视页码与输入值一致。
+- 从已滚动位置跳转、连续多次跳转、大视口/短页面场景下的跳转准确性。
+- 跳转完成后页码输入框不再漂移（防止可见页检测与跳转锁竞争）。
+
 ### 运行注意
 
 E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 环境下建议设置 `CI=true`。
@@ -105,16 +116,17 @@ E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 
 
 - `compute_pdf_hash`：PDF 文件哈希计算。
 - `annotations_path`：标注文件路径的确定性与结构。
-- `save_annotations_to_disk` / `load_annotations_from_disk`：标注持久化往返。
-- 缺失标注文件时返回空列表。
-- 文件读取正确性。
+- `save_pdf_data_to_disk` / `load_pdf_data_from_disk`：标注持久化往返、旧格式兼容、缺失文件返回空。
+- `save_session_to_disk` / `load_session_from_disk` / `delete_session_from_disk`：解读会话 CRUD。
+- `read_pdf_bytes` 命令的文件读取正确性。
 
 ### 可测试性重构
 
 为了让 Rust 代码易于测试，`lib.rs` 将纯逻辑与 `tauri::AppHandle` 解耦：
 
 - `compute_pdf_hash`：纯函数，接收文件路径。
-- `annotations_dir`、`annotations_path`、`load_annotations_from_disk`、`save_annotations_to_disk`：基于 `std::path::Path` 的纯函数。
+- `annotations_dir`、`annotations_path`、`load_pdf_data_from_disk`、`save_pdf_data_to_disk`：基于 `std::path::Path` 的纯函数。
+- `sessions_dir`、`session_path`、`load_session_from_disk`、`save_session_to_disk`、`delete_session_from_disk`：基于 `std::path::Path` 的纯函数。
 - Tauri command 仅负责从 `AppHandle` 解析 `app_data_dir` 并调用纯函数。
 
 ## 测试驱动发现的 bug 修复
@@ -142,6 +154,11 @@ E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 
 5. **App 回调引用不稳定**
    - 问题：`handleAnnotationUpdate`、`handleAnnotationDelete` 等回调每次渲染都重新创建，导致依赖它们的子组件 effect 不必要地重复执行。
    - 修复：`src/App.tsx` 使用 `useCallback` 稳定这些回调引用。
+
+6. **连续滚动页码跳转后页码漂移**
+   - 问题：连续滚动模式下，旧版可见页检测以页面中心为基准，在大视口或短页面场景下，跳转到目标页后当前页码会漂移到相邻页。
+   - 修复：`src/components/PdfViewer.tsx` 改为以「页面顶部距离视口顶部最近」作为当前页判断标准，并引入跳转锁避免可见页检测与跳转滚动竞争。
+   - 回归测试：`src/components/PdfViewer.pageJump.test.tsx` 与 `e2e/pdf-page-jump.spec.ts`
 
 ## 持续集成建议
 

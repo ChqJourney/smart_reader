@@ -2,6 +2,34 @@ import { useRef, useState } from "react";
 import { Annotation } from "../services/annotations";
 import Icon from "./Icon";
 
+interface InterpretedStashIconProps {
+  groupSize: number;
+  index: number;
+}
+
+function InterpretedStashIcon({ groupSize, index }: InterpretedStashIconProps) {
+  const points = [];
+  const cx = 10;
+  const cy = 10;
+  const outer = 9;
+  const inner = 4;
+  for (let i = 0; i < groupSize * 2; i++) {
+    const angle = (Math.PI / 2 + (i * Math.PI) / groupSize) * -1;
+    const r = i % 2 === 0 ? outer : inner;
+    points.push(`${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`);
+  }
+  const selfAngle = (Math.PI / 2 + (index * 2 * Math.PI) / groupSize) * -1;
+  const hx = cx + outer * Math.cos(selfAngle);
+  const hy = cy + outer * Math.sin(selfAngle);
+
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" className="interpreted-stash-icon">
+      <polygon points={points.join(" ")} className="interpreted-stash-star" />
+      <circle cx={hx} cy={hy} r="2.5" className="interpreted-stash-highlight" />
+    </svg>
+  );
+}
+
 interface AnnotationMarkerProps {
   annotation: Annotation;
   scale: number;
@@ -23,8 +51,16 @@ export default function AnnotationMarker({
 
   const left = annotation.position.x * scale;
   const top = annotation.position.y * scale;
+  const isStash = annotation.type === "stash";
+  const isInterpretedStash =
+    isStash &&
+    typeof annotation.interpretedGroupSize === "number" &&
+    typeof annotation.interpretedIndex === "number";
+  const isDraggable = !isStash || isInterpretedStash;
+  const isClickable = annotation.type !== "stash" || isInterpretedStash;
 
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (!isDraggable) return;
     e.stopPropagation();
     e.preventDefault();
     setIsDragging(true);
@@ -56,6 +92,7 @@ export default function AnnotationMarker({
   };
 
   const handleClick = (e: React.MouseEvent) => {
+    if (!isClickable) return;
     const shouldClick = !hasMovedRef.current;
     hasMovedRef.current = false;
     if (shouldClick) {
@@ -64,23 +101,46 @@ export default function AnnotationMarker({
     }
   };
 
-  const iconName = annotation.type === "translate" ? "translate" : "explain";
+  const className = isStash
+    ? `annotation-marker stash ${highlighted ? "highlighted" : ""} ${
+        isInterpretedStash ? "interpreted" : ""
+      }`
+    : `annotation-marker ${annotation.type} ${highlighted ? "highlighted" : ""} ${
+        isDragging ? "dragging" : ""
+      }`;
+
+  const label = isStash
+    ? isInterpretedStash
+      ? "已解读暂存"
+      : "暂存"
+    : annotation.type === "translate"
+    ? "翻译"
+    : "解读";
 
   return (
     <div
-      className={`annotation-marker ${annotation.type} ${highlighted ? "highlighted" : ""} ${
-        isDragging ? "dragging" : ""
-      }`}
+      className={className}
       style={{ left, top }}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       onClick={handleClick}
-      aria-label={annotation.type === "translate" ? "翻译" : "解读"}
-      title={annotation.type === "translate" ? "翻译" : "解读"}
+      aria-label={label}
+      title={label}
     >
-      <Icon name={iconName} size={12} />
+      {isStash ? (
+        isInterpretedStash ? (
+          <InterpretedStashIcon
+            groupSize={annotation.interpretedGroupSize!}
+            index={annotation.interpretedIndex!}
+          />
+        ) : (
+          <Icon name="stash" size={12} />
+        )
+      ) : (
+        <Icon name={annotation.type === "translate" ? "translate" : "explain"} size={12} />
+      )}
     </div>
   );
 }

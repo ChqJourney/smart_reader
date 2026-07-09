@@ -1,6 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Annotation } from "../services/annotations";
 import AnnotationMarker from "./AnnotationMarker";
+import ExplainPopup from "./ExplainPopup";
+import StashInterpretedPopup from "./StashInterpretedPopup";
 import TranslatePopup from "./TranslatePopup";
 
 interface PdfAnnotationsProps {
@@ -22,6 +24,8 @@ export default function PdfAnnotations({
   onDelete,
   onExplainClick,
 }: PdfAnnotationsProps) {
+  const [openPopupId, setOpenPopupId] = useState<string | null>(null);
+
   const pageAnnotations = useMemo(
     () => annotations.filter((a) => a.position.page === pageNum),
     [annotations, pageNum]
@@ -29,38 +33,79 @@ export default function PdfAnnotations({
 
   return (
     <>
-      {pageAnnotations.map((annotation) => (
-        <div key={annotation.id}>
-          <AnnotationMarker
-            annotation={annotation}
-            scale={scale}
-            highlighted={highlightedId === annotation.id}
-            onClick={() =>
-              annotation.type === "translate"
-                ? onUpdate(annotation.id, { hidden: !annotation.hidden })
-                : onExplainClick(annotation.id)
-            }
-            onMove={(dx, dy) =>
-              onUpdate(annotation.id, {
-                position: {
-                  ...annotation.position,
-                  x: annotation.position.x + dx / scale,
-                  y: annotation.position.y + dy / scale,
-                },
-              })
-            }
-          />
-          {annotation.type === "translate" && !annotation.hidden && (
-            <TranslatePopup
+      {pageAnnotations.map((annotation) => {
+        const isInterpretedStash =
+          annotation.type === "stash" &&
+          typeof annotation.interpretedGroupSize === "number" &&
+          typeof annotation.interpretedIndex === "number";
+
+        return (
+          <div key={annotation.id}>
+            <AnnotationMarker
               annotation={annotation}
               scale={scale}
-              onUpdate={(patch) => onUpdate(annotation.id, patch)}
-              onHide={() => onUpdate(annotation.id, { hidden: true })}
-              onClose={() => onDelete(annotation.id)}
+              highlighted={highlightedId === annotation.id}
+              onClick={() => {
+                if (annotation.type === "translate") {
+                  onUpdate(annotation.id, { hidden: !annotation.hidden });
+                } else if (annotation.type === "explain" || isInterpretedStash) {
+                  setOpenPopupId((current) =>
+                    current === annotation.id ? null : annotation.id
+                  );
+                }
+              }}
+              onMove={(dx, dy) =>
+                onUpdate(annotation.id, {
+                  position: {
+                    ...annotation.position,
+                    x: annotation.position.x + dx / scale,
+                    y: annotation.position.y + dy / scale,
+                  },
+                })
+              }
             />
-          )}
-        </div>
-      ))}
+            {annotation.type === "translate" && !annotation.hidden && (
+              <TranslatePopup
+                annotation={annotation}
+                scale={scale}
+                onUpdate={(patch) => onUpdate(annotation.id, patch)}
+                onHide={() => onUpdate(annotation.id, { hidden: true })}
+                onClose={() => onDelete(annotation.id)}
+              />
+            )}
+            {annotation.type === "explain" && openPopupId === annotation.id && (
+              <ExplainPopup
+                annotation={annotation}
+                scale={scale}
+                onGotoSession={() => {
+                  setOpenPopupId(null);
+                  onExplainClick(annotation.id);
+                }}
+                onDelete={() => {
+                  setOpenPopupId(null);
+                  onDelete(annotation.id);
+                }}
+                onClose={() => setOpenPopupId(null)}
+              />
+            )}
+            {isInterpretedStash && openPopupId === annotation.id && (
+              <StashInterpretedPopup
+                annotation={annotation}
+                scale={scale}
+                onGotoSession={() => {
+                  setOpenPopupId(null);
+                  onExplainClick(annotation.id);
+                }}
+                onDelete={() => {
+                  setOpenPopupId(null);
+                  onDelete(annotation.id);
+                }}
+                onClose={() => setOpenPopupId(null)}
+              />
+            )}
+          </div>
+        );
+      })}
     </>
   );
 }

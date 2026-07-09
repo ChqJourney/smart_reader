@@ -11,13 +11,14 @@ async function setupTauriMock(page: import("@playwright/test").Page, pdfPath: st
 
   await page.addInitScript(
     ({ bytes, returnPath }) => {
+      const arrayBuffer = new Uint8Array(bytes).buffer;
       (window as any).__TAURI_INTERNALS__ = {
         invoke: async (cmd: string, args?: Record<string, unknown>) => {
           if (cmd === "plugin:dialog|open") {
             return returnPath;
           }
           if (cmd === "read_pdf_bytes") {
-            return bytes;
+            return arrayBuffer;
           }
           if (cmd === "load_annotations") {
             return [];

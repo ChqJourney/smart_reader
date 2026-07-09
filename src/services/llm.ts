@@ -8,6 +8,9 @@ export interface LlmConfig {
 
 const STORAGE_KEY = "standardread-llm-config";
 
+// Security note: API Key is stored in localStorage (webview) for now.
+// For production deployments, migrate to the system keychain via tauri-plugin-keyring.
+
 const DEFAULT_LLM_CONFIG: LlmConfig = {
   baseUrl: "https://api.openai.com/v1",
   apiKey: "",
@@ -38,10 +41,15 @@ export interface ChatMessage {
 
 export async function* streamChatCompletion(
   config: LlmConfig,
-  messages: ChatMessage[]
+  messages: ChatMessage[],
+  signal?: AbortSignal
 ): AsyncGenerator<{ type: "chunk"; content: string } | { type: "error"; message: string }, void> {
   if (!config.apiKey) {
     yield { type: "error", message: "API Key 未配置，请先在设置中配置 LLM API。" };
+    return;
+  }
+
+  if (signal?.aborted) {
     return;
   }
 
@@ -57,6 +65,7 @@ export async function* streamChatCompletion(
         messages,
         stream: true,
       }),
+      signal,
     });
 
     if (!response.ok) {
@@ -75,6 +84,11 @@ export async function* streamChatCompletion(
     let buffer = "";
 
     while (true) {
+      if (signal?.aborted) {
+        await reader.cancel();
+        return;
+      }
+
       const { done, value } = await reader.read();
       if (done) break;
 
@@ -89,6 +103,10 @@ export async function* streamChatCompletion(
 
         try {
           const data = JSON.parse(trimmed.slice(6));
+          if (data.error) {
+            yield { type: "error", message: `LLM API 错误: ${JSON.stringify(data.error)}` };
+            return;
+          }
           const delta = data.choices?.[0]?.delta?.content;
           if (delta) {
             yield { type: "chunk", content: delta };
@@ -99,8 +117,18 @@ export async function* streamChatCompletion(
       }
     }
   } catch (err) {
+    if ((err as Error).name === "AbortError") {
+      return;
+    }
     yield { type: "error", message: `请求失败: ${err}` };
   }
+}
+
+export function buildCustomInterpretPrompt(prompt: string, sources: { fileName: string; page: number; text: string }[]): string {
+  const sourceText = sources
+    .map((s, i) => `片段 ${i + 1}（${s.fileName} 第 ${s.page} 页）：\n${s.text}`)
+    .join("\n\n");
+  return `${prompt}\n\n${sourceText}`;
 }
 
 export function buildSelectionPrompt(action: "explain" | "translate", text: string): string {

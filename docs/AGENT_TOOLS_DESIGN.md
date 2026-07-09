@@ -2,7 +2,7 @@
 
 > 目标：用“轻量 PDF 解析 + LLM Function Calling Tools”替代传统 RAG，实现标准文档的智能阅读理解  
 > 适用：文本型 PDF，强章节结构，多语言，答案需精确溯源  
-> 状态：本文为完整目标架构。当前「超前量版」暂不实现 Clause 索引、Tools 调用、术语表、测试清单等功能，仅保留 PDF 阅读 + 翻译 + 解读。
+> 状态：本文为完整目标架构。当前「超轻量版」暂不实现 Clause 索引、Tools 调用、术语表、测试清单等功能，仅保留 PDF 阅读 + 翻译 + 解读。
 
 ---
 
@@ -67,7 +67,7 @@
 [答案生成] 带引用溯源的流式回复
 ```
 
-### 2.1 超前量版（当前阶段）架构
+### 2.1 超轻量版（当前阶段）架构
 
 ```
 用户打开 PDF（支持多 Tab，最多 10 个）
@@ -78,7 +78,9 @@
     ├── 连续滚动模式：基于 IntersectionObserver 懒加载渲染页面
     │
     ▼
-用户点击「翻译」或「解读」
+用户点击「加入暂存」「翻译」或「解读」
+    │
+    ├── 加入暂存 → 在 PDF 页面上生成橙色暂存标记，文本进入右侧面板暂存区
     │
     ├── 翻译 → 在 PDF 页面上生成可拖动、可隐藏、可删除的浮层批注
     │            流式生成翻译结果，位置按 PDF hash 持久化到 AppData
@@ -87,19 +89,31 @@
                  点击条目跳转并高亮对应标记，内容流式生成
     │
     ▼
+自定义解读（基于暂存区）
+    │
+    ├── 用户在暂存区选择多个片段并输入解读要求
+    └── 系统把片段合并为 Prompt，创建新的解读会话并流式输出
+    │
+    ▼
+会话追问
+    │
+    └── 在已展开的解读记录下继续提问，追加 user/assistant 消息并流式输出
+    │
+    ▼
 [LLM 直接调用] 携带选中文本 + Prompt 生成回答
     │
     ▼
 [答案生成] 流式回复（Markdown 渲染）
 ```
 
-超前量版说明：
+超轻量版说明：
 
 - 不做 PDF 文本提取与 Clause 索引。
 - 不调用 Function Calling Tools。
-- AI 仅基于用户当前选中的文本片段进行翻译或解读。
+- AI 仅基于用户当前选中的文本片段或暂存区片段进行翻译、解读或自定义解读。
 - 翻译结果以浮层批注形式锚定在 PDF 页面上，可拖动、隐藏、删除，并按 PDF 文件 hash 持久化到 AppData。
-- 解读结果以条目形式展示在右侧面板，默认折叠，点击条目可跳转到 PDF 对应位置并高亮标记。
+- 解读结果以条目形式展示在右侧面板，默认折叠，点击条目可跳转到 PDF 对应位置并高亮标记；支持多轮追问。
+- 选中文本可「加入暂存」，暂存片段在右侧面板汇聚，可编辑、删除、清空、跳转回原文，也可一次性发起自定义解读。
 - AI 输出支持 Markdown 渲染。
 - 选区工具条点击外部自动消失。
 - PDF 阅读器支持单页与连续滚动两种模式，连续模式下用鼠标滚轮或方向键浏览。
@@ -114,6 +128,8 @@
 ### 3.1 文本提取
 
 使用 Rust 端的 PDF 解析库（如 `pdf-extract`、`lopdf` 或前端 PDF.js）提取文本，保留：
+
+> 注：当前「超轻量版」仅使用前端 `pdfjs-dist` 进行本地渲染与文本选区，尚未实现 PDF 文本提取与后续解析流程。
 
 - 段落文本
 - 标题行
@@ -173,7 +189,7 @@ interface TableInfo {
 
 ## 4. Clause 索引生成
 
-> 本章节为完整目标架构。当前「超前量版」暂不实现 Clause 索引，PDF 仅用于本地渲染和文本选区。
+> 本章节为完整目标架构。当前「超轻量版」暂不实现 Clause 索引，PDF 仅用于本地渲染和文本选区。
 
 ### 4.1 常见编号格式
 
@@ -243,7 +259,7 @@ interface ClauseIndex {
 
 ## 5. LLM Tools 定义
 
-> 本章节为完整目标架构。当前「超前量版」不启用 Function Calling Tools，AI 直接基于用户选中文本进行翻译/解读。所有 Tools 在后续完整版中启用。
+> 本章节为完整目标架构。当前「超轻量版」不启用 Function Calling Tools，AI 直接基于用户选中文本进行翻译/解读。所有 Tools 在后续完整版中启用。
 
 所有 Tools 通过 OpenAI 兼容的 Function Calling 接口暴露给 LLM。
 
@@ -439,7 +455,7 @@ interface ClauseIndex {
 
 ## 6. Agent 调用流程
 
-> 本章节为完整目标架构。当前「超前量版」的调用流程见 2.1 节：用户选中文本后直接调用 LLM，不经过 Tools。
+> 本章节为完整目标架构。当前「超轻量版」的调用流程见 2.1 节：用户选中文本后直接调用 LLM，不经过 Tools。
 
 ### 6.1 标准问答流程
 
@@ -571,24 +587,46 @@ Return as a JSON array.
 
 ---
 
-### 7.4 超前量版 Prompt
+### 7.4 超轻量版 Prompt
 
-超前量版直接把选中文本传给 LLM，不需要 Tools。当前只保留「翻译」和「解读」两个动作：
+超轻量版直接把选中文本传给 LLM，不需要 Tools。当前保留「翻译」「解读」和「自定义解读」三个动作：
 
-**翻译 Prompt**：
+**翻译 Prompt**（固定输出中文）：
 
 ```text
-请将以下标准文档内容翻译成 {target_lang}，保持专业术语准确，并在首次出现关键术语时保留原文：
+请将以下标准文档内容翻译成中文，保持专业术语准确，并在首次出现关键术语时保留原文：
 
 {text}
 ```
 
-**解读 Prompt**：
+**解读 Prompt**（固定输出中文）：
 
 ```text
-请用通俗易懂的中文解读以下标准条款/段落，说明其要求、意义、与测试工作的关系：
+请用通俗易懂的中文解读以下标准条款/段落，说明其要求、意义、与测试工作的关系，并指出可能相关的其他条款：
 
 {text}
+```
+
+**自定义解读 Prompt**：
+
+```text
+{用户输入的 prompt}
+
+片段 1（{fileName} 第 {page} 页）：
+{text}
+
+片段 2（{fileName} 第 {page} 页）：
+{text}
+
+...
+```
+
+自定义解读由用户在弹窗中输入解读要求，系统将暂存片段按上述格式拼接后发送给 LLM。
+
+**System Prompt**（解读会话，包括选中解读与自定义解读）：
+
+```text
+你是一位检测认证行业标准文档阅读助手，擅长把复杂的英文标准条款解释得清晰易懂。请基于用户提供的文档片段回答，不要编造片段中未提及的条款或页码。
 ```
 
 ---
@@ -642,46 +680,77 @@ src-tauri/src/
     └── db.rs              # SQLite 数据访问
 ```
 
-### 9.2 超前量版代码结构
+### 9.2 超轻量版代码结构
 
-当前阶段后端保留 PDF 文件读取、hash 计算与批注 JSON 文件读写：
+当前阶段后端保留 PDF 文件读取、hash 计算、批注 JSON 文件读写，以及解读会话 JSON 文件读写：
 
 ```
 src-tauri/src/
 ├── main.rs
-└── lib.rs                 # 注册 read_pdf_bytes、get_pdf_hash、load_annotations、save_annotations 等命令
+└── lib.rs                 # 注册 read_pdf_bytes、open_path、get_pdf_hash、load_pdf_data、save_pdf_data、load_session、save_session、delete_session 等命令
 ```
 
 前端保留：
 
-- `App.tsx`：多 Tab 管理、双栏布局、拖拽调节宽度、面板显隐状态、annotations 状态管理。
+- `App.tsx`：多 Tab 管理、双栏布局、拖拽调节宽度、面板显隐状态、annotations / sessions / stashes 状态管理，legacy localStorage 会话迁移。
 - `PdfViewer.tsx`：本地渲染、单页/连续滚动模式、键盘导航、文本选区、annotation 渲染。
-- `PdfPage.tsx`：单页封装，canvas、wrapper、text items、selection rect/highlights。
-- `SelectionToolbar.tsx`：「翻译」「解读」两个按钮，点击外部自动消失。
-- `AnnotationMarker.tsx`：页面内可拖动的翻译/解读标记。
+- `SelectionToolbar.tsx`：「加入暂存」「解读」「翻译」三个按钮，点击外部自动消失。
+- `AnnotationMarker.tsx`：页面内可拖动的翻译/解读/暂存标记。
 - `TranslatePopup.tsx`：附着在 PDF 页面上的翻译浮层，可拖动、隐藏、删除，流式显示翻译。
-- `PdfAnnotations.tsx`：按页渲染 markers 和 translate popup。
-- `AiChatPanel.tsx`：LLM 配置 + 解读条目列表（默认折叠，点击跳转）。
-- `services/llm.ts`：OpenAI 兼容流式请求与 Prompt 模板。
-- `services/annotations.ts`：Annotation 类型定义与 Tauri 命令封装。
+- `ExplainPopup.tsx`：解读标记点击后弹出的详情浮层。
+- `StashInterpretedPopup.tsx`：已解读暂存标记点击后弹出的浮层，支持查看解读会话或删除。
+- `PdfAnnotations.tsx`：按页渲染 markers 和各类 popup。
+- `AiChatPanel.tsx`：LLM 配置、暂存区、解读条目列表（默认折叠，点击跳转，支持追问）。
+- `CustomInterpretModal.tsx`：自定义解读弹窗，输入 Prompt 后基于暂存区片段发起解读。
+- `Icon.tsx`：SVG 图标集合。
+- `services/llm.ts`：OpenAI 兼容流式请求、LLM 配置读写、Prompt 模板。
+- `services/annotations.ts`：Annotation / PdfData 类型定义与 Tauri 命令封装。
+- `services/sessions.ts`：InterpretationSession / InterpretationMessage 类型与会话 CRUD、后端存储调用。
+- `services/stash.ts`：StashSource / StashItem 类型与暂存片段管理。
 
 连续滚动实现要点：
 
-- 每页封装为 `PdfPage` 组件，独立维护 canvas、wrapper、text items。
+- 每页在 `PdfViewer` 内部通过独立状态维护 canvas、wrapper、text items。
 - 父组件通过 `IntersectionObserver` 监听各页可见性，仅渲染可见页及相邻页。
 - 连续模式下滚动容器监听键盘事件，支持方向键、`PageUp/PageDown`、`Home/End`。
+- 连续滚动页码检测以「页面顶部距离视口顶部最近」为准，避免大视口下以页面中心为基准导致的页码漂移。
 
 Annotation 持久化要点：
 
 - 坐标以 PDF 原始坐标（scale=1）保存，渲染时乘以当前 scale，自动适应缩放。
 - 后端读取 PDF 内容计算 SHA-256 hash，作为文件唯一标识。
-- 批注以 JSON 形式存储在 `<AppData>/annotations/{hash}.json`。
-- 切换或重新打开同一 PDF 时自动恢复批注位置与内容。
+- 批注与关联的 session ids 以 JSON 形式存储在 `<AppData>/annotations/{hash}.json`。
+- 解读会话以独立 JSON 文件存储在 `<AppData>/annotations/sessions/{session_id}.json`。
+- 切换或重新打开同一 PDF 时自动恢复批注位置、内容与关联会话。
 
-### 9.2 前端调用示例
+### 9.2 前端调用示例（当前已实现）
 
 ```typescript
-// 打开 PDF 并解析
+// 读取 PDF 原始字节
+const bytes = await invoke('read_pdf_bytes', { filePath });
+
+// 获取 PDF 文件 hash
+const hash = await invoke('get_pdf_hash', { filePath });
+
+// 加载 PDF 关联的批注与 session ids
+const data = await invoke('load_pdf_data', { filePath });
+
+// 保存 PDF 关联的批注与 session ids
+await invoke('save_pdf_data', { filePath, data });
+
+// 加载 / 保存 / 删除解读会话
+const session = await invoke('load_session', { sessionId });
+await invoke('save_session', { session });
+await invoke('delete_session', { sessionId });
+
+// 使用系统默认程序打开路径
+await invoke('open_path', { path });
+```
+
+以下为未来完整架构中的示例调用，当前暂未实现：
+
+```typescript
+// 打开 PDF 并解析（完整版）
 await invoke('open_and_parse_pdf', { filePath });
 
 // 用户提问（Agent 自动调用 Tools）
@@ -739,6 +808,7 @@ await invoke('verify_clause_index', { documentId });
 | 版本 | 日期 | 变更人 | 变更内容 |
 |------|------|--------|---------|
 | 0.1 | 2026-07-06 | Kimi | 初始版本，轻量解析 + LLM Function Calling Tools 方案 |
-| 0.2 | 2026-07-07 | Kimi | 增加「超前量版」说明：当前仅保留翻译/解读，Tools、Clause 索引、术语表、测试清单等功能延后 |
+| 0.2 | 2026-07-07 | Kimi | 增加「超轻量版」说明：当前仅保留翻译/解读，Tools、Clause 索引、术语表、测试清单等功能延后 |
 | 0.3 | 2026-07-07 | Kimi | 同步已实现功能：PDF 连续滚动阅读、单页/连续切换、键盘导航、左右分栏拖拽调节与显隐、AI 流式输出单气泡修复 |
 | 0.4 | 2026-07-07 | Kimi | 同步已实现功能：多 PDF Tab（最多 10 个）、AI 消息 Markdown 渲染、翻译浮层批注（可拖动/隐藏/删除/持久化）、解读条目列表（默认折叠/点击跳转）、选区工具条点击外部消失、批注按 PDF hash 持久化到 AppData |
+| 0.5 | 2026-07-08 | Kimi | 同步当前代码结构：新增暂存区、自定义解读、会话追问；修正 Prompt 示例与前端组件清单；删除不存在的 `PdfPage.tsx` 引用；补充 session 持久化说明 |

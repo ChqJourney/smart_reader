@@ -3,7 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import AnnotationMarker from "../components/AnnotationMarker";
 import { Annotation } from "../services/annotations";
 
-function makeAnnotation(type: Annotation["type"] = "explain"): Annotation {
+function makeAnnotation(type: Annotation["type"] = "explain", overrides: Partial<Annotation> = {}): Annotation {
   return {
     id: "1",
     type,
@@ -12,6 +12,7 @@ function makeAnnotation(type: Annotation["type"] = "explain"): Annotation {
     content: "",
     isStreaming: false,
     createdAt: 1,
+    ...overrides,
   };
 }
 
@@ -40,6 +41,32 @@ describe("AnnotationMarker", () => {
     );
 
     expect(screen.getByLabelText(/翻译/i)).toBeInTheDocument();
+  });
+
+  it("renders stash icon label", () => {
+    render(
+      <AnnotationMarker
+        annotation={makeAnnotation("stash")}
+        scale={1.5}
+        onClick={vi.fn()}
+        onMove={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText(/暂存/i)).toBeInTheDocument();
+  });
+
+  it("renders interpreted stash marker with group info", () => {
+    render(
+      <AnnotationMarker
+        annotation={makeAnnotation("stash", { interpretedGroupSize: 3, interpretedIndex: 1 })}
+        scale={1.5}
+        onClick={vi.fn()}
+        onMove={vi.fn()}
+      />
+    );
+
+    expect(screen.getByLabelText(/已解读暂存/i)).toBeInTheDocument();
   });
 
   it("calls onClick when clicked without dragging", () => {
@@ -99,5 +126,49 @@ describe("AnnotationMarker", () => {
     fireEvent.mouseMove(marker, { clientX: 10, clientY: 20 });
 
     expect(onMove).toHaveBeenCalledWith(10, 20);
+  });
+
+  it("does not call onClick for plain stash marker", () => {
+    const onClick = vi.fn();
+    render(
+      <AnnotationMarker
+        annotation={makeAnnotation("stash")}
+        scale={1}
+        onClick={onClick}
+        onMove={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByLabelText(/暂存/i));
+    expect(onClick).not.toHaveBeenCalled();
+  });
+
+  it("calls onClick and onMove for interpreted stash marker", () => {
+    const onClick = vi.fn();
+    const onMove = vi.fn();
+    render(
+      <AnnotationMarker
+        annotation={makeAnnotation("stash", { interpretedGroupSize: 3, interpretedIndex: 1 })}
+        scale={1}
+        onClick={onClick}
+        onMove={onMove}
+      />
+    );
+
+    const marker = screen.getByLabelText(/已解读暂存/i);
+
+    // Drag the marker.
+    fireEvent.mouseDown(marker, { clientX: 0, clientY: 0 });
+    fireEvent.mouseMove(marker, { clientX: 5, clientY: 5 });
+    fireEvent.mouseUp(marker, { clientX: 5, clientY: 5 });
+    expect(onMove).toHaveBeenCalledWith(5, 5);
+
+    // First click after a drag is ignored (it belongs to the drag gesture).
+    fireEvent.click(marker);
+    expect(onClick).not.toHaveBeenCalled();
+
+    // Subsequent clicks open the popup.
+    fireEvent.click(marker);
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 });

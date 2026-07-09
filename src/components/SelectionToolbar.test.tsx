@@ -15,10 +15,12 @@ describe("SelectionToolbar", () => {
       <SelectionToolbar
         selection={{ text: "hello", x: 100, y: 200 }}
         onAction={vi.fn()}
+        onAddToStash={vi.fn()}
         onDismiss={vi.fn()}
       />
     );
 
+    expect(screen.getByRole("button", { name: /加入暂存/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /解读/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /翻译/i })).toBeInTheDocument();
   });
@@ -30,6 +32,7 @@ describe("SelectionToolbar", () => {
       <SelectionToolbar
         selection={{ text: "hello", x: 0, y: 0 }}
         onAction={onAction}
+        onAddToStash={vi.fn()}
         onDismiss={onDismiss}
       />
     );
@@ -37,6 +40,24 @@ describe("SelectionToolbar", () => {
     fireEvent.click(screen.getByRole("button", { name: /解读/i }));
 
     expect(onAction).toHaveBeenCalledWith("explain", "hello");
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it("calls onAddToStash with text then dismisses", () => {
+    const onAddToStash = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <SelectionToolbar
+        selection={{ text: "hello", x: 0, y: 0 }}
+        onAction={vi.fn()}
+        onAddToStash={onAddToStash}
+        onDismiss={onDismiss}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /加入暂存/i }));
+
+    expect(onAddToStash).toHaveBeenCalledWith("hello");
     expect(onDismiss).toHaveBeenCalled();
   });
 
@@ -48,6 +69,7 @@ describe("SelectionToolbar", () => {
         <SelectionToolbar
           selection={{ text: "hello", x: 0, y: 0 }}
           onAction={vi.fn()}
+          onAddToStash={vi.fn()}
           onDismiss={onDismiss}
         />
       </div>

@@ -1,4 +1,4 @@
-# StandardRead AI 功能改造实施计划（修正版）
+# SpecReader AI 功能改造实施计划（修正版）
 
 > 基于 2026-07-10 需求沟通及后续反馈整理，已按反馈修正单实例跨平台处理、文件关联、继续生成语义、双栏状态隔离、identifier 与 AppData 路径关系等关键问题。
 
@@ -152,7 +152,7 @@
 
 ### 4.5 Top bar 改为 Recent Files 区域
 
-**目标**：移除顶部 “StandardRead AI” 标题，改为占据 60% 宽度的最近文件卡片区，支持横向滚动、清空、点击切换 tab。
+**目标**：移除顶部 “SpecReader AI” 标题，改为占据 60% 宽度的最近文件卡片区，支持横向滚动、清空、点击切换 tab。
 
 **涉及文件**：
 - `src/components/RecentFilesBar.tsx`（新增）
@@ -328,7 +328,7 @@
 
 ### 4.11 禁止多开 + PDF 文件关联
 
-**目标**：同一时刻只允许运行一个 StandardRead AI 进程；第二次启动或双击 PDF 时聚焦已有窗口并打开文件。
+**目标**：同一时刻只允许运行一个 SpecReader AI 进程；第二次启动或双击 PDF 时聚焦已有窗口并打开文件。
 
 **涉及文件**：
 - `src-tauri/Cargo.toml`

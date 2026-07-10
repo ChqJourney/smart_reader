@@ -1,4 +1,4 @@
-# StandardRead AI
+# SpecReader AI
 
 面向检测认证工程师的桌面端 AI 助手，用于降低阅读、理解和执行各类标准 PDF 文件时的认知与智力开销。
 

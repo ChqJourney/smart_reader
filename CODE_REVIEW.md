@@ -1,4 +1,4 @@
-# StandardRead AI — 代码审查报告
+# SpecReader AI — 代码审查报告
 
 > 审查对象：`pdf-standard-agent`（Tauri 2.0 + React 18 + TypeScript + Rust）
 > 审查范围：架构 / 逻辑 / 功能 / 冗余 / 安全

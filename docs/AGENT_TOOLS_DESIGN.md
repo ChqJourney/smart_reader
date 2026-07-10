@@ -1,4 +1,4 @@
-# StandardRead AI - Agent Tools 设计方案
+# SpecReader AI - Agent Tools 设计方案
 
 > 目标：用“轻量 PDF 解析 + LLM Function Calling Tools”替代传统 RAG，实现标准文档的智能阅读理解  
 > 适用：文本型 PDF，强章节结构，多语言，答案需精确溯源  

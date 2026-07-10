@@ -1,10 +1,10 @@
-# StandardRead AI 项目指南
+# SpecReader AI 项目指南
 
 > 本文件供 AI coding agent 阅读，用于快速理解项目结构、技术栈、构建流程与开发约定。
 
 ## 1. 项目概述
 
-**StandardRead AI**（内部代号 `pdf-standard-agent`）是一款面向检测认证工程师的桌面端 AI 助手，用于降低阅读、理解和执行 IEC / ISO / EN / GB / UL / ASTM / IEEE 等标准 PDF 文件时的认知与智力开销。
+**SpecReader AI**（内部代号 `pdf-standard-agent`）是一款面向检测认证工程师的桌面端 AI 助手，用于降低阅读、理解和执行 IEC / ISO / EN / GB / UL / ASTM / IEEE 等标准 PDF 文件时的认知与智力开销。
 
 当前处于**「超轻量版」**，核心闭环为：
 
@@ -380,5 +380,5 @@ cd src-tauri && cargo test
 
 - 前端版本：`0.1.0`
 - Tauri 应用版本：`0.1.0`
-- 产品名称：`StandardRead AI`
+- 产品名称：`SpecReader AI`
 - 应用标识：`com.standardread.app`

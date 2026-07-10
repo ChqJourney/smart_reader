@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "StandardRead AI",
+  "productName": "SpecReader AI",
   "version": "0.1.0",
   "identifier": "photonee",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "StandardRead AI",
+        "title": "SpecReader AI",
         "width": 1400,
         "height": 900,
         "minWidth": 1000,

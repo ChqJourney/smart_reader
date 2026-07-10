@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Annotation } from "../services/annotations";
 import Icon from "./Icon";
-import { buildSelectionPrompt, ChatMessage, loadLlmConfig, streamChatCompletion } from "../services/llm";
+import { buildSelectionPrompt, buildSystemPrompt, ChatMessage, streamChatCompletion } from "../services/llm";
+import { loadSettings } from "../services/settings";
 
 interface TranslatePopupProps {
   annotation: Annotation;
@@ -26,11 +27,30 @@ export default function TranslatePopup({
   const abortControllerRef = useRef<AbortController | null>(null);
   const accumulatedRef = useRef(localContent);
 
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-
   const left = annotation.position.x * scale;
   const top = annotation.position.y * scale;
+
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [adjustedPosition, setAdjustedPosition] = useState({ x: left, y: top });
+
+  // Keep the popup fully inside the PDF page wrapper so it never overflows
+  // the page boundary after initial placement, content changes, or dragging.
+  useLayoutEffect(() => {
+    if (!popupRef.current) return;
+    const wrapper = popupRef.current.closest(".pdf-page-wrapper") as HTMLElement | null;
+    if (!wrapper) return;
+
+    const popupWidth = popupRef.current.offsetWidth;
+    const popupHeight = popupRef.current.offsetHeight;
+    const maxX = wrapper.offsetWidth - popupWidth;
+    const maxY = wrapper.offsetHeight - popupHeight;
+
+    setAdjustedPosition({
+      x: Math.max(0, Math.min(left, maxX)),
+      y: Math.max(0, Math.min(top, maxY)),
+    });
+  }, [left, top, localContent, isStreaming]);
 
   // Stream translation on mount
   useEffect(() => {
@@ -41,21 +61,22 @@ export default function TranslatePopup({
     const signal = controller.signal;
 
     let accumulated = "";
+    let cancelled = false;
 
     const runTranslation = async () => {
-      const config = loadLlmConfig();
-      const prompt = buildSelectionPrompt("translate", annotation.text);
+      const settings = await loadSettings();
+      if (cancelled) return;
+      const prompt = buildSelectionPrompt("translate", annotation.text, settings.targetLanguage);
       const messages: ChatMessage[] = [
         {
           role: "system",
-          content:
-            "你是一位检测认证行业标准文档翻译助手，擅长把英文标准条款翻译成准确、流畅的中文。",
+          content: buildSystemPrompt(settings.targetLanguage),
         },
         { role: "user", content: prompt },
       ];
 
       try {
-        for await (const event of streamChatCompletion(config, messages, signal)) {
+        for await (const event of streamChatCompletion(settings.llm, messages, signal)) {
           if (signal.aborted) return;
           if (event.type === "chunk") {
             accumulated += event.content;
@@ -80,6 +101,7 @@ export default function TranslatePopup({
     runTranslation();
 
     return () => {
+      cancelled = true;
       controller.abort();
       onUpdate({ content: accumulatedRef.current });
     };
@@ -137,7 +159,7 @@ export default function TranslatePopup({
     <div
       ref={popupRef}
       className={`translate-popup ${isDragging ? "dragging" : ""}`}
-      style={{ left, top }}
+      style={{ left: adjustedPosition.x, top: adjustedPosition.y }}
     >
       <div className="translate-popup-header" onMouseDown={handleMouseDown}>
         <span className="translate-popup-title">

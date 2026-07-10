@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import React from "react";
 import App from "./App";
 import { open } from "@tauri-apps/plugin-dialog";
+import { DEFAULT_SETTINGS } from "./services/settings";
 
 const mockInvoke = vi.hoisted(() => vi.fn());
 
@@ -111,9 +112,15 @@ function setupMockInvoke() {
         return Promise.resolve(`hash-${args?.filePath}`);
       case "load_session":
         return Promise.resolve(null);
+      case "load_settings":
+        return Promise.resolve({ ...DEFAULT_SETTINGS });
+      case "load_recent_files":
+        return Promise.resolve([]);
       case "save_session":
       case "save_pdf_data":
       case "delete_session":
+      case "save_settings":
+      case "save_recent_files":
         return Promise.resolve(undefined);
       default:
         return Promise.reject(new Error(`No mock handler for command: ${command}`));
@@ -131,7 +138,7 @@ describe("App", () => {
 
   it("renders header and open button", () => {
     render(<App />);
-    expect(screen.getByText("StandardRead AI")).toBeInTheDocument();
+    expect(screen.getByLabelText("最近打开的文件")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Open PDF/i })).toBeInTheDocument();
   });
 
@@ -331,7 +338,10 @@ describe("App", () => {
     expect(screen.queryByText(/selected text/i)).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /暂存区 \(0\)/i })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText("file-a.pdf"));
+    const fileATab = screen.getAllByText("file-a.pdf")
+      .find((el) => el.classList.contains("tab-name"))?.parentElement;
+    expect(fileATab).toBeDefined();
+    fireEvent.click(fileATab!);
 
     await waitFor(() => {
       expect(screen.getByRole("tab", { name: /暂存区 \(1\)/i })).toBeInTheDocument();
@@ -381,7 +391,13 @@ describe("App", () => {
       if (command === "get_pdf_hash") {
         return Promise.resolve(`hash-${args?.filePath}`);
       }
-      if (["save_session", "save_pdf_data", "delete_session"].includes(command)) {
+      if (command === "load_settings") {
+        return Promise.resolve({ ...DEFAULT_SETTINGS });
+      }
+      if (command === "load_recent_files") {
+        return Promise.resolve([]);
+      }
+      if (["save_session", "save_pdf_data", "delete_session", "save_settings", "save_recent_files"].includes(command)) {
         return Promise.resolve(undefined);
       }
       return Promise.reject(new Error(`No mock handler for command: ${command}`));
@@ -416,7 +432,13 @@ describe("App", () => {
       if (command === "get_pdf_hash") {
         return Promise.resolve(`hash-${args?.filePath}`);
       }
-      if (["save_session", "save_pdf_data", "delete_session", "load_session"].includes(command)) {
+      if (command === "load_settings") {
+        return Promise.resolve({ ...DEFAULT_SETTINGS });
+      }
+      if (command === "load_recent_files") {
+        return Promise.resolve([]);
+      }
+      if (["save_session", "save_pdf_data", "delete_session", "load_session", "save_settings", "save_recent_files"].includes(command)) {
         return Promise.resolve(undefined);
       }
       return Promise.reject(new Error(`No mock handler for command: ${command}`));
@@ -431,5 +453,46 @@ describe("App", () => {
     });
 
     deleteSpy.mockRestore();
+  });
+
+  it("enters split view when dragging an inactive tab into the main area", async () => {
+    (open as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("/test/file-a.pdf")
+      .mockResolvedValueOnce("/test/file-b.pdf");
+
+    render(<App />);
+
+    await openPdf("/test/file-a.pdf");
+    fireEvent.click(screen.getByRole("button", { name: /Open PDF/i }));
+    await waitFor(() => {
+      expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
+    });
+
+    // Find the inactive tab (file-a) and drag it into the main area.
+    const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i }).parentElement as HTMLElement;
+    let draggedTabId = "";
+    const dataTransfer = {
+      setData: vi.fn((_format: string, value: string) => {
+        draggedTabId = value;
+      }),
+      effectAllowed: "",
+      getData: vi.fn(() => draggedTabId),
+      dropEffect: "",
+    };
+
+    fireEvent.dragStart(inactiveTab, { dataTransfer });
+    const main = document.querySelector("main") as HTMLElement;
+    fireEvent.dragOver(main, { dataTransfer });
+    fireEvent.drop(main, { dataTransfer });
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);
+    });
+
+    // Exit split view and verify we are back to a single PDF panel.
+    fireEvent.click(screen.getByLabelText("退出并排视图"));
+    await waitFor(() => {
+      expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(1);
+    });
   });
 });

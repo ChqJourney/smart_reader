@@ -19,10 +19,11 @@ export interface UseTabsReturn {
   tabs: PdfTab[];
   activeTabId: string | null;
   activeTab: PdfTab | null;
-  handleOpenPdf: () => Promise<void>;
+  handleOpenPdf: () => Promise<PdfTab | null>;
+  openPdfByPath: (path: string, fileName: string) => Promise<PdfTab | null>;
   handleCloseTab: (e: React.MouseEvent, tabId: string, onClose?: () => void) => void;
   handleTabClick: (tabId: string, onSwitch?: () => void) => void;
-  handleViewerStateChange: (state: PdfViewerState) => void;
+  handleViewerStateChange: (state: PdfViewerState, tabId?: string) => void;
   gotoTabPage: (tabId: string, page: number) => void;
 }
 
@@ -32,7 +33,37 @@ export function useTabs(): UseTabsReturn {
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) || null;
 
-  const handleOpenPdf = useCallback(async () => {
+  const addTab = useCallback(async (path: string): Promise<PdfTab | null> => {
+    try {
+      if (tabs.length >= MAX_TABS) {
+        alert(`最多只能同时打开 ${MAX_TABS} 个 PDF 文件。请先关闭部分标签。`);
+        return null;
+      }
+
+      const fileHash = await getPdfHash(path);
+      const existing = tabs.find((tab) => tab.fileHash === fileHash || tab.filePath === path);
+      if (existing) {
+        setActiveTabId(existing.id);
+        return existing;
+      }
+
+      const newTab: PdfTab = {
+        id: crypto.randomUUID(),
+        filePath: path,
+        fileName: path.split("/").pop() || path,
+        fileHash,
+      };
+
+      setTabs((prev) => [...prev, newTab]);
+      setActiveTabId(newTab.id);
+      return newTab;
+    } catch (error) {
+      console.error("Failed to open PDF:", error);
+      return null;
+    }
+  }, [tabs.length, tabs]);
+
+  const handleOpenPdf = useCallback(async (): Promise<PdfTab | null> => {
     try {
       const selected = await open({
         multiple: false,
@@ -45,28 +76,19 @@ export function useTabs(): UseTabsReturn {
         ],
       });
 
-      if (!selected) return;
-
-      if (tabs.length >= MAX_TABS) {
-        alert(`最多只能同时打开 ${MAX_TABS} 个 PDF 文件。请先关闭部分标签。`);
-        return;
-      }
+      if (!selected) return null;
 
       const path = Array.isArray(selected) ? selected[0] : selected;
-      const fileHash = await getPdfHash(path);
-      const newTab: PdfTab = {
-        id: crypto.randomUUID(),
-        filePath: path,
-        fileName: path.split("/").pop() || path,
-        fileHash,
-      };
-
-      setTabs((prev) => [...prev, newTab]);
-      setActiveTabId(newTab.id);
+      return await addTab(path);
     } catch (error) {
       console.error("Failed to open PDF:", error);
+      return null;
     }
-  }, [tabs.length]);
+  }, [addTab]);
+
+  const openPdfByPath = useCallback(async (path: string): Promise<PdfTab | null> => {
+    return addTab(path);
+  }, [addTab]);
 
   const handleCloseTab = useCallback((e: React.MouseEvent, tabId: string, onClose?: () => void) => {
     e.stopPropagation();
@@ -90,11 +112,12 @@ export function useTabs(): UseTabsReturn {
     onSwitch?.();
   }, []);
 
-  const handleViewerStateChange = useCallback((state: PdfViewerState) => {
-    if (!activeTabId) return;
+  const handleViewerStateChange = useCallback((state: PdfViewerState, tabId?: string) => {
+    const targetId = tabId ?? activeTabId;
+    if (!targetId) return;
     setTabs((prev) =>
       prev.map((tab) =>
-        tab.id === activeTabId
+        tab.id === targetId
           ? { ...tab, pageNum: state.pageNum, scale: state.scale, viewMode: state.viewMode }
           : tab
       )
@@ -115,6 +138,7 @@ export function useTabs(): UseTabsReturn {
     activeTabId,
     activeTab,
     handleOpenPdf,
+    openPdfByPath,
     handleCloseTab,
     handleTabClick,
     handleViewerStateChange,

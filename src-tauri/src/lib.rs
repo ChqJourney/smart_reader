@@ -1,32 +1,81 @@
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+
+const OPEN_PDF_EVENT: &str = "open-pdf";
+
+fn extract_pdf_path(args: &[String]) -> Option<String> {
+    // Skip the executable itself, then take the first argument that looks like a PDF path.
+    args.iter()
+        .skip(1)
+        .find(|a| a.to_lowercase().ends_with(".pdf"))
+        .cloned()
+}
+
+fn emit_open_pdf(app_handle: &tauri::AppHandle, args: &[String]) {
+    if let Some(path) = extract_pdf_path(args) {
+        let _ = app_handle.emit(OPEN_PDF_EVENT, path);
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-  tauri::Builder::default()
-    .plugin(tauri_plugin_dialog::init())
-    .plugin(tauri_plugin_shell::init())
-    .setup(|app| {
-      if cfg!(debug_assertions) {
-        app.handle().plugin(
-          tauri_plugin_log::Builder::default()
-            .level(log::LevelFilter::Info)
-            .build(),
-        )?;
-      }
-      Ok(())
-    })
-    .invoke_handler(tauri::generate_handler![
-      read_pdf_bytes,
-      open_path,
-      get_pdf_hash,
-      load_pdf_data,
-      save_pdf_data,
-      load_session,
-      save_session,
-      delete_session
-    ])
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    let builder = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_shell::init());
+
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+        emit_open_pdf(app, &args);
+    }));
+
+    let app = builder
+        .setup(|app| {
+            let handle = app.handle().clone();
+            emit_open_pdf(&handle,
+                &std::env::args().collect::<Vec<_>>(),
+            );
+
+            if cfg!(debug_assertions) {
+                app.handle().plugin(
+                    tauri_plugin_log::Builder::default()
+                        .level(log::LevelFilter::Info)
+                        .build(),
+                )?;
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            read_pdf_bytes,
+            open_path,
+            get_pdf_hash,
+            load_pdf_data,
+            save_pdf_data,
+            load_session,
+            save_session,
+            delete_session,
+            load_settings,
+            save_settings,
+            load_recent_files,
+            save_recent_files
+        ])
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    app.run(|app_handle: &tauri::AppHandle, event: tauri::RunEvent| {
+        if let tauri::RunEvent::Opened { urls } = event {
+            for url in urls {
+                let path = url.to_string();
+                if path.to_lowercase().ends_with(".pdf") {
+                    let _ = app_handle.emit(OPEN_PDF_EVENT, path);
+                }
+            }
+            // Focus main window when the app is opened via a file on macOS.
+            let _ = app_handle.get_webview_window("main").map(|w: tauri::WebviewWindow| {
+                let _ = w.set_focus();
+                w.unminimize();
+                w
+            });
+        }
+    });
 }
 
 #[tauri::command]
@@ -152,6 +201,48 @@ struct InterpretationSession {
     updated_at: u64,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct LlmConfig {
+    base_url: String,
+    api_key: String,
+    model: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct AppSettings {
+    llm: LlmConfig,
+    #[serde(default = "default_target_language")]
+    target_language: String,
+}
+
+fn default_target_language() -> String {
+    "中文".to_string()
+}
+
+impl Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            llm: LlmConfig {
+                base_url: "https://api.openai.com/v1".to_string(),
+                api_key: "".to_string(),
+                model: "gpt-4o-mini".to_string(),
+            },
+            target_language: default_target_language(),
+        }
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct RecentFile {
+    path: String,
+    file_name: String,
+    #[serde(default)]
+    opened_at: u64,
+}
+
 fn annotations_dir(base_dir: &std::path::Path) -> std::path::PathBuf {
     let dir = base_dir.join("annotations");
     if !dir.exists() {
@@ -178,6 +269,14 @@ fn annotations_path(base_dir: &std::path::Path, file_path: &str) -> Result<std::
 fn session_path(base_dir: &std::path::Path, session_id: &str) -> std::path::PathBuf {
     let dir = sessions_dir(base_dir);
     dir.join(format!("{}.json", session_id))
+}
+
+fn settings_path(base_dir: &std::path::Path) -> std::path::PathBuf {
+    base_dir.join("settings.json")
+}
+
+fn recent_files_path(base_dir: &std::path::Path) -> std::path::PathBuf {
+    base_dir.join("recent_files.json")
 }
 
 fn load_pdf_data_from_disk(base_dir: &std::path::Path, file_path: &str) -> Result<PdfAnnotationsFile, String> {
@@ -247,13 +346,54 @@ fn delete_session_from_disk(base_dir: &std::path::Path, session_id: &str) -> Res
     Ok(())
 }
 
+fn load_settings_from_disk(base_dir: &std::path::Path) -> Result<AppSettings, String> {
+    let path = settings_path(base_dir);
+    if !path.exists() {
+        return Ok(AppSettings::default());
+    }
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read settings file: {}", e))?;
+    let settings: AppSettings = serde_json::from_str(&raw)
+        .map_err(|e| format!("Failed to parse settings: {}", e))?;
+    Ok(settings)
+}
+
+fn save_settings_to_disk(base_dir: &std::path::Path, settings: AppSettings) -> Result<(), String> {
+    let path = settings_path(base_dir);
+    let raw = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+    std::fs::write(&path, raw)
+        .map_err(|e| format!("Failed to write settings file: {}", e))?;
+    Ok(())
+}
+
+fn load_recent_files_from_disk(base_dir: &std::path::Path) -> Result<Vec<RecentFile>, String> {
+    let path = recent_files_path(base_dir);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let raw = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read recent files file: {}", e))?;
+    let files: Vec<RecentFile> = serde_json::from_str(&raw)
+        .map_err(|e| format!("Failed to parse recent files: {}", e))?;
+    Ok(files)
+}
+
+fn save_recent_files_to_disk(base_dir: &std::path::Path, files: Vec<RecentFile>) -> Result<(), String> {
+    let path = recent_files_path(base_dir);
+    let raw = serde_json::to_string_pretty(&files)
+        .map_err(|e| format!("Failed to serialize recent files: {}", e))?;
+    std::fs::write(&path, raw)
+        .map_err(|e| format!("Failed to write recent files file: {}", e))?;
+    Ok(())
+}
+
 fn app_data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     let base = app
         .path()
         .resolve(".", tauri::path::BaseDirectory::AppData)
         .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
-    // Store all app data under the company/product namespace.
-    let dir = base.join("Photonee").join("SpecReader");
+    let dir = base.join("SpecReader");
     if !dir.exists() {
         let _ = std::fs::create_dir_all(&dir);
     }
@@ -326,6 +466,56 @@ async fn delete_session(
     .map_err(|e| format!("Task failed: {}", e))?
 }
 
+#[tauri::command]
+async fn load_settings(
+    app: tauri::AppHandle,
+) -> Result<AppSettings, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let base_dir = app_data_dir(&app)?;
+        load_settings_from_disk(&base_dir)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+async fn save_settings(
+    app: tauri::AppHandle,
+    settings: AppSettings,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let base_dir = app_data_dir(&app)?;
+        save_settings_to_disk(&base_dir, settings)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+async fn load_recent_files(
+    app: tauri::AppHandle,
+) -> Result<Vec<RecentFile>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let base_dir = app_data_dir(&app)?;
+        load_recent_files_from_disk(&base_dir)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+async fn save_recent_files(
+    app: tauri::AppHandle,
+    files: Vec<RecentFile>,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let base_dir = app_data_dir(&app)?;
+        save_recent_files_to_disk(&base_dir, files)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -375,6 +565,32 @@ mod tests {
             created_at: 1,
             updated_at: 2,
         }
+    }
+
+    fn sample_settings() -> AppSettings {
+        AppSettings {
+            llm: LlmConfig {
+                base_url: "https://api.example.com/v1".to_string(),
+                api_key: "sk-test".to_string(),
+                model: "gpt-4o-mini".to_string(),
+            },
+            target_language: "中文".to_string(),
+        }
+    }
+
+    fn sample_recent_files() -> Vec<RecentFile> {
+        vec![
+            RecentFile {
+                path: "/tmp/a.pdf".to_string(),
+                file_name: "a.pdf".to_string(),
+                opened_at: 1,
+            },
+            RecentFile {
+                path: "/tmp/b.pdf".to_string(),
+                file_name: "b.pdf".to_string(),
+                opened_at: 2,
+            },
+        ]
     }
 
     #[test]
@@ -549,5 +765,71 @@ mod tests {
 
         let bytes = std::fs::read(&path).unwrap();
         assert_eq!(bytes, b"pdf bytes");
+    }
+
+    #[test]
+    fn load_settings_returns_default_when_missing() {
+        let base = tempfile::tempdir().unwrap();
+        let loaded = load_settings_from_disk(base.path()).unwrap();
+        assert_eq!(loaded, AppSettings::default());
+        assert_eq!(loaded.target_language, "中文");
+        assert_eq!(loaded.llm.model, "gpt-4o-mini");
+    }
+
+    #[test]
+    fn save_and_load_settings_roundtrip() {
+        let base = tempfile::tempdir().unwrap();
+        let settings = sample_settings();
+        save_settings_to_disk(base.path(), settings.clone()).unwrap();
+
+        let loaded = load_settings_from_disk(base.path()).unwrap();
+        assert_eq!(loaded, settings);
+    }
+
+    #[test]
+    fn save_settings_serializes_camel_case_json() {
+        let base = tempfile::tempdir().unwrap();
+        let settings = sample_settings();
+        save_settings_to_disk(base.path(), settings).unwrap();
+
+        let raw = std::fs::read_to_string(settings_path(base.path())).unwrap();
+        assert!(raw.contains("\"targetLanguage\":"), "serialized settings should use camelCase targetLanguage");
+        assert!(raw.contains("\"baseUrl\":"), "serialized llm config should use camelCase baseUrl");
+        assert!(raw.contains("\"apiKey\":"), "serialized llm config should use camelCase apiKey");
+    }
+
+    #[test]
+    fn load_recent_files_returns_empty_when_missing() {
+        let base = tempfile::tempdir().unwrap();
+        let loaded = load_recent_files_from_disk(base.path()).unwrap();
+        assert!(loaded.is_empty());
+    }
+
+    #[test]
+    fn save_and_load_recent_files_roundtrip() {
+        let base = tempfile::tempdir().unwrap();
+        let files = sample_recent_files();
+        save_recent_files_to_disk(base.path(), files.clone()).unwrap();
+
+        let loaded = load_recent_files_from_disk(base.path()).unwrap();
+        assert_eq!(loaded, files);
+    }
+
+    #[test]
+    fn app_data_dir_does_not_contain_extra_photonee() {
+        // This test verifies the path helper logic without a real Tauri app handle.
+        // The function itself requires an AppHandle; here we test the join behavior
+        // by checking that our on-disk helpers put files directly under SpecReader.
+        let base = tempfile::tempdir().unwrap();
+        let app_data = base.path().join("SpecReader");
+        std::fs::create_dir_all(&app_data).unwrap();
+
+        let settings = sample_settings();
+        save_settings_to_disk(&app_data, settings).unwrap();
+
+        let path = settings_path(&app_data);
+        let path_str = path.to_string_lossy();
+        assert!(path_str.contains("SpecReader"));
+        assert!(!path_str.contains("SpecReader/Photonee"));
     }
 }

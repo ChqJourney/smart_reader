@@ -1,16 +1,9 @@
 import { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { StashItem } from "../services/stash";
-import {
-  InterpretationSession,
-} from "../services/sessions";
+import { InterpretationSession } from "../services/sessions";
 import Icon from "./Icon";
 import CustomInterpretModal from "./CustomInterpretModal";
-import {
-  loadLlmConfig,
-  LlmConfig,
-  saveLlmConfig,
-} from "../services/llm";
 
 interface AiChatPanelProps {
   stashes: StashItem[];
@@ -22,6 +15,7 @@ interface AiChatPanelProps {
   onCustomInterpret: (prompt: string) => void;
   onGotoStash?: (stash: StashItem) => void;
   onFollowUp: (sessionId: string, prompt: string) => void;
+  onInterrupt?: (sessionId: string) => void;
   onToggleVisibility?: () => void;
 }
 
@@ -37,18 +31,11 @@ export default function AiChatPanel({
   onCustomInterpret,
   onGotoStash,
   onFollowUp,
+  onInterrupt,
   onToggleVisibility,
 }: AiChatPanelProps) {
-  const [config, setConfig] = useState<LlmConfig>(loadLlmConfig);
-  const [showSettings, setShowSettings] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>(stashes.length > 0 ? "stash" : "sessions");
   const [expandedId, setExpandedId] = useState<string | null>(expandedSessionId ?? null);
-
-  useEffect(() => {
-    if (expandedSessionId) {
-      setExpandedId(expandedSessionId);
-    }
-  }, [expandedSessionId]);
   const [expandedStashIds, setExpandedStashIds] = useState<Set<string>>(new Set());
   const [editingStashId, setEditingStashId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
@@ -64,12 +51,6 @@ export default function AiChatPanel({
   useEffect(() => {
     setActiveTab(stashes.length > 0 ? "stash" : "sessions");
   }, [stashes.length]);
-
-  const handleSaveConfig = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    saveLlmConfig(config);
-    setShowSettings(false);
-  };
 
   const handleSessionClick = (session: InterpretationSession) => {
     setExpandedId((current) => (current === session.id ? null : session.id));
@@ -119,14 +100,6 @@ export default function AiChatPanel({
           <h2>AI 助手</h2>
         </div>
         <div className="ai-chat-header-actions">
-          <button
-            onClick={() => setShowSettings((s) => !s)}
-            className={`icon-btn settings-toggle ${showSettings ? "active" : ""}`}
-            aria-label={showSettings ? "关闭设置" : "打开设置"}
-            title={showSettings ? "关闭设置" : "打开设置"}
-          >
-            <Icon name="settings" size={16} />
-          </button>
           {onToggleVisibility && (
             <button
               onClick={onToggleVisibility}
@@ -139,39 +112,6 @@ export default function AiChatPanel({
           )}
         </div>
       </div>
-
-      {showSettings && (
-        <form className="llm-config-form" onSubmit={handleSaveConfig}>
-          <label>
-            API Base URL
-            <input
-              type="text"
-              value={config.baseUrl}
-              onChange={(e) => setConfig((c) => ({ ...c, baseUrl: e.target.value }))}
-              placeholder="https://api.openai.com/v1"
-            />
-          </label>
-          <label>
-            API Key
-            <input
-              type="password"
-              value={config.apiKey}
-              onChange={(e) => setConfig((c) => ({ ...c, apiKey: e.target.value }))}
-              placeholder="sk-..."
-            />
-          </label>
-          <label>
-            Model
-            <input
-              type="text"
-              value={config.model}
-              onChange={(e) => setConfig((c) => ({ ...c, model: e.target.value }))}
-              placeholder="gpt-4o-mini"
-            />
-          </label>
-          <button type="submit">保存配置</button>
-        </form>
-      )}
 
       <div className="ai-chat-tabs">
         <button
@@ -338,8 +278,10 @@ export default function AiChatPanel({
                       </div>
                     ))}
                     <FollowUpInput
+                      session={session}
                       disabled={session.isStreaming}
                       onSend={(text) => onFollowUp(session.id, text)}
+                      onInterrupt={() => onInterrupt?.(session.id)}
                     />
                   </div>
                 )}
@@ -365,12 +307,15 @@ export default function AiChatPanel({
 }
 
 interface FollowUpInputProps {
+  session: InterpretationSession;
   disabled: boolean;
   onSend: (text: string) => void;
+  onInterrupt: () => void;
 }
 
-function FollowUpInput({ disabled, onSend }: FollowUpInputProps) {
+function FollowUpInput({ session, disabled, onSend, onInterrupt }: FollowUpInputProps) {
   const [text, setText] = useState("");
+  const isStreaming = session.isStreaming;
 
   const handleSend = () => {
     const trimmed = text.trim();
@@ -382,7 +327,11 @@ function FollowUpInput({ disabled, onSend }: FollowUpInputProps) {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      if (isStreaming) {
+        onInterrupt();
+      } else {
+        handleSend();
+      }
     }
   };
 
@@ -392,12 +341,16 @@ function FollowUpInput({ disabled, onSend }: FollowUpInputProps) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="继续追问..."
+        placeholder={isStreaming ? "生成中…" : "继续追问..."}
         rows={2}
         disabled={disabled}
       />
-      <button onClick={handleSend} disabled={disabled || !text.trim()}>
-        发送
+      <button
+        onClick={isStreaming ? onInterrupt : handleSend}
+        disabled={!isStreaming && !text.trim()}
+        className={isStreaming ? "interrupt" : ""}
+      >
+        {isStreaming ? "中止" : "发送"}
       </button>
     </div>
   );

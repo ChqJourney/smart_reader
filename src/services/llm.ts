@@ -1,38 +1,8 @@
+import { LlmConfig } from "./settings";
+
+export type { LlmConfig };
+
 export type SelectionAction = "explain" | "translate";
-
-export interface LlmConfig {
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-}
-
-const STORAGE_KEY = "standardread-llm-config";
-
-// Security note: API Key is stored in localStorage (webview) for now.
-// For production deployments, migrate to the system keychain via tauri-plugin-keyring.
-
-const DEFAULT_LLM_CONFIG: LlmConfig = {
-  baseUrl: "https://api.openai.com/v1",
-  apiKey: "",
-  model: "gpt-4o-mini",
-};
-
-export function loadLlmConfig(): LlmConfig {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<LlmConfig>;
-      return { ...DEFAULT_LLM_CONFIG, ...parsed };
-    }
-  } catch {
-    // ignore
-  }
-  return { ...DEFAULT_LLM_CONFIG };
-}
-
-export function saveLlmConfig(config: LlmConfig) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-}
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -124,19 +94,31 @@ export async function* streamChatCompletion(
   }
 }
 
-export function buildCustomInterpretPrompt(prompt: string, sources: { fileName: string; page: number; text: string }[]): string {
+export function buildSystemPrompt(targetLanguage: string): string {
+  return `你是一位检测认证行业标准文档阅读助手，擅长把复杂的英文标准条款解释得清晰易懂。请基于用户提供的文档片段用${targetLanguage}回答，不要编造片段中未提及的条款或页码。`;
+}
+
+export function buildCustomInterpretPrompt(
+  prompt: string,
+  sources: { fileName: string; page: number; text: string }[],
+  targetLanguage: string
+): string {
   const sourceText = sources
     .map((s, i) => `片段 ${i + 1}（${s.fileName} 第 ${s.page} 页）：\n${s.text}`)
     .join("\n\n");
-  return `${prompt}\n\n${sourceText}`;
+  return `请用${targetLanguage}回答以下问题：\n\n${prompt}\n\n${sourceText}`;
 }
 
-export function buildSelectionPrompt(action: "explain" | "translate", text: string): string {
+export function buildSelectionPrompt(
+  action: "explain" | "translate",
+  text: string,
+  targetLanguage: string
+): string {
   switch (action) {
     case "explain":
-      return `请用通俗易懂的中文解读以下标准条款/段落，说明其要求、意义、与测试工作的关系，并指出可能相关的其他条款：\n\n${text}`;
+      return `请用通俗易懂的${targetLanguage}解读以下标准条款/段落，说明其要求、意义、与测试工作的关系，并指出可能相关的其他条款：\n\n${text}`;
     case "translate":
-      return `请将以下标准文档内容翻译成中文，保持专业术语准确，并在首次出现关键术语时保留原文：\n\n${text}`;
+      return `请将以下标准文档内容翻译成${targetLanguage}，保持专业术语准确，并在首次出现关键术语时保留原文：\n\n${text}`;
     default:
       return text;
   }

@@ -6,7 +6,7 @@ test.describe("App E2E", () => {
   });
 
   test("renders the main layout", async ({ page }) => {
-    await expect(page.getByRole("heading", { name: "StandardRead AI" })).toBeVisible();
+    await expect(page.getByLabel("最近打开的文件")).toBeVisible();
     await expect(page.getByRole("button", { name: "Open PDF" })).toBeVisible();
   });
 
@@ -36,10 +36,10 @@ test.describe("App E2E", () => {
 
   test("opens and closes settings", async ({ page }) => {
     await page.getByRole("button", { name: "打开设置" }).click();
-    await expect(page.getByPlaceholder("https://api.openai.com")).toBeVisible();
+    await expect(page.getByPlaceholder("https://api.openai.com/v1")).toBeVisible();
     await expect(page.getByPlaceholder("sk-...")).toBeVisible();
 
-    await page.getByRole("button", { name: "关闭设置" }).click();
-    await expect(page.getByPlaceholder("https://api.openai.com")).not.toBeVisible();
+    await page.getByRole("button", { name: "取消" }).click();
+    await expect(page.getByPlaceholder("https://api.openai.com/v1")).not.toBeVisible();
   });
 });

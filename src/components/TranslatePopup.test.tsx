@@ -3,6 +3,13 @@ import { render, screen } from "@testing-library/react";
 import TranslatePopup from "../components/TranslatePopup";
 import { Annotation } from "../services/annotations";
 
+vi.mock("../services/settings", () => ({
+  loadSettings: vi.fn().mockResolvedValue({
+    targetLanguage: "中文",
+    llm: { baseUrl: "", apiKey: "", model: "" },
+  }),
+}));
+
 vi.mock("../services/llm", async () => {
   const actual = await vi.importActual<typeof import("../services/llm")>("../services/llm");
   return {
@@ -90,5 +97,32 @@ describe("TranslatePopup", () => {
       expect(screen.queryByText(/翻译中…/)).not.toBeInTheDocument();
       expect(document.querySelector(".loading-spinner")).not.toBeInTheDocument();
     });
+  });
+
+  it("adjusts position to stay within page wrapper bounds", () => {
+    const onUpdate = vi.fn();
+    const { container } = render(
+      <div
+        className="pdf-page-wrapper"
+        style={{ width: 200, height: 200, position: "relative" }}
+      >
+        <TranslatePopup
+          annotation={makeAnnotation({
+            position: { page: 1, x: 180, y: 190 },
+            content: "translation result",
+            isStreaming: false,
+          })}
+          scale={1}
+          onUpdate={onUpdate}
+          onHide={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </div>
+    );
+
+    const popup = container.querySelector(".translate-popup") as HTMLElement;
+    const wrapper = popup.closest(".pdf-page-wrapper") as HTMLElement;
+    expect(popup.offsetLeft + popup.offsetWidth).toBeLessThanOrEqual(wrapper.offsetWidth);
+    expect(popup.offsetTop + popup.offsetHeight).toBeLessThanOrEqual(wrapper.offsetHeight);
   });
 });

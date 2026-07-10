@@ -78,12 +78,21 @@ npm install
 │   │   ├── TranslatePopup.tsx         # 翻译浮层
 │   │   ├── ExplainPopup.tsx           # 解读详情浮层
 │   │   ├── StashInterpretedPopup.tsx  # 已解读暂存浮层
-│   │   ├── AiChatPanel.tsx            # 右侧面板（设置、暂存区、解读记录）
+│   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录、流式中止）
+│   │   ├── SettingsModal.tsx          # 全局设置 Modal（LLM + 目标语言）
+│   │   ├── RecentFilesBar.tsx         # 顶部最近文件栏
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗
 │   │   └── Icon.tsx                   # SVG 图标组件
+│   ├── hooks/                         # 可复用状态逻辑
+│   │   ├── useTabs.ts                 # Tab 管理
+│   │   ├── usePersistence.ts          # 批注/会话/暂存状态与持久化
+│   │   ├── useRightPanelLayout.ts     # 右侧面板布局
+│   │   ├── useRecentFiles.ts          # 最近文件列表
+│   │   └── useSplitView.ts            # 双排视图状态
 │   ├── services/                      # 业务逻辑与 Tauri 命令封装
 │   │   ├── annotations.ts             # Annotation 类型 + CRUD + 持久化调用
-│   │   ├── llm.ts                     # LLM 配置、SSE 流式请求、Prompt 模板
+│   │   ├── settings.ts                # 应用设置（LLM + 目标语言）CRUD
+│   │   ├── llm.ts                     # LLM 配置读取、SSE 流式请求、Prompt 模板
 │   │   ├── sessions.ts                # 解读会话数据结构与管理
 │   │   └── stash.ts                   # 暂存片段数据结构与管理
 │   └── test/                          # 测试工具
@@ -171,11 +180,13 @@ cd src-tauri && cargo test
 
 - `read_pdf_bytes(filePath: string)`：读取 PDF 原始字节。
 - `get_pdf_hash(filePath: string)`：计算 PDF SHA-256 hash。
-- `load_pdf_data(filePath: string)`：加载 `<AppData>/annotations/{hash}.json`。
+- `load_pdf_data(filePath: string)`：加载 `<AppData>/SpecReader/annotations/{hash}.json`。
 - `save_pdf_data(filePath: string, data: PdfData)`：保存批注与会话引用。
 - `load_session(sessionId: string)`：加载单个会话 JSON。
 - `save_session(session: InterpretationSession)`：保存会话 JSON。
 - `delete_session(sessionId: string)`：删除会话文件。
+- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM + 目标语言）。
+- `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表。
 - `open_path(path: string)`：使用系统默认程序打开路径。
 
 ### 6.2 数据持久化
@@ -184,10 +195,13 @@ cd src-tauri && cargo test
 
 ```
 <AppData>/
-└── annotations/
-    ├── {pdf_hash}.json        # 批注 + 关联 session ids
-    └── sessions/
-        └── {session_id}.json  # 解读会话详情
+└── photonee/SpecReader/          # identifier 保持 photonee
+    ├── annotations/
+    │   ├── {pdf_hash}.json        # 批注 + 关联 session ids
+    │   └── sessions/
+    │       └── {session_id}.json  # 解读会话详情
+    ├── settings.json              # LLM 配置 + 目标语言
+    └── recent_files.json          # 最近打开文件列表
 ```
 
 - 批注坐标以 **PDF 原始坐标（scale=1）**保存，渲染时乘以当前 scale。
@@ -197,30 +211,36 @@ cd src-tauri && cargo test
 ### 6.3 LLM 调用
 
 - `services/llm.ts` 中的 `streamChatCompletion` 使用标准 OpenAI 兼容 SSE 接口。
-- Prompt 模板包括 `buildSelectionPrompt`（翻译 / 解读）和 `buildCustomInterpretPrompt`（自定义解读）。
-- 配置保存于 `localStorage`，键为 `standardread-llm-config`。
-- 默认模型为 `gpt-4o-mini`。
+- Prompt 模板包括 `buildSelectionPrompt`（翻译 / 解读）和 `buildCustomInterpretPrompt`（自定义解读），均接收 `targetLanguage` 参数。
+- System prompt 也通过 `buildSystemPrompt(targetLanguage)` 按目标语言生成。
+- LLM 配置与目标语言通过 `services/settings.ts` 持久化到后端 AppData；首次启动时会从旧的 `localStorage` 键 `standardread-llm-config` 迁移一次。
+- 默认模型为 `gpt-4o-mini`，默认目标语言为 `中文`。
 
 ### 6.4 核心状态流
 
 ```
 App.tsx
-├── tabs / activeTabId            # PDF Tab 状态
-├── annotations                   # 全局批注列表
-├── sessions                      # 全局解读会话列表
-├── stashes                       # 当前 PDF 的暂存片段
-├── selection                     # 当前 PDF 选区
-└── rightVisible / rightPanelWidth # 面板布局
+├── tabs / activeTabId / secondaryTabId   # PDF Tab 状态（单视图 + 并排视图）
+├── annotations                           # 全局批注列表
+├── sessions                              # 全局解读会话列表
+├── stashes                               # 当前 PDF 的暂存片段
+├── selection                             # 当前 PDF 选区
+├── rightVisible / rightPanelWidth        # 面板布局
+├── recentFiles                           # 最近打开文件列表
+├── settings / settingsOpen               # 全局设置与 Modal
+└── splitPct                              # 并排视图左右面板比例
 
 PdfViewer.tsx
 ├── pdf / numPages / pageNum / scale / viewMode
-├── visiblePages / pageViewports  # 连续滚动懒加载 + 精确跳转
+├── visiblePages / pageViewports          # 连续滚动懒加载 + 精确跳转
 └── 文本选区 → onSelection
 
 AiChatPanel.tsx
-├── config（LLM 配置）
 ├── expandedId / expandedStashIds
 └── 检测到 isStreaming 会话时启动 SSE 流
+
+SettingsModal.tsx
+└── LLM 配置 + 目标语言设置弹窗
 ```
 
 ## 7. 代码组织约定
@@ -268,15 +288,20 @@ AiChatPanel.tsx
   - 覆盖率 provider：`v8`
 - 主要覆盖：
   - `services/annotations.test.ts`：批注 CRUD、Tauri invoke mock。
-  - `services/llm.test.ts`：LLM 配置默认值、SSE 流解析、Prompt 构建。
+  - `services/settings.test.ts`：AppSettings 默认值、后端 invoke mock、旧 localStorage 配置迁移。
+  - `services/llm.test.ts`：LLM 配置默认值、SSE 流解析、Prompt 构建（含目标语言）。
   - `services/sessions.test.ts`：会话消息更新、流状态。
   - `services/stash.test.ts`：暂存片段管理。
+  - `hooks/useRecentFiles.test.ts`：最近文件增删与上限。
+  - `hooks/useSplitView.test.ts`：双排视图进入/退出。
   - `components/SelectionToolbar.test.tsx`：工具条渲染、点击外部关闭。
   - `components/AnnotationMarker.test.tsx`：拖拽后不误触发点击。
   - `components/PdfAnnotations.test.tsx`：按页过滤、交互回调。
-  - `components/AiChatPanel.test.tsx`：设置面板、流式更新。
+  - `components/AiChatPanel.test.tsx`：流式更新、中止按钮。
+  - `components/SettingsModal.test.tsx`：设置表单与保存回调。
+  - `components/RecentFilesBar.test.tsx`：文件点击与清空。
   - `components/PdfViewer.pageJump.test.tsx`：连续滚动页码跳转。
-  - `App.test.tsx`：面板显隐、会话清理。
+  - `App.test.tsx`：面板显隐、会话清理、Recent Files。
 - Mock 策略：
   - `setup.ts` 中全局 mock `crypto.randomUUID`、`localStorage`、`matchMedia`、`IntersectionObserver`、`ResizeObserver`。
   - 相关测试用 `vi.doMock("@tauri-apps/api/core")` mock `invoke`。
@@ -286,9 +311,9 @@ AiChatPanel.tsx
 ### 8.2 E2E 测试
 
 - Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`。
-- `app.spec.ts`：主布局、面板显隐、设置开关。
+- `app.spec.ts`：主布局、顶部最近文件栏、设置 Modal、面板显隐。
 - `pdf-page-jump.spec.ts`：连续滚动模式下页码跳转正确性，使用 mock 的 Tauri `invoke` 返回 PDF 字节。
-- CI 环境下建议设置 `CI=true`。
+- 单实例与文件关联需在打包后的安装包上手动验证，E2E 较难覆盖。
 
 ### 8.3 后端测试
 

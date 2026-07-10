@@ -20,11 +20,20 @@ async function setupTauriMock(page: import("@playwright/test").Page, pdfPath: st
           if (cmd === "read_pdf_bytes") {
             return arrayBuffer;
           }
-          if (cmd === "load_annotations") {
-            return [];
+          if (cmd === "load_pdf_data") {
+            return { annotations: [], sessionIds: [] };
           }
-          if (cmd === "save_annotations") {
+          if (cmd === "save_pdf_data") {
             return undefined;
+          }
+          if (cmd === "load_settings") {
+            return {
+              llm: { baseUrl: "https://api.openai.com/v1", apiKey: "", model: "gpt-4o-mini" },
+              targetLanguage: "中文",
+            };
+          }
+          if (cmd === "load_recent_files") {
+            return [];
           }
           if (cmd === "get_pdf_hash") {
             return "test-hash";

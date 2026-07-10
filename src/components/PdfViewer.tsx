@@ -830,6 +830,18 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
   const zoomOut = () => setScale((s) => Math.max(0.5, s - 0.05));
   const zoomIn = () => setScale((s) => s + 0.05);
 
+  const fitToWidth = useCallback(() => {
+    if (!pdf || numPages === 0) return;
+    const container = viewMode === "single" ? singleContainerRef.current : continuousContainerRef.current;
+    if (!container) return;
+    const currentViewport = pageViewports.get(pageNum);
+    if (!currentViewport) return;
+    const originalWidth = currentViewport.width / scale;
+    const padding = parseInt(window.getComputedStyle(container).paddingLeft || "24", 10);
+    const newScale = (container.clientWidth - padding * 2) / originalWidth;
+    setScale(Math.max(0.1, Math.min(5, newScale)));
+  }, [pdf, numPages, viewMode, pageNum, pageViewports, scale]);
+
   // Stable ref callback for continuous-mode page wrappers
   const pageWrapperRefCallbacks = useRef<Map<number, (el: HTMLDivElement | null) => void>>(new Map());
   const setPageWrapperRef = useCallback((page: number) => {
@@ -961,6 +973,15 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
         </div>
 
         <div className="pdf-controls-right">
+          <button
+            className="icon-btn"
+            onClick={fitToWidth}
+            disabled={numPages === 0 || isLoading}
+            aria-label="适合宽度"
+            title="适合宽度"
+          >
+            <Icon name="fit-to-width" size={16} />
+          </button>
           <button
             className="icon-btn"
             onClick={zoomOut}

@@ -62,7 +62,7 @@ describe("AiChatPanel", () => {
     vi.clearAllMocks();
   });
 
-  it("renders stash and sessions tabs", () => {
+  const renderPanel = (props: Partial<React.ComponentProps<typeof AiChatPanel>> = {}) =>
     render(
       <AiChatPanel
         stashes={[]}
@@ -71,24 +71,19 @@ describe("AiChatPanel", () => {
         onClearStashes={vi.fn()}
         onCustomInterpret={vi.fn()}
         onFollowUp={vi.fn()}
+        {...props}
       />
     );
+
+  it("renders stash and sessions tabs", () => {
+    renderPanel();
 
     expect(screen.getByRole("tab", { name: /暂存区/i })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /解读记录/i })).toBeInTheDocument();
   });
 
   it("shows stash placeholder when empty", () => {
-    render(
-      <AiChatPanel
-        stashes={[]}
-        sessions={[]}
-        onRemoveStash={vi.fn()}
-        onClearStashes={vi.fn()}
-        onCustomInterpret={vi.fn()}
-        onFollowUp={vi.fn()}
-      />
-    );
+    renderPanel();
 
     fireEvent.click(screen.getByRole("tab", { name: /暂存区/i }));
 
@@ -101,16 +96,7 @@ describe("AiChatPanel", () => {
       makeStash("stash-2", "second excerpt", { source: makeSource({ fileName: "b.pdf", page: 5 }) }),
     ];
 
-    render(
-      <AiChatPanel
-        stashes={stashes}
-        sessions={[]}
-        onRemoveStash={vi.fn()}
-        onClearStashes={vi.fn()}
-        onCustomInterpret={vi.fn()}
-        onFollowUp={vi.fn()}
-      />
-    );
+    renderPanel({ stashes });
 
     expect(screen.getByText(/a.pdf/)).toBeInTheDocument();
     expect(screen.getByText(/第 3 页/)).toBeInTheDocument();
@@ -122,16 +108,7 @@ describe("AiChatPanel", () => {
     const onRemoveStash = vi.fn();
     const stashes = [makeStash("stash-1", "text")];
 
-    render(
-      <AiChatPanel
-        stashes={stashes}
-        sessions={[]}
-        onRemoveStash={onRemoveStash}
-        onClearStashes={vi.fn()}
-        onCustomInterpret={vi.fn()}
-        onFollowUp={vi.fn()}
-      />
-    );
+    renderPanel({ stashes, onRemoveStash });
 
     fireEvent.click(screen.getByRole("button", { name: /删除/i }));
 
@@ -140,16 +117,7 @@ describe("AiChatPanel", () => {
 
   it("expands and collapses long stash text", () => {
     const longText = "a".repeat(200);
-    render(
-      <AiChatPanel
-        stashes={[makeStash("stash-1", longText)]}
-        sessions={[]}
-        onRemoveStash={vi.fn()}
-        onClearStashes={vi.fn()}
-        onCustomInterpret={vi.fn()}
-        onFollowUp={vi.fn()}
-      />
-    );
+    renderPanel({ stashes: [makeStash("stash-1", longText)] });
 
     expect(screen.getByRole("button", { name: /展开/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /展开/i }));
@@ -159,17 +127,7 @@ describe("AiChatPanel", () => {
 
   it("calls onUpdateStash when editing a stash", () => {
     const onUpdateStash = vi.fn();
-    render(
-      <AiChatPanel
-        stashes={[makeStash("stash-1", "original text")]}
-        sessions={[]}
-        onRemoveStash={vi.fn()}
-        onUpdateStash={onUpdateStash}
-        onClearStashes={vi.fn()}
-        onCustomInterpret={vi.fn()}
-        onFollowUp={vi.fn()}
-      />
-    );
+    renderPanel({ stashes: [makeStash("stash-1", "original text")], onUpdateStash });
 
     fireEvent.click(screen.getByRole("button", { name: /编辑/i }));
     const textarea = screen.getByDisplayValue("original text");
@@ -182,16 +140,7 @@ describe("AiChatPanel", () => {
   it("calls onClearStashes when clearing", () => {
     const onClearStashes = vi.fn();
 
-    render(
-      <AiChatPanel
-        stashes={[makeStash("stash-1", "text")]}
-        sessions={[]}
-        onRemoveStash={vi.fn()}
-        onClearStashes={onClearStashes}
-        onCustomInterpret={vi.fn()}
-        onFollowUp={vi.fn()}
-      />
-    );
+    renderPanel({ stashes: [makeStash("stash-1", "text")], onClearStashes });
 
     fireEvent.click(screen.getByRole("button", { name: /清空暂存/i }));
 
@@ -199,16 +148,7 @@ describe("AiChatPanel", () => {
   });
 
   it("opens custom interpret modal", () => {
-    render(
-      <AiChatPanel
-        stashes={[makeStash("stash-1", "text")]}
-        sessions={[]}
-        onRemoveStash={vi.fn()}
-        onClearStashes={vi.fn()}
-        onCustomInterpret={vi.fn()}
-        onFollowUp={vi.fn()}
-      />
-    );
+    renderPanel({ stashes: [makeStash("stash-1", "text")] });
 
     fireEvent.click(screen.getByRole("button", { name: /自定义解读/i }));
 
@@ -219,16 +159,10 @@ describe("AiChatPanel", () => {
   it("calls onCustomInterpret when modal submitted", () => {
     const onCustomInterpret = vi.fn();
 
-    render(
-      <AiChatPanel
-        stashes={[makeStash("stash-1", "text")]}
-        sessions={[]}
-        onRemoveStash={vi.fn()}
-        onClearStashes={vi.fn()}
-        onCustomInterpret={onCustomInterpret}
-        onFollowUp={vi.fn()}
-      />
-    );
+    renderPanel({
+      stashes: [makeStash("stash-1", "text")],
+      onCustomInterpret,
+    });
 
     fireEvent.click(screen.getByRole("button", { name: /自定义解读/i }));
     fireEvent.change(screen.getByPlaceholderText(/输入你的解读要求/), {
@@ -242,16 +176,7 @@ describe("AiChatPanel", () => {
   it("renders sessions in interpretation tab", () => {
     const sessions = [makeSession({ id: "session-1" })];
 
-    render(
-      <AiChatPanel
-        stashes={[]}
-        sessions={sessions}
-        onRemoveStash={vi.fn()}
-        onClearStashes={vi.fn()}
-        onCustomInterpret={vi.fn()}
-        onFollowUp={vi.fn()}
-      />
-    );
+    renderPanel({ sessions });
 
     fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
 
@@ -269,16 +194,7 @@ describe("AiChatPanel", () => {
       }),
     ];
 
-    render(
-      <AiChatPanel
-        stashes={[]}
-        sessions={sessions}
-        onRemoveStash={vi.fn()}
-        onClearStashes={vi.fn()}
-        onCustomInterpret={vi.fn()}
-        onFollowUp={vi.fn()}
-      />
-    );
+    renderPanel({ sessions });
 
     fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
     fireEvent.click(screen.getByText(/问题/));
@@ -298,16 +214,7 @@ describe("AiChatPanel", () => {
       }),
     ];
 
-    render(
-      <AiChatPanel
-        stashes={[]}
-        sessions={sessions}
-        onRemoveStash={vi.fn()}
-        onClearStashes={vi.fn()}
-        onCustomInterpret={vi.fn()}
-        onFollowUp={onFollowUp}
-      />
-    );
+    renderPanel({ sessions, onFollowUp });
 
     fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
     fireEvent.click(screen.getByText(/问题/));
@@ -317,5 +224,30 @@ describe("AiChatPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: /发送/i }));
 
     expect(onFollowUp).toHaveBeenCalledWith("session-1", "追问内容");
+  });
+
+  it("shows interrupt button when session is streaming", () => {
+    const onInterrupt = vi.fn();
+    const sessions = [
+      makeSession({
+        id: "session-1",
+        isStreaming: true,
+        messages: [
+          makeMessage({ id: "msg-1", role: "user", content: "问题" }),
+          makeMessage({ id: "msg-2", role: "assistant", content: "" }),
+        ],
+      }),
+    ];
+
+    renderPanel({ sessions, onInterrupt });
+
+    fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
+    fireEvent.click(screen.getByText(/问题/));
+
+    const interruptBtn = screen.getByRole("button", { name: /中止/i });
+    expect(interruptBtn).toBeInTheDocument();
+
+    fireEvent.click(interruptBtn);
+    expect(onInterrupt).toHaveBeenCalledWith("session-1");
   });
 });

@@ -25,7 +25,8 @@ export type IconName =
   | "ai"
   | "edit"
   | "panel-left"
-  | "panel-right";
+  | "panel-right"
+  | "fit-to-width";
 
 interface IconProps {
   name: IconName;
@@ -157,6 +158,13 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
     <>
       <rect x="3" y="3" width="14" height="14" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" />
       <path d="M13 3v14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+    </>
+  ),
+  "fit-to-width": (
+    <>
+      <rect x="2" y="5" width="16" height="10" rx="1" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M6 8l-3 2 3 2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M14 8l3 2-3 2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </>
   ),
 };

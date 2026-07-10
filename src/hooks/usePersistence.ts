@@ -3,7 +3,6 @@ import {
   Annotation,
   createAnnotation,
   deleteAnnotation,
-  getPdfHash,
   loadPdfData,
   savePdfData,
   updateAnnotation,
@@ -11,13 +10,11 @@ import {
 import {
   InterpretationSession,
   appendUserMessage,
-  clearLegacySessionsStorage,
   createSession,
   deleteSession,
   deleteSessionOnDisk,
   finishStreaming,
   loadSession,
-  loadSessionsFromLegacyStorage,
   saveSession,
   startAssistantResponse,
   updateMessageContent,
@@ -29,7 +26,15 @@ import {
   removeStash,
   updateStash,
 } from "../services/stash";
-import { buildCustomInterpretPrompt, buildSelectionPrompt, SelectionAction, loadLlmConfig, streamChatCompletion, ChatMessage } from "../services/llm";
+import {
+  buildCustomInterpretPrompt,
+  buildSelectionPrompt,
+  buildSystemPrompt,
+  SelectionAction,
+  streamChatCompletion,
+  ChatMessage,
+} from "../services/llm";
+import { AppSettings } from "../services/settings";
 import { PdfTab } from "./useTabs";
 
 export interface SelectionState {
@@ -46,7 +51,10 @@ export interface SelectionState {
 export interface UsePersistenceProps {
   activeTab: PdfTab | null;
   activeTabId: string | null;
+  secondaryTab: PdfTab | null;
+  isSplitView: boolean;
   openRightPanel: () => void;
+  settings: AppSettings;
 }
 
 export interface UsePersistenceReturn {
@@ -56,14 +64,15 @@ export interface UsePersistenceReturn {
   setStashes: React.Dispatch<React.SetStateAction<StashItem[]>>;
   sessions: InterpretationSession[];
   setSessions: React.Dispatch<React.SetStateAction<InterpretationSession[]>>;
-  activeTabStashes: StashItem[];
-  activeTabSessions: InterpretationSession[];
+  visibleTabStashes: StashItem[];
+  visibleTabSessions: InterpretationSession[];
   handleAddToStash: (selection: SelectionState, text: string) => void;
   handleRemoveStash: (id: string) => void;
   handleClearStashes: () => void;
-  handleCustomInterpret: (prompt: string, activeTabStashes: StashItem[]) => void;
+  handleCustomInterpret: (prompt: string, visibleStashes: StashItem[]) => void;
   handleSelectionAction: (selection: SelectionState, action: SelectionAction, text: string) => void;
   handleFollowUp: (sessionId: string, prompt: string) => void;
+  handleInterruptSession: (sessionId: string) => void;
   handleSessionUpdate: (updatedSession: InterpretationSession) => void;
   handleAnnotationUpdate: (id: string, patch: Partial<Omit<Annotation, "id">>) => void;
   handleAnnotationDelete: (id: string) => Promise<void>;
@@ -74,7 +83,10 @@ export interface UsePersistenceReturn {
 export function usePersistence({
   activeTab,
   activeTabId,
+  secondaryTab,
+  isSplitView,
   openRightPanel,
+  settings,
 }: UsePersistenceProps): UsePersistenceReturn {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [stashes, setStashes] = useState<StashItem[]>([]);
@@ -84,72 +96,36 @@ export function usePersistence({
   const sessionSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedSessionsRef = useRef<Record<string, InterpretationSession>>({});
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
+  const settingsRef = useRef<AppSettings>(settings);
 
-  const activeTabStashes = useMemo(
-    () => (activeTabId ? stashes.filter((s) => s.source.tabId === activeTabId) : []),
-    [stashes, activeTabId]
-  );
-
-  const activeTabSessions = useMemo(
-    () =>
-      activeTab?.fileHash
-        ? sessions.filter((s) => s.sources.some((item) => item.source.fileHash === activeTab.fileHash))
-        : [],
-    [sessions, activeTab?.fileHash]
-  );
-
-  // Migrate legacy localStorage sessions to backend storage on mount
   useEffect(() => {
-    let cancelled = false;
-    async function migrate() {
-      const legacy = loadSessionsFromLegacyStorage();
-      if (legacy.length === 0) return;
+    settingsRef.current = settings;
+  }, [settings]);
 
-      for (const session of legacy) {
-        if (cancelled) return;
-        const enrichedSources = await Promise.all(
-          session.sources.map(async (item) => {
-            if (item.source.fileHash) return item;
-            try {
-              const fileHash = await getPdfHash(item.source.filePath);
-              return { ...item, source: { ...item.source, fileHash } };
-            } catch {
-              return item;
-            }
-          })
-        );
-        const migratedSession = { ...session, sources: enrichedSources };
-        await saveSession(migratedSession);
+  const visibleTabIds = useMemo(() => {
+    const ids = new Set<string>();
+    if (activeTabId) ids.add(activeTabId);
+    if (isSplitView && secondaryTab?.id) ids.add(secondaryTab.id);
+    return ids;
+  }, [activeTabId, isSplitView, secondaryTab?.id]);
 
-        const uniqueHashes = new Map<string, string>();
-        enrichedSources.forEach((item) => {
-          if (item.source.fileHash) {
-            uniqueHashes.set(item.source.fileHash, item.source.filePath);
-          }
-        });
-        for (const [, filePath] of uniqueHashes.entries()) {
-          if (cancelled) return;
-          try {
-            const data = await loadPdfData(filePath);
-            if (!data.sessionIds.includes(migratedSession.id)) {
-              await savePdfData(filePath, {
-                annotations: data.annotations,
-                sessionIds: [...data.sessionIds, migratedSession.id],
-              });
-            }
-          } catch {
-            // ignore per-pdf migration errors
-          }
-        }
-      }
+  const visibleFileHashes = useMemo(() => {
+    const hashes = new Set<string>();
+    if (activeTab?.fileHash) hashes.add(activeTab.fileHash);
+    if (isSplitView && secondaryTab?.fileHash) hashes.add(secondaryTab.fileHash);
+    return hashes;
+  }, [activeTab?.fileHash, isSplitView, secondaryTab?.fileHash]);
 
-      clearLegacySessionsStorage();
-    }
-    migrate();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const visibleTabStashes = useMemo(
+    () => stashes.filter((s) => visibleTabIds.has(s.source.tabId)),
+    [stashes, visibleTabIds]
+  );
+
+  const visibleTabSessions = useMemo(
+    () =>
+      sessions.filter((s) => s.sources.some((item) => visibleFileHashes.has(item.source.fileHash))),
+    [sessions, visibleFileHashes]
+  );
 
   // Load annotations and sessions when active file changes
   useEffect(() => {
@@ -179,25 +155,63 @@ export function usePersistence({
     };
   }, [activeTab?.filePath, activeTab?.fileHash]);
 
+  // Load secondary PDF sessions when in split view so AI panel can merge records
+  useEffect(() => {
+    if (!isSplitView || !secondaryTab?.filePath) return;
+    let cancelled = false;
+    loadPdfData(secondaryTab.filePath).then(async (data) => {
+      if (cancelled) return;
+      const sessionIds = data.sessionIds || [];
+      const loadedSessions = await Promise.all(sessionIds.map((id) => loadSession(id)));
+      if (cancelled) return;
+      setSessions((prev) => {
+        const existingIds = new Set(prev.map((s) => s.id));
+        const newSessions = loadedSessions.filter(
+          (s): s is InterpretationSession => s !== null && !existingIds.has(s.id)
+        );
+        return newSessions.length > 0 ? [...prev, ...newSessions] : prev;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isSplitView, secondaryTab?.filePath]);
+
   // Persist PDF data with debounce (annotations + session references)
   useEffect(() => {
     if (!activeTab?.filePath || !activeTab.fileHash) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
-      const sessionIds = sessions
+      const annotationsToSave = annotations.filter(
+        (a) => a.type !== "stash" || a.interpretedGroupSize !== undefined
+      );
+
+      // Active PDF: save current annotations + session refs
+      const activeSessionIds = sessions
         .filter((s) => s.sources.some((item) => item.source.fileHash === activeTab.fileHash))
         .map((s) => s.id);
       savePdfData(activeTab.filePath, {
-        annotations: annotations.filter(
-          (a) => a.type !== "stash" || a.interpretedGroupSize !== undefined
-        ),
-        sessionIds,
+        annotations: annotationsToSave,
+        sessionIds: activeSessionIds,
       });
+
+      // Secondary PDF in split view: preserve its existing annotations, only update session refs
+      if (isSplitView && secondaryTab?.filePath && secondaryTab.fileHash && secondaryTab.filePath !== activeTab.filePath) {
+        const secondarySessionIds = sessions
+          .filter((s) => s.sources.some((item) => item.source.fileHash === secondaryTab.fileHash))
+          .map((s) => s.id);
+        loadPdfData(secondaryTab.filePath).then((data) => {
+          savePdfData(secondaryTab.filePath, {
+            annotations: data.annotations,
+            sessionIds: secondarySessionIds,
+          });
+        });
+      }
     }, 500);
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
-  }, [annotations, sessions, activeTab?.filePath, activeTab?.fileHash]);
+  }, [annotations, sessions, activeTab?.filePath, activeTab?.fileHash, isSplitView, secondaryTab?.filePath, secondaryTab?.fileHash]);
 
   // Persist modified sessions with debounce
   useEffect(() => {
@@ -243,12 +257,12 @@ export function usePersistence({
     };
 
     const stream = async () => {
-      const config = loadLlmConfig();
+      const currentSettings = settingsRef.current;
+      const config = currentSettings.llm;
       const messagesForApi: ChatMessage[] = [
         {
           role: "system",
-          content:
-            "你是一位检测认证行业标准文档阅读助手，擅长把复杂的英文标准条款解释得清晰易懂。请基于用户提供的文档片段回答，不要编造片段中未提及的条款或页码。",
+          content: buildSystemPrompt(currentSettings.targetLanguage),
         },
         ...sessionRef.current.messages
           .filter((m) => !(m.role === "assistant" && m.id === messageId))
@@ -361,28 +375,29 @@ export function usePersistence({
   }, []);
 
   const handleClearStashes = useCallback(() => {
-    setStashes((prev) => prev.filter((s) => s.source.tabId !== activeTabId));
+    setStashes((prev) => prev.filter((s) => !visibleTabIds.has(s.source.tabId)));
     setAnnotations((prev) => prev.filter((a) => a.type !== "stash"));
-  }, [activeTabId]);
+  }, [visibleTabIds]);
 
-  const handleCustomInterpret = useCallback((prompt: string, activeTabStashes: StashItem[]) => {
-    if (activeTabStashes.length === 0 || !activeTab) return;
+  const handleCustomInterpret = useCallback((prompt: string, visibleStashes: StashItem[]) => {
+    if (visibleStashes.length === 0 || !activeTab) return;
     const enrichedPrompt = buildCustomInterpretPrompt(
       prompt,
-      activeTabStashes.map((s) => ({
+      visibleStashes.map((s) => ({
         fileName: s.source.fileName,
         page: s.source.page,
         text: s.text,
-      }))
+      })),
+      settingsRef.current.targetLanguage
     );
-    startSessionFromStashes(enrichedPrompt, activeTabStashes);
+    startSessionFromStashes(enrichedPrompt, visibleStashes);
 
     // Persistence of the session and its PDF references is handled by the
     // debounced effects; avoid manual writes here to prevent clobbering.
-    setStashes((prev) => prev.filter((s) => s.source.tabId !== activeTabId));
+    setStashes((prev) => prev.filter((s) => !visibleTabIds.has(s.source.tabId)));
     // Keep interpreted stash annotations; remove only uninterpreted stash markers.
     setAnnotations((prev) => prev.filter((a) => a.type !== "stash" || a.interpretedGroupSize !== undefined));
-  }, [activeTab, activeTabId, startSessionFromStashes]);
+  }, [activeTab, visibleTabIds, startSessionFromStashes]);
 
   const handleSelectionAction = useCallback((selection: SelectionState, action: SelectionAction, text: string) => {
     if (!activeTab) return;
@@ -391,7 +406,7 @@ export function usePersistence({
     setAnnotations((prev) => [...prev, newAnnotation]);
 
     if (action === "explain") {
-      const prompt = buildSelectionPrompt("explain", text);
+      const prompt = buildSelectionPrompt("explain", text, settingsRef.current.targetLanguage);
       const sourceStash = createStashItem(
         {
           tabId: activeTab.id,
@@ -431,6 +446,16 @@ export function usePersistence({
       return next;
     });
   }, [runSessionStream]);
+
+  const handleInterruptSession = useCallback((sessionId: string) => {
+    const session = sessions.find((s) => s.id === sessionId);
+    if (!session?.streamingMessageId) return;
+    const controller = abortControllersRef.current.get(session.streamingMessageId);
+    controller?.abort();
+    setSessions((prev) =>
+      prev.map((s) => (s.id === sessionId ? { ...s, isStreaming: false, streamingMessageId: undefined } : s))
+    );
+  }, [sessions]);
 
   const handleSessionUpdate = useCallback((updatedSession: InterpretationSession) => {
     setSessions((prev) => prev.map((s) => (s.id === updatedSession.id ? updatedSession : s)));
@@ -494,14 +519,15 @@ export function usePersistence({
     setStashes,
     sessions,
     setSessions,
-    activeTabStashes,
-    activeTabSessions,
+    visibleTabStashes,
+    visibleTabSessions,
     handleAddToStash,
     handleRemoveStash,
     handleClearStashes,
     handleCustomInterpret,
     handleSelectionAction,
     handleFollowUp,
+    handleInterruptSession,
     handleSessionUpdate,
     handleAnnotationUpdate,
     handleAnnotationDelete,

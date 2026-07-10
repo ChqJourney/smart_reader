@@ -276,4 +276,38 @@ describe("PdfViewer continuous mode page jump", () => {
     expect(scrollToSpy).toHaveBeenCalled();
     expect(canvasContainer!.scrollTop).toBe(expectedScrollTopForPage(targetPage));
   });
+
+  it("fits page width to container when fit-to-width button is clicked", async () => {
+    const { container } = render(<PdfViewer filePath="/fake/test.pdf" />);
+
+    // Wait until the viewer has loaded the PDF and viewports are ready.
+    await waitFor<HTMLInputElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLInputElement;
+      if (!input || input.disabled) {
+        throw new Error("page input not ready yet");
+      }
+      return input;
+    });
+
+    expect(screen.getByText("150%")).toBeInTheDocument();
+
+    // Provide a stable container width for the fit calculation.
+    const canvasContainer = container.querySelector(".pdf-canvas-container.continuous") as HTMLDivElement;
+    expect(canvasContainer).not.toBeNull();
+    Object.defineProperty(canvasContainer, "clientWidth", {
+      value: 400,
+      configurable: true,
+    });
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      paddingLeft: "24px",
+    } as CSSStyleDeclaration);
+
+    const fitButton = screen.getByLabelText("适合宽度");
+    fireEvent.click(fitButton);
+
+    // newScale = (400 - 24 * 2) / (200 * 1.5 / 1.5) = 352 / 200 = 1.76
+    await waitFor(() => {
+      expect(screen.getByText("176%")).toBeInTheDocument();
+    });
+  });
 });

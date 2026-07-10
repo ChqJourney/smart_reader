@@ -30,6 +30,80 @@ body {
   flex-shrink: 0;
 }
 
+.recent-files-bar {
+  width: 60%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.recent-files-list {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  /* 隐藏滚动条，保留横向滚动能力 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  min-width: 0;
+}
+
+.recent-files-list::-webkit-scrollbar {
+  display: none;
+}
+
+.recent-files-empty {
+  font-size: 0.8rem;
+  color: #9e9e9e;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.recent-file-card {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 160px;
+  padding: 5px 10px;
+  background: #f3f3f3;
+  color: #424242;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.recent-file-card:hover {
+  background: #eaeaea;
+}
+
+.recent-file-card.active {
+  background: #e8f0fe;
+  border-color: #0078d4;
+  color: #0078d4;
+}
+
+.recent-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-files-clear {
+  flex-shrink: 0;
+  color: #757575;
+}
+
+.recent-files-clear:hover {
+  background: #f0f0f0;
+  color: #1f1f1f;
+}
+
 .app-brand {
   display: flex;
   align-items: center;
@@ -113,6 +187,13 @@ body {
   border-bottom: 1px solid #e5e5e5;
   overflow-x: auto;
   flex-shrink: 0;
+  /* 隐藏不需要的滚动条，保留横向滚动能力 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none;
 }
 
 .tab-item {
@@ -144,6 +225,31 @@ body {
   border-bottom: 1px solid #ffffff;
   margin-bottom: -1px;
   box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.tab-item.secondary {
+  background: #e8f0fe;
+  color: #0078d4;
+  border-color: #b4d6fb;
+}
+
+.split-view-exit {
+  margin-left: auto;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  background: #fff;
+  color: #424242;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.split-view-exit:hover {
+  background: #f0f0f0;
 }
 
 .tab-close {
@@ -620,10 +726,12 @@ body {
 
 .pdf-controls .page-input {
   width: 42px;
-  padding: 2px 4px;
+  height: 26px;
+  padding: 0 4px;
   border: 1px solid transparent;
   border-radius: 4px;
-  text-align: right;
+  text-align: center;
+  line-height: 24px;
   font-size: 0.85rem;
   color: #616161;
   background: transparent;

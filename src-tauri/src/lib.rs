@@ -60,22 +60,11 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    app.run(|app_handle: &tauri::AppHandle, event: tauri::RunEvent| {
-        if let tauri::RunEvent::Opened { urls } = event {
-            for url in urls {
-                let path = url.to_string();
-                if path.to_lowercase().ends_with(".pdf") {
-                    let _ = app_handle.emit(OPEN_PDF_EVENT, path);
-                }
-            }
-            // Focus main window when the app is opened via a file on macOS.
-            let _ = app_handle.get_webview_window("main").map(|w: tauri::WebviewWindow| {
-                let _ = w.set_focus();
-                w.unminimize();
-                w
-            });
-        }
-    });
+    // TODO: macOS file-association / single-instance via `RunEvent::Opened`
+    // is not available in Tauri 2.x. For now Windows/Linux are handled by
+    // tauri-plugin-single-instance; macOS file-open from Finder needs a
+    // platform-specific plugin (e.g. tauri-plugin-deep-link) added later.
+    app.run(|_, _| {});
 }
 
 #[tauri::command]

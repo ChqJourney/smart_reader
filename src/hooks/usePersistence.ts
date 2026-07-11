@@ -9,6 +9,7 @@ import {
   updateAnnotation,
 } from "../services/annotations";
 import { showConfirm } from "../services/dialog";
+import { logError } from "../services/logs";
 import {
   InterpretationSession,
   SessionAction,
@@ -152,16 +153,37 @@ export function usePersistence({
     [sessions, visibleFileHashes]
   );
 
-  // Load annotations and sessions when active file changes
+  const loadedFileHashesRef = useRef<Set<string>>(new Set());
+
+  // Maintain the set of file hashes considered "loaded". When all annotations
+  // for a hash are removed (e.g. tab closed), drop the hash so reopening the
+  // same file later triggers a fresh load.
   useEffect(() => {
-    if (!activeTab?.filePath) {
+    const currentHashes = new Set(
+      annotations.map((a) => a.fileHash).filter(Boolean)
+    );
+    for (const hash of loadedFileHashesRef.current) {
+      if (!currentHashes.has(hash)) {
+        loadedFileHashesRef.current.delete(hash);
+      }
+    }
+  }, [annotations]);
+
+  // Load annotations and sessions when active file changes.
+  // Skip if the current fileHash has already been loaded successfully.
+  useEffect(() => {
+    if (!activeTab?.filePath || !activeTab.fileHash) {
       setAnnotations([]);
       return;
     }
     const fileHash = activeTab.fileHash;
+    if (loadedFileHashesRef.current.has(fileHash)) return;
+
     let cancelled = false;
     loadPdfData(activeTab.filePath).then(async (data) => {
       if (cancelled) return;
+      // Mark as loaded before merging so concurrent StrictMode runs see it.
+      loadedFileHashesRef.current.add(fileHash);
       // Merge loaded annotations, replacing any previous annotations for the
       // same fileHash. Backfill fileHash for legacy data that lacks it.
       setAnnotations((prev) => {
@@ -195,11 +217,15 @@ export function usePersistence({
 
   // Load secondary PDF annotations and sessions when in split view.
   useEffect(() => {
-    if (!isSplitView || !secondaryTab?.filePath) return;
+    if (!isSplitView || !secondaryTab?.filePath || !secondaryTab.fileHash)
+      return;
     const fileHash = secondaryTab.fileHash;
+    if (loadedFileHashesRef.current.has(fileHash)) return;
+
     let cancelled = false;
     loadPdfData(secondaryTab.filePath).then(async (data) => {
       if (cancelled) return;
+      loadedFileHashesRef.current.add(fileHash);
       setAnnotations((prev) => {
         const kept = prev.filter((a) => a.fileHash !== fileHash);
         const loaded = data.annotations
@@ -233,7 +259,7 @@ export function usePersistence({
   useEffect(() => {
     if (!activeTab?.filePath || !activeTab.fileHash) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    saveTimeoutRef.current = setTimeout(() => {
+    saveTimeoutRef.current = setTimeout(async () => {
       const shouldSaveAnnotation = (a: Annotation) =>
         (a.type !== "stash" || a.interpretedGroupSize !== undefined) &&
         a.fileHash;
@@ -248,10 +274,15 @@ export function usePersistence({
           s.sources.some((item) => item.source.fileHash === activeFileHash)
         )
         .map((s) => s.id);
-      savePdfData(activeTab.filePath, {
-        annotations: activeAnnotations,
-        sessionIds: activeSessionIds,
-      });
+      try {
+        await savePdfData(activeTab.filePath, {
+          annotations: activeAnnotations,
+          sessionIds: activeSessionIds,
+        });
+      } catch (err) {
+        console.error("Failed to save PDF data:", err);
+        logError("savePdfData failed", err);
+      }
 
       // Secondary PDF in split view: annotations now live in state with fileHash,
       // so we can save them directly without loading from disk first.
@@ -270,10 +301,15 @@ export function usePersistence({
             s.sources.some((item) => item.source.fileHash === secondaryFileHash)
           )
           .map((s) => s.id);
-        savePdfData(secondaryTab.filePath, {
-          annotations: secondaryAnnotations,
-          sessionIds: secondarySessionIds,
-        });
+        try {
+          await savePdfData(secondaryTab.filePath, {
+            annotations: secondaryAnnotations,
+            sessionIds: secondarySessionIds,
+          });
+        } catch (err) {
+          console.error("Failed to save secondary PDF data:", err);
+          logError("savePdfData secondary failed", err);
+        }
       }
     }, 500);
     return () => {
@@ -294,24 +330,36 @@ export function usePersistence({
   useEffect(() => {
     if (sessionSaveTimeoutRef.current)
       clearTimeout(sessionSaveTimeoutRef.current);
-    sessionSaveTimeoutRef.current = setTimeout(() => {
+    sessionSaveTimeoutRef.current = setTimeout(async () => {
       // Delete any previously saved sessions that no longer exist in state.
-      Object.keys(savedSessionsRef.current).forEach((sessionId) => {
+      const deletedSessionIds: string[] = [];
+      for (const sessionId of Object.keys(savedSessionsRef.current)) {
         if (!sessions.some((s) => s.id === sessionId)) {
-          deleteSessionOnDisk(sessionId).then(() => {
-            delete savedSessionsRef.current[sessionId];
-          });
+          try {
+            await deleteSessionOnDisk(sessionId);
+            deletedSessionIds.push(sessionId);
+          } catch (err) {
+            console.error("Failed to delete session:", err);
+            logError("deleteSessionOnDisk failed", err);
+          }
         }
+      }
+      deletedSessionIds.forEach((sessionId) => {
+        delete savedSessionsRef.current[sessionId];
       });
 
-      sessions.forEach((session) => {
+      for (const session of sessions) {
         const saved = savedSessionsRef.current[session.id];
         if (!saved || JSON.stringify(saved) !== JSON.stringify(session)) {
-          saveSession(session).then(() => {
+          try {
+            await saveSession(session);
             savedSessionsRef.current[session.id] = session;
-          });
+          } catch (err) {
+            console.error("Failed to save session:", err);
+            logError("saveSession failed", err);
+          }
         }
-      });
+      }
     }, 500);
     return () => {
       if (sessionSaveTimeoutRef.current)

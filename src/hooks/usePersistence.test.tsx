@@ -20,6 +20,7 @@ vi.mock("@tauri-apps/api/core", () => ({
       case "save_pdf_data":
       case "save_session":
       case "delete_session":
+      case "log_error":
         return Promise.resolve(null);
       default:
         return Promise.reject(
@@ -329,7 +330,12 @@ describe("usePersistence", () => {
           }
         }
         if (
-          ["save_pdf_data", "save_session", "delete_session"].includes(command)
+          [
+            "save_pdf_data",
+            "save_session",
+            "delete_session",
+            "log_error",
+          ].includes(command)
         ) {
           return Promise.resolve(null);
         }

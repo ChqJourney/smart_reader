@@ -1,5 +1,7 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 use tauri::Emitter;
 
 const LOG_FILE_NAME: &str = "app";
@@ -11,15 +13,30 @@ mod secure_storage;
 
 const OPEN_PDF_EVENT: &str = "open-pdf";
 
+struct CachedHash {
+    hash: String,
+    modified: SystemTime,
+    size: u64,
+}
+
 /// Application-wide state shared across Tauri commands.
 ///
 /// `allowed_paths` tracks PDF files that the user has explicitly authorized
 /// through the file dialog or recent-files list. Commands that read PDF bytes
 /// or compute hashes must validate paths against this set to prevent arbitrary
 /// file access from the webview.
+///
+/// `pdf_hash_cache` avoids re-reading large PDFs on every annotation save/load
+/// by caching the SHA-256 hash keyed on file metadata (mtime + size).
+///
+/// `dict_connection` reuses a single SQLite connection for dictionary lookups
+/// instead of opening a new connection per query. It is reset after a
+/// dictionary download so the next lookup opens the new file.
 struct AppState {
-    allowed_paths: Mutex<HashSet<std::path::PathBuf>>,
+    allowed_paths: Mutex<HashSet<PathBuf>>,
     api_key_storage: Arc<dyn secure_storage::ApiKeyStorage>,
+    pdf_hash_cache: Arc<Mutex<HashMap<PathBuf, CachedHash>>>,
+    dict_connection: Arc<Mutex<Option<rusqlite::Connection>>>,
 }
 
 impl AppState {
@@ -27,6 +44,8 @@ impl AppState {
         Self {
             allowed_paths: Mutex::new(HashSet::new()),
             api_key_storage: Arc::new(secure_storage::KeyringStorage),
+            pdf_hash_cache: Arc::new(Mutex::new(HashMap::new())),
+            dict_connection: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -131,6 +150,7 @@ pub fn run() {
             read_pdf_bytes,
             open_path,
             open_logs_dir,
+            log_error,
             get_pdf_hash,
             authorize_pdf_path,
             load_pdf_data,
@@ -202,9 +222,44 @@ async fn authorize_pdf_path(
     Ok(())
 }
 
+#[cfg(test)]
 fn read_pdf_bytes_core(state: &AppState, file_path: &str) -> Result<Vec<u8>, String> {
     validate_pdf_access(state, file_path)?;
     std::fs::read(file_path).map_err(|e| format!("Failed to read PDF file: {}", e))
+}
+
+fn compute_pdf_hash_cached(
+    cache: &Arc<Mutex<HashMap<PathBuf, CachedHash>>>,
+    file_path: &str,
+) -> Result<String, String> {
+    let path = PathBuf::from(file_path);
+    let metadata = std::fs::metadata(&path)
+        .map_err(|e| format!("Failed to read PDF metadata: {}", e))?;
+    let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+    let size = metadata.len();
+
+    {
+        let cached = cache.lock().unwrap();
+        if let Some(entry) = cached.get(&path) {
+            // size changes always invalidate; modified is a best-effort check.
+            // FAT32 and similar low-precision filesystems are covered by size.
+            if entry.modified == modified && entry.size == size {
+                return Ok(entry.hash.clone());
+            }
+        }
+    }
+
+    let hash = compute_pdf_hash(file_path)?;
+    let mut cached = cache.lock().unwrap();
+    cached.insert(
+        path,
+        CachedHash {
+            hash: hash.clone(),
+            modified,
+            size,
+        },
+    );
+    Ok(hash)
 }
 
 #[tauri::command]
@@ -212,10 +267,16 @@ async fn read_pdf_bytes(
     state: tauri::State<'_, AppState>,
     file_path: String,
 ) -> Result<tauri::ipc::Response, String> {
-    let bytes = read_pdf_bytes_core(&state, &file_path)?;
-    tauri::async_runtime::spawn_blocking(move || Ok(tauri::ipc::Response::new(bytes)))
-        .await
-        .map_err(|e| format!("Task failed: {}", e))?
+    // Path authorization uses tauri::State which is not Send, so keep it on
+    // the async runtime thread before moving file I/O to spawn_blocking.
+    validate_pdf_access(&state, &file_path)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let bytes = std::fs::read(&file_path)
+            .map_err(|e| format!("Failed to read PDF file: {}", e))?;
+        Ok::<_, String>(tauri::ipc::Response::new(bytes))
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -224,7 +285,8 @@ async fn get_pdf_hash(
     file_path: String,
 ) -> Result<String, String> {
     validate_pdf_access(&state, &file_path)?;
-    tauri::async_runtime::spawn_blocking(move || compute_pdf_hash(&file_path))
+    let cache = state.pdf_hash_cache.clone();
+    tauri::async_runtime::spawn_blocking(move || compute_pdf_hash_cached(&cache, &file_path))
         .await
         .map_err(|e| format!("Task failed: {}", e))?
 }
@@ -427,19 +489,17 @@ fn sessions_dir(base_dir: &std::path::Path) -> std::path::PathBuf {
 }
 
 fn annotations_path(
-    base_dir: &std::path::Path,
+    cache: &Arc<Mutex<HashMap<PathBuf, CachedHash>>>,
+    base_dir: &Path,
     file_path: &str,
-) -> Result<std::path::PathBuf, String> {
-    let hash = compute_pdf_hash(file_path)?;
+) -> Result<PathBuf, String> {
+    let hash = compute_pdf_hash_cached(cache, file_path)?;
     let file_name = format!("{}.json", hash);
     let dir = annotations_dir(base_dir);
     Ok(dir.join(file_name))
 }
 
-fn session_path(
-    base_dir: &std::path::Path,
-    session_id: &str,
-) -> Result<std::path::PathBuf, String> {
+fn session_path(base_dir: &Path, session_id: &str) -> Result<PathBuf, String> {
     validate_session_id(session_id)?;
     let dir = sessions_dir(base_dir);
     Ok(dir.join(format!("{}.json", session_id)))
@@ -458,26 +518,45 @@ fn validate_session_id(session_id: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn settings_path(base_dir: &std::path::Path) -> std::path::PathBuf {
+fn settings_path(base_dir: &Path) -> PathBuf {
     base_dir.join("settings.json")
 }
 
-fn recent_files_path(base_dir: &std::path::Path) -> std::path::PathBuf {
+fn recent_files_path(base_dir: &Path) -> PathBuf {
     base_dir.join("recent_files.json")
 }
 
-/// Global serialization lock for all atomic file writes. Writes are fast and
-/// infrequent, so a single lock keeps the implementation simple while preventing
-/// concurrent writes to the same file from racing on the temporary file / rename.
-static ATOMIC_WRITE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+/// Registry of per-file write locks. Atomic writes to the same destination
+/// file are serialized; writes to different files can proceed concurrently.
+///
+/// Each entry is an `Arc<Mutex<()>>` so a single lock can be held for the
+/// duration of the write while the registry itself is only held briefly.
+static ATOMIC_WRITE_LOCKS: std::sync::OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<()>>>>> =
+    std::sync::OnceLock::new();
+
+fn file_write_lock(path: &Path) -> Result<Arc<Mutex<()>>, String> {
+    let locks = ATOMIC_WRITE_LOCKS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut locks = locks
+        .lock()
+        .map_err(|e| format!("Failed to acquire write lock registry: {}", e))?;
+    Ok(locks
+        .entry(path.to_path_buf())
+        .or_insert_with(|| Arc::new(Mutex::new(())))
+        .clone())
+}
 
 /// Atomically write `content` to `path` by first writing to a temporary file
 /// in the same directory and then renaming it into place. This ensures that
 /// `path` is never in a partially-written state if the process crashes.
-fn atomic_write(path: &std::path::Path, content: &[u8]) -> Result<(), String> {
-    let _guard = ATOMIC_WRITE_LOCK
+///
+/// Concurrent writes to the same destination are serialized; different files
+/// can be written concurrently.
+fn atomic_write(path: &Path, content: &[u8]) -> Result<(), String> {
+    let file_lock = file_write_lock(path)?;
+
+    let _guard = file_lock
         .lock()
-        .map_err(|e| format!("Failed to acquire write lock: {}", e))?;
+        .map_err(|e| format!("Failed to acquire file write lock: {}", e))?;
     let tmp_path = path.with_extension("tmp");
     std::fs::write(&tmp_path, content)
         .map_err(|e| format!("Failed to write temporary file: {}", e))?;
@@ -487,10 +566,11 @@ fn atomic_write(path: &std::path::Path, content: &[u8]) -> Result<(), String> {
 }
 
 fn load_pdf_data_from_disk(
-    base_dir: &std::path::Path,
+    cache: &Arc<Mutex<HashMap<PathBuf, CachedHash>>>,
+    base_dir: &Path,
     file_path: &str,
 ) -> Result<PdfAnnotationsFile, String> {
-    let path = annotations_path(base_dir, file_path)?;
+    let path = annotations_path(cache, base_dir, file_path)?;
     if !path.exists() {
         return Ok(PdfAnnotationsFile::default());
     }
@@ -514,11 +594,12 @@ fn load_pdf_data_from_disk(
 }
 
 fn save_pdf_data_to_disk(
-    base_dir: &std::path::Path,
+    cache: &Arc<Mutex<HashMap<PathBuf, CachedHash>>>,
+    base_dir: &Path,
     file_path: &str,
     data: PdfAnnotationsFile,
 ) -> Result<(), String> {
-    let path = annotations_path(base_dir, file_path)?;
+    let path = annotations_path(cache, base_dir, file_path)?;
     let raw = serde_json::to_string_pretty(&data)
         .map_err(|e| format!("Failed to serialize annotations: {}", e))?;
     atomic_write(&path, raw.as_bytes())
@@ -651,11 +732,13 @@ fn save_recent_files_to_disk(
 #[tauri::command]
 async fn load_pdf_data(
     app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
     file_path: String,
 ) -> Result<PdfAnnotationsFile, String> {
+    let cache = state.pdf_hash_cache.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let base_dir = paths::app_data_dir(&app)?;
-        load_pdf_data_from_disk(&base_dir, &file_path)
+        load_pdf_data_from_disk(&cache, &base_dir, &file_path)
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
@@ -664,12 +747,14 @@ async fn load_pdf_data(
 #[tauri::command]
 async fn save_pdf_data(
     app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
     file_path: String,
     data: PdfAnnotationsFile,
 ) -> Result<(), String> {
+    let cache = state.pdf_hash_cache.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let base_dir = paths::app_data_dir(&app)?;
-        save_pdf_data_to_disk(&base_dir, &file_path, data)
+        save_pdf_data_to_disk(&cache, &base_dir, &file_path, data)
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
@@ -767,22 +852,38 @@ async fn check_dictionary(app: tauri::AppHandle) -> Result<dictionary::Dictionar
 }
 
 #[tauri::command]
-async fn download_dictionary(app: tauri::AppHandle) -> Result<(), String> {
-    dictionary::download_dictionary(app).await
+async fn download_dictionary(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let result = dictionary::download_dictionary(app).await;
+    if result.is_ok() {
+        if let Ok(mut conn) = state.dict_connection.lock() {
+            *conn = None;
+        }
+    }
+    result
 }
 
 #[tauri::command]
 async fn lookup_word(
     app: tauri::AppHandle,
+    state: tauri::State<'_, AppState>,
     word: String,
 ) -> Result<Option<dictionary::DictEntry>, String> {
+    let dict_connection = state.dict_connection.clone();
     tauri::async_runtime::spawn_blocking(
         move || -> Result<Option<dictionary::DictEntry>, String> {
-            dictionary::lookup_word(&app, word)
+            dictionary::lookup_word(&dict_connection, &app, word)
         },
     )
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+fn log_error(message: String) {
+    log::error!("{}", message);
 }
 
 #[cfg(test)]
@@ -880,6 +981,10 @@ mod tests {
         assert_eq!(hash.len(), 64);
     }
 
+    fn test_hash_cache() -> Arc<Mutex<HashMap<PathBuf, CachedHash>>> {
+        Arc::new(Mutex::new(HashMap::new()))
+    }
+
     #[test]
     fn annotations_path_is_deterministic() {
         let base = tempfile::tempdir().unwrap();
@@ -887,8 +992,9 @@ mod tests {
         let pdf_path = pdf_dir.path().join("test.pdf");
         std::fs::write(&pdf_path, b"pdf content").unwrap();
 
-        let p1 = annotations_path(base.path(), pdf_path.to_str().unwrap()).unwrap();
-        let p2 = annotations_path(base.path(), pdf_path.to_str().unwrap()).unwrap();
+        let cache = test_hash_cache();
+        let p1 = annotations_path(&cache, base.path(), pdf_path.to_str().unwrap()).unwrap();
+        let p2 = annotations_path(&cache, base.path(), pdf_path.to_str().unwrap()).unwrap();
         assert_eq!(p1, p2);
         assert!(p1.to_string_lossy().contains("annotations"));
         assert_eq!(p1.extension().unwrap(), "json");
@@ -905,9 +1011,17 @@ mod tests {
             annotations: vec![sample_annotation("1"), sample_annotation("2")],
             session_ids: vec!["session-a".to_string()],
         };
-        save_pdf_data_to_disk(base.path(), pdf_path.to_str().unwrap(), data.clone()).unwrap();
+        let cache = test_hash_cache();
+        save_pdf_data_to_disk(
+            &cache,
+            base.path(),
+            pdf_path.to_str().unwrap(),
+            data.clone(),
+        )
+        .unwrap();
 
-        let loaded = load_pdf_data_from_disk(base.path(), pdf_path.to_str().unwrap()).unwrap();
+        let loaded =
+            load_pdf_data_from_disk(&cache, base.path(), pdf_path.to_str().unwrap()).unwrap();
         assert_eq!(loaded, data);
     }
 
@@ -937,10 +1051,12 @@ mod tests {
             ],
             "sessionIds": ["s1", "s2"]
         }"#;
-        let path = annotations_path(base.path(), pdf_path.to_str().unwrap()).unwrap();
+        let cache = test_hash_cache();
+        let path = annotations_path(&cache, base.path(), pdf_path.to_str().unwrap()).unwrap();
         std::fs::write(&path, raw).unwrap();
 
-        let loaded = load_pdf_data_from_disk(base.path(), pdf_path.to_str().unwrap()).unwrap();
+        let loaded =
+            load_pdf_data_from_disk(&cache, base.path(), pdf_path.to_str().unwrap()).unwrap();
         assert_eq!(loaded.annotations.len(), 1);
         let annotation = &loaded.annotations[0];
         assert_eq!(annotation.id, "a1");
@@ -972,9 +1088,10 @@ mod tests {
             annotations: vec![annotation],
             session_ids: vec!["s1".to_string()],
         };
-        save_pdf_data_to_disk(base.path(), pdf_path.to_str().unwrap(), data).unwrap();
+        let cache = test_hash_cache();
+        save_pdf_data_to_disk(&cache, base.path(), pdf_path.to_str().unwrap(), data).unwrap();
 
-        let path = annotations_path(base.path(), pdf_path.to_str().unwrap()).unwrap();
+        let path = annotations_path(&cache, base.path(), pdf_path.to_str().unwrap()).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();
         assert!(
             raw.contains("\"sessionId\":"),
@@ -1005,7 +1122,9 @@ mod tests {
         let pdf_path = pdf_dir.path().join("test.pdf");
         std::fs::write(&pdf_path, b"pdf content").unwrap();
 
-        let loaded = load_pdf_data_from_disk(base.path(), pdf_path.to_str().unwrap()).unwrap();
+        let cache = test_hash_cache();
+        let loaded =
+            load_pdf_data_from_disk(&cache, base.path(), pdf_path.to_str().unwrap()).unwrap();
         assert!(loaded.annotations.is_empty());
         assert!(loaded.session_ids.is_empty());
     }
@@ -1018,11 +1137,13 @@ mod tests {
         std::fs::write(&pdf_path, b"pdf content").unwrap();
 
         let annotations = vec![sample_annotation("1")];
-        let path = annotations_path(base.path(), pdf_path.to_str().unwrap()).unwrap();
+        let cache = test_hash_cache();
+        let path = annotations_path(&cache, base.path(), pdf_path.to_str().unwrap()).unwrap();
         let raw = serde_json::to_string_pretty(&annotations).unwrap();
         std::fs::write(&path, raw).unwrap();
 
-        let loaded = load_pdf_data_from_disk(base.path(), pdf_path.to_str().unwrap()).unwrap();
+        let loaded =
+            load_pdf_data_from_disk(&cache, base.path(), pdf_path.to_str().unwrap()).unwrap();
         assert_eq!(loaded.annotations, annotations);
         assert!(loaded.session_ids.is_empty());
     }

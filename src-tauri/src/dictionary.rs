@@ -1,5 +1,6 @@
 use rusqlite::{Connection, OptionalExtension};
 use sha2::{Digest, Sha256};
+use std::sync::{Arc, Mutex};
 use tauri::Emitter;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
@@ -536,17 +537,28 @@ fn verify_file_hash(path: &std::path::Path, expected: &str) -> Result<(), String
     }
 }
 
-pub fn lookup_word(app: &tauri::AppHandle, word: String) -> Result<Option<DictEntry>, String> {
+pub fn lookup_word(
+    dict_connection: &Arc<Mutex<Option<Connection>>>,
+    app: &tauri::AppHandle,
+    word: String,
+) -> Result<Option<DictEntry>, String> {
     let path = dict_path(app)?;
     if !path.exists() {
         return Ok(None);
     }
 
-    // Open a fresh connection per query instead of holding a global Mutex guard
-    // for the entire SQLite query. This avoids blocking concurrent lookups and
-    // keeps the critical section minimal.
-    let db = Connection::open(&path)
-        .map_err(|e| format!("Failed to open dictionary database: {}", e))?;
+    let mut conn_guard = dict_connection
+        .lock()
+        .map_err(|e| format!("Dictionary connection lock poisoned: {}", e))?;
+    if conn_guard.is_none() {
+        *conn_guard = Some(
+            Connection::open(&path)
+                .map_err(|e| format!("Failed to open dictionary database: {}", e))?,
+        );
+    }
+    let db = conn_guard
+        .as_ref()
+        .ok_or("Dictionary connection is not available")?;
 
     let mut stmt = db
         .prepare(

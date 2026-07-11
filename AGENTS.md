@@ -167,9 +167,9 @@ npm run tauri build -- --no-bundle
    ```
 2. GitHub Actions `cd.yml` 自动：
    - 用 `--no-bundle` 构建 Windows `exe`
-   - 将 `exe` 打包为 zip（Tauri Updater 更新包）
-   - 用私钥生成 `latest.json`
-   - 上传 `SpecReader AI v{version}.exe`、`SpecReader-AI_{version}_x64.zip`、`latest.json` 到 Release
+   - 用 `tauri bundle` 生成 NSIS 安装包（`SpecReader AI_*_x64-setup.exe`），并自动签名生成 `.sig`
+   - 用 `.sig` 内容生成 `latest.json`
+   - 上传 `SpecReader AI v{version}.exe`、`SpecReader-AI_{version}_x64-setup.exe`、`latest.json` 到 Release
 3. 客户端启动 3 秒后自动检查 `latest.json`，发现新版本提示下载并重启。
 
 > 注意：Tauri 更新包签名私钥保存在 `~/.tauri/specreader.key`，需配置为 GitHub Secret `TAURI_SIGNING_PRIVATE_KEY`。

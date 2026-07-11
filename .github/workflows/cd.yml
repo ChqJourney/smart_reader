@@ -37,8 +37,6 @@ jobs:
       # Build only the executable, skip installer bundles.
       - name: Build Tauri executable
         run: npm run tauri build -- --no-bundle
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
       - name: Prepare release assets
         id: assets
@@ -47,29 +45,55 @@ jobs:
           $tag = "${{ github.ref_name }}"
           $version = $tag -replace '^v', ''
           $releaseDir = "src-tauri/target/release"
+          $bundleDir = "$releaseDir/bundle/nsis"
+
+          # Direct-download executable.
           $exe = Get-ChildItem -Path $releaseDir -Filter "*.exe" |
             Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
           if (-not $exe) {
             throw "No executable found in $releaseDir"
           }
-
-          # Human-readable executable for direct download.
           $exeName = "SpecReader AI v$version.exe"
           Copy-Item -Path $exe.FullName -Destination $exeName -Force
 
-          # Updater expects a .zip archive containing the executable.
-          $zipName = "SpecReader-AI_${version}_x64.zip"
-          Compress-Archive -Path $exe.FullName -DestinationPath $zipName -Force
+          # Build the NSIS installer bundle. With createUpdaterArtifacts enabled,
+          # Tauri also generates the *.sig signature file for the updater.
+          npm run tauri bundle
+
+          # Locate the generated NSIS installer.
+          $nsis = Get-ChildItem -Path $bundleDir -Filter "*-setup.exe" |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if (-not $nsis) {
+            throw "No NSIS installer found in $bundleDir"
+          }
+          $nsisName = "SpecReader-AI_${version}_x64-setup.exe"
+          Copy-Item -Path $nsis.FullName -Destination $nsisName -Force
+
+          # Read the auto-generated signature.
+          $sigFile = "$($nsis.FullName).sig"
+          if (-not (Test-Path $sigFile)) {
+            throw "Signature file not found: $sigFile"
+          }
+          $signature = (Get-Content -Path $sigFile -Raw).Trim()
+
+          # Build the Tauri v2 static updater manifest.
+          $manifest = @{
+            version = $version
+            notes = "SpecReader AI v$version"
+            pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+            platforms = @{
+              "windows-x86_64" = @{
+                signature = $signature
+                url = "https://github.com/photonee/specreader-ai/releases/download/$tag/$nsisName"
+              }
+            }
+          }
+          $manifest | ConvertTo-Json -Depth 10 | Set-Content -Path "latest.json" -Encoding UTF8
 
           "EXE_PATH=$exeName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "ZIP_PATH=$zipName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-
-      # Generate the updater manifest (latest.json) signed with the private key.
-      - name: Generate updater JSON
-        shell: pwsh
-        run: |
-          cargo tauri updater --ci
+          "INSTALLER_PATH=$nsisName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
@@ -78,7 +102,7 @@ jobs:
         with:
           files: |
             ${{ steps.assets.outputs.EXE_PATH }}
-            ${{ steps.assets.outputs.ZIP_PATH }}
+            ${{ steps.assets.outputs.INSTALLER_PATH }}
             latest.json
           name: Release ${{ github.ref_name }}
           draft: false

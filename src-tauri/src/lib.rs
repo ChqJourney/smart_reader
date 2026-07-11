@@ -186,8 +186,26 @@ struct InterpretationSession {
     is_streaming: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     streaming_message_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    action: Option<String>,
     created_at: u64,
     updated_at: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct SystemPrompts {
+    translate: String,
+    explain: String,
+}
+
+impl Default for SystemPrompts {
+    fn default() -> Self {
+        Self {
+            translate: "你是一位检测认证行业标准文档翻译助手，擅长把英文标准条款准确翻译成{targetLanguage}。请保持专业术语准确，首次出现关键术语时保留原文，不要编造片段中未提及的条款或页码。".to_string(),
+            explain: "你是一位检测认证行业标准文档阅读助手，擅长把复杂的英文标准条款解释得清晰易懂。请基于用户提供的文档片段用{targetLanguage}回答，不要编造片段中未提及的条款或页码。".to_string(),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -204,6 +222,8 @@ struct AppSettings {
     llm: LlmConfig,
     #[serde(default = "default_target_language")]
     target_language: String,
+    #[serde(default)]
+    system_prompts: SystemPrompts,
 }
 
 fn default_target_language() -> String {
@@ -219,6 +239,7 @@ impl Default for AppSettings {
                 model: "gpt-4o-mini".to_string(),
             },
             target_language: default_target_language(),
+            system_prompts: SystemPrompts::default(),
         }
     }
 }
@@ -551,6 +572,7 @@ mod tests {
             }],
             is_streaming: false,
             streaming_message_id: None,
+            action: Some("explain".to_string()),
             created_at: 1,
             updated_at: 2,
         }
@@ -564,6 +586,7 @@ mod tests {
                 model: "gpt-4o-mini".to_string(),
             },
             target_language: "中文".to_string(),
+            system_prompts: SystemPrompts::default(),
         }
     }
 
@@ -763,6 +786,8 @@ mod tests {
         assert_eq!(loaded, AppSettings::default());
         assert_eq!(loaded.target_language, "中文");
         assert_eq!(loaded.llm.model, "gpt-4o-mini");
+        assert!(!loaded.system_prompts.translate.is_empty());
+        assert!(!loaded.system_prompts.explain.is_empty());
     }
 
     #[test]
@@ -785,6 +810,7 @@ mod tests {
         assert!(raw.contains("\"targetLanguage\":"), "serialized settings should use camelCase targetLanguage");
         assert!(raw.contains("\"baseUrl\":"), "serialized llm config should use camelCase baseUrl");
         assert!(raw.contains("\"apiKey\":"), "serialized llm config should use camelCase apiKey");
+        assert!(raw.contains("\"systemPrompts\":"), "serialized settings should use camelCase systemPrompts");
     }
 
     #[test]

@@ -1,5 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { StashItem } from "./stash";
+import { SelectionAction } from "./llm";
+
+export type SessionAction = SelectionAction | "custom";
 
 export interface InterpretationMessage {
   id: string;
@@ -14,6 +17,7 @@ export interface InterpretationSession {
   messages: InterpretationMessage[];
   isStreaming: boolean;
   streamingMessageId?: string;
+  action?: SessionAction;
   createdAt: number;
   updatedAt: number;
 }
@@ -29,13 +33,18 @@ function createMessage(role: "user" | "assistant", content: string): Interpretat
   };
 }
 
-export function createSession(sources: StashItem[], prompt: string): InterpretationSession {
+export function createSession(
+  sources: StashItem[],
+  prompt: string,
+  action: SessionAction = "explain"
+): InterpretationSession {
   const now = Date.now();
   return {
     id: crypto.randomUUID(),
     sources,
     messages: [createMessage("user", prompt)],
     isStreaming: false,
+    action,
     createdAt: now,
     updatedAt: now,
   };

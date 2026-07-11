@@ -9,6 +9,7 @@ import {
 } from "../services/annotations";
 import {
   InterpretationSession,
+  SessionAction,
   appendUserMessage,
   createSession,
   deleteSession,
@@ -262,7 +263,11 @@ export function usePersistence({
       const messagesForApi: ChatMessage[] = [
         {
           role: "system",
-          content: buildSystemPrompt(currentSettings.targetLanguage),
+          content: buildSystemPrompt(
+            sessionRef.current.action ?? "explain",
+            currentSettings.targetLanguage,
+            currentSettings.systemPrompts
+          ),
         },
         ...sessionRef.current.messages
           .filter((m) => !(m.role === "assistant" && m.id === messageId))
@@ -311,8 +316,12 @@ export function usePersistence({
     stream();
   }, []);
 
-  const startSessionFromStashes = useCallback((prompt: string, sources: StashItem[]) => {
-    const session = createSession(sources, prompt);
+  const startSessionFromStashes = useCallback((
+    prompt: string,
+    sources: StashItem[],
+    action: SessionAction = "explain"
+  ) => {
+    const session = createSession(sources, prompt, action);
     const streamingSession = startAssistantResponse(session);
     const sessionId = streamingSession.id;
     const messageId = streamingSession.streamingMessageId!;
@@ -390,7 +399,7 @@ export function usePersistence({
       })),
       settingsRef.current.targetLanguage
     );
-    startSessionFromStashes(enrichedPrompt, visibleStashes);
+    startSessionFromStashes(enrichedPrompt, visibleStashes, "custom");
 
     // Persistence of the session and its PDF references is handled by the
     // debounced effects; avoid manual writes here to prevent clobbering.
@@ -419,7 +428,7 @@ export function usePersistence({
         },
         text
       );
-      const { sessionId } = startSessionFromStashes(prompt, [sourceStash]);
+      const { sessionId } = startSessionFromStashes(prompt, [sourceStash], action);
 
       // Link the annotation to the session; persistence is handled by debounced effects.
       setAnnotations((prev) =>

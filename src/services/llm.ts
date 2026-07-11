@@ -1,6 +1,6 @@
-import { LlmConfig } from "./settings";
+import { LlmConfig, SystemPrompts } from "./settings";
 
-export type { LlmConfig };
+export type { LlmConfig, SystemPrompts };
 
 export type SelectionAction = "explain" | "translate";
 
@@ -94,8 +94,13 @@ export async function* streamChatCompletion(
   }
 }
 
-export function buildSystemPrompt(targetLanguage: string): string {
-  return `你是一位检测认证行业标准文档阅读助手，擅长把复杂的英文标准条款解释得清晰易懂。请基于用户提供的文档片段用${targetLanguage}回答，不要编造片段中未提及的条款或页码。`;
+export function buildSystemPrompt(
+  action: "translate" | "explain" | "custom",
+  targetLanguage: string,
+  systemPrompts: SystemPrompts
+): string {
+  const raw = action === "translate" ? systemPrompts.translate : systemPrompts.explain;
+  return raw.replace(/\{targetLanguage\}/g, targetLanguage);
 }
 
 export function buildCustomInterpretPrompt(

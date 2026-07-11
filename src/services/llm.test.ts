@@ -5,7 +5,13 @@ import {
   buildSystemPrompt,
   streamChatCompletion,
   LlmConfig,
+  SystemPrompts,
 } from "../services/llm";
+
+const sampleSystemPrompts: SystemPrompts = {
+  translate: "Translate to {targetLanguage}.",
+  explain: "Explain in {targetLanguage}.",
+};
 
 describe("llm service", () => {
   beforeEach(() => {
@@ -13,10 +19,28 @@ describe("llm service", () => {
   });
 
   describe("buildSystemPrompt", () => {
-    it("includes target language", () => {
-      const prompt = buildSystemPrompt("English");
-      expect(prompt).toContain("English");
-      expect(prompt).toContain("检测认证");
+    it("uses translate prompt for translate action", () => {
+      const prompt = buildSystemPrompt("translate", "English", sampleSystemPrompts);
+      expect(prompt).toBe("Translate to English.");
+    });
+
+    it("uses explain prompt for explain and custom actions", () => {
+      const explain = buildSystemPrompt("explain", "中文", sampleSystemPrompts);
+      const custom = buildSystemPrompt("custom", "中文", sampleSystemPrompts);
+      expect(explain).toBe("Explain in 中文.");
+      expect(custom).toBe("Explain in 中文.");
+    });
+
+    it("replaces all targetLanguage placeholders", () => {
+      const prompt = buildSystemPrompt(
+        "translate",
+        "English",
+        {
+          translate: "Use {targetLanguage} and only {targetLanguage}.",
+          explain: "Explain.",
+        }
+      );
+      expect(prompt).toBe("Use English and only English.");
     });
   });
 

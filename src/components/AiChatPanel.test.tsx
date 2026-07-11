@@ -183,7 +183,7 @@ describe("AiChatPanel", () => {
     expect(screen.getByText(/请解读/)).toBeInTheDocument();
   });
 
-  it("expands session to show messages", () => {
+  it("enters full-screen chatbox when clicking a session", () => {
     const sessions = [
       makeSession({
         id: "session-1",
@@ -200,6 +200,87 @@ describe("AiChatPanel", () => {
     fireEvent.click(screen.getByText(/问题/));
 
     expect(screen.getByText(/回答/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /返回解读记录/i })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: /解读记录/i })).not.toBeInTheDocument();
+  });
+
+  it("returns to session list when back button is clicked", () => {
+    const sessions = [
+      makeSession({
+        id: "session-1",
+        messages: [
+          makeMessage({ id: "msg-1", role: "user", content: "问题" }),
+          makeMessage({ id: "msg-2", role: "assistant", content: "回答" }),
+        ],
+      }),
+    ];
+
+    renderPanel({ sessions });
+
+    fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
+    fireEvent.click(screen.getByText(/问题/));
+    expect(screen.getByText(/回答/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /返回解读记录/i }));
+
+    expect(screen.queryByText(/回答/)).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /解读记录/i })).toBeInTheDocument();
+  });
+
+  it("enters chatbox when expandedSessionId prop is provided", () => {
+    const sessions = [
+      makeSession({
+        id: "session-1",
+        messages: [
+          makeMessage({ id: "msg-1", role: "user", content: "问题" }),
+          makeMessage({ id: "msg-2", role: "assistant", content: "回答" }),
+        ],
+      }),
+    ];
+
+    const { rerender } = renderPanel({ sessions });
+    expect(screen.getByRole("tab", { name: /解读记录/i })).toBeInTheDocument();
+
+    rerender(
+      <AiChatPanel
+        stashes={[]}
+        sessions={sessions}
+        expandedSessionId="session-1"
+        onRemoveStash={vi.fn()}
+        onClearStashes={vi.fn()}
+        onCustomInterpret={vi.fn()}
+        onFollowUp={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/回答/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /返回解读记录/i })).toBeInTheDocument();
+  });
+
+  it("returns to list when active session is removed", () => {
+    const sessions = [
+      makeSession({
+        id: "session-1",
+        messages: [makeMessage({ id: "msg-1", role: "user", content: "问题" })],
+      }),
+    ];
+
+    const { rerender } = renderPanel({ sessions, expandedSessionId: "session-1" });
+    expect(screen.getByText(/问题/)).toBeInTheDocument();
+
+    rerender(
+      <AiChatPanel
+        stashes={[]}
+        sessions={[]}
+        onRemoveStash={vi.fn()}
+        onClearStashes={vi.fn()}
+        onCustomInterpret={vi.fn()}
+        onFollowUp={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText(/问题/)).not.toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /解读记录/i })).toBeInTheDocument();
   });
 
   it("calls onFollowUp when submitting follow-up", () => {

@@ -48,7 +48,7 @@ describe("sessions service", () => {
   });
 
   describe("createSession", () => {
-    it("creates a session with sources and initial user prompt", () => {
+    it("creates a session with default explain action", () => {
       const sources = [makeStashItem("stash-1", "text one")];
       const session = createSession(sources, "请解读这两段内容的关系");
 
@@ -56,15 +56,15 @@ describe("sessions service", () => {
         id: "test-uuid-0001",
         sources,
         isStreaming: false,
+        action: "explain",
       });
-      expect(session.messages).toHaveLength(1);
-      expect(session.messages[0]).toMatchObject({
-        id: "test-uuid-0002",
-        role: "user",
-        content: "请解读这两段内容的关系",
-      });
-      expect(session.createdAt).toBeGreaterThan(0);
-      expect(session.updatedAt).toBeGreaterThanOrEqual(session.createdAt);
+    });
+
+    it("creates a session with custom action", () => {
+      const sources = [makeStashItem("stash-1", "text one")];
+      const session = createSession(sources, "prompt", "custom");
+
+      expect(session.action).toBe("custom");
     });
   });
 

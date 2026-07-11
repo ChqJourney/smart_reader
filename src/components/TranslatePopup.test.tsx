@@ -7,6 +7,10 @@ vi.mock("../services/settings", () => ({
   loadSettings: vi.fn().mockResolvedValue({
     targetLanguage: "中文",
     llm: { baseUrl: "", apiKey: "", model: "" },
+    systemPrompts: {
+      translate: "Translate to {targetLanguage}.",
+      explain: "Explain in {targetLanguage}.",
+    },
   }),
 }));
 

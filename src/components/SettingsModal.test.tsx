@@ -5,6 +5,10 @@ import SettingsModal from "./SettingsModal";
 const defaultSettings = {
   llm: { baseUrl: "https://api.openai.com/v1", apiKey: "", model: "gpt-4o-mini" },
   targetLanguage: "中文",
+  systemPrompts: {
+    translate: "翻译提示词 {targetLanguage}",
+    explain: "解读提示词 {targetLanguage}",
+  },
 };
 
 describe("SettingsModal", () => {
@@ -53,7 +57,65 @@ describe("SettingsModal", () => {
     expect(onSave).toHaveBeenCalledWith({
       llm: { baseUrl: "https://api.openai.com/v1", apiKey: "", model: "gpt-4" },
       targetLanguage: "English",
+      systemPrompts: defaultSettings.systemPrompts,
     });
+  });
+
+  it("renders system prompt tabs and switches between translate and explain", () => {
+    render(
+      <SettingsModal
+        open
+        initialSettings={defaultSettings}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("系统提示词")).toBeInTheDocument();
+    expect(screen.getByLabelText("翻译系统提示词")).toHaveValue("翻译提示词 {targetLanguage}");
+
+    fireEvent.click(screen.getByText("解读"));
+    expect(screen.getByLabelText("解读系统提示词")).toHaveValue("解读提示词 {targetLanguage}");
+  });
+
+  it("resets active prompt to default", () => {
+    render(
+      <SettingsModal
+        open
+        initialSettings={defaultSettings}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+      />
+    );
+
+    const textarea = screen.getByLabelText("翻译系统提示词");
+    fireEvent.change(textarea, { target: { value: "modified" } });
+    expect(textarea).toHaveValue("modified");
+
+    fireEvent.click(screen.getByText("恢复默认"));
+    expect(textarea).not.toHaveValue("modified");
+    expect((textarea as HTMLTextAreaElement).value).toContain("翻译助手");
+  });
+
+  it("resets all settings to defaults", () => {
+    const onSave = vi.fn();
+    render(
+      <SettingsModal
+        open
+        initialSettings={defaultSettings}
+        onClose={vi.fn()}
+        onSave={onSave}
+      />
+    );
+
+    fireEvent.change(screen.getByLabelText("Model"), { target: { value: "custom" } });
+    fireEvent.click(screen.getByText("恢复全部默认"));
+    fireEvent.click(screen.getByText("保存"));
+
+    expect(onSave).toHaveBeenCalled();
+    const saved = onSave.mock.calls[0][0];
+    expect(saved.llm.model).toBe("gpt-4o-mini");
+    expect(saved.systemPrompts.translate).toContain("翻译助手");
   });
 
   it("calls onClose when cancel clicked or overlay clicked", () => {

@@ -8,6 +8,12 @@ const DEFAULT_SETTINGS = {
     model: "gpt-4o-mini",
   },
   targetLanguage: "中文",
+  systemPrompts: {
+    translate:
+      "你是一位检测认证行业标准文档翻译助手，擅长把英文标准条款准确翻译成{targetLanguage}。请保持专业术语准确，首次出现关键术语时保留原文，不要编造片段中未提及的条款或页码。",
+    explain:
+      "你是一位检测认证行业标准文档阅读助手，擅长把复杂的英文标准条款解释得清晰易懂。请基于用户提供的文档片段用{targetLanguage}回答，不要编造片段中未提及的条款或页码。",
+  },
 };
 
 describe("settings service", () => {
@@ -37,6 +43,20 @@ describe("settings service", () => {
     expect(settings.llm.baseUrl).toBe("https://custom.example.com");
     expect(settings.llm.apiKey).toBe("sk-test");
     expect(settings.targetLanguage).toBe("English");
+    expect(settings.systemPrompts).toEqual(DEFAULT_SETTINGS.systemPrompts);
+  });
+
+  it("fills default system prompts when backend returns old format", async () => {
+    mockTauriInvoke({
+      load_settings: () => ({
+        llm: { baseUrl: "https://api.openai.com/v1", apiKey: "sk-test", model: "gpt-4o-mini" },
+        targetLanguage: "中文",
+      }),
+    });
+    const { loadSettings } = await import("../services/settings");
+    const settings = await loadSettings();
+    expect(settings.systemPrompts.translate).toContain("翻译助手");
+    expect(settings.systemPrompts.explain).toContain("阅读助手");
   });
 
   it("migrates legacy localStorage config when backend apiKey is empty", async () => {
@@ -104,6 +124,10 @@ describe("settings service", () => {
     const settings = {
       llm: { baseUrl: "x", apiKey: "y", model: "z" },
       targetLanguage: "中文",
+      systemPrompts: {
+        translate: "translate prompt",
+        explain: "explain prompt",
+      },
     };
     await saveSettings(settings);
     expect(saved).toEqual(settings);

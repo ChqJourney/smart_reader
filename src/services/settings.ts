@@ -6,12 +6,25 @@ export interface LlmConfig {
   model: string;
 }
 
+export interface SystemPrompts {
+  translate: string;
+  explain: string;
+}
+
 export interface AppSettings {
   llm: LlmConfig;
   targetLanguage: string;
+  systemPrompts: SystemPrompts;
 }
 
 const LEGACY_STORAGE_KEY = "standardread-llm-config";
+
+const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
+  translate:
+    "你是一位检测认证行业标准文档翻译助手，擅长把英文标准条款准确翻译成{targetLanguage}。请保持专业术语准确，首次出现关键术语时保留原文，不要编造片段中未提及的条款或页码。",
+  explain:
+    "你是一位检测认证行业标准文档阅读助手，擅长把复杂的英文标准条款解释得清晰易懂。请基于用户提供的文档片段用{targetLanguage}回答，不要编造片段中未提及的条款或页码。",
+};
 
 const DEFAULT_SETTINGS: AppSettings = {
   llm: {
@@ -20,9 +33,10 @@ const DEFAULT_SETTINGS: AppSettings = {
     model: "gpt-4o-mini",
   },
   targetLanguage: "中文",
+  systemPrompts: DEFAULT_SYSTEM_PROMPTS,
 };
 
-function isValidSettings(value: unknown): value is AppSettings {
+function isValidSettings(value: unknown): value is Partial<AppSettings> {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -31,6 +45,23 @@ function isValidSettings(value: unknown): value is AppSettings {
     typeof (value as AppSettings).llm.apiKey === "string" &&
     typeof (value as AppSettings).targetLanguage === "string"
   );
+}
+
+function normalizeSettings(value: Partial<AppSettings>): AppSettings {
+  return {
+    llm: {
+      baseUrl: value.llm?.baseUrl ?? DEFAULT_SETTINGS.llm.baseUrl,
+      apiKey: value.llm?.apiKey ?? DEFAULT_SETTINGS.llm.apiKey,
+      model: value.llm?.model ?? DEFAULT_SETTINGS.llm.model,
+    },
+    targetLanguage: value.targetLanguage ?? DEFAULT_SETTINGS.targetLanguage,
+    systemPrompts: {
+      translate:
+        value.systemPrompts?.translate ?? DEFAULT_SYSTEM_PROMPTS.translate,
+      explain:
+        value.systemPrompts?.explain ?? DEFAULT_SYSTEM_PROMPTS.explain,
+    },
+  };
 }
 
 function mergeWithLegacy(base: AppSettings): AppSettings {
@@ -51,10 +82,11 @@ export async function loadSettings(): Promise<AppSettings> {
   try {
     const backend = await invoke<AppSettings>("load_settings");
     if (isValidSettings(backend)) {
-      if (!backend.llm.apiKey) {
-        return mergeWithLegacy(backend);
+      const normalized = normalizeSettings(backend);
+      if (!normalized.llm.apiKey) {
+        return mergeWithLegacy(normalized);
       }
-      return backend;
+      return normalized;
     }
   } catch (err) {
     console.error("Failed to load settings:", err);
@@ -80,4 +112,4 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
   }
 }
 
-export { DEFAULT_SETTINGS };
+export { DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPTS };

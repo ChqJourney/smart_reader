@@ -46,7 +46,7 @@ jobs:
         run: npm audit --audit-level=moderate
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium webkit
 
       - name: Run frontend unit / integration tests
         run: npm run test

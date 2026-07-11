@@ -149,15 +149,15 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    app.run(|app_handle, event| {
+    app.run(|_app_handle, _event| {
         #[cfg(target_os = "macos")]
-        if let tauri::RunEvent::Opened { urls } = event {
+        if let tauri::RunEvent::Opened { urls } = _event {
             // Finder file-open / single-instance activation: pick the first PDF
             // URL and emit it to the frontend so the existing window opens it.
             for url in urls {
                 let path = url.to_string();
                 if path.to_lowercase().ends_with(".pdf") {
-                    let _ = app_handle.emit(OPEN_PDF_EVENT, path);
+                    let _ = _app_handle.emit(OPEN_PDF_EVENT, path);
                     break;
                 }
             }

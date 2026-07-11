@@ -89,10 +89,10 @@
 - **实现概要**：
   1. 后端：添加 `tauri-plugin-updater = "2"` 与 `tauri-plugin-process = "2"` 依赖，在 `lib.rs` 初始化插件。
   2. 生成签名密钥对（私钥保存于 `~/.tauri/specreader.key`，公钥写入 `tauri.conf.json`）。
-  3. `tauri.conf.json` 增加 `plugins.updater` 节点，endpoint 指向 GitHub Release `latest.json`；Windows `installMode` 设为 `passive`（适配便携 exe）。
+  3. `tauri.conf.json` 增加 `plugins.updater` 节点，endpoint 指向 GitHub Release `latest.json`；Windows `installMode` 设为 `passive`。
   4. `capabilities/default.json` 增加 `updater:default` 与 `process:default` 权限。
   5. 前端新增 `src/services/updater.ts`，应用启动 3 秒后调用 `check()`，发现更新时弹窗确认，确认后 `downloadAndInstall()` + `relaunch()`。
-  6. CD 工作流改为：Windows runner 用 `--no-bundle` 构建裸 `exe`；将 `exe` 打包为 zip 作为更新包；调用 `cargo tauri updater --ci` 生成签名后的 `latest.json`；一起上传到 Release。
+  6. CD 工作流改为：Windows runner 用 `--no-bundle` 构建裸 `exe`；再运行 `tauri bundle` 生成 NSIS 安装包（`*-setup.exe`），Tauri 同时自动生成 `.sig` 签名文件；读取 `.sig` 内容写入 `latest.json`；裸 `exe`、NSIS 安装包、`latest.json` 一起上传到 Release。
   7. 新增 `scripts/bump-version.mjs`，同步修改 `package.json`、`Cargo.toml`、`tauri.conf.json` 版本号。
 - **注意**：更新包签名（Tauri）已启用；Windows 代码签名未启用，SmartScreen 仍会提示。
 - **验收**：发布新版本后，旧版客户端能检测到更新并下载安装；`latest.json` 签名验证通过。

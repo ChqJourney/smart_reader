@@ -1,7 +1,7 @@
 {
   "name": "pdf-standard-agent",
   "private": true,
-  "version": "0.5.1",
+  "version": "0.5.2",
   "description": "AI assistant for reading and interpreting standard PDFs",
   "author": "SpecReader AI Team",
   "license": "Proprietary",

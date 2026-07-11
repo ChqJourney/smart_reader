@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import PdfViewer, { PdfViewerHandle } from "./components/PdfViewer";
 import SelectionToolbar from "./components/SelectionToolbar";
@@ -9,7 +10,10 @@ import { StashItem } from "./services/stash";
 import { SelectionAction } from "./services/llm";
 import { useTabs } from "./hooks/useTabs";
 import { usePersistence, SelectionState } from "./hooks/usePersistence";
-import { useRightPanelLayout, DIVIDER_WIDTH } from "./hooks/useRightPanelLayout";
+import {
+  useRightPanelLayout,
+  DIVIDER_WIDTH,
+} from "./hooks/useRightPanelLayout";
 import { useRecentFiles } from "./hooks/useRecentFiles";
 import { useSplitView } from "./hooks/useSplitView";
 import RecentFilesBar from "./components/RecentFilesBar";
@@ -26,6 +30,7 @@ const RIGHT_PANEL_SPLIT_FRACTION = 0.2;
 const RIGHT_PANEL_SPLIT_MIN_WIDTH = 200;
 
 function App() {
+  const { t } = useTranslation();
   const tabs = useTabs();
   const layout = useRightPanelLayout();
   const recentFiles = useRecentFiles();
@@ -47,8 +52,10 @@ function App() {
     };
   }, []);
 
-  const secondaryTab =
-    tabs.tabs.find((t) => t.id === splitView.secondaryTabId) || null;
+  const secondaryTab = useMemo(
+    () => tabs.tabs.find((t) => t.id === splitView.secondaryTabId) || null,
+    [tabs.tabs, splitView.secondaryTabId]
+  );
 
   const hoverTranslateActive =
     settings.hoverTranslate && dictionaryStatus.status?.exists === true;
@@ -63,9 +70,13 @@ function App() {
   });
 
   const [selection, setSelection] = useState<SelectionState | null>(null);
-  const [highlightedAnnotationId, setHighlightedAnnotationId] = useState<string | null>(null);
+  const [highlightedAnnotationId, setHighlightedAnnotationId] = useState<
+    string | null
+  >(null);
 
-  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null
+  );
   const pdfViewerRef = useRef<PdfViewerHandle>(null);
   const secondaryPdfViewerRef = useRef<PdfViewerHandle>(null);
 
@@ -85,7 +96,10 @@ function App() {
         prevRightWidthRef.current = layout.rightPanelWidth;
         const mainWidth = layout.mainRef.current.getBoundingClientRect().width;
         const availableWidth = Math.max(0, mainWidth - DIVIDER_WIDTH);
-        const targetWidth = Math.max(availableWidth * RIGHT_PANEL_SPLIT_FRACTION, RIGHT_PANEL_SPLIT_MIN_WIDTH);
+        const targetWidth = Math.max(
+          availableWidth * RIGHT_PANEL_SPLIT_FRACTION,
+          RIGHT_PANEL_SPLIT_MIN_WIDTH
+        );
         layout.setRightPanelWidth(targetWidth);
       }
       if (!layout.rightVisible) {
@@ -97,12 +111,21 @@ function App() {
         prevRightWidthRef.current = null;
       }
     }
-  }, [splitView.isSplitView, layout.rightPanelWidth, layout.rightVisible, layout.setRightPanelWidth, layout.openRightPanel, layout.mainRef]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    splitView.isSplitView,
+    layout.rightPanelWidth,
+    layout.rightVisible,
+    layout.setRightPanelWidth,
+    layout.openRightPanel,
+    layout.mainRef,
+  ]);
 
   // Cleanup highlight timeout on unmount
   useEffect(() => {
     return () => {
-      if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+      if (highlightTimeoutRef.current)
+        clearTimeout(highlightTimeoutRef.current);
     };
   }, []);
 
@@ -147,26 +170,32 @@ function App() {
     };
   }, []);
 
-  const startSplitResize = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    isResizingSplitRef.current = true;
-    currentSplitPctRef.current = splitPct;
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-  }, [splitPct]);
+  const startSplitResize = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      isResizingSplitRef.current = true;
+      currentSplitPctRef.current = splitPct;
+      document.body.style.cursor = "col-resize";
+      document.body.style.userSelect = "none";
+    },
+    [splitPct]
+  );
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const draggedTabId = e.dataTransfer.getData("text/plain");
-    if (!draggedTabId || draggedTabId === tabs.activeTabId) return;
-    if (!tabs.tabs.some((t) => t.id === draggedTabId)) return;
-    splitView.enterSplitView(draggedTabId);
-  }, [tabs, splitView]);
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const draggedTabId = e.dataTransfer.getData("text/plain");
+      if (!draggedTabId || draggedTabId === tabs.activeTabId) return;
+      if (!tabs.tabs.some((t) => t.id === draggedTabId)) return;
+      splitView.enterSplitView(draggedTabId);
+    },
+    [tabs, splitView]
+  );
 
   // Listen for system-driven PDF open requests (single-instance file association).
   useEffect(() => {
@@ -200,91 +229,139 @@ function App() {
     }
   }, [tabs, recentFiles]);
 
-  const handleRecentFileClick = useCallback(async (file: import("./hooks/useRecentFiles").RecentFile) => {
-    const tab = await tabs.openPdfByPath(file.path, file.fileName);
-    if (tab) {
-      recentFiles.addRecentFile(tab.filePath, tab.fileName);
-    }
-  }, [tabs, recentFiles]);
-
-  const handleTabClick = useCallback((tabId: string) => {
-    if (splitView.isSplitView) {
-      if (tabId === tabs.activeTabId) return;
-      if (tabId === splitView.secondaryTabId) {
-        // Swap primary and secondary tabs
-        splitView.setSecondaryTabId(tabs.activeTabId);
-        tabs.handleTabClick(tabId, () => {
-          setSelection(null);
-          setHighlightedAnnotationId(null);
-        });
-        return;
+  const handleRecentFileClick = useCallback(
+    async (file: import("./hooks/useRecentFiles").RecentFile) => {
+      const tab = await tabs.openPdfByPath(file.path, file.fileName);
+      if (tab) {
+        recentFiles.addRecentFile(tab.filePath, tab.fileName);
       }
-      // Clicked a third tab: exit split view and activate it
-      splitView.exitSplitView();
-    }
-    tabs.handleTabClick(tabId, () => {
-      setSelection(null);
-      setHighlightedAnnotationId(null);
-    });
-  }, [tabs, splitView]);
+    },
+    [tabs, recentFiles]
+  );
 
-  const handleCloseTab = useCallback((e: React.MouseEvent, tabId: string) => {
-    const isActive = tabs.activeTabId === tabId;
-    const isSecondary = splitView.secondaryTabId === tabId;
-
-    tabs.handleCloseTab(e, tabId, () => {
-      if (isActive) {
-        persistence.setAnnotations([]);
-        setSelection(null);
-        setHighlightedAnnotationId(null);
-      }
-      persistence.setStashes((prev) => prev.filter((s) => s.source.tabId !== tabId));
-      if (isSecondary || (isActive && splitView.isSplitView)) {
+  const handleTabClick = useCallback(
+    (tabId: string) => {
+      if (splitView.isSplitView) {
+        if (tabId === tabs.activeTabId) return;
+        if (tabId === splitView.secondaryTabId) {
+          // Swap primary and secondary tabs
+          splitView.setSecondaryTabId(tabs.activeTabId);
+          tabs.handleTabClick(tabId, () => {
+            setSelection(null);
+            setHighlightedAnnotationId(null);
+          });
+          return;
+        }
+        // Clicked a third tab: exit split view and activate it
         splitView.exitSplitView();
       }
-    });
-  }, [tabs, persistence, splitView]);
+      tabs.handleTabClick(tabId, () => {
+        setSelection(null);
+        setHighlightedAnnotationId(null);
+      });
+    },
+    [tabs, splitView]
+  );
 
-  const handleSelection = useCallback((
-    text: string,
-    page: number,
-    position: { x: number; y: number; pdfX: number; pdfY: number; width?: number; height?: number }
-  ) => {
-    setSelection({
-      text,
-      x: position.x,
-      y: position.y,
-      pdfX: position.pdfX,
-      pdfY: position.pdfY,
-      page,
-      width: position.width,
-      height: position.height,
-    });
-  }, []);
+  const handleCloseTab = useCallback(
+    (e: React.MouseEvent, tabId: string) => {
+      const isActive = tabs.activeTabId === tabId;
+      const isSecondary = splitView.secondaryTabId === tabId;
+      const closingTab = tabs.tabs.find((t) => t.id === tabId);
+      const remainingTabIds = tabs.tabs
+        .filter((t) => t.id !== tabId)
+        .map((t) => t.id);
 
-  const handleAddToStash = useCallback((text: string) => {
-    if (!selection) return;
-    persistence.handleAddToStash(selection, text);
-    setSelection(null);
-  }, [selection, persistence]);
+      tabs.handleCloseTab(e, tabId, () => {
+        if (closingTab) {
+          persistence.abortSessionsForTab(
+            tabId,
+            closingTab.fileHash,
+            remainingTabIds
+          );
+        }
+        if (isActive) {
+          persistence.setAnnotations([]);
+          setSelection(null);
+          setHighlightedAnnotationId(null);
+        }
+        persistence.setStashes((prev) =>
+          prev.filter((s) => s.source.tabId !== tabId)
+        );
+        if (isSecondary || (isActive && splitView.isSplitView)) {
+          splitView.exitSplitView();
+        }
+      });
+    },
+    [tabs, persistence, splitView]
+  );
 
-  const handleSelectionAction = useCallback((action: SelectionAction, text: string) => {
-    if (!selection) return;
-    persistence.handleSelectionAction(selection, action, text);
-    setSelection(null);
-  }, [selection, persistence]);
+  const handleSelection = useCallback(
+    (
+      text: string,
+      page: number,
+      position: {
+        x: number;
+        y: number;
+        pdfX: number;
+        pdfY: number;
+        width?: number;
+        height?: number;
+      }
+    ) => {
+      setSelection({
+        text,
+        x: position.x,
+        y: position.y,
+        pdfX: position.pdfX,
+        pdfY: position.pdfY,
+        page,
+        width: position.width,
+        height: position.height,
+      });
+    },
+    []
+  );
 
-  const handleGotoStash = useCallback((stash: StashItem) => {
-    tabs.gotoTabPage(stash.source.tabId, stash.source.page);
-    pdfViewerRef.current?.goToPage(stash.source.page);
-  }, [tabs]);
+  const handleAddToStash = useCallback(
+    (text: string) => {
+      if (!selection) return;
+      persistence.handleAddToStash(selection, text);
+      setSelection(null);
+    },
+    [selection, persistence]
+  );
 
-  const handleExplainClick = useCallback((id: string) => {
-    layout.openRightPanel();
-    setHighlightedAnnotationId(id);
-    if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
-    highlightTimeoutRef.current = setTimeout(() => setHighlightedAnnotationId(null), 2000);
-  }, [layout]);
+  const handleSelectionAction = useCallback(
+    (action: SelectionAction, text: string) => {
+      if (!selection) return;
+      persistence.handleSelectionAction(selection, action, text);
+      setSelection(null);
+    },
+    [selection, persistence]
+  );
+
+  const handleGotoStash = useCallback(
+    (stash: StashItem) => {
+      tabs.gotoTabPage(stash.source.tabId, stash.source.page);
+      pdfViewerRef.current?.goToPage(stash.source.page);
+    },
+    [tabs]
+  );
+
+  const handleExplainClick = useCallback(
+    (id: string) => {
+      layout.openRightPanel();
+      setHighlightedAnnotationId(id);
+      if (highlightTimeoutRef.current)
+        clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = setTimeout(
+        () => setHighlightedAnnotationId(null),
+        2000
+      );
+    },
+    [layout]
+  );
 
   const showBoth = layout.leftVisible && layout.rightVisible;
   const showOnlyLeft = layout.leftVisible && !layout.rightVisible;
@@ -303,19 +380,20 @@ function App() {
           <button
             className="icon-btn settings-btn"
             onClick={() => setSettingsOpen(true)}
-            aria-label="打开设置"
-            title="打开设置"
+            aria-label={t("app.openSettings")}
+            title={t("app.openSettings")}
           >
             <Icon name="settings" size={18} />
           </button>
           <button
+            data-testid="open-pdf-btn"
             className="icon-btn primary open-pdf-btn"
             onClick={handleOpenPdf}
-            aria-label="Open PDF"
-            title="打开 PDF"
+            aria-label={t("app.openPdf")}
+            title={t("app.openPdf")}
           >
             <Icon name="open" size={16} />
-            <span>Open PDF</span>
+            <span>{t("app.openPdf")}</span>
           </button>
         </div>
       </header>
@@ -327,7 +405,9 @@ function App() {
               key={tab.id}
               data-testid={`tab-${tab.id}`}
               className={`tab-item ${tab.id === tabs.activeTabId ? "active" : ""} ${
-                splitView.isSplitView && tab.id === splitView.secondaryTabId ? "secondary" : ""
+                splitView.isSplitView && tab.id === splitView.secondaryTabId
+                  ? "secondary"
+                  : ""
               }`}
               onClick={() => handleTabClick(tab.id)}
               title={tab.fileName}
@@ -341,8 +421,8 @@ function App() {
               <button
                 className="icon-btn tab-close"
                 onClick={(e) => handleCloseTab(e, tab.id)}
-                aria-label={`关闭 ${tab.fileName}`}
-                title="关闭标签页"
+                aria-label={t("tab.closeNamed", { fileName: tab.fileName })}
+                title={t("tab.close")}
               >
                 <Icon name="close" size={12} />
               </button>
@@ -352,11 +432,11 @@ function App() {
             <button
               className="icon-btn split-view-exit"
               onClick={splitView.exitSplitView}
-              aria-label="退出并排视图"
-              title="退出并排视图"
+              aria-label={t("app.exitSplitView")}
+              title={t("app.exitSplitView")}
             >
               <Icon name="panel-left" size={14} />
-              <span>退出并排</span>
+              <span>{t("app.exitSplit")}</span>
             </button>
           )}
         </div>
@@ -370,10 +450,15 @@ function App() {
       >
         {splitView.isSplitView ? (
           <>
-            <div className="pdf-panel expanded" ref={primaryPanelRef} style={{ flex: splitPct }}>
+            <div
+              className="pdf-panel expanded"
+              ref={primaryPanelRef}
+              style={{ flex: splitPct }}
+            >
               <PdfViewer
                 ref={pdfViewerRef}
                 filePath={tabs.activeTab?.filePath ?? ""}
+                fileHash={tabs.activeTab?.fileHash}
                 onSelection={handleSelection}
                 initialState={
                   tabs.activeTab
@@ -384,13 +469,19 @@ function App() {
                       }
                     : undefined
                 }
-                onStateChange={(state) => tabs.handleViewerStateChange(state, tabs.activeTabId ?? undefined)}
+                onStateChange={(state) =>
+                  tabs.handleViewerStateChange(
+                    state,
+                    tabs.activeTabId ?? undefined
+                  )
+                }
                 annotations={persistence.annotations}
                 highlightedAnnotationId={highlightedAnnotationId}
                 onAnnotationUpdate={persistence.handleAnnotationUpdate}
                 onAnnotationDelete={persistence.handleAnnotationDelete}
                 onExplainClick={handleExplainClick}
                 hoverTranslate={hoverTranslateActive}
+                settings={settings}
               />
             </div>
             <div
@@ -400,25 +491,39 @@ function App() {
             >
               <div className="panel-divider-handle" />
             </div>
-            <div className="pdf-panel expanded" ref={secondaryPanelRef} style={{ flex: 100 - splitPct }}>
+            <div
+              className="pdf-panel expanded"
+              ref={secondaryPanelRef}
+              style={{ flex: 100 - splitPct }}
+            >
               <PdfViewer
                 ref={secondaryPdfViewerRef}
-                filePath={tabs.tabs.find((t) => t.id === splitView.secondaryTabId)?.filePath ?? ""}
-                onSelection={handleSelection}
-                initialState={
-                  (() => {
-                    const tab = tabs.tabs.find((t) => t.id === splitView.secondaryTabId);
-                    return tab
-                      ? {
-                          pageNum: tab.pageNum,
-                          scale: tab.scale,
-                          viewMode: tab.viewMode,
-                        }
-                      : undefined;
-                  })()
+                filePath={
+                  tabs.tabs.find((t) => t.id === splitView.secondaryTabId)
+                    ?.filePath ?? ""
                 }
+                fileHash={
+                  tabs.tabs.find((t) => t.id === splitView.secondaryTabId)
+                    ?.fileHash
+                }
+                onSelection={handleSelection}
+                initialState={(() => {
+                  const tab = tabs.tabs.find(
+                    (t) => t.id === splitView.secondaryTabId
+                  );
+                  return tab
+                    ? {
+                        pageNum: tab.pageNum,
+                        scale: tab.scale,
+                        viewMode: tab.viewMode,
+                      }
+                    : undefined;
+                })()}
                 onStateChange={(state) =>
-                  tabs.handleViewerStateChange(state, splitView.secondaryTabId ?? undefined)
+                  tabs.handleViewerStateChange(
+                    state,
+                    splitView.secondaryTabId ?? undefined
+                  )
                 }
                 annotations={persistence.annotations}
                 highlightedAnnotationId={highlightedAnnotationId}
@@ -426,6 +531,7 @@ function App() {
                 onAnnotationDelete={persistence.handleAnnotationDelete}
                 onExplainClick={handleExplainClick}
                 hoverTranslate={hoverTranslateActive}
+                settings={settings}
               />
             </div>
             {layout.rightVisible ? (
@@ -440,12 +546,17 @@ function App() {
                   <AiChatPanel
                     stashes={persistence.visibleTabStashes}
                     sessions={persistence.visibleTabSessions}
-                    expandedSessionId={persistence.findSessionIdByAnnotationId(highlightedAnnotationId ?? "")}
+                    expandedSessionId={persistence.findSessionIdByAnnotationId(
+                      highlightedAnnotationId ?? ""
+                    )}
                     onRemoveStash={persistence.handleRemoveStash}
                     onUpdateStash={persistence.handleUpdateStash}
                     onClearStashes={persistence.handleClearStashes}
                     onCustomInterpret={(prompt) =>
-                      persistence.handleCustomInterpret(prompt, persistence.visibleTabStashes)
+                      persistence.handleCustomInterpret(
+                        prompt,
+                        persistence.visibleTabStashes
+                      )
                     }
                     onGotoStash={handleGotoStash}
                     onFollowUp={persistence.handleFollowUp}
@@ -458,8 +569,8 @@ function App() {
               <button
                 className="icon-btn panel-toggle collapsed right"
                 onClick={layout.toggleRight}
-                aria-label="显示 AI 助手"
-                title="显示 AI 助手"
+                aria-label={t("app.showAiAssistant")}
+                title={t("app.showAiAssistant")}
               >
                 <Icon name="panel-right" size={16} />
               </button>
@@ -473,13 +584,14 @@ function App() {
                 showBoth
                   ? { width: `${layout.leftPct}%` }
                   : showOnlyLeft
-                  ? { flex: 1 }
-                  : undefined
+                    ? { flex: 1 }
+                    : undefined
               }
             >
               <PdfViewer
                 ref={pdfViewerRef}
                 filePath={tabs.activeTab?.filePath ?? ""}
+                fileHash={tabs.activeTab?.fileHash}
                 onSelection={handleSelection}
                 onToggleVisibility={layout.toggleLeft}
                 initialState={
@@ -491,13 +603,19 @@ function App() {
                       }
                     : undefined
                 }
-                onStateChange={(state) => tabs.handleViewerStateChange(state, tabs.activeTabId ?? undefined)}
+                onStateChange={(state) =>
+                  tabs.handleViewerStateChange(
+                    state,
+                    tabs.activeTabId ?? undefined
+                  )
+                }
                 annotations={persistence.annotations}
                 highlightedAnnotationId={highlightedAnnotationId}
                 onAnnotationUpdate={persistence.handleAnnotationUpdate}
                 onAnnotationDelete={persistence.handleAnnotationDelete}
                 onExplainClick={handleExplainClick}
                 hoverTranslate={hoverTranslateActive}
+                settings={settings}
               />
             </div>
             {showBoth && (
@@ -512,19 +630,24 @@ function App() {
                   showBoth
                     ? { width: `${layout.rightPct}%` }
                     : showOnlyRight
-                    ? { flex: 1 }
-                    : undefined
+                      ? { flex: 1 }
+                      : undefined
                 }
               >
                 <AiChatPanel
                   stashes={persistence.visibleTabStashes}
                   sessions={persistence.visibleTabSessions}
-                  expandedSessionId={persistence.findSessionIdByAnnotationId(highlightedAnnotationId ?? "")}
+                  expandedSessionId={persistence.findSessionIdByAnnotationId(
+                    highlightedAnnotationId ?? ""
+                  )}
                   onRemoveStash={persistence.handleRemoveStash}
                   onUpdateStash={persistence.handleUpdateStash}
                   onClearStashes={persistence.handleClearStashes}
                   onCustomInterpret={(prompt) =>
-                    persistence.handleCustomInterpret(prompt, persistence.visibleTabStashes)
+                    persistence.handleCustomInterpret(
+                      prompt,
+                      persistence.visibleTabStashes
+                    )
                   }
                   onGotoStash={handleGotoStash}
                   onFollowUp={persistence.handleFollowUp}
@@ -536,8 +659,8 @@ function App() {
               <button
                 className="icon-btn panel-toggle collapsed right"
                 onClick={layout.toggleRight}
-                aria-label="显示 AI 助手"
-                title="显示 AI 助手"
+                aria-label={t("app.showAiAssistant")}
+                title={t("app.showAiAssistant")}
               >
                 <Icon name="panel-right" size={16} />
               </button>
@@ -548,8 +671,8 @@ function App() {
             <button
               className="icon-btn panel-toggle collapsed left"
               onClick={layout.toggleLeft}
-              aria-label="显示 PDF"
-              title="显示 PDF"
+              aria-label={t("app.showPdf")}
+              title={t("app.showPdf")}
             >
               <Icon name="panel-left" size={16} />
             </button>
@@ -558,12 +681,17 @@ function App() {
                 <AiChatPanel
                   stashes={persistence.visibleTabStashes}
                   sessions={persistence.visibleTabSessions}
-                  expandedSessionId={persistence.findSessionIdByAnnotationId(highlightedAnnotationId ?? "")}
+                  expandedSessionId={persistence.findSessionIdByAnnotationId(
+                    highlightedAnnotationId ?? ""
+                  )}
                   onRemoveStash={persistence.handleRemoveStash}
                   onUpdateStash={persistence.handleUpdateStash}
                   onClearStashes={persistence.handleClearStashes}
                   onCustomInterpret={(prompt) =>
-                    persistence.handleCustomInterpret(prompt, persistence.visibleTabStashes)
+                    persistence.handleCustomInterpret(
+                      prompt,
+                      persistence.visibleTabStashes
+                    )
                   }
                   onGotoStash={handleGotoStash}
                   onFollowUp={persistence.handleFollowUp}
@@ -575,8 +703,8 @@ function App() {
               <button
                 className="icon-btn panel-toggle collapsed right"
                 onClick={layout.toggleRight}
-                aria-label="显示 AI 助手"
-                title="显示 AI 助手"
+                aria-label={t("app.showAiAssistant")}
+                title={t("app.showAiAssistant")}
               >
                 <Icon name="panel-right" size={16} />
               </button>

@@ -56,6 +56,15 @@ npm run test:e2e:ui
 # 依次运行单元测试与 E2E 测试
 npm run test:all
 
+# TypeScript 类型检查
+npm run type-check
+
+# ESLint 代码检查
+npm run lint
+
+# Prettier 格式检查
+npm run format:check
+
 # 后端 Rust 测试
 cd src-tauri && cargo test
 ```
@@ -85,6 +94,7 @@ cd src-tauri && cargo test
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
 │   │   └── Icon.tsx                   # SVG 图标组件
+│   ├── hooks/                         # 可复用状态逻辑
 │   ├── services/                      # 业务逻辑与 Tauri 命令封装
 │   │   ├── annotations.ts             # Annotation 类型 + CRUD + 持久化调用
 │   │   ├── settings.ts                # 应用设置（LLM + 目标语言 + 悬停翻译开关）CRUD
@@ -98,10 +108,13 @@ cd src-tauri && cargo test
 ├── src-tauri/                         # Tauri Rust 后端
 │   ├── src/
 │   │   ├── lib.rs                     # Tauri 命令
+│   │   ├── dictionary.rs              # ECDICT 本地词典
+│   │   ├── secure_storage.rs          # API Key 系统钥匙串封装
 │   │   └── main.rs                    # 后端入口
 │   ├── capabilities/                  # Tauri 权限配置
 │   ├── Cargo.toml
 │   └── tauri.conf.json
+├── eslint.config.js                   # ESLint flat config
 ├── e2e/                               # Playwright E2E 测试
 ├── scripts/                           # 辅助脚本
 ├── package.json
@@ -121,7 +134,7 @@ cd src-tauri && cargo test
 - 解读记录支持多轮追问。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
-- LLM 配置（Base URL、API Key、Model）保存于 `localStorage`。
+- LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 单独存放于系统钥匙串，不再落入 `settings.json` 或 `localStorage`。
 
 明确未实现（已规划到后续版本）：
 
@@ -134,7 +147,7 @@ cd src-tauri && cargo test
 
 - PDF 文件内容不上传云端，仅在本地读取和渲染。
 - 仅用户主动选中的文本片段会发送给用户配置的 LLM API。
-- API Key 当前保存在前端 `localStorage`，未加密；后续计划迁移到系统安全存储。
+- API Key 通过 Rust `keyring` crate 存入系统钥匙串；`settings.json` 中只保留空占位。钥匙串不可用时保存会明确报错，不回退明文存储。
 
 ## License
 

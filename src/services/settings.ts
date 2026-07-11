@@ -60,8 +60,7 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
     systemPrompts: {
       translate:
         value.systemPrompts?.translate ?? DEFAULT_SYSTEM_PROMPTS.translate,
-      explain:
-        value.systemPrompts?.explain ?? DEFAULT_SYSTEM_PROMPTS.explain,
+      explain: value.systemPrompts?.explain ?? DEFAULT_SYSTEM_PROMPTS.explain,
     },
     hoverTranslate: value.hoverTranslate ?? DEFAULT_SETTINGS.hoverTranslate,
   };

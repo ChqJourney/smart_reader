@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import { LlmConfig, SystemPrompts } from "./settings";
 
 export type { LlmConfig, SystemPrompts };
@@ -13,9 +14,15 @@ export async function* streamChatCompletion(
   config: LlmConfig,
   messages: ChatMessage[],
   signal?: AbortSignal
-): AsyncGenerator<{ type: "chunk"; content: string } | { type: "error"; message: string }, void> {
+): AsyncGenerator<
+  { type: "chunk"; content: string } | { type: "error"; message: string },
+  void
+> {
   if (!config.apiKey) {
-    yield { type: "error", message: "API Key 未配置，请先在设置中配置 LLM API。" };
+    yield {
+      type: "error",
+      message: i18n.t("llm.error.apiKeyMissing"),
+    };
     return;
   }
 
@@ -40,13 +47,19 @@ export async function* streamChatCompletion(
 
     if (!response.ok) {
       const errorText = await response.text();
-      yield { type: "error", message: `LLM API 错误 (${response.status}): ${errorText}` };
+      yield {
+        type: "error",
+        message: i18n.t("llm.error.apiError", {
+          status: response.status,
+          detail: errorText,
+        }),
+      };
       return;
     }
 
     const reader = response.body?.getReader();
     if (!reader) {
-      yield { type: "error", message: "无法读取 LLM 响应流。" };
+      yield { type: "error", message: i18n.t("llm.error.streamReadError") };
       return;
     }
 
@@ -74,7 +87,12 @@ export async function* streamChatCompletion(
         try {
           const data = JSON.parse(trimmed.slice(6));
           if (data.error) {
-            yield { type: "error", message: `LLM API 错误: ${JSON.stringify(data.error)}` };
+            yield {
+              type: "error",
+              message: i18n.t("llm.error.llmApiError", {
+                detail: JSON.stringify(data.error),
+              }),
+            };
             return;
           }
           const delta = data.choices?.[0]?.delta?.content;
@@ -90,7 +108,10 @@ export async function* streamChatCompletion(
     if ((err as Error).name === "AbortError") {
       return;
     }
-    yield { type: "error", message: `请求失败: ${err}` };
+    yield {
+      type: "error",
+      message: i18n.t("llm.error.requestFailed", { message: String(err) }),
+    };
   }
 }
 
@@ -99,7 +120,8 @@ export function buildSystemPrompt(
   targetLanguage: string,
   systemPrompts: SystemPrompts
 ): string {
-  const raw = action === "translate" ? systemPrompts.translate : systemPrompts.explain;
+  const raw =
+    action === "translate" ? systemPrompts.translate : systemPrompts.explain;
   return raw.replace(/\{targetLanguage\}/g, targetLanguage);
 }
 
@@ -109,9 +131,20 @@ export function buildCustomInterpretPrompt(
   targetLanguage: string
 ): string {
   const sourceText = sources
-    .map((s, i) => `片段 ${i + 1}（${s.fileName} 第 ${s.page} 页）：\n${s.text}`)
+    .map((s, i) =>
+      i18n.t("llm.customInterpretSource", {
+        index: i + 1,
+        fileName: s.fileName,
+        page: s.page,
+        text: s.text,
+      })
+    )
     .join("\n\n");
-  return `请用${targetLanguage}回答以下问题：\n\n${prompt}\n\n${sourceText}`;
+  return i18n.t("llm.customInterpretPrompt", {
+    targetLanguage,
+    prompt,
+    sources: sourceText,
+  });
 }
 
 export function buildSelectionPrompt(
@@ -121,15 +154,10 @@ export function buildSelectionPrompt(
 ): string {
   switch (action) {
     case "explain":
-      return `请用通俗易懂的${targetLanguage}解读以下标准条款/段落，说明其要求、意义、与测试工作的关系，并指出可能相关的其他条款：\n\n${text}`;
+      return i18n.t("llm.prompts.explain", { targetLanguage, text });
     case "translate":
-      return `请将以下标准文档内容翻译成${targetLanguage}，保持专业术语准确，并在首次出现关键术语时保留原文：\n\n${text}`;
+      return i18n.t("llm.prompts.translate", { targetLanguage, text });
     default:
       return text;
   }
 }
-
-export const ACTION_LABELS: Record<"explain" | "translate", string> = {
-  explain: "解读",
-  translate: "翻译",
-};

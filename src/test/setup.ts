@@ -1,3 +1,4 @@
+import "../i18n";
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
@@ -12,7 +13,9 @@ afterEach(() => {
 let uuidCounter = 0;
 Object.defineProperty(globalThis, "crypto", {
   value: {
-    randomUUID: vi.fn(() => `test-uuid-${String(++uuidCounter).padStart(4, "0")}`),
+    randomUUID: vi.fn(
+      () => `test-uuid-${String(++uuidCounter).padStart(4, "0")}`
+    ),
   },
 });
 

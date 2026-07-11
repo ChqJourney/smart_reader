@@ -1,0 +1,136 @@
+.pdf-viewer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.pdf-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 14px;
+  background: #ffffff;
+  border-bottom: 1px solid #e5e5e5;
+  flex-shrink: 0;
+}
+
+.pdf-controls-left,
+.pdf-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pdf-controls-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pdf-controls button {
+  padding: 6px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #424242;
+  transition: background 0.15s ease;
+}
+
+.pdf-controls button:hover:not(:disabled) {
+  background: #f0f0f0;
+}
+
+.pdf-controls button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pdf-controls .page-info,
+.pdf-controls .scale-info {
+  font-size: 0.85rem;
+  color: #616161;
+  min-width: 80px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-controls .page-input {
+  width: 42px;
+  height: 26px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-align: center;
+  line-height: 24px;
+  font-size: 0.85rem;
+  color: #616161;
+  background: transparent;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-controls .page-input:hover,
+.pdf-controls .page-input:focus {
+  border-color: #d1d1d1;
+  background: #fff;
+  outline: none;
+}
+
+.pdf-hide-btn,
+.pdf-mode-toggle {
+  color: #616161;
+}
+
+.pdf-hide-btn:hover,
+.pdf-mode-toggle:hover {
+  background: #f0f0f0;
+  color: #1f1f1f;
+}
+
+.pdf-canvas-container {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #ededed;
+}
+
+.pdf-canvas-container.continuous {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 24px 0;
+}
+
+.pdf-canvas-container.continuous .pdf-page-wrapper {
+  margin: 0 auto 24px;
+  flex-shrink: 0;
+}
+
+.pdf-canvas-container.continuous .pdf-page-wrapper:last-child {
+  margin-bottom: 0;
+}
+
+.pdf-canvas-container canvas {
+  display: block;
+  background: white;
+}
+
+.pdf-placeholder {
+  color: #757575;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.pdf-viewer-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 24px;
+  color: #c42b1c;
+  text-align: center;
+}

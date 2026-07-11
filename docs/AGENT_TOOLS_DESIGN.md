@@ -138,13 +138,13 @@
 
 ### 3.2 清洗规则
 
-| 清洗目标 | 策略 |
-|---------|------|
+| 清洗目标  | 策略                                 |
+| --------- | ------------------------------------ |
 | 页眉/页脚 | 识别重复出现的小字号文本，按位置过滤 |
-| 页码 | 识别页边距处的独立数字 |
-| 重复表头 | 表格跨页时重复的表头行去重 |
-| 换行符 | 段落内软换行合并为连续文本 |
-| 多余空格 | 多个空格合并为一个 |
+| 页码      | 识别页边距处的独立数字               |
+| 重复表头  | 表格跨页时重复的表头行去重           |
+| 换行符    | 段落内软换行合并为连续文本           |
+| 多余空格  | 多个空格合并为一个                   |
 
 ### 3.3 Markdown 输出示例
 
@@ -167,6 +167,7 @@ Table 1 - Test levels
 ## 4.2 Test conditions
 
 The EUT shall be tested under the following environmental conditions:
+
 - Temperature: 15 °C to 35 °C
 - Relative humidity: 25 % to 75 %
 
@@ -180,7 +181,7 @@ The EUT shall be tested under the following environmental conditions:
 ```typescript
 interface TableInfo {
   page: number;
-  title: string;        // e.g. "Table 1 - Test levels"
+  title: string; // e.g. "Table 1 - Test levels"
   bbox: { x: number; y: number; width: number; height: number };
 }
 ```
@@ -243,15 +244,15 @@ Initial index:
 interface ClauseIndex {
   id: string;
   document_id: string;
-  clause_number: string;      // e.g. "4.2.1"
-  clause_title: string;       // e.g. "Environmental conditions"
-  level: number;              // 1, 2, 3, ...
-  parent_clause: string;      // e.g. "4.2"
+  clause_number: string; // e.g. "4.2.1"
+  clause_title: string; // e.g. "Environmental conditions"
+  level: number; // 1, 2, 3, ...
+  parent_clause: string; // e.g. "4.2"
   page_start: number;
   page_end: number;
-  start_position: number;     // 在 raw_text 中的字符位置
+  start_position: number; // 在 raw_text 中的字符位置
   end_position: number;
-  is_verified: boolean;       // 是否经过 LLM 复核
+  is_verified: boolean; // 是否经过 LLM 复核
 }
 ```
 
@@ -487,7 +488,10 @@ LLM 生成最终答案（流式输出）
 ```json
 [
   { "name": "find_definition", "arguments": { "term": "ESD" } },
-  { "name": "search_document", "arguments": { "keywords": "ESD test level voltage discharge", "top_k": 5 } }
+  {
+    "name": "search_document",
+    "arguments": { "keywords": "ESD test level voltage discharge", "top_k": 5 }
+  }
 ]
 ```
 
@@ -500,7 +504,10 @@ LLM 生成最终答案（流式输出）
 
 ```json
 [
-  { "name": "get_clause", "arguments": { "clause_number": "5.3", "include_sub_clauses": true } }
+  {
+    "name": "get_clause",
+    "arguments": { "clause_number": "5.3", "include_sub_clauses": true }
+  }
 ]
 ```
 
@@ -512,13 +519,17 @@ LLM 生成最终答案（流式输出）
 
 ```json
 [
-  { "name": "extract_table", "arguments": { "table_title": "Table 1 - Test levels", "page_number": 42 } }
+  {
+    "name": "extract_table",
+    "arguments": { "table_title": "Table 1 - Test levels", "page_number": 42 }
+  }
 ]
 ```
 
 **最终答案**：
 
 > ESD（静电放电）测试的电压等级如 Table 1 所示（Clause 5.3, Page 42）：
+>
 > - 接触放电：Level 1 ±2 kV，Level 2 ±4 kV
 > - 空气放电：Level 1 ±2 kV，Level 2 ±4 kV
 
@@ -727,42 +738,42 @@ Annotation 持久化要点：
 
 ```typescript
 // 读取 PDF 原始字节
-const bytes = await invoke('read_pdf_bytes', { filePath });
+const bytes = await invoke("read_pdf_bytes", { filePath });
 
 // 获取 PDF 文件 hash
-const hash = await invoke('get_pdf_hash', { filePath });
+const hash = await invoke("get_pdf_hash", { filePath });
 
 // 加载 PDF 关联的批注与 session ids
-const data = await invoke('load_pdf_data', { filePath });
+const data = await invoke("load_pdf_data", { filePath });
 
 // 保存 PDF 关联的批注与 session ids
-await invoke('save_pdf_data', { filePath, data });
+await invoke("save_pdf_data", { filePath, data });
 
 // 加载 / 保存 / 删除解读会话
-const session = await invoke('load_session', { sessionId });
-await invoke('save_session', { session });
-await invoke('delete_session', { sessionId });
+const session = await invoke("load_session", { sessionId });
+await invoke("save_session", { session });
+await invoke("delete_session", { sessionId });
 
 // 使用系统默认程序打开路径
-await invoke('open_path', { path });
+await invoke("open_path", { path });
 ```
 
 以下为未来完整架构中的示例调用，当前暂未实现：
 
 ```typescript
 // 打开 PDF 并解析（完整版）
-await invoke('open_and_parse_pdf', { filePath });
+await invoke("open_and_parse_pdf", { filePath });
 
 // 用户提问（Agent 自动调用 Tools）
-const answer = await invoke('ask_document', {
+const answer = await invoke("ask_document", {
   documentId,
-  question: 'What are the ESD test levels?',
-  sourceLang: 'en',
-  targetLang: 'zh-CN',
+  question: "What are the ESD test levels?",
+  sourceLang: "en",
+  targetLang: "zh-CN",
 });
 
 // 复核 Clause 索引
-await invoke('verify_clause_index', { documentId });
+await invoke("verify_clause_index", { documentId });
 ```
 
 ---
@@ -771,24 +782,24 @@ await invoke('verify_clause_index', { documentId });
 
 ### 10.1 优势
 
-| 优势 | 说明 |
-|------|------|
-| 技术栈简单 | 无 Embedding、无向量库、无 RAG 检索逻辑 |
-| 开发周期短 | MVP 预计 4-6 周 |
-| 灵活性强 | LLM 自主决定如何查询文档 |
-| 跨语言友好 | LLM 自身具备多语言能力 |
-| 表格精确读取 | 通过多模态截图避免解析错误 |
-| 可解释性好 | 用户可看到 LLM 调用了哪些 Tools |
+| 优势         | 说明                                    |
+| ------------ | --------------------------------------- |
+| 技术栈简单   | 无 Embedding、无向量库、无 RAG 检索逻辑 |
+| 开发周期短   | MVP 预计 4-6 周                         |
+| 灵活性强     | LLM 自主决定如何查询文档                |
+| 跨语言友好   | LLM 自身具备多语言能力                  |
+| 表格精确读取 | 通过多模态截图避免解析错误              |
+| 可解释性好   | 用户可看到 LLM 调用了哪些 Tools         |
 
 ### 10.2 风险与应对
 
-| 风险 | 影响 | 应对 |
-|------|------|------|
-| LLM Function Calling 不稳定 | 调错 Tool 或参数 | 严格定义 Tool schema；对参数做校验；失败后重试 |
-| 多次 Tool 调用导致延迟 | 用户体验下降 | 设置最大轮数；优化 Tool 设计；在 Debug 模式下可查看调用过程 |
-| 长 Clause 超出 LLM 上下文 | 无法完整读取 | 不分段，整个传给 LLM；若超出模型上下文窗口，则提示用户该 Clause 过长 |
-| 表格标题识别不准 | extract_table 找不到表格 | 允许用户手动框选表格区域；记录用户修正 |
-| LLM 幻觉 | 编造条款 | 强制引用来源；Prompt 中强调只基于 Tool 结果回答 |
+| 风险                        | 影响                     | 应对                                                                 |
+| --------------------------- | ------------------------ | -------------------------------------------------------------------- |
+| LLM Function Calling 不稳定 | 调错 Tool 或参数         | 严格定义 Tool schema；对参数做校验；失败后重试                       |
+| 多次 Tool 调用导致延迟      | 用户体验下降             | 设置最大轮数；优化 Tool 设计；在 Debug 模式下可查看调用过程          |
+| 长 Clause 超出 LLM 上下文   | 无法完整读取             | 不分段，整个传给 LLM；若超出模型上下文窗口，则提示用户该 Clause 过长 |
+| 表格标题识别不准            | extract_table 找不到表格 | 允许用户手动框选表格区域；记录用户修正                               |
+| LLM 幻觉                    | 编造条款                 | 强制引用来源；Prompt 中强调只基于 Tool 结果回答                      |
 
 ---
 
@@ -805,10 +816,10 @@ await invoke('verify_clause_index', { documentId });
 
 ## 12. 变更记录
 
-| 版本 | 日期 | 变更人 | 变更内容 |
-|------|------|--------|---------|
-| 0.1 | 2026-07-06 | Kimi | 初始版本，轻量解析 + LLM Function Calling Tools 方案 |
-| 0.2 | 2026-07-07 | Kimi | 增加「超轻量版」说明：当前仅保留翻译/解读，Tools、Clause 索引、术语表、测试清单等功能延后 |
-| 0.3 | 2026-07-07 | Kimi | 同步已实现功能：PDF 连续滚动阅读、单页/连续切换、键盘导航、左右分栏拖拽调节与显隐、AI 流式输出单气泡修复 |
-| 0.4 | 2026-07-07 | Kimi | 同步已实现功能：多 PDF Tab（最多 10 个）、AI 消息 Markdown 渲染、翻译浮层批注（可拖动/隐藏/删除/持久化）、解读条目列表（默认折叠/点击跳转）、选区工具条点击外部消失、批注按 PDF hash 持久化到 AppData |
-| 0.5 | 2026-07-08 | Kimi | 同步当前代码结构：新增暂存区、自定义解读、会话追问；修正 Prompt 示例与前端组件清单；删除不存在的 `PdfPage.tsx` 引用；补充 session 持久化说明 |
+| 版本 | 日期       | 变更人 | 变更内容                                                                                                                                                                                              |
+| ---- | ---------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0.1  | 2026-07-06 | Kimi   | 初始版本，轻量解析 + LLM Function Calling Tools 方案                                                                                                                                                  |
+| 0.2  | 2026-07-07 | Kimi   | 增加「超轻量版」说明：当前仅保留翻译/解读，Tools、Clause 索引、术语表、测试清单等功能延后                                                                                                             |
+| 0.3  | 2026-07-07 | Kimi   | 同步已实现功能：PDF 连续滚动阅读、单页/连续切换、键盘导航、左右分栏拖拽调节与显隐、AI 流式输出单气泡修复                                                                                              |
+| 0.4  | 2026-07-07 | Kimi   | 同步已实现功能：多 PDF Tab（最多 10 个）、AI 消息 Markdown 渲染、翻译浮层批注（可拖动/隐藏/删除/持久化）、解读条目列表（默认折叠/点击跳转）、选区工具条点击外部消失、批注按 PDF hash 持久化到 AppData |
+| 0.5  | 2026-07-08 | Kimi   | 同步当前代码结构：新增暂存区、自定义解读、会话追问；修正 Prompt 示例与前端组件清单；删除不存在的 `PdfPage.tsx` 引用；补充 session 持久化说明                                                          |

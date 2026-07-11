@@ -1,5 +1,5 @@
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import fs from 'fs';
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import fs from "fs";
 
 const doc = await PDFDocument.create();
 const font = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -24,6 +24,6 @@ for (let i = 0; i < pageSizes.length; i++) {
 }
 
 const pdfBytes = await doc.save();
-await fs.promises.mkdir('e2e/fixtures', { recursive: true });
-fs.writeFileSync('e2e/fixtures/sample-short-pages.pdf', pdfBytes);
-console.log('Generated e2e/fixtures/sample-short-pages.pdf');
+await fs.promises.mkdir("e2e/fixtures", { recursive: true });
+fs.writeFileSync("e2e/fixtures/sample-short-pages.pdf", pdfBytes);
+console.log("Generated e2e/fixtures/sample-short-pages.pdf");

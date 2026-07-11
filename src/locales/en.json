@@ -1,0 +1,176 @@
+{
+  "app": {
+    "openSettings": "Open Settings",
+    "openPdf": "Open PDF",
+    "exitSplitView": "Exit Split View",
+    "exitSplit": "Exit Split",
+    "showPdf": "Show PDF",
+    "showAiAssistant": "Show AI Assistant"
+  },
+  "tab": {
+    "close": "Close Tab",
+    "closeNamed": "Close {{fileName}}"
+  },
+  "pdf": {
+    "hidePanel": "Hide PDF Panel",
+    "switchToContinuous": "Switch to Continuous",
+    "switchToSingle": "Switch to Single Page",
+    "previousPage": "Previous Page",
+    "nextPage": "Next Page",
+    "pageNumber": "Page Number",
+    "pageNumberHint": "Enter a page number and press Enter to jump",
+    "fitToWidth": "Fit to Width",
+    "zoomOut": "Zoom Out",
+    "zoomIn": "Zoom In",
+    "loading": "Loading...",
+    "loadingPdf": "Loading PDF...",
+    "selectPdfToView": "Select a PDF to view"
+  },
+  "panel": {
+    "hide": "Hide Panel"
+  },
+  "chat": {
+    "aiAssistant": "AI Assistant",
+    "userLabel": "You",
+    "aiLabel": "AI",
+    "generatingPlaceholder": "Generating…",
+    "followUpPlaceholder": "Ask a follow-up..."
+  },
+  "stash": {
+    "tabLabel": "Stash ({{count}})",
+    "add": "Add to Stash",
+    "source": "{{fileName}} · page {{page}}",
+    "emptyHint": "No stashed snippets yet. Select content in the PDF and click Add to Stash.",
+    "clear": "Clear Stash",
+    "expand": "Expand",
+    "collapse": "Collapse"
+  },
+  "session": {
+    "tabLabel": "Interpretations ({{count}})",
+    "emptyHint": "Select content in the PDF, click Explain to generate an interpretation, or add it to Stash first and use Custom Interpret.",
+    "streamingStatus": "Interpreting…",
+    "backToList": "Back to Interpretations",
+    "viewSession": "View Interpretation"
+  },
+  "customInterpret": {
+    "title": "Custom Interpret",
+    "hint": "Interpret based on {{count}} selected snippets",
+    "placeholder": "Enter your interpretation request..."
+  },
+  "translate": {
+    "title": "Translate",
+    "hidePopup": "Hide Popup",
+    "loading": "Translating…"
+  },
+  "explain": {
+    "title": "Explain",
+    "popupLabel": "Explanation Marker"
+  },
+  "marker": {
+    "stash": "Stash",
+    "interpretedStash": "Interpreted Stash",
+    "translate": "Translate",
+    "explain": "Explain"
+  },
+  "recentFiles": {
+    "title": "Recent Files",
+    "empty": "Recently opened files will appear here",
+    "clear": "Clear Recent Files"
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Configure the LLM API, feature options, and system information.",
+    "pages": {
+      "model": "Model Settings",
+      "feature": "Feature Settings",
+      "system": "System Settings"
+    },
+    "llmApi": "LLM API",
+    "llmApiHint": "Model access information used for translation, interpretation, and custom Q&A.",
+    "apiBaseUrl": "API Base URL",
+    "model": "Model",
+    "apiKey": "API Key",
+    "outputLanguage": "Output Language",
+    "outputLanguageHint": "The default language used for translation and interpretation results.",
+    "targetLanguage": "Target Language",
+    "targetLanguagePlaceholder": "Chinese",
+    "hoverTranslate": "Hover Translation",
+    "hoverTranslateHint": "Show translations from the local ECDICT dictionary when hovering over English words.",
+    "enableHoverTranslate": "Enable Hover Translation",
+    "dictionaryReady": "Dictionary Ready",
+    "downloadingProgress": "Downloading {{percent}}%",
+    "systemPrompts": "System Prompts",
+    "systemPromptsHint": "Control the AI's role and style in different scenarios. Supports the {targetLanguage} placeholder.",
+    "promptAriaLabel": "{{action}} System Prompt",
+    "characters": "characters",
+    "version": "Version",
+    "appInfo": "App Info",
+    "productName": "Product Name",
+    "identifier": "App Identifier",
+    "license": "License",
+    "licenseLoading": "Loading license…",
+    "licenseError": "Unable to load license content",
+    "resetAll": "Reset All Defaults",
+    "openLogs": "Open Logs Directory",
+    "downloadDictionaryTitle": "Download Offline Dictionary",
+    "downloadDictionaryHint": "Hover translation requires downloading the ECDICT English-Chinese dictionary (about 200 MB). It will be saved to the local app data directory and only needs to be downloaded once.",
+    "downloadNow": "Download Now",
+    "defaultTargetLanguage": "Chinese",
+    "defaultPrompts": {
+      "translate": "You are an assistant specializing in translating testing and certification industry standard documents. Accurately translate English standard clauses into {targetLanguage}. Keep professional terminology accurate, retain the original text when key terms first appear, and do not make up clauses or page numbers not mentioned in the excerpt.",
+      "explain": "You are an assistant for reading testing and certification industry standard documents, skilled at explaining complex English standard clauses clearly. Answer in {targetLanguage} based on the document excerpt provided by the user, and do not make up clauses or page numbers not mentioned in the excerpt."
+    }
+  },
+  "dictionary": {
+    "querying": "Looking up…",
+    "downloadFailed": "Dictionary download failed"
+  },
+  "errorBoundary": {
+    "title": "An error occurred",
+    "description": "Try reloading, or open the logs directory to troubleshoot.",
+    "reload": "Reload",
+    "openLogs": "Open Logs Directory"
+  },
+  "llm": {
+    "error": {
+      "apiKeyMissing": "API Key is not configured. Please configure the LLM API in Settings first.",
+      "apiError": "LLM API error ({{status}}): {{detail}}",
+      "streamReadError": "Unable to read LLM response stream.",
+      "llmApiError": "LLM API error: {{detail}}",
+      "requestFailed": "Request failed: {{message}}"
+    },
+    "prompts": {
+      "explain": "Explain the following standard clause/paragraph in accessible {{targetLanguage}}, describing its requirements, significance, relationship to testing work, and any potentially related clauses:\n\n{{text}}",
+      "translate": "Translate the following standard document content into {{targetLanguage}}, keep professional terminology accurate, and retain the original text when key terms first appear:\n\n{{text}}"
+    },
+    "customInterpretPrompt": "Please answer the following question in {{targetLanguage}}:\n\n{{prompt}}\n\n{{sources}}",
+    "customInterpretSource": "Excerpt {{index}} ({{fileName}} page {{page}}):\n{{text}}"
+  },
+  "tabs": {
+    "maxTabsHint": "You can open up to {{maxTabs}} PDF files at the same time. Please close some tabs first."
+  },
+  "confirm": {
+    "deleteTitle": "Confirm Delete",
+    "deleteExplainBody": "Are you sure you want to delete this interpretation? The source marker and the interpretation record in the right panel will be deleted together."
+  },
+  "action": {
+    "translate": "Translate",
+    "explain": "Explain"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "send": "Send",
+    "stop": "Stop",
+    "close": "Close",
+    "delete": "Delete",
+    "edit": "Edit",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "reset": "Reset",
+    "notice": "Notice",
+    "sourceText": "Source Text",
+    "errorPrefix": "[Error]",
+    "characters": "characters"
+  }
+}

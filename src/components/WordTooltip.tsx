@@ -1,4 +1,6 @@
+import { useTranslation } from "react-i18next";
 import { DictEntry } from "../services/dictionary";
+import "./WordTooltip.css";
 
 interface WordTooltipProps {
   word: string;
@@ -15,6 +17,8 @@ export default function WordTooltip({
   x,
   y,
 }: WordTooltipProps) {
+  const { t } = useTranslation();
+
   if (!loading && !entry) return null;
 
   const formatTranslation = (text?: string) => {
@@ -43,12 +47,10 @@ export default function WordTooltip({
         {entry?.phonetic && (
           <span className="word-tooltip-phonetic">/{entry.phonetic}/</span>
         )}
-        {entry?.pos && (
-          <span className="word-tooltip-pos">{entry.pos}</span>
-        )}
+        {entry?.pos && <span className="word-tooltip-pos">{entry.pos}</span>}
       </div>
       {loading && (
-        <div className="word-tooltip-loading">查询中…</div>
+        <div className="word-tooltip-loading">{t("dictionary.querying")}</div>
       )}
       {!loading && translationLines && (
         <ul className="word-tooltip-body">

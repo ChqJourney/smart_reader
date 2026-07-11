@@ -4,11 +4,7 @@ import MarkdownRenderer from "./MarkdownRenderer";
 
 describe("MarkdownRenderer", () => {
   it("renders plain paragraphs", () => {
-    render(
-      <MarkdownRenderer
-        content={`第一段\n\n第二段`}
-      />
-    );
+    render(<MarkdownRenderer content={`第一段\n\n第二段`} />);
     expect(screen.getByText("第一段")).toBeInTheDocument();
     expect(screen.getByText("第二段")).toBeInTheDocument();
   });
@@ -33,11 +29,7 @@ describe("MarkdownRenderer", () => {
   });
 
   it("renders task lists", () => {
-    render(
-      <MarkdownRenderer
-        content={`- [x] 完成\n- [ ] 未完成`}
-      />
-    );
+    render(<MarkdownRenderer content={`- [x] 完成\n- [ ] 未完成`} />);
     expect(screen.getByText("完成")).toBeInTheDocument();
     expect(screen.getByText("未完成")).toBeInTheDocument();
   });

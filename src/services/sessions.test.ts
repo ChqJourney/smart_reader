@@ -71,7 +71,10 @@ describe("sessions service", () => {
   describe("appendUserMessage", () => {
     it("appends a user message and updates updatedAt", () => {
       vi.useFakeTimers();
-      const session = createSession([makeStashItem("stash-1", "text")], "initial");
+      const session = createSession(
+        [makeStashItem("stash-1", "text")],
+        "initial"
+      );
       vi.advanceTimersByTime(1);
 
       const updated = appendUserMessage(session, "追问内容");
@@ -89,7 +92,10 @@ describe("sessions service", () => {
 
   describe("startAssistantResponse", () => {
     it("appends an empty assistant message and marks streaming", () => {
-      const session = createSession([makeStashItem("stash-1", "text")], "initial");
+      const session = createSession(
+        [makeStashItem("stash-1", "text")],
+        "initial"
+      );
 
       const updated = startAssistantResponse(session);
 
@@ -109,18 +115,30 @@ describe("sessions service", () => {
         ...createSession([makeStashItem("stash-1", "text")], "initial"),
         messages: [
           { id: "msg-user", role: "user", content: "initial", createdAt: 1000 },
-          { id: "msg-assistant", role: "assistant", content: "", createdAt: 1000 },
+          {
+            id: "msg-assistant",
+            role: "assistant",
+            content: "",
+            createdAt: 1000,
+          },
         ],
       };
 
-      const updated = updateMessageContent(session, "msg-assistant", "partial answer");
+      const updated = updateMessageContent(
+        session,
+        "msg-assistant",
+        "partial answer"
+      );
 
       expect(updated.messages[1].content).toBe("partial answer");
       expect(updated.messages[0]).toEqual(session.messages[0]);
     });
 
     it("returns the same session when message id is not found", () => {
-      const session = createSession([makeStashItem("stash-1", "text")], "initial");
+      const session = createSession(
+        [makeStashItem("stash-1", "text")],
+        "initial"
+      );
 
       const updated = updateMessageContent(session, "missing", "content");
 
@@ -130,7 +148,10 @@ describe("sessions service", () => {
 
   describe("finishStreaming", () => {
     it("clears streaming state", () => {
-      const session = createSession([makeStashItem("stash-1", "text")], "initial");
+      const session = createSession(
+        [makeStashItem("stash-1", "text")],
+        "initial"
+      );
       const streaming = startAssistantResponse(session);
 
       const finished = finishStreaming(streaming);
@@ -142,8 +163,14 @@ describe("sessions service", () => {
 
   describe("deleteSession", () => {
     it("removes the session with matching id", () => {
-      const session1: InterpretationSession = { ...createSession([makeStashItem("stash-1", "text")], "initial"), id: "session-1" };
-      const session2: InterpretationSession = { ...createSession([makeStashItem("stash-2", "text")], "initial"), id: "session-2" };
+      const session1: InterpretationSession = {
+        ...createSession([makeStashItem("stash-1", "text")], "initial"),
+        id: "session-1",
+      };
+      const session2: InterpretationSession = {
+        ...createSession([makeStashItem("stash-2", "text")], "initial"),
+        id: "session-2",
+      };
       const sessions = [session1, session2];
 
       const result = deleteSession(sessions, session1.id);
@@ -154,7 +181,10 @@ describe("sessions service", () => {
     });
 
     it("returns the same array when id is not found", () => {
-      const session = createSession([makeStashItem("stash-1", "text")], "initial");
+      const session = createSession(
+        [makeStashItem("stash-1", "text")],
+        "initial"
+      );
       const sessions = [session];
 
       const result = deleteSession(sessions, "non-existent");
@@ -165,7 +195,10 @@ describe("sessions service", () => {
 
   describe("persistence", () => {
     it("loads sessions from localStorage", () => {
-      const session = createSession([makeStashItem("stash-1", "text")], "initial");
+      const session = createSession(
+        [makeStashItem("stash-1", "text")],
+        "initial"
+      );
       localStorage.setItem(STORAGE_KEY, JSON.stringify([session]));
 
       const loaded = loadSessionsFromLegacyStorage();
@@ -209,7 +242,9 @@ describe("sessions service", () => {
             createdAt: 1000,
           },
         ],
-        messages: [{ id: "msg-1", role: "user", content: "hello", createdAt: 1 }],
+        messages: [
+          { id: "msg-1", role: "user", content: "hello", createdAt: 1 },
+        ],
         isStreaming: true,
         streamingMessageId: "msg-2",
         createdAt: 1,
@@ -219,7 +254,9 @@ describe("sessions service", () => {
 
       const result = await loadSession("session-1");
 
-      expect(mockInvoke).toHaveBeenCalledWith("load_session", { sessionId: "session-1" });
+      expect(mockInvoke).toHaveBeenCalledWith("load_session", {
+        sessionId: "session-1",
+      });
       expect(result).not.toBeNull();
       expect(result!.streamingMessageId).toBe("msg-2");
       expect(result!.sources[0].source.fileHash).toBe("hash-file");

@@ -36,10 +36,14 @@ test.describe("App E2E", () => {
 
   test("opens and closes settings", async ({ page }) => {
     await page.getByRole("button", { name: "打开设置" }).click();
-    await expect(page.getByPlaceholder("https://api.openai.com/v1")).toBeVisible();
+    await expect(
+      page.getByPlaceholder("https://api.openai.com/v1")
+    ).toBeVisible();
     await expect(page.getByPlaceholder("sk-...")).toBeVisible();
 
     await page.getByRole("button", { name: "取消" }).click();
-    await expect(page.getByPlaceholder("https://api.openai.com/v1")).not.toBeVisible();
+    await expect(
+      page.getByPlaceholder("https://api.openai.com/v1")
+    ).not.toBeVisible();
   });
 });

@@ -1,6 +1,8 @@
+import { useTranslation } from "react-i18next";
 import { useRef, useState } from "react";
 import { Annotation } from "../services/annotations";
 import Icon from "./Icon";
+import "./AnnotationMarker.css";
 
 interface InterpretedStashIconProps {
   groupSize: number;
@@ -23,7 +25,12 @@ function InterpretedStashIcon({ groupSize, index }: InterpretedStashIconProps) {
   const hy = cy + outer * Math.sin(selfAngle);
 
   return (
-    <svg width="20" height="20" viewBox="0 0 20 20" className="interpreted-stash-icon">
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      className="interpreted-stash-icon"
+    >
       <polygon points={points.join(" ")} className="interpreted-stash-star" />
       <circle cx={hx} cy={hy} r="2.5" className="interpreted-stash-highlight" />
     </svg>
@@ -45,6 +52,7 @@ export default function AnnotationMarker({
   onClick,
   onMove,
 }: AnnotationMarkerProps) {
+  const { t } = useTranslation();
   const [isDragging, setIsDragging] = useState(false);
   const hasMovedRef = useRef(false);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -111,11 +119,11 @@ export default function AnnotationMarker({
 
   const label = isStash
     ? isInterpretedStash
-      ? "已解读暂存"
-      : "暂存"
+      ? t("marker.interpretedStash")
+      : t("marker.stash")
     : annotation.type === "translate"
-    ? "翻译"
-    : "解读";
+      ? t("marker.translate")
+      : t("marker.explain");
 
   return (
     <div
@@ -139,7 +147,10 @@ export default function AnnotationMarker({
           <Icon name="stash" size={12} />
         )
       ) : (
-        <Icon name={annotation.type === "translate" ? "translate" : "explain"} size={12} />
+        <Icon
+          name={annotation.type === "translate" ? "translate" : "explain"}
+          size={12}
+        />
       )}
     </div>
   );

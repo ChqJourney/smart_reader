@@ -1,0 +1,119 @@
+.explain-popup {
+  position: absolute;
+  z-index: 21;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+  transform: translate(-50%, 12px);
+}
+
+.explain-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: #fafafa;
+  border-bottom: 1px solid #e8e8e8;
+  user-select: none;
+}
+
+.explain-popup-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1f1f1f;
+}
+
+.explain-popup-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.explain-popup-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #616161;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.explain-popup-actions button:hover {
+  background: #f0f0f0;
+  color: #1f1f1f;
+}
+
+.explain-popup-body {
+  padding: 10px 12px;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.explain-popup-label {
+  font-size: 0.7rem;
+  color: #888;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.explain-popup-source {
+  font-size: 0.8rem;
+  color: #333;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.explain-popup-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fafafa;
+  border-top: 1px solid #e8e8e8;
+}
+
+.explain-popup-footer button {
+  padding: 6px 12px;
+  background: #f3f3f3;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #424242;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.explain-popup-footer button:hover {
+  background: #e8e8e8;
+  border-color: #d1d1d1;
+}
+
+.explain-popup-footer button.danger {
+  background: #c42b1c;
+  color: #fff;
+  border-color: #c42b1c;
+}
+
+.explain-popup-footer button.danger:hover {
+  background: #a82418;
+  border-color: #a82418;
+}

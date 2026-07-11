@@ -1,0 +1,9 @@
+SpecReader AI Proprietary License
+
+Copyright (c) 2026 SpecReader AI contributors. All rights reserved.
+
+This software and its source code are proprietary and confidential.
+Unauthorized copying, distribution, modification, or use is strictly prohibited.
+Commercial use or distribution requires a written license agreement.
+
+For licensing inquiries, please contact the SpecReader AI team.

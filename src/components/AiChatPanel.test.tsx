@@ -2,10 +2,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import AiChatPanel from "../components/AiChatPanel";
 import { StashItem, StashSource } from "../services/stash";
-import { InterpretationSession, InterpretationMessage } from "../services/sessions";
+import {
+  InterpretationSession,
+  InterpretationMessage,
+} from "../services/sessions";
 
 vi.mock("../services/llm", async () => {
-  const actual = await vi.importActual<typeof import("../services/llm")>("../services/llm");
+  const actual =
+    await vi.importActual<typeof import("../services/llm")>("../services/llm");
   return {
     ...actual,
     streamChatCompletion: vi.fn(),
@@ -25,7 +29,11 @@ function makeSource(overrides: Partial<StashSource> = {}): StashSource {
   };
 }
 
-function makeStash(id: string, text: string, overrides: Partial<StashItem> = {}): StashItem {
+function makeStash(
+  id: string,
+  text: string,
+  overrides: Partial<StashItem> = {}
+): StashItem {
   return {
     id,
     source: makeSource(),
@@ -35,7 +43,9 @@ function makeStash(id: string, text: string, overrides: Partial<StashItem> = {})
   };
 }
 
-function makeMessage(overrides: Partial<InterpretationMessage> = {}): InterpretationMessage {
+function makeMessage(
+  overrides: Partial<InterpretationMessage> = {}
+): InterpretationMessage {
   return {
     id: `msg-${overrides.role ?? "user"}`,
     role: "user",
@@ -45,7 +55,9 @@ function makeMessage(overrides: Partial<InterpretationMessage> = {}): Interpreta
   };
 }
 
-function makeSession(overrides: Partial<InterpretationSession> = {}): InterpretationSession {
+function makeSession(
+  overrides: Partial<InterpretationSession> = {}
+): InterpretationSession {
   return {
     id: "session-1",
     sources: [makeStash("stash-1", "source text")],
@@ -62,7 +74,9 @@ describe("AiChatPanel", () => {
     vi.clearAllMocks();
   });
 
-  const renderPanel = (props: Partial<React.ComponentProps<typeof AiChatPanel>> = {}) =>
+  const renderPanel = (
+    props: Partial<React.ComponentProps<typeof AiChatPanel>> = {}
+  ) =>
     render(
       <AiChatPanel
         stashes={[]}
@@ -92,8 +106,12 @@ describe("AiChatPanel", () => {
 
   it("renders stash items with source info", () => {
     const stashes = [
-      makeStash("stash-1", "first excerpt", { source: makeSource({ fileName: "a.pdf", page: 3 }) }),
-      makeStash("stash-2", "second excerpt", { source: makeSource({ fileName: "b.pdf", page: 5 }) }),
+      makeStash("stash-1", "first excerpt", {
+        source: makeSource({ fileName: "a.pdf", page: 3 }),
+      }),
+      makeStash("stash-2", "second excerpt", {
+        source: makeSource({ fileName: "b.pdf", page: 5 }),
+      }),
     ];
 
     renderPanel({ stashes });
@@ -127,7 +145,10 @@ describe("AiChatPanel", () => {
 
   it("calls onUpdateStash when editing a stash", () => {
     const onUpdateStash = vi.fn();
-    renderPanel({ stashes: [makeStash("stash-1", "original text")], onUpdateStash });
+    renderPanel({
+      stashes: [makeStash("stash-1", "original text")],
+      onUpdateStash,
+    });
 
     fireEvent.click(screen.getByRole("button", { name: /编辑/i }));
     const textarea = screen.getByDisplayValue("original text");
@@ -152,7 +173,9 @@ describe("AiChatPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /自定义解读/i }));
 
-    expect(screen.getByRole("heading", { name: /自定义解读/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /自定义解读/i })
+    ).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/输入你的解读要求/)).toBeInTheDocument();
   });
 
@@ -200,8 +223,12 @@ describe("AiChatPanel", () => {
     fireEvent.click(screen.getByText(/问题/));
 
     expect(screen.getByText(/回答/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /返回解读记录/i })).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: /解读记录/i })).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /返回解读记录/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: /解读记录/i })
+    ).not.toBeInTheDocument();
   });
 
   it("returns to session list when back button is clicked", () => {
@@ -254,7 +281,9 @@ describe("AiChatPanel", () => {
     );
 
     expect(screen.getByText(/回答/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /返回解读记录/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /返回解读记录/i })
+    ).toBeInTheDocument();
   });
 
   it("returns to list when active session is removed", () => {
@@ -265,7 +294,10 @@ describe("AiChatPanel", () => {
       }),
     ];
 
-    const { rerender } = renderPanel({ sessions, expandedSessionId: "session-1" });
+    const { rerender } = renderPanel({
+      sessions,
+      expandedSessionId: "session-1",
+    });
     expect(screen.getByText(/问题/)).toBeInTheDocument();
 
     rerender(

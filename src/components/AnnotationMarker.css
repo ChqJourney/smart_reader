@@ -1,0 +1,87 @@
+.annotation-marker {
+  position: absolute;
+  z-index: 20;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  cursor: pointer;
+  user-select: none;
+  transform: translate(-50%, -50%);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.18),
+    0 0 0 1.5px rgba(255, 255, 255, 0.25) inset;
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.1s ease;
+}
+
+.annotation-marker.translate {
+  background: #0f9d58;
+}
+
+.annotation-marker.explain {
+  background: #0078d4;
+}
+
+.annotation-marker:hover {
+  transform: translate(-50%, -50%) scale(1.15);
+  box-shadow:
+    0 4px 10px rgba(0, 0, 0, 0.22),
+    0 0 0 1.5px rgba(255, 255, 255, 0.3) inset;
+}
+
+.annotation-marker.dragging {
+  cursor: grabbing;
+  transform: translate(-50%, -50%) scale(1.25);
+}
+
+.annotation-marker.highlighted {
+  animation: marker-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes marker-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(0, 120, 212, 0.5),
+      0 0 0 1.5px rgba(255, 255, 255, 0.25) inset;
+  }
+  50% {
+    box-shadow:
+      0 0 0 8px rgba(0, 120, 212, 0),
+      0 0 0 1.5px rgba(255, 255, 255, 0.25) inset;
+  }
+}
+
+.annotation-marker.stash {
+  background: #f59e0b;
+}
+
+.annotation-marker.stash.interpreted {
+  background: #d97706;
+}
+
+.annotation-marker.stash.highlighted {
+  animation: marker-pulse 1.5s ease-in-out infinite;
+}
+
+.annotation-marker.stash .interpreted-stash-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.annotation-marker.stash .interpreted-stash-star {
+  fill: #fbbf24;
+  stroke: #fff;
+  stroke-width: 1;
+}
+
+.annotation-marker.stash .interpreted-stash-highlight {
+  fill: #ef4444;
+  stroke: #fff;
+  stroke-width: 0.5;
+}

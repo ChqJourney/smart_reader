@@ -5,7 +5,11 @@ import SelectionToolbar from "../components/SelectionToolbar";
 describe("SelectionToolbar", () => {
   it("renders nothing when there is no selection", () => {
     const { container } = render(
-      <SelectionToolbar selection={null} onAction={vi.fn()} onDismiss={vi.fn()} />
+      <SelectionToolbar
+        selection={null}
+        onAction={vi.fn()}
+        onDismiss={vi.fn()}
+      />
     );
     expect(container.firstChild).toBeNull();
   });
@@ -20,7 +24,9 @@ describe("SelectionToolbar", () => {
       />
     );
 
-    expect(screen.getByRole("button", { name: /加入暂存/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /加入暂存/i })
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /解读/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /翻译/i })).toBeInTheDocument();
   });

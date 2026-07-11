@@ -41,7 +41,9 @@ export function useRightPanelLayout(): UseRightPanelLayoutReturn {
   const rightPanelLayout = useMemo(() => loadRightPanelLayout(), []);
   const [leftVisible, setLeftVisible] = useState(true);
   const [rightVisible, setRightVisible] = useState(rightPanelLayout.visible);
-  const [rightPanelWidth, setRightPanelWidthInternal] = useState<number>(rightPanelLayout.width);
+  const [rightPanelWidth, setRightPanelWidthInternal] = useState<number>(
+    rightPanelLayout.width
+  );
 
   const setRightPanelWidth = useCallback((width: number) => {
     setRightPanelWidthInternal(width);
@@ -50,14 +52,48 @@ export function useRightPanelLayout(): UseRightPanelLayoutReturn {
   const mainRef = useRef<HTMLElement>(null);
   const isDraggingRef = useRef(false);
 
+  // Measure the main container width in a layout effect and keep it in state.
+  // Reading DOM during render causes layout thrashing; using ResizeObserver +
+  // window resize avoids that.
+  const [availableWidth, setAvailableWidth] = useState(() =>
+    Math.max(0, window.innerWidth - DIVIDER_WIDTH)
+  );
+
+  useEffect(() => {
+    const updateWidth = () => {
+      const width =
+        mainRef.current?.getBoundingClientRect().width ?? window.innerWidth;
+      setAvailableWidth(Math.max(0, width - DIVIDER_WIDTH));
+    };
+
+    updateWidth();
+
+    const resizeObserver = new ResizeObserver(updateWidth);
+    if (mainRef.current) {
+      resizeObserver.observe(mainRef.current);
+    }
+    window.addEventListener("resize", updateWidth);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", updateWidth);
+    };
+  }, []);
+
   // Restore default right panel width if no persisted value exists
   useEffect(() => {
     if (rightPanelWidth > 0) return;
     const availableWidth = Math.max(
       0,
-      (mainRef.current?.getBoundingClientRect().width ?? window.innerWidth) - DIVIDER_WIDTH
+      (mainRef.current?.getBoundingClientRect().width ?? window.innerWidth) -
+        DIVIDER_WIDTH
     );
-    setRightPanelWidthInternal(Math.max(availableWidth * RIGHT_PANEL_DEFAULT_FRACTION, RIGHT_PANEL_MIN_WIDTH));
+    setRightPanelWidthInternal(
+      Math.max(
+        availableWidth * RIGHT_PANEL_DEFAULT_FRACTION,
+        RIGHT_PANEL_MIN_WIDTH
+      )
+    );
   }, [rightPanelWidth]);
 
   // Persist right panel width and visibility
@@ -85,7 +121,10 @@ export function useRightPanelLayout(): UseRightPanelLayoutReturn {
         MIN_PANEL_WIDTH,
         Math.min(availableWidth - RIGHT_PANEL_MIN_WIDTH, x)
       );
-      const newRightPx = Math.max(RIGHT_PANEL_MIN_WIDTH, availableWidth - newLeftPx);
+      const newRightPx = Math.max(
+        RIGHT_PANEL_MIN_WIDTH,
+        availableWidth - newLeftPx
+      );
       setRightPanelWidthInternal(newRightPx);
     };
 
@@ -117,10 +156,6 @@ export function useRightPanelLayout(): UseRightPanelLayoutReturn {
   const toggleRight = useCallback(() => setRightVisible((v) => !v), []);
   const openRightPanel = useCallback(() => setRightVisible(true), []);
 
-  const availableWidth = Math.max(
-    0,
-    (mainRef.current?.getBoundingClientRect().width ?? window.innerWidth) - DIVIDER_WIDTH
-  );
   const effectiveRightWidth =
     rightPanelWidth > 0
       ? Math.max(
@@ -130,9 +165,18 @@ export function useRightPanelLayout(): UseRightPanelLayoutReturn {
             rightPanelWidth
           )
         )
-      : Math.max(availableWidth * RIGHT_PANEL_DEFAULT_FRACTION, RIGHT_PANEL_MIN_WIDTH);
-  const leftPct = availableWidth > 0 ? ((availableWidth - effectiveRightWidth) / availableWidth) * 100 : 100 - RIGHT_PANEL_DEFAULT_FRACTION * 100;
-  const rightPct = availableWidth > 0 ? (effectiveRightWidth / availableWidth) * 100 : RIGHT_PANEL_DEFAULT_FRACTION * 100;
+      : Math.max(
+          availableWidth * RIGHT_PANEL_DEFAULT_FRACTION,
+          RIGHT_PANEL_MIN_WIDTH
+        );
+  const leftPct =
+    availableWidth > 0
+      ? ((availableWidth - effectiveRightWidth) / availableWidth) * 100
+      : 100 - RIGHT_PANEL_DEFAULT_FRACTION * 100;
+  const rightPct =
+    availableWidth > 0
+      ? (effectiveRightWidth / availableWidth) * 100
+      : RIGHT_PANEL_DEFAULT_FRACTION * 100;
 
   return {
     mainRef,

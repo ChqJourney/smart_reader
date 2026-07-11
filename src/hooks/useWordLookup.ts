@@ -13,11 +13,7 @@ export interface WordLookupState {
 export function useWordLookup(
   enabled: boolean,
   delayMs = 500
-): [
-  WordLookupState,
-  (word: string, x: number, y: number) => void,
-  () => void
-] {
+): [WordLookupState, (word: string, x: number, y: number) => void, () => void] {
   const [state, setState] = useState<WordLookupState>({
     visible: false,
     word: "",

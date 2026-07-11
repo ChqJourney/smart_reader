@@ -32,6 +32,10 @@ export function removeStash(stashes: StashItem[], id: string): StashItem[] {
   return stashes.filter((item) => item.id !== id);
 }
 
-export function updateStash(stashes: StashItem[], id: string, text: string): StashItem[] {
+export function updateStash(
+  stashes: StashItem[],
+  id: string,
+  text: string
+): StashItem[] {
   return stashes.map((item) => (item.id === id ? { ...item, text } : item));
 }

@@ -158,7 +158,9 @@ describe("annotations service", () => {
     });
 
     it("creates a stash annotation with optional stashId", () => {
-      const annotation = createAnnotation("stash", "text", 2, 100, 200, { stashId: "stash-1" });
+      const annotation = createAnnotation("stash", "text", 2, 100, 200, {
+        stashId: "stash-1",
+      });
 
       expect(annotation.type).toBe("stash");
       expect(annotation.hidden).toBeUndefined();
@@ -169,8 +171,24 @@ describe("annotations service", () => {
   describe("updateAnnotation", () => {
     it("updates matching annotation by id", () => {
       const annotations: Annotation[] = [
-        { id: "1", type: "explain", text: "a", position: { page: 1, x: 0, y: 0 }, content: "", isStreaming: false, createdAt: 1 },
-        { id: "2", type: "explain", text: "b", position: { page: 1, x: 0, y: 0 }, content: "", isStreaming: false, createdAt: 2 },
+        {
+          id: "1",
+          type: "explain",
+          text: "a",
+          position: { page: 1, x: 0, y: 0 },
+          content: "",
+          isStreaming: false,
+          createdAt: 1,
+        },
+        {
+          id: "2",
+          type: "explain",
+          text: "b",
+          position: { page: 1, x: 0, y: 0 },
+          content: "",
+          isStreaming: false,
+          createdAt: 2,
+        },
       ];
 
       const result = updateAnnotation(annotations, "1", { text: "updated" });
@@ -181,7 +199,15 @@ describe("annotations service", () => {
 
     it("returns new array without mutating original", () => {
       const annotations: Annotation[] = [
-        { id: "1", type: "explain", text: "a", position: { page: 1, x: 0, y: 0 }, content: "", isStreaming: false, createdAt: 1 },
+        {
+          id: "1",
+          type: "explain",
+          text: "a",
+          position: { page: 1, x: 0, y: 0 },
+          content: "",
+          isStreaming: false,
+          createdAt: 1,
+        },
       ];
 
       const result = updateAnnotation(annotations, "1", { text: "updated" });
@@ -194,8 +220,24 @@ describe("annotations service", () => {
   describe("deleteAnnotation", () => {
     it("removes annotation by id", () => {
       const annotations: Annotation[] = [
-        { id: "1", type: "explain", text: "a", position: { page: 1, x: 0, y: 0 }, content: "", isStreaming: false, createdAt: 1 },
-        { id: "2", type: "explain", text: "b", position: { page: 1, x: 0, y: 0 }, content: "", isStreaming: false, createdAt: 2 },
+        {
+          id: "1",
+          type: "explain",
+          text: "a",
+          position: { page: 1, x: 0, y: 0 },
+          content: "",
+          isStreaming: false,
+          createdAt: 1,
+        },
+        {
+          id: "2",
+          type: "explain",
+          text: "b",
+          position: { page: 1, x: 0, y: 0 },
+          content: "",
+          isStreaming: false,
+          createdAt: 2,
+        },
       ];
 
       const result = deleteAnnotation(annotations, "1");

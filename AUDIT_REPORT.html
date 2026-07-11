@@ -1,0 +1,1700 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SpecReader AI — 商业级代码审核报告</title>
+    <style>
+      :root {
+        --bg: #0d1117;
+        --bg-card: #161b22;
+        --bg-card-hover: #1c2128;
+        --border: #30363d;
+        --border-light: #21262d;
+        --text: #e6edf3;
+        --text-muted: #8b949e;
+        --text-dim: #6e7681;
+        --accent: #2f81f7;
+        --accent-bg: rgba(47, 129, 247, 0.1);
+        --critical: #f85149;
+        --critical-bg: rgba(248, 81, 73, 0.12);
+        --high: #db6d28;
+        --high-bg: rgba(219, 109, 40, 0.12);
+        --medium: #d29922;
+        --medium-bg: rgba(210, 153, 34, 0.12);
+        --low: #58a6ff;
+        --low-bg: rgba(88, 166, 255, 0.1);
+        --success: #3fb950;
+        --success-bg: rgba(63, 185, 80, 0.12);
+        --code-bg: #0d1117;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC",
+          "PingFang SC", "Microsoft YaHei", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.7;
+        font-size: 15px;
+        -webkit-font-smoothing: antialiased;
+      }
+      .container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 40px 24px 80px;
+      }
+
+      /* Hero */
+      .hero {
+        background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 40px 36px;
+        margin-bottom: 32px;
+      }
+      .hero h1 {
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        background: linear-gradient(90deg, #e6edf3, #2f81f7);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .hero .subtitle {
+        color: var(--text-muted);
+        font-size: 15px;
+        margin-bottom: 20px;
+      }
+      .hero-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-top: 16px;
+      }
+      .meta-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .meta-label {
+        font-size: 12px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .meta-value {
+        font-size: 14px;
+        color: var(--text);
+        font-weight: 500;
+      }
+
+      /* Score bar */
+      .score-bar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 16px;
+        margin-top: 24px;
+      }
+      .score-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 12px;
+        padding: 18px 16px;
+        text-align: center;
+      }
+      .score-card .label {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+      .score-card .value {
+        font-size: 26px;
+        font-weight: 700;
+      }
+      .score-card .stars {
+        font-size: 13px;
+        margin-top: 4px;
+      }
+
+      /* Section */
+      section {
+        margin-bottom: 36px;
+      }
+      h2 {
+        font-size: 20px;
+        font-weight: 600;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      h2 .icon {
+        font-size: 22px;
+      }
+      h3 {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 20px 0 12px;
+        color: var(--text);
+      }
+
+      p {
+        margin-bottom: 12px;
+        color: var(--text);
+      }
+      ul,
+      ol {
+        margin: 8px 0 16px 20px;
+      }
+      li {
+        margin-bottom: 6px;
+      }
+
+      /* Stats grid */
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin: 20px 0;
+      }
+      .stat-box {
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+        border: 1px solid;
+      }
+      .stat-box .num {
+        font-size: 28px;
+        font-weight: 700;
+      }
+      .stat-box .lbl {
+        font-size: 12px;
+        margin-top: 4px;
+      }
+      .stat-critical {
+        background: var(--critical-bg);
+        border-color: var(--critical);
+      }
+      .stat-critical .num {
+        color: var(--critical);
+      }
+      .stat-high {
+        background: var(--high-bg);
+        border-color: var(--high);
+      }
+      .stat-high .num {
+        color: var(--high);
+      }
+      .stat-medium {
+        background: var(--medium-bg);
+        border-color: var(--medium);
+      }
+      .stat-medium .num {
+        color: var(--medium);
+      }
+      .stat-low {
+        background: var(--low-bg);
+        border-color: var(--low);
+      }
+      .stat-low .num {
+        color: var(--low);
+      }
+
+      /* Issue card */
+      .issue {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 12px;
+        padding: 20px 22px;
+        margin-bottom: 14px;
+        transition: background 0.15s;
+      }
+      .issue:hover {
+        background: var(--bg-card-hover);
+      }
+      .issue-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .badge-critical {
+        background: var(--critical-bg);
+        color: var(--critical);
+        border: 1px solid var(--critical);
+      }
+      .badge-high {
+        background: var(--high-bg);
+        color: var(--high);
+        border: 1px solid var(--high);
+      }
+      .badge-medium {
+        background: var(--medium-bg);
+        color: var(--medium);
+        border: 1px solid var(--medium);
+      }
+      .badge-low {
+        background: var(--low-bg);
+        color: var(--low);
+        border: 1px solid var(--low);
+      }
+      .badge-fixed {
+        background: var(--success-bg);
+        color: var(--success);
+        border: 1px solid var(--success);
+      }
+      .badge-partial {
+        background: var(--medium-bg);
+        color: var(--medium);
+        border: 1px solid var(--medium);
+      }
+      .badge-notfixed {
+        background: var(--critical-bg);
+        color: var(--critical);
+        border: 1px solid var(--critical);
+      }
+      .issue-title {
+        font-weight: 600;
+        font-size: 15px;
+        flex: 1;
+        min-width: 200px;
+      }
+      .issue-body {
+        color: var(--text-muted);
+        font-size: 14px;
+      }
+      .issue-body strong {
+        color: var(--text);
+      }
+      .issue-meta {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 8px;
+        font-family: "SF Mono", "Fira Code", monospace;
+      }
+      .issue-solution {
+        margin-top: 10px;
+        padding: 10px 14px;
+        background: var(--accent-bg);
+        border-left: 3px solid var(--accent);
+        border-radius: 4px;
+        font-size: 13px;
+        color: var(--text);
+      }
+      .issue-solution::before {
+        content: "建议修复：";
+        font-weight: 600;
+        color: var(--accent);
+      }
+      code {
+        background: var(--code-bg);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+        font-size: 13px;
+        color: #79c0ff;
+      }
+
+      /* Table */
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+        font-size: 14px;
+      }
+      th,
+      td {
+        padding: 10px 14px;
+        text-align: left;
+        border-bottom: 1px solid var(--border-light);
+      }
+      th {
+        font-weight: 600;
+        color: var(--text-muted);
+        font-size: 13px;
+      }
+      tr:hover {
+        background: var(--bg-card-hover);
+      }
+
+      /* Verification list */
+      .verify-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .verify-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 10px;
+        margin-bottom: 8px;
+      }
+      .verify-icon {
+        font-size: 18px;
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+      .verify-content {
+        flex: 1;
+      }
+      .verify-title {
+        font-weight: 600;
+        font-size: 14px;
+        margin-bottom: 4px;
+      }
+      .verify-desc {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+
+      /* Callout */
+      .callout {
+        background: var(--accent-bg);
+        border: 1px solid var(--accent);
+        border-radius: 12px;
+        padding: 18px 22px;
+        margin: 20px 0;
+      }
+      .callout strong {
+        color: var(--accent);
+      }
+      .callout-warn {
+        background: var(--critical-bg);
+        border-color: var(--critical);
+      }
+      .callout-warn strong {
+        color: var(--critical);
+      }
+
+      /* Dimension cards */
+      .dim-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 16px;
+      }
+      .dim-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .dim-card h4 {
+        font-size: 15px;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .dim-card .rating {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+      .dim-card p {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+
+      /* Priority list */
+      .priority-list {
+        counter-reset: prio;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .priority-item {
+        counter-increment: prio;
+        display: flex;
+        gap: 14px;
+        padding: 14px 16px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 10px;
+        margin-bottom: 8px;
+        align-items: flex-start;
+      }
+      .priority-item::before {
+        content: counter(prio);
+        flex-shrink: 0;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .priority-content {
+        flex: 1;
+      }
+      .priority-title {
+        font-weight: 600;
+        font-size: 14px;
+        margin-bottom: 2px;
+      }
+      .priority-desc {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+
+      .footer {
+        text-align: center;
+        color: var(--text-dim);
+        font-size: 13px;
+        margin-top: 40px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+      }
+      .highlight {
+        color: var(--accent);
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <!-- Hero -->
+      <div class="hero">
+        <h1>SpecReader AI — 商业级代码审核报告</h1>
+        <div class="subtitle">
+          面向检测认证工程师的桌面端 AI 助手 · Tauri 2.0 + React 18 + TypeScript
+          + Rust
+        </div>
+        <div class="hero-meta">
+          <div class="meta-item">
+            <span class="meta-label">审查日期</span
+            ><span class="meta-value">2026-07-11</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">版本</span
+            ><span class="meta-value">0.1.0（超轻量版）</span>
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">审查范围</span
+            ><span class="meta-value"
+              >前端 / 后端 / 配置 / 测试 / 商业化就绪度</span
+            >
+          </div>
+          <div class="meta-item">
+            <span class="meta-label">基线对照</span
+            ><span class="meta-value">CODE_REVIEW.md (2026-07-09)</span>
+          </div>
+        </div>
+        <div class="score-bar">
+          <div class="score-card">
+            <div class="label">架构设计</div>
+            <div class="value" style="color: var(--success)">A-</div>
+            <div class="stars">⭐⭐⭐⭐</div>
+          </div>
+          <div class="score-card">
+            <div class="label">代码质量</div>
+            <div class="value" style="color: var(--medium)">B</div>
+            <div class="stars">⭐⭐⭐⭐</div>
+          </div>
+          <div class="score-card">
+            <div class="label">安全性</div>
+            <div class="value" style="color: var(--high)">C+</div>
+            <div class="stars">⭐⭐⭐</div>
+          </div>
+          <div class="score-card">
+            <div class="label">测试覆盖</div>
+            <div class="value" style="color: var(--medium)">B-</div>
+            <div class="stars">⭐⭐⭐</div>
+          </div>
+          <div class="score-card">
+            <div class="label">商业化就绪</div>
+            <div class="value" style="color: var(--critical)">D</div>
+            <div class="stars">⭐⭐</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 总结 -->
+      <section>
+        <h2><span class="icon">📋</span> 审查总结</h2>
+        <p>
+          本次审核以<strong>商业级桌面软件</strong>为标准，对 SpecReader AI
+          的前端、Rust
+          后端、配置文件、测试体系及商业化基础设施进行了全面审查。整体而言，项目工程素质良好——架构清晰、Tauri
+          命令与纯逻辑解耦、PDF 渲染与交互细节专业、Rust
+          端序列化往返测试设计出色。但距离商业级交付标准仍有明显差距，主要集中在<strong>安全加固、数据可靠性、测试覆盖、商业化基础设施</strong>四个方面。
+        </p>
+
+        <div class="stats-grid">
+          <div class="stat-box stat-critical">
+            <div class="num">5</div>
+            <div class="lbl">Critical</div>
+          </div>
+          <div class="stat-box stat-high">
+            <div class="num">11</div>
+            <div class="lbl">High</div>
+          </div>
+          <div class="stat-box stat-medium">
+            <div class="num">18</div>
+            <div class="lbl">Medium</div>
+          </div>
+          <div class="stat-box stat-low">
+            <div class="num">14</div>
+            <div class="lbl">Low</div>
+          </div>
+        </div>
+
+        <div class="callout">
+          <strong>核心结论：</strong>相比上一版
+          CODE_REVIEW.md，项目在序列化修复（P0）、God Component
+          拆分、AbortController、CSP
+          加固、二进制传输优化方面取得了显著进展。但新发现
+          <span class="highlight">1 个 Critical 级状态管理缺陷</span
+          >（StrictMode 下流式请求双发）、<span class="highlight"
+            >2 个 High 级安全漏洞</span
+          >（路径穿越 +
+          无路径校验）、以及商业化基础设施全面缺失（无自动更新、无崩溃监控、无代码签名、无
+          LICENSE）。建议优先修复安全与数据可靠性问题，再补齐商业化基础设施。
+        </div>
+      </section>
+
+      <!-- 历史问题验证 -->
+      <section>
+        <h2><span class="icon">✅</span> 历史 CODE_REVIEW.md 问题修复验证</h2>
+        <p>
+          对照 2026-07-09 的 CODE_REVIEW.md，逐项验证此前报告的问题是否已修复：
+        </p>
+        <ul class="verify-list">
+          <li class="verify-item">
+            <span class="verify-icon">✅</span>
+            <div class="verify-content">
+              <div class="verify-title">
+                [P0 已修复] Rust serde rename_all = "camelCase" 缺失
+              </div>
+              <div class="verify-desc">
+                <code>lib.rs</code> 中 11 个跨端结构体均已添加
+                <code>#[serde(rename_all = "camelCase")]</code>，并新增 6
+                个序列化往返测试（camelCase
+                序列化/反序列化验证）。这是上一版最严重的 Critical
+                bug，已彻底修复且有回归保护。
+              </div>
+            </div>
+          </li>
+          <li class="verify-item">
+            <span class="verify-icon">✅</span>
+            <div class="verify-content">
+              <div class="verify-title">
+                [P1 已修复] read_pdf_bytes 返回 JSON 数字数组
+              </div>
+              <div class="verify-desc">
+                已改用
+                <code>tauri::ipc::Response::new(bytes)</code>
+                返回原始二进制，前端直接拿到 <code>ArrayBuffer</code>。
+              </div>
+            </div>
+          </li>
+          <li class="verify-item">
+            <span class="verify-icon">✅</span>
+            <div class="verify-content">
+              <div class="verify-title">
+                [P2 已修复] App.tsx God Component（~790 行）
+              </div>
+              <div class="verify-desc">
+                已拆分出 <code>useTabs</code> / <code>usePersistence</code> /
+                <code>useRightPanelLayout</code> / <code>useSplitView</code> /
+                <code>useRecentFiles</code> / <code>useDictionaryStatus</code> /
+                <code>useWordLookup</code> 7 个自定义 Hook，App.tsx 降至 605
+                行。
+              </div>
+            </div>
+          </li>
+          <li class="verify-item">
+            <span class="verify-icon">⚠️</span>
+            <div class="verify-content">
+              <div class="verify-title">[P1 部分修复] 持久化双写竞态</div>
+              <div class="verify-desc">
+                <code>handleCustomInterpret</code> /
+                <code>handleSelectionAction</code> 已移除手动写盘，但
+                <code>handleAnnotationDelete</code
+                >（usePersistence.ts:496-502）仍有手动
+                <code>loadPdfData + savePdfData</code>，与防抖 effect 存在竞态。
+              </div>
+            </div>
+          </li>
+          <li class="verify-item">
+            <span class="verify-icon">✅</span>
+            <div class="verify-content">
+              <div class="verify-title">[P2 已修复] 流式缺 AbortController</div>
+              <div class="verify-desc">
+                <code>usePersistence.ts</code> 和
+                <code>TranslatePopup.tsx</code> 均已实现 AbortController，<code
+                  >streamChatCompletion</code
+                >
+                支持 <code>signal</code> 参数。
+              </div>
+            </div>
+          </li>
+          <li class="verify-item">
+            <span class="verify-icon">❌</span>
+            <div class="verify-content">
+              <div class="verify-title">
+                [P2 未修复] 抽取 useStreaming 统一流式逻辑
+              </div>
+              <div class="verify-desc">
+                翻译与解读仍各自内联流式逻辑，<code>buildSystemPrompt</code> /
+                <code>streamChatCompletion</code> 调用重复。
+              </div>
+            </div>
+          </li>
+          <li class="verify-item">
+            <span class="verify-icon">✅</span>
+            <div class="verify-content">
+              <div class="verify-title">[P3 已修复] 死代码清理</div>
+              <div class="verify-desc">
+                <code>clearStashes</code> /
+                <code>saveSessionsToLegacyStorage</code> 已删除。
+              </div>
+            </div>
+          </li>
+          <li class="verify-item">
+            <span class="verify-icon">⚠️</span>
+            <div class="verify-content">
+              <div class="verify-title">[P3 部分修复] 关闭 Tab 清理资源</div>
+              <div class="verify-desc">
+                stashes 已按 tabId 过滤清理，但运行中的流式请求未
+                abort、sessions 未清理、非活跃 tab 的 annotations 残留。
+              </div>
+            </div>
+          </li>
+          <li class="verify-item">
+            <span class="verify-icon">✅</span>
+            <div class="verify-content">
+              <div class="verify-title">[P3 已修复] CSP 加固</div>
+              <div class="verify-desc">
+                <code>tauri.conf.json</code> 已从 <code>null</code> 改为完整 CSP
+                策略，含 <code>object-src 'none'</code>、<code
+                  >frame-ancestors 'none'</code
+                >。
+              </div>
+            </div>
+          </li>
+        </ul>
+      </section>
+
+      <!-- Critical -->
+      <section>
+        <h2><span class="icon">🔴</span> Critical 级问题（5 项）</h2>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-critical">Critical</span>
+            <span class="issue-title"
+              >C-1. handleFollowUp 在 setSessions updater
+              内发起副作用，StrictMode 下流式请求双发</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong
+            ><code>src/hooks/usePersistence.ts:444-457</code><br />
+            <code>handleFollowUp</code> 在 <code>setSessions</code> 的 updater
+            函数内部调用 <code>runSessionStream()</code> 发起 LLM
+            流式请求。React 18 StrictMode（<code>main.tsx:6</code>
+            已启用）在开发模式下会<strong>双重调用</strong> state updater
+            以检测副作用。这导致：<br />
+            ① 两条并发流式请求同时消费 LLM API，双倍 token 消耗；<br />
+            ② 两个 AbortController 写入同一
+            messageId，后者覆盖前者，前者流成为孤儿无法 abort；<br />
+            ③ 两个流同时更新同一 session，产生内容交错和状态不一致。
+          </div>
+          <div class="issue-solution">
+            将副作用移出 updater：先在 updater 中只更新 state 并捕获
+            updatedSession 引用，updater 返回后再调用
+            <code>runSessionStream()</code>。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-critical">Critical</span>
+            <span class="issue-title"
+              >C-2. session_path 路径穿越漏洞，可覆盖任意文件</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>src-tauri/src/lib.rs:284-287</code
+            ><br />
+            <code>session_path</code> 将前端传入的
+            <code>session_id</code> 直接拼入文件名，无任何校验。若
+            <code>session_id</code> 包含 <code>../</code>，可逃逸 sessions
+            目录，覆盖 AppData 下任意文件（如
+            <code>settings.json</code>）。<code>save_session</code> 和
+            <code>delete_session</code> 命令均受影响。虽然前端当前生成 UUID，但
+            Tauri command 参数可被任意前端代码（含 XSS 注入代码）构造。
+          </div>
+          <div class="issue-solution">
+            校验 session_id 仅含字母数字和连字符：<code
+              >session_id.chars().all(|c| c.is_alphanumeric() || c == '-' || c
+              == '_')</code
+            >，或规范化路径后校验仍在 sessions_dir 内。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-critical">Critical</span>
+            <span class="issue-title">C-3. 完全无自动更新机制</span>
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong>全项目<br />
+            无 <code>tauri-plugin-updater</code> 依赖、无 updater
+            配置、无更新检查逻辑。商业级桌面软件必须具备自动更新能力，否则用户无法获取安全补丁和新功能。PRD
+            中已规划 License 系统，但连基础的更新通道都未建立。
+          </div>
+          <div class="issue-solution">
+            集成 <code>tauri-plugin-updater</code>，配置更新端点 URL
+            和签名密钥，在应用启动时检查更新。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-critical">Critical</span>
+            <span class="issue-title"
+              >C-4. 无代码签名配置，分发将被系统拦截</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>src-tauri/tauri.conf.json:42</code
+            ><br />
+            macOS <code>signingIdentity: "-"</code> 仅 ad-hoc
+            签名，用户打开时会被 Gatekeeper 阻止。Windows 无代码签名配置，exe
+            会触发 SmartScreen 警告。CD
+            流水线（<code>.github/workflows/cd.yml</code>）仅构建 Windows 且使用
+            <code>--no-bundle</code> 跳过打包，缺少 macOS 和 Linux
+            构建。商业软件无法以此状态分发。
+          </div>
+          <div class="issue-solution">
+            配置 Apple Developer ID 签名 + notarization；添加 Windows
+            代码签名证书；CD 添加 macOS（含 universal binary）和 Linux
+            构建_job。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-critical">Critical</span>
+            <span class="issue-title"
+              >C-5. 无 LICENSE 文件，许可证信息缺失</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>package.json</code>（无 license
+            字段）、<code>src-tauri/Cargo.toml:6</code>（<code
+              >license = ""</code
+            >
+            为空）、项目根目录无 LICENSE 文件<br />
+            PRD 明确标注"商业软件"，但代码库无任何许可证声明。<code
+              >Cargo.toml</code
+            >
+            的 description/authors/repository
+            均为占位符。这在法律和商业分发上都是不可接受的。
+          </div>
+          <div class="issue-solution">
+            添加 LICENSE 文件（商业许可或选定的开源协议），填写 package.json 和
+            Cargo.toml 的 license/author/description 字段。
+          </div>
+        </div>
+      </section>
+
+      <!-- High -->
+      <section>
+        <h2><span class="icon">🟠</span> High 级问题（11 项）</h2>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-high">High</span>
+            <span class="issue-title"
+              >H-1. read_pdf_bytes / open_path / get_pdf_hash 无路径校验</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>src-tauri/src/lib.rs:76-98</code><br />
+            三个命令接受任意路径字符串，无任何校验。<code>read_pdf_bytes</code>
+            可读取系统任意文件（如
+            <code>~/.ssh/id_rsa</code>）并返回二进制；<code>open_path</code>
+            可调用系统默认程序打开任意路径/URL。若 webview 存在
+            XSS，攻击者可利用这些命令读取敏感文件。
+          </div>
+          <div class="issue-solution">
+            校验文件扩展名为 <code>.pdf</code>，或维护 dialog
+            授权文件白名单；<code>open_path</code> 限制为 http/https 协议。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-high">High</span>
+            <span class="issue-title"
+              >H-2. 文件写入非原子操作，崩溃时数据损坏</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong
+            ><code>src-tauri/src/lib.rs:318-404</code>（save_pdf_data /
+            save_session / save_settings / save_recent_files）<br />
+            所有持久化函数使用
+            <code>std::fs::write</code>
+            直接覆写目标文件。若写入过程中进程崩溃、断电或磁盘满，文件会被截断为部分内容，导致用户所有批注数据损坏且不可恢复。用户积累的批注和解读会话是有价值数据，不应因一次异常写入而全部丢失。
+          </div>
+          <div class="issue-solution">
+            实现原子写入：先写 <code>.tmp</code> 临时文件，成功后
+            <code>rename</code> 覆盖目标文件。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-high">High</span>
+            <span class="issue-title"
+              >H-3. lookup_word 阻塞 I/O 在 async runtime 上执行</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>src-tauri/src/lib.rs:544-547</code
+            ><br />
+            <code>lookup_word</code> 是 async Tauri command，但直接调用同步的
+            SQLite 查询（持有 Mutex 执行阻塞 <code>prepare</code> +
+            <code>query_row</code>）。在 Tauri 2 的 tokio 运行时上，阻塞 I/O
+            会卡住工作线程，影响其他异步任务调度。其他命令（read_pdf_bytes
+            等）都正确使用了 <code>spawn_blocking</code>，唯独此处遗漏。
+          </div>
+          <div class="issue-solution">
+            用 <code>tauri::async_runtime::spawn_blocking</code> 包裹
+            <code>dictionary::lookup_word</code> 调用。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-high">High</span>
+            <span class="issue-title"
+              >H-4. handleAnnotationDelete 手动写盘与防抖 effect 竞态</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong
+            ><code>src/hooks/usePersistence.ts:496-502</code><br />
+            <code>handleAnnotationDelete</code> 在删除解读标注时手动执行
+            <code>loadPdfData → savePdfData</code>（读-改-写），同时防抖
+            effect（行 182-215）也会在 500ms 后写盘。若防抖 effect
+            在手动写入之后执行且内存 state
+            尚未更新，删除操作会被覆盖（被删除的标注重新写回磁盘）。
+          </div>
+          <div class="issue-solution">
+            统一以防抖 effect 为唯一写入入口，<code
+              >handleAnnotationDelete</code
+            >
+            只更新内存 state。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-high">High</span>
+            <span class="issue-title"
+              >H-5. 分屏视图两个 PdfViewer 共享同一 annotations
+              数组，标注跨文件错显</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>src/App.tsx:374-430</code><br />
+            <code>usePersistence</code> 只加载 activeTab 的
+            annotations，secondary tab 的 annotations 从未加载。两个 PdfViewer
+            接收同一个 annotations 数组，而 <code>Annotation</code> 无
+            <code>fileHash</code> 字段，<code>PdfAnnotations</code> 只按
+            <code>position.page</code> 过滤。若两个 PDF 有相同页码，primary PDF
+            的标注会错误显示在 secondary PDF 上。
+          </div>
+          <div class="issue-solution">
+            为 Annotation 增加 fileHash 字段并同时按 fileHash + page
+            过滤；或分屏时维护独立的 annotations 数组。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-high">High</span>
+            <span class="issue-title"
+              >H-6. 关闭非活跃 Tab 时运行中的流式请求未 abort，sessions
+              未清理</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>src/App.tsx:231-246</code><br />
+            <code>handleCloseTab</code> 仅清理 stashes，被关 Tab
+            关联的正在运行的 LLM 流式请求不会被 abort（继续消耗 API
+            token），sessions 保留在全局 state 中。关闭 secondary tab（非
+            active）时 annotations 也残留内存。
+          </div>
+          <div class="issue-solution">
+            在 onClose 中找到该 tab 关联的所有正在流式的 session 并
+            abort，清理对应的 sessions 引用和 annotations。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-high">High</span>
+            <span class="issue-title"
+              >H-7. CSP connect-src 允许 http:，API Key 可被发送到任意 HTTP
+              端点</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>src-tauri/tauri.conf.json:26</code
+            ><br />
+            CSP <code>connect-src 'self' http: https:</code> 允许连接任意
+            HTTP/HTTPS 端点。LLM API 请求从前端 webview 直接发出，API Key 在
+            Authorization header 中。若发生 XSS，攻击者可将 API Key 发往任意
+            HTTP 服务器。
+          </div>
+          <div class="issue-solution">
+            将 <code>http:</code> 限制为
+            <code>http://localhost:* http://127.0.0.1:*</code>（支持本地 LLM 如
+            Ollama），或考虑将 LLM 请求代理到 Rust 后端。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-high">High</span>
+            <span class="issue-title">H-8. 无崩溃监控 / 错误上报系统</span>
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong>全项目<br />
+            完全无 Sentry、Bugsnag 或自定义 telemetry。前端仅有
+            <code>MarkdownErrorBoundary</code> 局部错误边界，无全局
+            ErrorBoundary。Rust 端 <code>app.run(|_, _| {})</code> 的 run
+            回调为空，未处理运行时异常。Release 构建中
+            <code>tauri-plugin-log</code> 未初始化（仅 debug
+            模式启用），生产环境无任何日志。用户遇到问题时无法提供日志用于排查。
+          </div>
+          <div class="issue-solution">
+            集成 Sentry（<code>@sentry/react</code> + Rust crate）；添加 App 级
+            React ErrorBoundary；release 中初始化 tauri-plugin-log（Warn
+            级别）输出到日志文件。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-high">High</span>
+            <span class="issue-title"
+              >H-9. 核心业务逻辑 Hook（usePersistence.ts，547
+              行）零直接测试</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>src/hooks/usePersistence.ts</code
+            ><br />
+            这是整个应用的核心编排层，管理 annotations/sessions/stash/LLM
+            流式/持久化/abort 控制，约 547
+            行代码，<strong>无任何直接单元测试</strong>。仅通过 App.test.tsx
+            间接覆盖部分路径。C-1（StrictMode
+            双发）正是因缺少直接测试而未被发现。估算整体语句覆盖率约
+            55-65%，分支覆盖率约 45-55%，远低于商业级 80%+ 标准。
+          </div>
+          <div class="issue-solution">
+            为 usePersistence
+            编写直接的单元测试，覆盖流式启动/中止、持久化防抖、删除清理、多文件
+            session 联动等核心路径。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-high">High</span>
+            <span class="issue-title"
+              >H-10. API Key 明文存储在 JSON 文件中</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong
+            ><code>src-tauri/src/lib.rs:216-222</code
+            >（LlmConfig.api_key）<br />
+            API Key 以明文 JSON 存储在
+            <code>AppData/SpecReader/settings.json</code>
+            中。任何有文件系统访问权限的程序或用户都可读取。已从 localStorage
+            迁移到后端文件（改进），但仍未达到 PRD 中"系统 Keychain
+            或安全存储"的要求。
+          </div>
+          <div class="issue-solution">
+            使用 <code>keyring</code> crate 或
+            <code>tauri-plugin-keyring</code>，将 API Key 存入系统钥匙串（macOS
+            Keychain / Windows Credential Manager / Linux Secret Service）。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-high">High</span>
+            <span class="issue-title"
+              >H-11. CI 缺少 type-check / lint / build 验证步骤</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>.github/workflows/ci.yml</code><br />
+            CI 缺少 <code>tsc --noEmit</code> 类型检查、eslint
+            代码规范检查、<code>npm run build</code>
+            构建验证。类型错误只能在本地 build 时发现。项目甚至未配置 eslint 和
+            prettier。缺少 <code>npm audit</code> 和
+            <code>cargo audit</code> 安全扫描。
+          </div>
+          <div class="issue-solution">
+            添加 eslint + prettier 配置；CI 中增加
+            type-check、lint、build、audit 步骤；添加覆盖率阈值（lines 80%）。
+          </div>
+        </div>
+      </section>
+
+      <!-- Medium -->
+      <section>
+        <h2><span class="icon">🟡</span> Medium 级问题（18 项，精选）</h2>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title">M-1. JSON 持久化文件无并发写入保护</span>
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>lib.rs:431-532</code><br /><code
+              >save_pdf_data</code
+            >
+            使用
+            <code>spawn_blocking</code>
+            在线程池执行，但无文件锁。多次保存可能并发执行
+            <code>std::fs::write</code> 写同一文件，导致 last-write-wins
+            丢数据。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-2. compute_pdf_hash 将整个文件读入内存</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>lib.rs:100-106</code><br /><code
+              >std::fs::read</code
+            >
+            将整个 PDF 读入内存计算哈希。100MB+ PDF 会占用大量内存，且每次
+            save_pdf_data 都会重新读入整个 PDF 算哈希。应改用流式哈希。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-3. 流式逻辑未统一抽取为 useStreaming</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>usePersistence.ts:248-317</code> /
+            <code>TranslatePopup.tsx:56-108</code><br />两处流式实现重复"构造
+            messages + streamChatCompletion + 累积 content + 防抖更新 +
+            错误处理"逻辑。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-4. PdfViewer.tsx 中 textContent.items 使用 any 类型</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>PdfViewer.tsx:224-226</code><br /><code
+              >as any[]</code
+            >
+            绕过类型检查，pdfjs-dist 有明确 TextItem 类型可用。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-5. 模态框缺少 Escape 键关闭和焦点陷阱</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>SettingsModal.tsx</code> /
+            <code>CustomInterpretModal.tsx</code><br />无 Escape
+            监听、无焦点陷阱，Tab 键可跳出模态框，违反 WAI-ARIA Modal Dialog
+            规范。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title">M-6. 无国际化框架，全部硬编码中文</span>
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong>几乎所有组件和 service<br />所有 UI 文本和
+            LLM prompt 模板均为硬编码中文。<code>index.html</code>
+            <code>lang="en"</code> 与实际不符。无 react-i18next 或类似框架。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-7. 使用 window.confirm / alert 进行用户交互</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>usePersistence.ts:484</code> /
+            <code>useTabs.ts:39</code><br />阻塞 JS
+            主线程，样式与应用不一致。应使用 Tauri dialog
+            插件或自定义模态确认框。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-8. dictionary.rs 结构体缺少 rename_all = "camelCase"</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>dictionary.rs:17-44</code
+            ><br />DictionaryStatus / DictEntry / DownloadProgress 三个结构体缺
+            rename_all。当前字段均为单词无 bug，但若后续添加多词字段（如
+            file_size）会静默产生与 lib.rs 相同的 Critical bug。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title">M-9. Release 构建无日志</span>
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>lib.rs:39-45</code><br /><code
+              >tauri-plugin-log</code
+            >
+            仅在 <code>cfg!(debug_assertions)</code> 下初始化。Release
+            构建完全无日志输出，生产环境问题不可排查。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-10. E2E 仅覆盖 chromium，未测试 WebKit（macOS 引擎）</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>playwright.config.ts:19-24</code
+            ><br />Tauri 在 macOS 使用 WebKit 引擎，但 E2E 仅配置
+            chromium。核心用户流程（打开 PDF → 选中文本 → 翻译/解读 → 持久化 →
+            重启恢复）完全无 E2E 覆盖。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-11. identifier 不符合 reverse-DNS 规范</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>tauri.conf.json:5</code>（<code
+              >"identifier": "photonee"</code
+            >）<br />不符合 reverse-DNS 规范，与 productName "SpecReader AI"
+            不一致，可能导致 macOS 应用注册冲突。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-12. sortedSessions / renderPages 未 memoize</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>AiChatPanel.tsx:84</code> /
+            <code>PdfViewer.tsx:911-920</code><br />每次渲染都重建数组和
+            Set，流式输出期间频繁重渲染时产生不必要开销。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-13. lineThreshold 魔法数字多次硬编码且取值不一致</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong
+            ><code>PdfViewer.tsx:295(4), 326(8), 335(4)</code
+            ><br />同一概念（行间距阈值）取值不一致，无命名常量。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-14. app_data_dir 在 lib.rs 和 dictionary.rs 中重复定义</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>lib.rs:406-416</code> /
+            <code>dictionary.rs:46-56</code><br />完全相同的函数定义两份，违反
+            DRY。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-15. tokio "time" feature 未显式启用</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>Cargo.toml:34</code><br />dictionary.rs
+            使用 <code>tokio::time::timeout</code> 和 <code>sleep</code>，但
+            Cargo.toml 未启用 time feature，靠 reqwest 传递依赖，脆弱。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title">M-16. 词典下载缺校验和验证</span>
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>dictionary.rs:114-384</code
+            ><br />下载完成后仅通过"能否作为 SQLite 打开"判断完整性，无 SHA-256
+            校验。静默数据损坏可能装入部分损坏词典。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-17. macOS 单实例 / 文件关联未实现</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>lib.rs:68-72</code><br />仅有 TODO
+            注释。macOS 通过 Finder 打开 PDF 时不会传递路径给已运行实例。
+          </div>
+        </div>
+
+        <div class="issue">
+          <div class="issue-header">
+            <span class="badge badge-medium">Medium</span
+            ><span class="issue-title"
+              >M-18. tauri-plugin-single-instance 未平台条件化编译</span
+            >
+          </div>
+          <div class="issue-body">
+            <strong>文件：</strong><code>Cargo.toml:32</code><br />仅
+            Windows/Linux 使用，但依赖无条件编译，macOS
+            增加构建时间和二进制体积。
+          </div>
+        </div>
+      </section>
+
+      <!-- Low 精选 -->
+      <section>
+        <h2><span class="icon">🔵</span> Low 级问题（14 项，精选）</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>编号</th>
+              <th>问题</th>
+              <th>文件</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>L-1</td>
+              <td>secondaryTab 每次渲染 find 查找，未 memoize</td>
+              <td>App.tsx:50-51</td>
+            </tr>
+            <tr>
+              <td>L-2</td>
+              <td>AiChatPanel useEffect 自动切 tab 可能打断用户操作</td>
+              <td>AiChatPanel.tsx:68-70</td>
+            </tr>
+            <tr>
+              <td>L-3</td>
+              <td>index.html lang="en" 与应用实际中文不符</td>
+              <td>index.html:2</td>
+            </tr>
+            <tr>
+              <td>L-4</td>
+              <td>TranslatePopup 流式 effect 依赖数组为空但引用了 props</td>
+              <td>TranslatePopup.tsx:56-108</td>
+            </tr>
+            <tr>
+              <td>L-5</td>
+              <td>PdfViewer.tsx 1110 行过大，PdfPage 子组件应拆分</td>
+              <td>PdfViewer.tsx</td>
+            </tr>
+            <tr>
+              <td>L-6</td>
+              <td>useRightPanelLayout 渲染期间同步读取 DOM（布局抖动）</td>
+              <td>useRightPanelLayout.ts:120-135</td>
+            </tr>
+            <tr>
+              <td>L-7</td>
+              <td>App.css 2237 行未按组件拆分</td>
+              <td>App.css</td>
+            </tr>
+            <tr>
+              <td>L-8</td>
+              <td>
+                useDictionaryStatus 在 App 和 SettingsModal
+                各自实例化，状态不同步
+              </td>
+              <td>App.tsx:36 / SettingsModal.tsx:29</td>
+            </tr>
+            <tr>
+              <td>L-9</td>
+              <td>let _ = 静默吞掉目录创建和事件发送错误</td>
+              <td>lib.rs 多处</td>
+            </tr>
+            <tr>
+              <td>L-10</td>
+              <td>read_pdf_bytes_reads_file 测试无实际测试价值</td>
+              <td>lib.rs:793-800</td>
+            </tr>
+            <tr>
+              <td>L-11</td>
+              <td>DICT_CONNECTION Mutex 在整个查询期间持有</td>
+              <td>dictionary.rs:451-490</td>
+            </tr>
+            <tr>
+              <td>L-12</td>
+              <td>词典下载 URL 硬编码 GitHub，无镜像/CDN</td>
+              <td>dictionary.rs:6-7</td>
+            </tr>
+            <tr>
+              <td>L-13</td>
+              <td>tauri-plugin-shell 初始化但未授予 capabilities</td>
+              <td>lib.rs:25 / default.json</td>
+            </tr>
+            <tr>
+              <td>L-14</td>
+              <td>goToPage scroll 监听器在组件卸载时可能泄漏</td>
+              <td>PdfViewer.tsx:784-796</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- 维度评估 -->
+      <section>
+        <h2><span class="icon">📊</span> 各维度专项评估</h2>
+        <div class="dim-grid">
+          <div class="dim-card">
+            <h4>架构设计 <span class="rating">⭐⭐⭐⭐ A-</span></h4>
+            <p>
+              Tauri 命令与纯逻辑解耦出色，service 层职责清晰，7 个自定义 Hook
+              拆分合理。PDF 渲染使用 IntersectionObserver
+              懒加载。主要不足：useStreaming 未抽取、App.css
+              未按组件拆分、PdfViewer 1110 行偏大。
+            </p>
+          </div>
+          <div class="dim-card">
+            <h4>安全性 <span class="rating">⭐⭐⭐ C+</span></h4>
+            <p>
+              Markdown 渲染使用 rehypeSanitize + 自定义 schema，XSS
+              防护良好。但存在路径穿越漏洞（C-2）、无路径校验（H-1）、CSP
+              connect-src 过宽（H-7）、API Key 明文存储（H-10）。词典下载 URL
+              硬编码无 SSRF 风险，SQLite 参数化查询无注入风险。
+            </p>
+          </div>
+          <div class="dim-card">
+            <h4>数据可靠性 <span class="rating">⭐⭐⭐ C+</span></h4>
+            <p>
+              批注按 PDF SHA-256 hash
+              持久化，重命名不影响恢复。但文件写入非原子（H-2），崩溃时数据损坏风险；无并发写入保护（M-1）；handleAnnotationDelete
+              与防抖 effect 竞态（H-4）。序列化往返测试出色。
+            </p>
+          </div>
+          <div class="dim-card">
+            <h4>性能 <span class="rating">⭐⭐⭐⭐ B+</span></h4>
+            <p>
+              PDF 懒加载渲染、DPR 高清缩放、AbortController
+              资源清理均到位。主要不足：compute_pdf_hash
+              整文件读入内存（M-2）、流式更新触发频繁重渲染、sortedSessions/renderPages
+              未 memoize。整体性能良好。
+            </p>
+          </div>
+          <div class="dim-card">
+            <h4>测试覆盖 <span class="rating">⭐⭐⭐ B-</span></h4>
+            <p>
+              Rust 序列化往返测试设计出色，PDF 页码跳转 E2E 专业。但核心
+              usePersistence Hook 零直接测试（H-9），核心用户流程无
+              E2E，dictionary.rs 仅 1 个 trivial 测试。估算覆盖率
+              55-65%，低于商业级 80% 标准。
+            </p>
+          </div>
+          <div class="dim-card">
+            <h4>商业化就绪 <span class="rating">⭐⭐ D</span></h4>
+            <p>
+              全面缺失：无自动更新（C-3）、无代码签名（C-4）、无
+              LICENSE（C-5）、无崩溃监控（H-8）、无日志系统、无 i18n、CD 仅
+              Windows 构建。PRD 规划了 License
+              系统和商业化路径，但基础设施完全空白。
+            </p>
+          </div>
+          <div class="dim-card">
+            <h4>可访问性 <span class="rating">⭐⭐⭐ B-</span></h4>
+            <p>
+              icon 按钮有 aria-label，AiChatPanel 使用
+              role="tab"/"log"。但模态框无 Escape/焦点陷阱（M-5），tab-bar 项用
+              div 而非 button 无 tabIndex，index.html lang
+              不符。整体可接受但未达 WCAG AA。
+            </p>
+          </div>
+          <div class="dim-card">
+            <h4>代码质量 <span class="rating">⭐⭐⭐⭐ B</span></h4>
+            <p>
+              TS strict 模式开启，useCallback 使用得当，Rust 无裸
+              unwrap。主要不足：any
+              类型残留（M-4）、魔法数字（M-13）、死代码已清理、window.confirm/alert
+              使用（M-7）、无 eslint/prettier。
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 优先修复清单 -->
+      <section>
+        <h2><span class="icon">🎯</span> 修复优先级清单（Top 15）</h2>
+        <ol class="priority-list">
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [Critical] 修复 handleFollowUp 副作用在 state updater
+                内执行（C-1）
+              </div>
+              <div class="priority-desc">
+                将 runSessionStream 移出 setSessions updater，避免 StrictMode
+                双发流式请求
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [Critical] 修复 session_path 路径穿越漏洞（C-2）
+              </div>
+              <div class="priority-desc">
+                校验 session_id 仅含字母数字和连字符，防止覆盖任意文件
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [Critical] 为 read_pdf_bytes / open_path / get_pdf_hash
+                添加路径校验（H-1）
+              </div>
+              <div class="priority-desc">
+                校验 .pdf 扩展名或授权白名单，限制 open_path 协议
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [Critical] 实现原子文件写入（H-2）
+              </div>
+              <div class="priority-desc">
+                先写 .tmp 再 rename，防止崩溃导致数据损坏
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [High] 统一持久化写入为单一防抖入口（H-4）
+              </div>
+              <div class="priority-desc">
+                移除 handleAnnotationDelete 手动写盘，消除竞态
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [High] 修复分屏视图标注跨文件错显（H-5）
+              </div>
+              <div class="priority-desc">
+                为 Annotation 增加 fileHash 字段并按 fileHash + page 过滤
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [High] 关闭 Tab 时 abort 流式请求并清理资源（H-6）
+              </div>
+              <div class="priority-desc">
+                在 onClose 中 abort 运行中的 session 流，清理 sessions 和
+                annotations
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [High] 收紧 CSP connect-src（H-7）
+              </div>
+              <div class="priority-desc">
+                将 http: 限制为 localhost/127.0.0.1，或代理 LLM 请求到 Rust 后端
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [High] API Key 迁移到系统钥匙串（H-10）
+              </div>
+              <div class="priority-desc">
+                使用 keyring crate 存入 macOS Keychain / Windows Credential
+                Manager
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [High] 为 usePersistence.ts 添加直接单元测试（H-9）
+              </div>
+              <div class="priority-desc">
+                覆盖流式、持久化、删除、多文件联动等核心路径
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [Critical] 添加自动更新机制（C-3）
+              </div>
+              <div class="priority-desc">
+                集成 tauri-plugin-updater，配置更新端点和签名
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [Critical] 配置代码签名 + 多平台 CD（C-4）
+              </div>
+              <div class="priority-desc">
+                macOS Developer ID + notarization，Windows 证书，添加
+                macOS/Linux 构建
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [Critical] 添加 LICENSE + 填写元数据（C-5）
+              </div>
+              <div class="priority-desc">
+                LICENSE 文件、package.json/Cargo.toml license/author/description
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [High] 集成崩溃监控 + 全局 ErrorBoundary + Release 日志（H-8）
+              </div>
+              <div class="priority-desc">
+                Sentry + React ErrorBoundary + tauri-plugin-log release 初始化
+              </div>
+            </div>
+          </li>
+          <li class="priority-item">
+            <div class="priority-content">
+              <div class="priority-title">
+                [High] CI 添加 type-check / lint / build / audit（H-11）
+              </div>
+              <div class="priority-desc">
+                配置 eslint+prettier，CI 增加 tsc --noEmit、npm audit、cargo
+                audit
+              </div>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <!-- 总结 -->
+      <section>
+        <h2><span class="icon">💡</span> 一句话总结</h2>
+        <div class="callout">
+          <strong>工程底子扎实，商业化基础设施空白。</strong>项目在架构设计、PDF
+          渲染、序列化正确性、Rust 纯函数解耦方面表现出专业水准，上一版
+          CODE_REVIEW.md 的 Critical bug
+          已彻底修复且有回归保护。但作为商业级软件，当前存在
+          <span class="highlight">1 个功能性缺陷</span>（StrictMode
+          流式双发）、<span class="highlight">2 个安全漏洞</span>（路径穿越 +
+          无路径校验）、<span class="highlight">数据可靠性风险</span
+          >（非原子写入），以及<span class="highlight"
+            >商业化基础设施全面缺失</span
+          >（无自动更新、无崩溃监控、无代码签名、无
+          LICENSE）。建议按优先级清单依次修复 C-1 至 C-5 五个 Critical
+          问题，再处理 H
+          系列安全与数据可靠性问题，最后补齐商业化基础设施。完成这些后，项目将达到可放心商业交付的质量水位。
+        </div>
+      </section>
+
+      <div class="footer">
+        <p>
+          SpecReader AI 商业级代码审核报告 · 审查日期 2026-07-11 · 共发现 48
+          项问题（5 Critical / 11 High / 18 Medium / 14 Low）
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

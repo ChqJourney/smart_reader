@@ -1,0 +1,176 @@
+{
+  "app": {
+    "openSettings": "打开设置",
+    "openPdf": "打开 PDF",
+    "exitSplitView": "退出并排视图",
+    "exitSplit": "退出并排",
+    "showPdf": "显示 PDF",
+    "showAiAssistant": "显示 AI 助手"
+  },
+  "tab": {
+    "close": "关闭标签页",
+    "closeNamed": "关闭 {{fileName}}"
+  },
+  "pdf": {
+    "hidePanel": "隐藏 PDF 面板",
+    "switchToContinuous": "切换为连续阅读",
+    "switchToSingle": "切换为单页阅读",
+    "previousPage": "上一页",
+    "nextPage": "下一页",
+    "pageNumber": "页码",
+    "pageNumberHint": "输入页码并按回车跳转",
+    "fitToWidth": "适合宽度",
+    "zoomOut": "缩小",
+    "zoomIn": "放大",
+    "loading": "加载中...",
+    "loadingPdf": "正在加载 PDF...",
+    "selectPdfToView": "选择 PDF 文件以查看"
+  },
+  "panel": {
+    "hide": "隐藏面板"
+  },
+  "chat": {
+    "aiAssistant": "AI 助手",
+    "userLabel": "你",
+    "aiLabel": "AI",
+    "generatingPlaceholder": "生成中…",
+    "followUpPlaceholder": "继续追问..."
+  },
+  "stash": {
+    "tabLabel": "暂存区 ({{count}})",
+    "add": "加入暂存",
+    "source": "{{fileName}} · 第 {{page}} 页",
+    "emptyHint": "暂无暂存片段，在 PDF 中选中内容后点击「加入暂存」。",
+    "clear": "清空暂存",
+    "expand": "展开",
+    "collapse": "收起"
+  },
+  "session": {
+    "tabLabel": "解读记录 ({{count}})",
+    "emptyHint": "在 PDF 中选中内容，点击「解读」生成解释，或先「加入暂存」再使用自定义解读。",
+    "streamingStatus": "解读中…",
+    "backToList": "返回解读记录",
+    "viewSession": "查看解读"
+  },
+  "customInterpret": {
+    "title": "自定义解读",
+    "hint": "基于 {{count}} 个选中片段进行解读",
+    "placeholder": "输入你的解读要求..."
+  },
+  "translate": {
+    "title": "翻译",
+    "hidePopup": "隐藏浮层",
+    "loading": "翻译中…"
+  },
+  "explain": {
+    "title": "解读",
+    "popupLabel": "解读标记"
+  },
+  "marker": {
+    "stash": "暂存",
+    "interpretedStash": "已解读暂存",
+    "translate": "翻译",
+    "explain": "解读"
+  },
+  "recentFiles": {
+    "title": "最近打开的文件",
+    "empty": "最近打开的文件将显示在这里",
+    "clear": "清空最近文件"
+  },
+  "settings": {
+    "title": "设置",
+    "description": "配置 LLM API、功能选项与系统信息。",
+    "pages": {
+      "model": "模型设置",
+      "feature": "功能设置",
+      "system": "系统设置"
+    },
+    "llmApi": "LLM API",
+    "llmApiHint": "用于翻译、解读与自定义问答的模型接入信息。",
+    "apiBaseUrl": "API Base URL",
+    "model": "Model",
+    "apiKey": "API Key",
+    "outputLanguage": "输出语言",
+    "outputLanguageHint": "翻译与解读结果默认使用的语言。",
+    "targetLanguage": "目标语言",
+    "targetLanguagePlaceholder": "中文",
+    "hoverTranslate": "悬停取词翻译",
+    "hoverTranslateHint": "鼠标悬停在英文单词上时，使用本地 ECDICT 词典显示翻译。",
+    "enableHoverTranslate": "启用悬停取词翻译",
+    "dictionaryReady": "词典已就绪",
+    "downloadingProgress": "下载中 {{percent}}%",
+    "systemPrompts": "系统提示词",
+    "systemPromptsHint": "控制 AI 在不同场景下的角色与回答风格。支持 {targetLanguage} 占位符。",
+    "promptAriaLabel": "{{action}}系统提示词",
+    "characters": "字符",
+    "version": "版本号",
+    "appInfo": "应用信息",
+    "productName": "产品名称",
+    "identifier": "应用标识",
+    "license": "许可证",
+    "licenseLoading": "正在加载许可证…",
+    "licenseError": "无法加载许可证内容",
+    "resetAll": "恢复全部默认",
+    "openLogs": "打开日志目录",
+    "downloadDictionaryTitle": "下载离线词典",
+    "downloadDictionaryHint": "悬停取词翻译需要下载 ECDICT 英汉词典（约 200 MB），下载后保存在本地应用数据目录，无需再次下载。",
+    "downloadNow": "立即下载",
+    "defaultTargetLanguage": "中文",
+    "defaultPrompts": {
+      "translate": "你是一位检测认证行业标准文档翻译助手，擅长把英文标准条款准确翻译成{targetLanguage}。请保持专业术语准确，首次出现关键术语时保留原文，不要编造片段中未提及的条款或页码。",
+      "explain": "你是一位检测认证行业标准文档阅读助手，擅长把复杂的英文标准条款解释得清晰易懂。请基于用户提供的文档片段用{targetLanguage}回答，不要编造片段中未提及的条款或页码。"
+    }
+  },
+  "dictionary": {
+    "querying": "查询中…",
+    "downloadFailed": "词典下载失败"
+  },
+  "errorBoundary": {
+    "title": "应用发生了错误",
+    "description": "请尝试重新加载，或打开日志目录以便排查问题。",
+    "reload": "重新加载",
+    "openLogs": "打开日志目录"
+  },
+  "llm": {
+    "error": {
+      "apiKeyMissing": "API Key 未配置，请先在设置中配置 LLM API。",
+      "apiError": "LLM API 错误 ({{status}}): {{detail}}",
+      "streamReadError": "无法读取 LLM 响应流。",
+      "llmApiError": "LLM API 错误: {{detail}}",
+      "requestFailed": "请求失败: {{message}}"
+    },
+    "prompts": {
+      "explain": "请用通俗易懂的{{targetLanguage}}解读以下标准条款/段落，说明其要求、意义、与测试工作的关系，并指出可能相关的其他条款：\n\n{{text}}",
+      "translate": "请将以下标准文档内容翻译成{{targetLanguage}}，保持专业术语准确，并在首次出现关键术语时保留原文：\n\n{{text}}"
+    },
+    "customInterpretPrompt": "请用{{targetLanguage}}回答以下问题：\n\n{{prompt}}\n\n{{sources}}",
+    "customInterpretSource": "片段 {{index}}（{{fileName}} 第 {{page}} 页）：\n{{text}}"
+  },
+  "tabs": {
+    "maxTabsHint": "最多只能同时打开 {{maxTabs}} 个 PDF 文件。请先关闭部分标签。"
+  },
+  "confirm": {
+    "deleteTitle": "确认删除",
+    "deleteExplainBody": "确定要删除这条解读吗？原文标记和右侧面板的解读记录将一并删除。"
+  },
+  "action": {
+    "translate": "翻译",
+    "explain": "解读"
+  },
+  "common": {
+    "cancel": "取消",
+    "save": "保存",
+    "send": "发送",
+    "stop": "中止",
+    "close": "关闭",
+    "delete": "删除",
+    "edit": "编辑",
+    "expand": "展开",
+    "collapse": "收起",
+    "reset": "恢复默认",
+    "notice": "提示",
+    "sourceText": "原文片段",
+    "errorPrefix": "[错误]",
+    "characters": "字符"
+  }
+}

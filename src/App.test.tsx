@@ -2,8 +2,17 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import React from "react";
 import App from "./App";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open, confirm } from "@tauri-apps/plugin-dialog";
 import { DEFAULT_SETTINGS } from "./services/settings";
+import { DictionaryStatusProvider } from "./hooks/useDictionaryStatus";
+
+function renderApp() {
+  return render(
+    <DictionaryStatusProvider>
+      <App />
+    </DictionaryStatusProvider>
+  );
+}
 
 const mockInvoke = vi.hoisted(() => vi.fn());
 const mockListen = vi.hoisted(() => vi.fn());
@@ -18,10 +27,12 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
+  confirm: vi.fn(),
 }));
 
 vi.mock("./services/llm", async () => {
-  const actual = await vi.importActual<typeof import("./services/llm")>("./services/llm");
+  const actual =
+    await vi.importActual<typeof import("./services/llm")>("./services/llm");
   return {
     ...actual,
     streamChatCompletion: vi.fn().mockImplementation(async function* () {
@@ -49,27 +60,48 @@ vi.mock("./components/PdfViewer", () => ({
           position: { x: number; y: number; pdfX: number; pdfY: number }
         ) => void;
         onToggleVisibility?: () => void;
-        annotations?: { id?: string; type: string; stashId?: string; interpretedGroupSize?: number }[];
+        annotations?: {
+          id?: string;
+          type: string;
+          stashId?: string;
+          interpretedGroupSize?: number;
+        }[];
         onAnnotationDelete?: (id: string) => void;
       },
       ref: React.Ref<HTMLDivElement>
     ) => {
       triggerSelection.mockImplementation(() => {
-        onSelection?.("selected text", 3, { x: 100, y: 200, pdfX: 50, pdfY: 60 });
+        onSelection?.("selected text", 3, {
+          x: 100,
+          y: 200,
+          pdfX: 50,
+          pdfY: 60,
+        });
       });
       lastAnnotations.mockImplementation(() => annotations ?? []);
       return (
         <div data-testid="pdf-viewer" ref={ref}>
           PdfViewer
-          <button data-testid="trigger-selection" onClick={() => triggerSelection()}>
+          <button
+            data-testid="trigger-selection"
+            onClick={() => triggerSelection()}
+          >
             Select
           </button>
           {annotations?.map((a) => {
-            const isExplain = a.type === "explain" || typeof a.interpretedGroupSize === "number";
+            const isExplain =
+              a.type === "explain" ||
+              typeof a.interpretedGroupSize === "number";
             return (
               <div key={a.id ?? `${a.type}-${a.stashId}`}>
                 <button
-                  aria-label={a.type === "translate" ? "翻译" : a.type === "explain" ? "解读" : "已解读暂存"}
+                  aria-label={
+                    a.type === "translate"
+                      ? "翻译"
+                      : a.type === "explain"
+                        ? "解读"
+                        : "已解读暂存"
+                  }
                   data-testid={`annotation-${a.type}-${a.id ?? a.stashId}`}
                   onClick={() => {}}
                 >
@@ -88,7 +120,9 @@ vi.mock("./components/PdfViewer", () => ({
             );
           })}
           {onToggleVisibility && (
-            <button title="隐藏 PDF 面板" onClick={onToggleVisibility}>隐藏</button>
+            <button title="隐藏 PDF 面板" onClick={onToggleVisibility}>
+              隐藏
+            </button>
           )}
         </div>
       );
@@ -102,39 +136,44 @@ function triggerPdfSelection() {
 
 async function openPdf(path = "/test/file.pdf") {
   (open as ReturnType<typeof vi.fn>).mockResolvedValue(path);
-  fireEvent.click(screen.getByRole("button", { name: /Open PDF/i }));
+  fireEvent.click(screen.getByTestId("open-pdf-btn"));
   await waitFor(() => {
     expect(screen.getByText(path.split("/").pop()!)).toBeInTheDocument();
   });
 }
 
 function setupMockInvoke() {
-  mockInvoke.mockImplementation((command: string, args?: Record<string, any>) => {
-    switch (command) {
-      case "load_pdf_data":
-        return Promise.resolve({ annotations: [], sessionIds: [] });
-      case "get_pdf_hash":
-        return Promise.resolve(`hash-${args?.filePath}`);
-      case "load_session":
-        return Promise.resolve(null);
-      case "load_settings":
-        return Promise.resolve({ ...DEFAULT_SETTINGS });
-      case "load_recent_files":
-        return Promise.resolve([]);
-      case "check_dictionary":
-        return Promise.resolve({ exists: false, path: "" });
-      case "download_dictionary":
-        return Promise.resolve(undefined);
-      case "save_session":
-      case "save_pdf_data":
-      case "delete_session":
-      case "save_settings":
-      case "save_recent_files":
-        return Promise.resolve(undefined);
-      default:
-        return Promise.reject(new Error(`No mock handler for command: ${command}`));
+  mockInvoke.mockImplementation(
+    (command: string, args?: Record<string, any>) => {
+      switch (command) {
+        case "load_pdf_data":
+          return Promise.resolve({ annotations: [], sessionIds: [] });
+        case "get_pdf_hash":
+          return Promise.resolve(`hash-${args?.filePath}`);
+        case "load_session":
+          return Promise.resolve(null);
+        case "load_settings":
+          return Promise.resolve({ ...DEFAULT_SETTINGS });
+        case "load_recent_files":
+          return Promise.resolve([]);
+        case "check_dictionary":
+          return Promise.resolve({ exists: false, path: "" });
+        case "download_dictionary":
+        case "authorize_pdf_path":
+          return Promise.resolve(undefined);
+        case "save_session":
+        case "save_pdf_data":
+        case "delete_session":
+        case "save_settings":
+        case "save_recent_files":
+          return Promise.resolve(undefined);
+        default:
+          return Promise.reject(
+            new Error(`No mock handler for command: ${command}`)
+          );
+      }
     }
-  });
+  );
   mockListen.mockResolvedValue(() => {});
 }
 
@@ -147,13 +186,13 @@ describe("App", () => {
   });
 
   it("renders header and open button", () => {
-    render(<App />);
+    renderApp();
     expect(screen.getByLabelText("最近打开的文件")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Open PDF/i })).toBeInTheDocument();
+    expect(screen.getByTestId("open-pdf-btn")).toBeInTheDocument();
   });
 
   it("toggles left and right panels", () => {
-    render(<App />);
+    renderApp();
 
     const hidePdfBtn = screen.getByTitle(/隐藏 PDF/i);
     fireEvent.click(hidePdfBtn);
@@ -173,19 +212,21 @@ describe("App", () => {
   });
 
   it("adds selection to stash and shows stash tab", async () => {
-    render(<App />);
+    renderApp();
 
     await openPdf();
     triggerPdfSelection();
 
     fireEvent.click(screen.getByRole("button", { name: /加入暂存/i }));
 
-    expect(screen.getByRole("tab", { name: /暂存区 \(1\)/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /暂存区 \(1\)/i })
+    ).toBeInTheDocument();
     expect(screen.getByText(/selected text/i)).toBeInTheDocument();
   });
 
   it("creates a session and clears stash after custom interpretation", async () => {
-    render(<App />);
+    renderApp();
 
     await openPdf();
     triggerPdfSelection();
@@ -198,14 +239,18 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: /发送/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("tab", { name: /解读记录 \(1\)/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("tab", { name: /解读记录 \(1\)/i })
+      ).toBeInTheDocument();
     });
-    expect(screen.getByRole("tab", { name: /暂存区 \(0\)/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /暂存区 \(0\)/i })
+    ).toBeInTheDocument();
   });
 
   it("custom interpretation prompt includes stash content", async () => {
     const { streamChatCompletion } = await import("./services/llm");
-    render(<App />);
+    renderApp();
 
     await openPdf();
     triggerPdfSelection();
@@ -221,8 +266,11 @@ describe("App", () => {
       expect(streamChatCompletion).toHaveBeenCalled();
     });
 
-    const [, messages] = (streamChatCompletion as ReturnType<typeof vi.fn>).mock.calls[0];
-    const userMessage = messages.find((m: { role: string; content: string }) => m.role === "user");
+    const [, messages] = (streamChatCompletion as ReturnType<typeof vi.fn>).mock
+      .calls[0];
+    const userMessage = messages.find(
+      (m: { role: string; content: string }) => m.role === "user"
+    );
     expect(userMessage.content).toContain("请分析关系");
     expect(userMessage.content).toContain("selected text");
 
@@ -242,44 +290,54 @@ describe("App", () => {
   });
 
   it("creates a session immediately for explain action", async () => {
-    render(<App />);
+    renderApp();
 
     await openPdf();
     triggerPdfSelection();
     fireEvent.click(screen.getByRole("button", { name: /解读/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("tab", { name: /解读记录 \(1\)/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("tab", { name: /解读记录 \(1\)/i })
+      ).toBeInTheDocument();
     });
   });
 
   it("saves explain session reference to PDF data", async () => {
-    render(<App />);
+    renderApp();
 
     await openPdf("/test/file.pdf");
     triggerPdfSelection();
     fireEvent.click(screen.getByRole("button", { name: /解读/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("tab", { name: /解读记录 \(1\)/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("tab", { name: /解读记录 \(1\)/i })
+      ).toBeInTheDocument();
     });
 
-    const annotation = lastAnnotations().find((a: { type: string }) => a.type === "explain");
+    const annotation = lastAnnotations().find(
+      (a: { type: string }) => a.type === "explain"
+    );
     expect(annotation).toBeDefined();
     const sessionId = (annotation as any).sessionId;
     expect(sessionId).toBeDefined();
 
     await waitFor(() => {
-      const savePdfCalls = mockInvoke.mock.calls.filter((call) => call[0] === "save_pdf_data");
+      const savePdfCalls = mockInvoke.mock.calls.filter(
+        (call) => call[0] === "save_pdf_data"
+      );
       expect(savePdfCalls.length).toBeGreaterThan(0);
       expect(
-        savePdfCalls.some((call) => (call[1] as any).data.sessionIds.includes(sessionId))
+        savePdfCalls.some((call) =>
+          (call[1] as any).data.sessionIds.includes(sessionId)
+        )
       ).toBe(true);
     });
   });
 
   it("removes a stash and its highlight when deleting", async () => {
-    render(<App />);
+    renderApp();
 
     await openPdf();
     triggerPdfSelection();
@@ -287,11 +345,13 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "删除" }));
 
-    expect(screen.getByRole("tab", { name: /暂存区 \(0\)/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /暂存区 \(0\)/i })
+    ).toBeInTheDocument();
   });
 
   it("clears all stashes when clearing", async () => {
-    render(<App />);
+    renderApp();
 
     await openPdf();
     triggerPdfSelection();
@@ -301,11 +361,13 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /清空暂存/i }));
 
-    expect(screen.getByRole("tab", { name: /暂存区 \(0\)/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /暂存区 \(0\)/i })
+    ).toBeInTheDocument();
   });
 
   it("hides stashes and sessions when their tab is closed", async () => {
-    render(<App />);
+    renderApp();
 
     await openPdf();
     triggerPdfSelection();
@@ -315,15 +377,23 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "解读" }));
 
     await waitFor(() => {
-      expect(screen.getByRole("tab", { name: /暂存区 \(1\)/i })).toBeInTheDocument();
-      expect(screen.getByRole("tab", { name: /解读记录 \(1\)/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("tab", { name: /暂存区 \(1\)/i })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("tab", { name: /解读记录 \(1\)/i })
+      ).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByTitle(/关闭标签页/i));
 
     expect(screen.queryByText(/selected text/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /暂存区 \(0\)/i })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /解读记录 \(0\)/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /暂存区 \(0\)/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /解读记录 \(0\)/i })
+    ).toBeInTheDocument();
   });
 
   it("filters stashes and sessions by the active tab", async () => {
@@ -331,30 +401,35 @@ describe("App", () => {
       .mockResolvedValueOnce("/test/file-a.pdf")
       .mockResolvedValueOnce("/test/file-b.pdf");
 
-    render(<App />);
+    renderApp();
 
-    fireEvent.click(screen.getByRole("button", { name: /Open PDF/i }));
+    fireEvent.click(screen.getByTestId("open-pdf-btn"));
     await waitFor(() => {
       expect(screen.getByText("file-a.pdf")).toBeInTheDocument();
     });
     triggerPdfSelection();
     fireEvent.click(screen.getByRole("button", { name: /加入暂存/i }));
 
-    fireEvent.click(screen.getByRole("button", { name: /Open PDF/i }));
+    fireEvent.click(screen.getByTestId("open-pdf-btn"));
     await waitFor(() => {
       expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
     });
 
     expect(screen.queryByText(/selected text/i)).not.toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /暂存区 \(0\)/i })).toBeInTheDocument();
+    expect(
+      screen.getByRole("tab", { name: /暂存区 \(0\)/i })
+    ).toBeInTheDocument();
 
-    const fileATab = screen.getAllByText("file-a.pdf")
+    const fileATab = screen
+      .getAllByText("file-a.pdf")
       .find((el) => el.classList.contains("tab-name"))?.parentElement;
     expect(fileATab).toBeDefined();
     fireEvent.click(fileATab!);
 
     await waitFor(() => {
-      expect(screen.getByRole("tab", { name: /暂存区 \(1\)/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("tab", { name: /暂存区 \(1\)/i })
+      ).toBeInTheDocument();
       expect(screen.getByText(/selected text/i)).toBeInTheDocument();
     });
   });
@@ -391,78 +466,121 @@ describe("App", () => {
       updatedAt: 1000,
     };
 
-    mockInvoke.mockImplementation((command: string, args?: Record<string, any>) => {
-      if (command === "load_pdf_data" && args?.filePath === "/test/file.pdf") {
-        return Promise.resolve({ annotations: [], sessionIds: ["session-existing"] });
+    mockInvoke.mockImplementation(
+      (command: string, args?: Record<string, any>) => {
+        if (
+          command === "load_pdf_data" &&
+          args?.filePath === "/test/file.pdf"
+        ) {
+          return Promise.resolve({
+            annotations: [],
+            sessionIds: ["session-existing"],
+          });
+        }
+        if (
+          command === "load_session" &&
+          args?.sessionId === "session-existing"
+        ) {
+          return Promise.resolve(existingSession);
+        }
+        if (command === "get_pdf_hash") {
+          return Promise.resolve(`hash-${args?.filePath}`);
+        }
+        if (command === "load_settings") {
+          return Promise.resolve({ ...DEFAULT_SETTINGS });
+        }
+        if (command === "load_recent_files") {
+          return Promise.resolve([]);
+        }
+        if (
+          [
+            "save_session",
+            "save_pdf_data",
+            "delete_session",
+            "save_settings",
+            "save_recent_files",
+            "authorize_pdf_path",
+          ].includes(command)
+        ) {
+          return Promise.resolve(undefined);
+        }
+        if (command === "check_dictionary") {
+          return Promise.resolve({ exists: false, path: "" });
+        }
+        return Promise.reject(
+          new Error(`No mock handler for command: ${command}`)
+        );
       }
-      if (command === "load_session" && args?.sessionId === "session-existing") {
-        return Promise.resolve(existingSession);
-      }
-      if (command === "get_pdf_hash") {
-        return Promise.resolve(`hash-${args?.filePath}`);
-      }
-      if (command === "load_settings") {
-        return Promise.resolve({ ...DEFAULT_SETTINGS });
-      }
-      if (command === "load_recent_files") {
-        return Promise.resolve([]);
-      }
-      if (["save_session", "save_pdf_data", "delete_session", "save_settings", "save_recent_files"].includes(command)) {
-        return Promise.resolve(undefined);
-      }
-      return Promise.reject(new Error(`No mock handler for command: ${command}`));
-    });
+    );
 
-    render(<App />);
+    renderApp();
 
     await openPdf();
 
     await waitFor(() => {
-      expect(screen.getByRole("tab", { name: /解读记录 \(1\)/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("tab", { name: /解读记录 \(1\)/i })
+      ).toBeInTheDocument();
     });
     expect(screen.getByText(/请解读/i)).toBeInTheDocument();
   });
 
   it("still removes annotation when session cleanup fails", async () => {
-    render(<App />);
+    renderApp();
 
     await openPdf("/test/file.pdf");
     triggerPdfSelection();
     fireEvent.click(screen.getByRole("button", { name: /解读/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("tab", { name: /解读记录 \(1\)/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("tab", { name: /解读记录 \(1\)/i })
+      ).toBeInTheDocument();
     });
 
     // Make subsequent loadPdfData reject to simulate backend failure
-    mockInvoke.mockImplementation((command: string, args?: Record<string, any>) => {
-      if (command === "load_pdf_data") {
-        return Promise.reject(new Error("disk error"));
+    mockInvoke.mockImplementation(
+      (command: string, args?: Record<string, any>) => {
+        if (command === "load_pdf_data") {
+          return Promise.reject(new Error("disk error"));
+        }
+        if (command === "get_pdf_hash") {
+          return Promise.resolve(`hash-${args?.filePath}`);
+        }
+        if (command === "load_settings") {
+          return Promise.resolve({ ...DEFAULT_SETTINGS });
+        }
+        if (command === "load_recent_files") {
+          return Promise.resolve([]);
+        }
+        if (
+          [
+            "save_session",
+            "save_pdf_data",
+            "delete_session",
+            "load_session",
+            "save_settings",
+            "save_recent_files",
+            "authorize_pdf_path",
+          ].includes(command)
+        ) {
+          return Promise.resolve(undefined);
+        }
+        return Promise.reject(
+          new Error(`No mock handler for command: ${command}`)
+        );
       }
-      if (command === "get_pdf_hash") {
-        return Promise.resolve(`hash-${args?.filePath}`);
-      }
-      if (command === "load_settings") {
-        return Promise.resolve({ ...DEFAULT_SETTINGS });
-      }
-      if (command === "load_recent_files") {
-        return Promise.resolve([]);
-      }
-      if (["save_session", "save_pdf_data", "delete_session", "load_session", "save_settings", "save_recent_files"].includes(command)) {
-        return Promise.resolve(undefined);
-      }
-      return Promise.reject(new Error(`No mock handler for command: ${command}`));
-    });
+    );
 
-    const deleteSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    vi.mocked(confirm).mockResolvedValue(true);
 
     fireEvent.click(screen.getByRole("button", { name: /删除解读/i }));
 
     await waitFor(() => {
-      expect(screen.getByRole("tab", { name: /解读记录 \(0\)/i })).toBeInTheDocument();
+      expect(
+        screen.getByRole("tab", { name: /解读记录 \(0\)/i })
+      ).toBeInTheDocument();
     });
-
-    deleteSpy.mockRestore();
   });
 
   it("enters split view when dragging an inactive tab into the main area", async () => {
@@ -470,16 +588,17 @@ describe("App", () => {
       .mockResolvedValueOnce("/test/file-a.pdf")
       .mockResolvedValueOnce("/test/file-b.pdf");
 
-    render(<App />);
+    renderApp();
 
     await openPdf("/test/file-a.pdf");
-    fireEvent.click(screen.getByRole("button", { name: /Open PDF/i }));
+    fireEvent.click(screen.getByTestId("open-pdf-btn"));
     await waitFor(() => {
       expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
     });
 
     // Find the inactive tab (file-a) and drag it into the main area.
-    const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i }).parentElement as HTMLElement;
+    const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i })
+      .parentElement as HTMLElement;
     let draggedTabId = "";
     const dataTransfer = {
       setData: vi.fn((_format: string, value: string) => {
@@ -511,29 +630,34 @@ describe("App", () => {
       .mockResolvedValueOnce("/test/file-a.pdf")
       .mockResolvedValueOnce("/test/file-b.pdf");
 
-    render(<App />);
+    renderApp();
 
     await openPdf("/test/file-a.pdf");
-    fireEvent.click(screen.getByRole("button", { name: /Open PDF/i }));
+    fireEvent.click(screen.getByTestId("open-pdf-btn"));
     await waitFor(() => {
       expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
     });
 
     const main = document.querySelector("main") as HTMLElement;
     const originalGetBoundingClientRect = main.getBoundingClientRect.bind(main);
-    main.getBoundingClientRect = vi.fn(() => ({
-      width: 2000,
-      height: 600,
-      top: 0,
-      left: 0,
-      right: 2000,
-      bottom: 600,
-      x: 0,
-      y: 0,
-      toJSON: () => "",
-    } as DOMRect));
+    main.getBoundingClientRect = vi.fn(
+      () =>
+        ({
+          width: 2000,
+          height: 600,
+          top: 0,
+          left: 0,
+          right: 2000,
+          bottom: 600,
+          x: 0,
+          y: 0,
+          toJSON: () => "",
+        }) as DOMRect
+    );
+    window.dispatchEvent(new Event("resize"));
 
-    const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i }).parentElement as HTMLElement;
+    const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i })
+      .parentElement as HTMLElement;
     let draggedTabId = "";
     const dataTransfer = {
       setData: vi.fn((_format: string, value: string) => {
@@ -553,7 +677,9 @@ describe("App", () => {
     });
 
     const rightPanel = document.querySelector(".right-panel") as HTMLElement;
-    expect(rightPanel.style.width).toBe("20%");
+    await waitFor(() => {
+      expect(rightPanel.style.width).toBe("20%");
+    });
 
     main.getBoundingClientRect = originalGetBoundingClientRect;
   });

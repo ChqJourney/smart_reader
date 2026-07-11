@@ -1,0 +1,342 @@
+.settings-modal-content {
+  width: 720px;
+  max-width: 92vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e5e5;
+  flex-shrink: 0;
+}
+
+.settings-modal-header h3 {
+  margin-bottom: 4px;
+}
+
+.settings-modal-body {
+  flex: 1;
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-modal-layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-modal-sidebar {
+  width: 160px;
+  flex-shrink: 0;
+  padding: 16px 0;
+  border-right: 1px solid #e5e5e5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-modal-sidebar button {
+  padding: 10px 16px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: #616161;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.settings-modal-sidebar button:hover {
+  background: #f3f3f3;
+  color: #1f1f1f;
+}
+
+.settings-modal-sidebar button.active {
+  background: #f0f7ff;
+  border-left-color: #0078d4;
+  color: #0078d4;
+  font-weight: 500;
+}
+
+.settings-modal-page-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.settings-section {
+  padding: 16px;
+  background: #fafafa;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+}
+
+.settings-section-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #1f1f1f;
+  margin-bottom: 4px;
+}
+
+.settings-section-hint {
+  font-size: 0.75rem;
+  color: #757575;
+  margin-bottom: 12px;
+}
+
+.settings-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-field label {
+  font-size: 0.8rem;
+  color: #616161;
+  font-weight: 500;
+}
+
+.settings-field input,
+.settings-field textarea {
+  padding: 8px 10px;
+  border: 1px solid #d1d1d1;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: #fff;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.settings-field input:focus,
+.settings-field textarea:focus {
+  outline: none;
+  border-color: #0078d4;
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
+}
+
+.settings-info-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings-info-list > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-info-list dt {
+  font-size: 0.75rem;
+  color: #757575;
+  font-weight: 500;
+}
+
+.settings-info-list dd {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #1f1f1f;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.settings-license-text {
+  width: 100%;
+  min-height: 160px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: #424242;
+  white-space: pre-wrap;
+  font-family: inherit;
+}
+
+.settings-prompt-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.settings-prompt-tabs button {
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  color: #616161;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.settings-prompt-tabs button:hover {
+  background: #f3f3f3;
+}
+
+.settings-prompt-tabs button.active {
+  background: #e8f0fe;
+  border-color: #0078d4;
+  color: #0078d4;
+  font-weight: 500;
+}
+
+.settings-prompt-area {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.settings-prompt-area textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d1d1;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 100px;
+}
+
+.settings-prompt-area textarea:focus {
+  outline: none;
+  border-color: #0078d4;
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
+}
+
+.settings-prompt-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  color: #757575;
+}
+
+.settings-prompt-meta .icon-btn {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  min-width: auto;
+  min-height: auto;
+}
+
+.settings-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e5e5e5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.settings-modal-footer-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-modal-footer .modal-actions {
+  margin-top: 0;
+}
+
+.settings-modal-footer .modal-actions button:last-child {
+  background: #0078d4;
+  color: #fff;
+  border-color: #0078d4;
+}
+
+.settings-modal-footer .modal-actions button:last-child:hover:not(:disabled) {
+  background: #006cbe;
+}
+
+.settings-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #1f1f1f;
+  user-select: none;
+}
+
+.settings-toggle:hover {
+  background: #f0f0f0;
+  color: #1f1f1f;
+}
+
+.settings-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #0078d4;
+}
+
+.settings-toggle:has(input:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.settings-status-ok {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #0f7b0f;
+}
+
+.settings-status-error {
+  margin-top: 8px;
+  font-size: 0.8rem;
+  color: #c42b1c;
+}
+
+.settings-download-progress {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-progress-bar {
+  height: 6px;
+  background: #e5e5e5;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.settings-progress-fill {
+  height: 100%;
+  background: #0078d4;
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
+.settings-progress-text {
+  font-size: 0.8rem;
+  color: #616161;
+}

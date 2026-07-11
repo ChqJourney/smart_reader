@@ -23,15 +23,18 @@
 
 ## 可用命令
 
-| 命令 | 说明 |
-|------|------|
-| `npm run test` | 运行前端单元/集成测试 |
-| `npm run test:watch` | 监听模式运行前端测试 |
-| `npm run test:coverage` | 生成前端测试覆盖率报告 |
-| `npm run test:e2e` | 运行 Playwright E2E 测试 |
-| `npm run test:e2e:ui` | 以 UI 模式运行 E2E 测试 |
-| `npm run test:all` | 依次运行单元测试与 E2E 测试 |
-| `cd src-tauri && cargo test` | 运行后端 Rust 测试 |
+| 命令                         | 说明                        |
+| ---------------------------- | --------------------------- |
+| `npm run test`               | 运行前端单元/集成测试       |
+| `npm run test:watch`         | 监听模式运行前端测试        |
+| `npm run test:coverage`      | 生成前端测试覆盖率报告      |
+| `npm run test:e2e`           | 运行 Playwright E2E 测试    |
+| `npm run test:e2e:ui`        | 以 UI 模式运行 E2E 测试     |
+| `npm run test:all`           | 依次运行单元测试与 E2E 测试 |
+| `npm run type-check`         | TypeScript 类型检查         |
+| `npm run lint`               | ESLint 代码检查             |
+| `npm run format:check`       | Prettier 格式检查           |
+| `cd src-tauri && cargo test` | 运行后端 Rust 测试          |
 
 ## 前端测试
 
@@ -55,6 +58,7 @@ Vitest 配置位于 `vite.config.ts`：
 ### 测试范围
 
 - **services/annotations.test.ts**：标注的 CRUD、Tauri invoke 调用。
+- **hooks/usePersistence.test.tsx**：StrictMode 下 `handleFollowUp` 不双发、流式中断、annotation 删除、分屏 annotation 隔离、关闭 Tab 资源清理。
 - **services/llm.test.ts**：LLM 配置读写、提示词构建、SSE 流解析。
 - **services/sessions.test.ts**：会话消息更新、流状态、删除。
 - **services/stash.test.ts**：暂存片段增删改。
@@ -119,8 +123,15 @@ E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 
 - `compute_pdf_hash`：PDF 文件哈希计算。
 - `annotations_path`：标注文件路径的确定性与结构。
 - `save_pdf_data_to_disk` / `load_pdf_data_from_disk`：标注持久化往返、旧格式兼容、缺失文件返回空。
-- `save_session_to_disk` / `load_session_from_disk` / `delete_session_from_disk`：解读会话 CRUD。
+- `save_session_to_disk` / `load_session_from_disk` / `delete_session_from_disk`：解读会话 CRUD、session id 路径穿越防护。
+- `validate_pdf_access` / `authorize_pdf_path`：PDF 路径授权白名单。
+- `atomic_write`：原子文件写入。
 - `read_pdf_bytes` 命令的文件读取正确性。
+
+`src-tauri/src/secure_storage.rs` 中的 `#[cfg(test)]` 模块覆盖：
+
+- `MemoryStorage` API Key 存取与删除。
+- `load_settings_with_storage` / `save_settings_with_storage`：settings JSON 中无 API Key 明文、keyring 失败时拒绝保存。
 
 ### 可测试性重构
 
@@ -162,6 +173,53 @@ E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 
    - 修复：`src/components/PdfViewer.tsx` 改为以「页面顶部距离视口顶部最近」作为当前页判断标准，并引入跳转锁避免可见页检测与跳转滚动竞争。
    - 回归测试：`src/components/PdfViewer.pageJump.test.tsx` 与 `e2e/pdf-page-jump.spec.ts`
 
+## 安全与数据可靠性修复（对应 `AUDIT_FIX_PLAN.md`）
+
+本轮修复覆盖了审计报告中的 Critical / High / P0 / P1 / P2 项，核心变化如下：
+
+1. **`handleFollowUp` StrictMode 双发 SSE（C-1）**
+   - 修复：`src/hooks/usePersistence.ts` 将 `runSessionStream` 移到 `setSessions` updater 外部。
+   - 回归测试：`src/hooks/usePersistence.test.tsx`
+
+2. **`session_path` 路径穿越（C-2）**
+   - 修复：`src-tauri/src/lib.rs` 增加 `validate_session_id`，限制 session id 字符集。
+   - 回归测试：`src-tauri/src/lib.rs` Rust tests
+
+3. **PDF 命令无路径校验（H-1）**
+   - 修复：`src-tauri/src/lib.rs` 增加 `AppState` 授权路径白名单与 `validate_pdf_access`。
+   - 回归测试：`src-tauri/src/lib.rs` Rust tests
+
+4. **文件写入非原子（H-2）**
+   - 修复：`src-tauri/src/lib.rs` 增加 `atomic_write`，所有 JSON 保存均通过 tmp + rename。
+   - 回归测试：`src-tauri/src/lib.rs` Rust tests
+
+5. **词典查询阻塞 I/O（H-3）**
+   - 修复：`src-tauri/src/lib.rs` 对 `check_dictionary` / `lookup_word` 使用 `spawn_blocking`。
+   - 回归测试：并发场景由集成测试与后端测试覆盖
+
+6. **CSP `connect-src` 过宽（H-7）**
+   - 修复：`src-tauri/tauri.conf.json` 收紧为 `http://localhost:* http://127.0.0.1:* https:`。
+
+7. **API Key 明文存储（H-10）**
+   - 修复：新增 `src-tauri/src/secure_storage.rs`，使用 `keyring` crate 存储 API Key；`settings.json` 中只保留空字符串。
+   - 回归测试：`src-tauri/src/lib.rs` / `src-tauri/src/secure_storage.rs` Rust tests
+
+8. **持久化写入竞态（H-4）**
+   - 修复：`src/hooks/usePersistence.ts` 移除 `handleAnnotationDelete` 中的手动读盘/写盘，统一由防抖 effect 处理；session effect 增加删除检测。
+   - 回归测试：`src/hooks/usePersistence.test.tsx`
+
+9. **分屏标注错显（H-5）**
+   - 修复：`Annotation` 增加 `fileHash`，`PdfAnnotations` 按 `fileHash + page` 过滤；加载分屏 PDF 时合并 annotations。
+   - 回归测试：`src/hooks/usePersistence.test.tsx`、`src/components/PdfAnnotations.test.tsx`
+
+10. **关闭 Tab 未中止流式请求（H-6）**
+    - 修复：`src/hooks/usePersistence.ts` 增加 `abortSessionsForTab`；`src/App.tsx` 关闭标签时调用。
+    - 回归测试：`src/hooks/usePersistence.test.tsx`
+
+11. **CI 缺少 type-check / lint / build / audit（H-11）**
+    - 修复：新增 `eslint.config.js`、`.prettierrc.json` 与相关 npm scripts；`.github/workflows/ci.yml` 增加对应步骤与 `cargo audit`。
+    - 回归测试：CI 流水线自身验证
+
 ## 悬停取词翻译测试
 
 新增功能「悬停取词翻译」涉及前端、后端与第三方资源下载，测试时需注意：
@@ -186,9 +244,14 @@ E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 
 ```bash
 npm ci
 npx playwright install chromium
+npm run type-check
+npm run lint
+npm run build
+npm audit --audit-level=moderate
 npm run test
 npm run test:e2e
 cd src-tauri && cargo test
+# cargo install cargo-audit && cargo audit
 ```
 
 如需跳过 E2E 或后端测试，可单独运行对应命令。

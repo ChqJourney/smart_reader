@@ -1,7 +1,9 @@
+import i18n from "i18next";
 import { useCallback, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { PdfViewerState } from "../components/PdfViewer";
-import { getPdfHash } from "../services/annotations";
+import { authorizePdfPath, getPdfHash } from "../services/annotations";
+import { showMessage } from "../services/dialog";
 
 const MAX_TABS = 10;
 
@@ -21,7 +23,11 @@ export interface UseTabsReturn {
   activeTab: PdfTab | null;
   handleOpenPdf: () => Promise<PdfTab | null>;
   openPdfByPath: (path: string, fileName: string) => Promise<PdfTab | null>;
-  handleCloseTab: (e: React.MouseEvent, tabId: string, onClose?: () => void) => void;
+  handleCloseTab: (
+    e: React.MouseEvent,
+    tabId: string,
+    onClose?: () => void
+  ) => void;
   handleTabClick: (tabId: string, onSwitch?: () => void) => void;
   handleViewerStateChange: (state: PdfViewerState, tabId?: string) => void;
   gotoTabPage: (tabId: string, page: number) => void;
@@ -33,35 +39,47 @@ export function useTabs(): UseTabsReturn {
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) || null;
 
-  const addTab = useCallback(async (path: string): Promise<PdfTab | null> => {
-    try {
-      if (tabs.length >= MAX_TABS) {
-        alert(`最多只能同时打开 ${MAX_TABS} 个 PDF 文件。请先关闭部分标签。`);
+  const addTab = useCallback(
+    async (path: string): Promise<PdfTab | null> => {
+      try {
+        if (tabs.length >= MAX_TABS) {
+          await showMessage(
+            i18n.t("common.notice"),
+            i18n.t("tabs.maxTabsHint", { maxTabs: MAX_TABS })
+          );
+          return null;
+        }
+
+        // Authorize the path before reading it. The backend maintains a whitelist
+        // of paths selected by the user to prevent arbitrary file access.
+        await authorizePdfPath(path);
+
+        const fileHash = await getPdfHash(path);
+        const existing = tabs.find(
+          (tab) => tab.fileHash === fileHash || tab.filePath === path
+        );
+        if (existing) {
+          setActiveTabId(existing.id);
+          return existing;
+        }
+
+        const newTab: PdfTab = {
+          id: crypto.randomUUID(),
+          filePath: path,
+          fileName: path.split("/").pop() || path,
+          fileHash,
+        };
+
+        setTabs((prev) => [...prev, newTab]);
+        setActiveTabId(newTab.id);
+        return newTab;
+      } catch (error) {
+        console.error("Failed to open PDF:", error);
         return null;
       }
-
-      const fileHash = await getPdfHash(path);
-      const existing = tabs.find((tab) => tab.fileHash === fileHash || tab.filePath === path);
-      if (existing) {
-        setActiveTabId(existing.id);
-        return existing;
-      }
-
-      const newTab: PdfTab = {
-        id: crypto.randomUUID(),
-        filePath: path,
-        fileName: path.split("/").pop() || path,
-        fileHash,
-      };
-
-      setTabs((prev) => [...prev, newTab]);
-      setActiveTabId(newTab.id);
-      return newTab;
-    } catch (error) {
-      console.error("Failed to open PDF:", error);
-      return null;
-    }
-  }, [tabs.length, tabs]);
+    },
+    [tabs]
+  );
 
   const handleOpenPdf = useCallback(async (): Promise<PdfTab | null> => {
     try {
@@ -86,50 +104,63 @@ export function useTabs(): UseTabsReturn {
     }
   }, [addTab]);
 
-  const openPdfByPath = useCallback(async (path: string): Promise<PdfTab | null> => {
-    return addTab(path);
-  }, [addTab]);
+  const openPdfByPath = useCallback(
+    async (path: string): Promise<PdfTab | null> => {
+      return addTab(path);
+    },
+    [addTab]
+  );
 
-  const handleCloseTab = useCallback((e: React.MouseEvent, tabId: string, onClose?: () => void) => {
-    e.stopPropagation();
+  const handleCloseTab = useCallback(
+    (e: React.MouseEvent, tabId: string, onClose?: () => void) => {
+      e.stopPropagation();
 
-    const index = tabs.findIndex((tab) => tab.id === tabId);
-    if (index === -1) return;
+      const index = tabs.findIndex((tab) => tab.id === tabId);
+      if (index === -1) return;
 
-    const nextTabs = tabs.filter((tab) => tab.id !== tabId);
+      const nextTabs = tabs.filter((tab) => tab.id !== tabId);
 
-    if (activeTabId === tabId) {
-      const nextActive = nextTabs[Math.min(index, nextTabs.length - 1)] || null;
-      setActiveTabId(nextActive?.id ?? null);
-    }
+      if (activeTabId === tabId) {
+        const nextActive =
+          nextTabs[Math.min(index, nextTabs.length - 1)] || null;
+        setActiveTabId(nextActive?.id ?? null);
+      }
 
-    setTabs(nextTabs);
-    onClose?.();
-  }, [tabs, activeTabId]);
+      setTabs(nextTabs);
+      onClose?.();
+    },
+    [tabs, activeTabId]
+  );
 
   const handleTabClick = useCallback((tabId: string, onSwitch?: () => void) => {
     setActiveTabId(tabId);
     onSwitch?.();
   }, []);
 
-  const handleViewerStateChange = useCallback((state: PdfViewerState, tabId?: string) => {
-    const targetId = tabId ?? activeTabId;
-    if (!targetId) return;
-    setTabs((prev) =>
-      prev.map((tab) =>
-        tab.id === targetId
-          ? { ...tab, pageNum: state.pageNum, scale: state.scale, viewMode: state.viewMode }
-          : tab
-      )
-    );
-  }, [activeTabId]);
+  const handleViewerStateChange = useCallback(
+    (state: PdfViewerState, tabId?: string) => {
+      const targetId = tabId ?? activeTabId;
+      if (!targetId) return;
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === targetId
+            ? {
+                ...tab,
+                pageNum: state.pageNum,
+                scale: state.scale,
+                viewMode: state.viewMode,
+              }
+            : tab
+        )
+      );
+    },
+    [activeTabId]
+  );
 
   const gotoTabPage = useCallback((tabId: string, page: number) => {
     setActiveTabId(tabId);
     setTabs((prev) =>
-      prev.map((tab) =>
-        tab.id === tabId ? { ...tab, pageNum: page } : tab
-      )
+      prev.map((tab) => (tab.id === tabId ? { ...tab, pageNum: page } : tab))
     );
   }, []);
 

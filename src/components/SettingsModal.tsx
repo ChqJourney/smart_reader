@@ -1,4 +1,6 @@
+import { useTranslation } from "react-i18next";
 import { useCallback, useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import {
   AppSettings,
   DEFAULT_SETTINGS,
@@ -6,8 +8,13 @@ import {
   SystemPrompts,
 } from "../services/settings";
 import { useDictionaryStatus } from "../hooks/useDictionaryStatus";
+import { useModal } from "../hooks/useModal";
+import { openLogsDir } from "../services/logs";
+import "./CustomInterpretModal.css";
+import "./SettingsModal.css";
 
 type PromptTab = "translate" | "explain";
+type SettingsPage = "model" | "feature" | "system";
 
 interface SettingsModalProps {
   open: boolean;
@@ -16,27 +23,59 @@ interface SettingsModalProps {
   onSave: (settings: AppSettings) => void;
 }
 
+const PAGE_LIST: SettingsPage[] = ["model", "feature", "system"];
+
 export default function SettingsModal({
   open,
   initialSettings,
   onClose,
   onSave,
 }: SettingsModalProps) {
+  const { t } = useTranslation();
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
-  const [activePromptTab, setActivePromptTab] = useState<PromptTab>("translate");
+  const [activePromptTab, setActivePromptTab] =
+    useState<PromptTab>("translate");
+  const [activePage, setActivePage] = useState<SettingsPage>("model");
   const [showDownloadConfirm, setShowDownloadConfirm] = useState(false);
   const [downloadPending, setDownloadPending] = useState(false);
+  const [version, setVersion] = useState<string>("0.1.0");
+  const [licenseText, setLicenseText] = useState<string | null>(null);
   const dictionaryStatus = useDictionaryStatus();
 
   useEffect(() => {
     setSettings(initialSettings);
     setActivePromptTab("translate");
+    setActivePage("model");
     setShowDownloadConfirm(false);
     setDownloadPending(false);
   }, [initialSettings, open]);
 
-  // When a download started from this modal finishes, automatically check the
-  // hover-translate toggle locally so the user can click Save to enable it.
+  useEffect(() => {
+    if (!open) return;
+    getVersion()
+      .then(setVersion)
+      .catch(() => setVersion("0.1.0"));
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    fetch("/LICENSE.txt")
+      .then((res) => {
+        if (!res.ok) throw new Error("failed");
+        return res.text();
+      })
+      .then((text) => {
+        if (!cancelled) setLicenseText(text);
+      })
+      .catch(() => {
+        if (!cancelled) setLicenseText(t("settings.licenseError"));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, t]);
+
   useEffect(() => {
     if (
       open &&
@@ -76,6 +115,16 @@ export default function SettingsModal({
     setShowDownloadConfirm(false);
     setDownloadPending(false);
   }, []);
+
+  const handleOpenLogs = useCallback(async () => {
+    try {
+      await openLogsDir();
+    } catch (e) {
+      console.error("Failed to open logs directory:", e);
+    }
+  }, []);
+
+  const { contentRef } = useModal({ open, onClose });
 
   if (!open) return null;
 
@@ -118,17 +167,23 @@ export default function SettingsModal({
         )
       : 0;
 
+  const promptTabLabel =
+    activePromptTab === "translate"
+      ? t("action.translate")
+      : t("action.explain");
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
+        ref={contentRef}
         className="modal-content settings-modal-content"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
-        aria-label="设置"
+        aria-label={t("settings.title")}
       >
         <div className="settings-modal-header">
-          <h3>设置</h3>
-          <p className="modal-hint">配置 LLM API、目标语言与系统提示词。</p>
+          <h3>{t("settings.title")}</h3>
+          <p className="modal-hint">{t("settings.description")}</p>
         </div>
 
         <form
@@ -136,153 +191,256 @@ export default function SettingsModal({
           className="settings-modal-body"
           onSubmit={handleSubmit}
         >
-          <section className="settings-section">
-            <div className="settings-section-title">LLM API</div>
-            <div className="settings-section-hint">
-              用于翻译、解读与自定义问答的模型接入信息。
-            </div>
-            <div className="settings-form-row">
-              <label className="settings-field">
-                API Base URL
-                <input
-                  type="text"
-                  value={settings.llm.baseUrl}
-                  onChange={(e) => updateLlm({ baseUrl: e.target.value })}
-                  placeholder="https://api.openai.com/v1"
-                />
-              </label>
-              <label className="settings-field">
-                Model
-                <input
-                  type="text"
-                  value={settings.llm.model}
-                  onChange={(e) => updateLlm({ model: e.target.value })}
-                  placeholder="gpt-4o-mini"
-                />
-              </label>
-            </div>
-            <label className="settings-field">
-              API Key
-              <input
-                type="password"
-                value={settings.llm.apiKey}
-                onChange={(e) => updateLlm({ apiKey: e.target.value })}
-                placeholder="sk-..."
-              />
-            </label>
-          </section>
-
-          <section className="settings-section">
-            <div className="settings-section-title">输出语言</div>
-            <div className="settings-section-hint">
-              翻译与解读结果默认使用的语言。
-            </div>
-            <div className="settings-form-row">
-              <label className="settings-field">
-                目标语言
-                <input
-                  type="text"
-                  value={settings.targetLanguage}
-                  onChange={(e) =>
-                    setSettings((s) => ({ ...s, targetLanguage: e.target.value }))
-                  }
-                  placeholder="中文"
-                />
-              </label>
-            </div>
-          </section>
-
-          <section className="settings-section">
-            <div className="settings-section-title">悬停取词翻译</div>
-            <div className="settings-section-hint">
-              鼠标悬停在英文单词上时，使用本地 ECDICT 词典显示翻译。
-            </div>
-            <label className="settings-toggle">
-              <input
-                type="checkbox"
-                checked={settings.hoverTranslate}
-                onChange={(e) => handleHoverTranslateToggle(e.target.checked)}
-                disabled={dictionaryStatus.downloading}
-              />
-              启用悬停取词翻译
-            </label>
-            {settings.hoverTranslate && dictionaryStatus.status?.exists && (
-              <p className="settings-status-ok">词典已就绪</p>
-            )}
-            {dictionaryStatus.downloading && (
-              <div className="settings-download-progress">
-                <div className="settings-progress-bar">
-                  <div
-                    className="settings-progress-fill"
-                    style={{ width: `${downloadProgressPercent}%` }}
-                  />
-                </div>
-                <span className="settings-progress-text">
-                  {dictionaryStatus.progress?.message ||
-                    `下载中 ${downloadProgressPercent}%`}
-                </span>
-              </div>
-            )}
-            {dictionaryStatus.error && (
-              <p className="settings-status-error">{dictionaryStatus.error}</p>
-            )}
-          </section>
-
-          <section className="settings-section">
-            <div className="settings-section-title">系统提示词</div>
-            <div className="settings-section-hint">
-              控制 AI 在不同场景下的角色与回答风格。支持 {"{targetLanguage}"} 占位符。
-            </div>
-            <div className="settings-prompt-tabs">
-              <button
-                type="button"
-                className={activePromptTab === "translate" ? "active" : ""}
-                onClick={() => setActivePromptTab("translate")}
-              >
-                翻译
-              </button>
-              <button
-                type="button"
-                className={activePromptTab === "explain" ? "active" : ""}
-                onClick={() => setActivePromptTab("explain")}
-              >
-                解读
-              </button>
-            </div>
-            <div className="settings-prompt-area">
-              <textarea
-                value={currentPrompt}
-                onChange={(e) => updateSystemPrompt(activePromptTab, e.target.value)}
-                rows={5}
-                aria-label={`${
-                  activePromptTab === "translate" ? "翻译" : "解读"
-                }系统提示词`}
-              />
-              <div className="settings-prompt-meta">
-                <span>{currentPrompt.length} 字符</span>
+          <div className="settings-modal-layout">
+            <nav
+              className="settings-modal-sidebar"
+              aria-label={t("settings.title")}
+            >
+              {PAGE_LIST.map((page) => (
                 <button
+                  key={page}
                   type="button"
-                  className="icon-btn"
-                  onClick={() => resetPrompt(activePromptTab)}
-                  disabled={currentPrompt === currentDefault}
+                  className={activePage === page ? "active" : ""}
+                  onClick={() => setActivePage(page)}
+                  aria-current={activePage === page ? "page" : undefined}
                 >
-                  恢复默认
+                  {t(`settings.pages.${page}`)}
                 </button>
-              </div>
+              ))}
+            </nav>
+
+            <div className="settings-modal-page-content">
+              {activePage === "model" && (
+                <section className="settings-section">
+                  <div className="settings-section-title">
+                    {t("settings.llmApi")}
+                  </div>
+                  <div className="settings-section-hint">
+                    {t("settings.llmApiHint")}
+                  </div>
+                  <div className="settings-form-row">
+                    <label className="settings-field">
+                      {t("settings.apiBaseUrl")}
+                      <input
+                        type="text"
+                        value={settings.llm.baseUrl}
+                        onChange={(e) => updateLlm({ baseUrl: e.target.value })}
+                        placeholder="https://api.openai.com/v1"
+                      />
+                    </label>
+                    <label className="settings-field">
+                      {t("settings.model")}
+                      <input
+                        type="text"
+                        value={settings.llm.model}
+                        onChange={(e) => updateLlm({ model: e.target.value })}
+                        placeholder="gpt-4o-mini"
+                      />
+                    </label>
+                  </div>
+                  <label className="settings-field">
+                    {t("settings.apiKey")}
+                    <input
+                      type="password"
+                      value={settings.llm.apiKey}
+                      onChange={(e) => updateLlm({ apiKey: e.target.value })}
+                      placeholder="sk-..."
+                    />
+                  </label>
+                </section>
+              )}
+
+              {activePage === "feature" && (
+                <>
+                  <section className="settings-section">
+                    <div className="settings-section-title">
+                      {t("settings.outputLanguage")}
+                    </div>
+                    <div className="settings-section-hint">
+                      {t("settings.outputLanguageHint")}
+                    </div>
+                    <div className="settings-form-row">
+                      <label className="settings-field">
+                        {t("settings.targetLanguage")}
+                        <input
+                          type="text"
+                          value={settings.targetLanguage}
+                          onChange={(e) =>
+                            setSettings((s) => ({
+                              ...s,
+                              targetLanguage: e.target.value,
+                            }))
+                          }
+                          placeholder={t("settings.targetLanguagePlaceholder")}
+                        />
+                      </label>
+                    </div>
+                  </section>
+
+                  <section className="settings-section">
+                    <div className="settings-section-title">
+                      {t("settings.hoverTranslate")}
+                    </div>
+                    <div className="settings-section-hint">
+                      {t("settings.hoverTranslateHint")}
+                    </div>
+                    <label className="settings-toggle">
+                      <input
+                        type="checkbox"
+                        checked={settings.hoverTranslate}
+                        onChange={(e) =>
+                          handleHoverTranslateToggle(e.target.checked)
+                        }
+                        disabled={dictionaryStatus.downloading}
+                      />
+                      {t("settings.enableHoverTranslate")}
+                    </label>
+                    {settings.hoverTranslate &&
+                      dictionaryStatus.status?.exists && (
+                        <p className="settings-status-ok">
+                          {t("settings.dictionaryReady")}
+                        </p>
+                      )}
+                    {dictionaryStatus.downloading && (
+                      <div className="settings-download-progress">
+                        <div className="settings-progress-bar">
+                          <div
+                            className="settings-progress-fill"
+                            style={{ width: `${downloadProgressPercent}%` }}
+                          />
+                        </div>
+                        <span className="settings-progress-text">
+                          {dictionaryStatus.progress?.message ||
+                            t("settings.downloadingProgress", {
+                              percent: downloadProgressPercent,
+                            })}
+                        </span>
+                      </div>
+                    )}
+                    {dictionaryStatus.error && (
+                      <p className="settings-status-error">
+                        {dictionaryStatus.error}
+                      </p>
+                    )}
+                  </section>
+
+                  <section className="settings-section">
+                    <div className="settings-section-title">
+                      {t("settings.systemPrompts")}
+                    </div>
+                    <div className="settings-section-hint">
+                      {t("settings.systemPromptsHint")}
+                    </div>
+                    <div className="settings-prompt-tabs">
+                      <button
+                        type="button"
+                        className={
+                          activePromptTab === "translate" ? "active" : ""
+                        }
+                        onClick={() => setActivePromptTab("translate")}
+                      >
+                        {t("action.translate")}
+                      </button>
+                      <button
+                        type="button"
+                        className={
+                          activePromptTab === "explain" ? "active" : ""
+                        }
+                        onClick={() => setActivePromptTab("explain")}
+                      >
+                        {t("action.explain")}
+                      </button>
+                    </div>
+                    <div className="settings-prompt-area">
+                      <textarea
+                        value={currentPrompt}
+                        onChange={(e) =>
+                          updateSystemPrompt(activePromptTab, e.target.value)
+                        }
+                        rows={5}
+                        aria-label={t("settings.promptAriaLabel", {
+                          action: promptTabLabel,
+                        })}
+                      />
+                      <div className="settings-prompt-meta">
+                        <span>
+                          {currentPrompt.length} {t("settings.characters")}
+                        </span>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          onClick={() => resetPrompt(activePromptTab)}
+                          disabled={currentPrompt === currentDefault}
+                        >
+                          {t("common.reset")}
+                        </button>
+                      </div>
+                    </div>
+                  </section>
+                </>
+              )}
+
+              {activePage === "system" && (
+                <>
+                  <section className="settings-section">
+                    <div className="settings-section-title">
+                      {t("settings.appInfo")}
+                    </div>
+                    <dl className="settings-info-list">
+                      <div>
+                        <dt>{t("settings.productName")}</dt>
+                        <dd>SpecReader AI</dd>
+                      </div>
+                      <div>
+                        <dt>{t("settings.version")}</dt>
+                        <dd>{version}</dd>
+                      </div>
+                      <div>
+                        <dt>{t("settings.identifier")}</dt>
+                        <dd>com.photonee.specreader</dd>
+                      </div>
+                    </dl>
+                  </section>
+
+                  <section className="settings-section">
+                    <div className="settings-section-title">
+                      {t("settings.license")}
+                    </div>
+                    <pre className="settings-license-text">
+                      {licenseText ?? t("settings.licenseLoading")}
+                    </pre>
+                  </section>
+
+                  <section className="settings-section">
+                    <div className="settings-section-title">
+                      {t("settings.openLogs")}
+                    </div>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      onClick={handleOpenLogs}
+                    >
+                      {t("settings.openLogs")}
+                    </button>
+                  </section>
+                </>
+              )}
             </div>
-          </section>
+          </div>
         </form>
 
         <div className="settings-modal-footer">
-          <button type="button" className="icon-btn" onClick={resetAll}>
-            恢复全部默认
-          </button>
+          <div className="settings-modal-footer-left">
+            <button type="button" className="icon-btn" onClick={resetAll}>
+              {t("settings.resetAll")}
+            </button>
+          </div>
           <div className="modal-actions">
             <button type="button" onClick={onClose}>
-              取消
+              {t("common.cancel")}
             </button>
             <button type="submit" form="settings-form">
-              保存
+              {t("common.save")}
             </button>
           </div>
         </div>
@@ -294,20 +452,24 @@ export default function SettingsModal({
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
-            aria-label="下载离线词典"
+            aria-label={t("settings.downloadDictionaryTitle")}
           >
             <div className="settings-modal-header">
-              <h3>下载离线词典</h3>
+              <h3>{t("settings.downloadDictionaryTitle")}</h3>
               <p className="modal-hint">
-                悬停取词翻译需要下载 ECDICT 英汉词典（约 200 MB），下载后保存在本地应用数据目录，无需再次下载。
+                {t("settings.downloadDictionaryHint")}
               </p>
             </div>
             <div className="settings-modal-footer">
               <button type="button" onClick={handleCancelDownload}>
-                取消
+                {t("common.cancel")}
               </button>
-              <button type="button" className="primary" onClick={handleConfirmDownload}>
-                立即下载
+              <button
+                type="button"
+                className="primary"
+                onClick={handleConfirmDownload}
+              >
+                {t("settings.downloadNow")}
               </button>
             </div>
           </div>

@@ -10,7 +10,9 @@ export function mockTauriInvoke(
   const invoke = vi.fn((command: string, args?: Record<string, any>) => {
     const handler = handlers[command];
     if (!handler) {
-      return Promise.reject(new Error(`No mock handler for command: ${command}`));
+      return Promise.reject(
+        new Error(`No mock handler for command: ${command}`)
+      );
     }
     return Promise.resolve(handler(args));
   });

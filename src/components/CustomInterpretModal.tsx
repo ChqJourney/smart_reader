@@ -1,4 +1,7 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
+import { useModal } from "../hooks/useModal";
+import "./CustomInterpretModal.css";
 
 interface CustomInterpretModalProps {
   stashCount: number;
@@ -11,7 +14,9 @@ export default function CustomInterpretModal({
   onSubmit,
   onClose,
 }: CustomInterpretModalProps) {
+  const { t } = useTranslation();
   const [prompt, setPrompt] = useState("");
+  const { contentRef } = useModal({ open: true, onClose });
 
   const handleSubmit = () => {
     const trimmed = prompt.trim();
@@ -29,22 +34,28 @@ export default function CustomInterpretModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        <h3>自定义解读</h3>
+      <div
+        ref={contentRef}
+        className="modal-content"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3>{t("customInterpret.title")}</h3>
         <p className="modal-hint">
-          基于 {stashCount} 个选中片段进行解读
+          {t("customInterpret.hint", { count: stashCount })}
         </p>
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="输入你的解读要求..."
+          placeholder={t("customInterpret.placeholder")}
           rows={4}
           autoFocus
         />
         <div className="modal-actions">
-          <button onClick={onClose}>取消</button>
-          <button onClick={handleSubmit} disabled={!prompt.trim()}>发送</button>
+          <button onClick={onClose}>{t("common.cancel")}</button>
+          <button onClick={handleSubmit} disabled={!prompt.trim()}>
+            {t("common.send")}
+          </button>
         </div>
       </div>
     </div>

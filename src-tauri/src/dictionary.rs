@@ -1,10 +1,17 @@
 use rusqlite::{Connection, OptionalExtension};
-use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
-const DICT_DOWNLOAD_URL: &str =
+const DEFAULT_DICT_DOWNLOAD_URL: &str =
     "https://github.com/skywind3000/ECDICT/releases/download/1.0.28/ecdict-sqlite-28.zip";
+
+/// Returns the dictionary download URL.
+///
+/// The URL can be overridden via the `SPECREADER_DICT_URL` environment variable
+/// so mirrors or internal hosting can be used without recompiling.
+fn dict_download_url() -> String {
+    std::env::var("SPECREADER_DICT_URL").unwrap_or_else(|_| DEFAULT_DICT_DOWNLOAD_URL.to_string())
+}
 
 const DICT_DIR: &str = "dict";
 const DICT_FILE: &str = "ecdict.sqlite";
@@ -15,6 +22,7 @@ const SQLITE_MAGIC: &[u8] = b"SQLite format 3\0";
 const DOWNLOAD_PROGRESS_EVENT: &str = "dictionary-download-progress";
 
 #[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct DictionaryStatus {
     pub exists: bool,
     pub path: String,
@@ -23,6 +31,7 @@ pub struct DictionaryStatus {
 }
 
 #[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct DictEntry {
     pub word: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -36,6 +45,7 @@ pub struct DictEntry {
 }
 
 #[derive(serde::Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
 struct DownloadProgress {
     status: &'static str,
     downloaded: u64,
@@ -43,22 +53,11 @@ struct DownloadProgress {
     message: Option<String>,
 }
 
-fn app_data_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
-    let base = app
-        .path()
-        .resolve(".", tauri::path::BaseDirectory::AppData)
-        .map_err(|e| format!("Failed to resolve app data dir: {}", e))?;
-    let dir = base.join("SpecReader");
-    if !dir.exists() {
-        let _ = std::fs::create_dir_all(&dir);
-    }
-    Ok(dir)
-}
-
 fn dict_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
-    let dir = app_data_dir(app)?.join(DICT_DIR);
+    let dir = crate::paths::app_data_dir(app)?.join(DICT_DIR);
     if !dir.exists() {
-        let _ = std::fs::create_dir_all(&dir);
+        std::fs::create_dir_all(&dir)
+            .map_err(|e| format!("Failed to create dictionary directory: {}", e))?;
     }
     Ok(dir)
 }
@@ -100,7 +99,7 @@ fn emit_progress(
     total: u64,
     message: Option<String>,
 ) {
-    let _ = app_handle.emit(
+    if let Err(e) = app_handle.emit(
         DOWNLOAD_PROGRESS_EVENT,
         DownloadProgress {
             status,
@@ -108,7 +107,9 @@ fn emit_progress(
             total,
             message,
         },
-    );
+    ) {
+        log::warn!("Failed to emit dictionary download progress: {}", e);
+    }
 }
 
 pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), String> {
@@ -131,7 +132,7 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
     // Probe total size once. This also warms up any redirects.
     let total_size = {
         let head = client
-            .head(DICT_DOWNLOAD_URL)
+            .head(dict_download_url())
             .send()
             .await
             .map_err(|e| format!("Failed to probe download URL: {}", e))?;
@@ -170,7 +171,7 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
     let mut downloaded = start_from;
 
     while retries <= MAX_RETRIES {
-        let mut request = client.get(DICT_DOWNLOAD_URL);
+        let mut request = client.get(dict_download_url());
         if start_from > 0 {
             request = request.header(reqwest::header::RANGE, format!("bytes={}-", start_from));
         }
@@ -326,7 +327,9 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
 
     let extract_dir = dict_extract_dir(&app_handle)?;
     if extract_dir.exists() {
-        let _ = tokio::fs::remove_dir_all(&extract_dir).await;
+        if let Err(e) = tokio::fs::remove_dir_all(&extract_dir).await {
+            log::warn!("Failed to remove stale extract directory: {}", e);
+        }
     }
     tokio::fs::create_dir_all(&extract_dir)
         .await
@@ -367,17 +370,13 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
         }
     }
 
-    // Clear cached connection so the next lookup uses the new file.
-    {
-        let mut conn = DICT_CONNECTION
-            .lock()
-            .map_err(|e| format!("Dictionary lock poisoned: {}", e))?;
-        *conn = None;
-    }
-
     // Clean up temp files.
-    let _ = tokio::fs::remove_file(&tmp_path).await;
-    let _ = tokio::fs::remove_dir_all(&extract_dir).await;
+    if let Err(e) = tokio::fs::remove_file(&tmp_path).await {
+        log::warn!("Failed to remove dictionary temp file: {}", e);
+    }
+    if let Err(e) = tokio::fs::remove_dir_all(&extract_dir).await {
+        log::warn!("Failed to remove dictionary extract directory: {}", e);
+    }
 
     emit_progress(&app_handle, "done", downloaded, total_size, None);
     Ok(())
@@ -404,7 +403,8 @@ fn extract_sqlite(
 
         let out_path = extract_dir.join(format!("entry_{}", i));
         if let Some(parent) = out_path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create extract parent directory: {}", e))?;
         }
         let mut out = std::fs::File::create(&out_path)
             .map_err(|e| format!("Failed to create extracted file: {}", e))?;
@@ -446,26 +446,17 @@ fn find_sqlite_file(dir: &std::path::Path) -> Option<std::path::PathBuf> {
     None
 }
 
-static DICT_CONNECTION: Mutex<Option<Connection>> = Mutex::new(None);
-
 pub fn lookup_word(app: &tauri::AppHandle, word: String) -> Result<Option<DictEntry>, String> {
     let path = dict_path(app)?;
     if !path.exists() {
         return Ok(None);
     }
 
-    let mut conn = DICT_CONNECTION
-        .lock()
-        .map_err(|e| format!("Dictionary lock poisoned: {}", e))?;
-
-    if conn.is_none() {
-        *conn = Some(
-            Connection::open(&path)
-                .map_err(|e| format!("Failed to open dictionary database: {}", e))?,
-        );
-    }
-
-    let db = conn.as_ref().ok_or("Dictionary connection is not available")?;
+    // Open a fresh connection per query instead of holding a global Mutex guard
+    // for the entire SQLite query. This avoids blocking concurrent lookups and
+    // keeps the critical section minimal.
+    let db = Connection::open(&path)
+        .map_err(|e| format!("Failed to open dictionary database: {}", e))?;
 
     let mut stmt = db
         .prepare(

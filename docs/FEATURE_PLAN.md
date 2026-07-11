@@ -6,13 +6,13 @@
 
 ## 1. 已确认的关键决策
 
-| 序号 | 需求点 | 确认结论 |
-|------|--------|----------|
-| 1 | 设置面板与目标语言 | 设置改为全局 Modal；LLM 配置与目标语言统一持久化到 AppData；目标语言默认“中文”，同时影响翻译、解读的 **user prompt 与 system prompt**。 |
-| 2 | 最近文件 | 存到 AppData，最多 20 条；点击切换到已有 tab；支持一键清空。 |
-| 3 | 双文件并排视图 | 三栏布局：PDF-A \| PDF-B \| AI 面板；入口为拖拽未激活 tab 到内容区；退出后恢复单 PDF + AI 面板。 |
-| 4 | AI 会话流式中断 | LLM 流式输出时，AI 面板输入区的发送按钮变为**中止按钮**；点击后停止流式生成，**保留已输出内容**；中止后按钮恢复为发送按钮。**不需要“继续生成”功能。** |
-| 5 | identifier / AppData 路径 | identifier 保持 `photonee`；最终 Windows 路径为 `AppData/Roaming/photonee/SpecReader/annotations`；去掉多余的 `Photonee` 层；不做旧数据迁移。 |
+| 序号 | 需求点                    | 确认结论                                                                                                                                              |
+| ---- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | 设置面板与目标语言        | 设置改为全局 Modal；LLM 配置与目标语言统一持久化到 AppData；目标语言默认“中文”，同时影响翻译、解读的 **user prompt 与 system prompt**。               |
+| 2    | 最近文件                  | 存到 AppData，最多 20 条；点击切换到已有 tab；支持一键清空。                                                                                          |
+| 3    | 双文件并排视图            | 三栏布局：PDF-A \| PDF-B \| AI 面板；入口为拖拽未激活 tab 到内容区；退出后恢复单 PDF + AI 面板。                                                      |
+| 4    | AI 会话流式中断           | LLM 流式输出时，AI 面板输入区的发送按钮变为**中止按钮**；点击后停止流式生成，**保留已输出内容**；中止后按钮恢复为发送按钮。**不需要“继续生成”功能。** |
+| 5    | identifier / AppData 路径 | identifier 保持 `photonee`；最终 Windows 路径为 `AppData/Roaming/photonee/SpecReader/annotations`；去掉多余的 `Photonee` 层；不做旧数据迁移。         |
 
 ---
 
@@ -29,6 +29,7 @@
 ## 3. 建议实施顺序
 
 ### 第一批：基础 UI / 体验小改动
+
 1. 设置面板改为 Modal + 目标语言设置
 2. Tab header 去掉纵向滚动条
 3. PDF 增加“适合容器宽度”按钮
@@ -36,12 +37,14 @@
 5. Top bar 改为 Recent Files 区域
 
 ### 第二批：数据与持久化
+
 6. LLM 配置迁移到 AppData
 7. Recent Files 持久化到 AppData
 8. identifier 与 AppData 路径定型
 9. 翻译浮层边界调整
 
 ### 第三批：架构大改动
+
 10. AI 会话流式中断（发送按钮变中止按钮）
 11. 双文件并排视图（三栏布局 + tab 拖拽）
 12. 禁止多开 + PDF 文件关联
@@ -55,6 +58,7 @@
 **目标**：把 `AiChatPanel` 中内嵌的 LLM 设置表单提取为全局 Modal；新增“目标语言”字段；目标语言影响 system prompt 与 user prompt。
 
 **涉及文件**：
+
 - `src/components/SettingsModal.tsx`（新增）
 - `src/components/AiChatPanel.tsx`
 - `src/App.tsx`
@@ -63,10 +67,11 @@
 - `src/App.css`
 
 **关键改动**：
+
 1. 新增类型 `AppSettings`：
    ```ts
    export interface AppSettings {
-     llm: LlmConfig;        // baseUrl / apiKey / model
+     llm: LlmConfig; // baseUrl / apiKey / model
      targetLanguage: string; // 默认 "中文"
    }
    ```
@@ -92,6 +97,7 @@
 **涉及文件**：`src/App.css`
 
 **关键改动**：
+
 ```css
 .tab-bar {
   overflow-x: auto;
@@ -103,6 +109,7 @@
   display: none;
 }
 ```
+
 必要时将 `.tab-bar` 的 `align-items: flex-end` 调整为 `center` 或给 `.tab-item` 固定高度，避免内容高度不一致导致溢出。
 
 ---
@@ -112,11 +119,13 @@
 **目标**：一键把当前页宽度缩放到容器可用宽度。
 
 **涉及文件**：
+
 - `src/components/PdfViewer.tsx`
 - `src/components/Icon.tsx`
 - `src/App.css`
 
 **关键改动**：
+
 1. `Icon.tsx` 新增 `fit-width` 图标。
 2. `PdfViewer.tsx` 新增 `fitToWidth()`：
    - 根据当前 `viewMode` 取 `singleContainerRef` 或 `continuousContainerRef`。
@@ -133,6 +142,7 @@
 **涉及文件**：`src/App.css`
 
 **关键改动**：
+
 ```css
 .pdf-controls .page-info {
   display: inline-flex;
@@ -155,12 +165,14 @@
 **目标**：移除顶部 “SpecReader AI” 标题，改为占据 60% 宽度的最近文件卡片区，支持横向滚动、清空、点击切换 tab。
 
 **涉及文件**：
+
 - `src/components/RecentFilesBar.tsx`（新增）
 - `src/hooks/useRecentFiles.ts`（新增）
 - `src/App.tsx`
 - `src/App.css`
 
 **关键改动**：
+
 1. 新增 `useRecentFiles` hook：
    - 维护 `RecentFile[] = { path, fileName, openedAt }`。
    - 提供 `addRecentFile(path, fileName)`、`clearRecentFiles()`。
@@ -189,8 +201,12 @@
      scrollbar-width: none;
      -ms-overflow-style: none;
    }
-   .recent-files-container::-webkit-scrollbar { display: none; }
-   .recent-file-card { /* card 样式 */ }
+   .recent-files-container::-webkit-scrollbar {
+     display: none;
+   }
+   .recent-file-card {
+     /* card 样式 */
+   }
    ```
 
 ---
@@ -200,12 +216,14 @@
 **目标**：把原本存在 `localStorage` 的 LLM 配置和即将新增的 Recent Files 都持久化到后端 AppData。
 
 **涉及文件**：
+
 - `src-tauri/src/lib.rs`
 - `src/services/settings.ts`
 - `src/hooks/useRecentFiles.ts`
 - `src/services/llm.ts`
 
 **关键改动**：
+
 1. Rust 端新增命令：
    - `load_settings() -> Result<AppSettings, String>`
    - `save_settings(settings: AppSettings) -> Result<(), String>`
@@ -226,10 +244,12 @@
 **目标**：identifier 保持 `photonee`，并去掉 `Photonee` 多余目录层。
 
 **涉及文件**：
+
 - `src-tauri/tauri.conf.json`
 - `src-tauri/src/lib.rs`
 
 **关键改动**：
+
 1. `tauri.conf.json`：
    - `identifier` 保持 `photonee`。
    - 同步在 `bundle` 中增加 `fileAssociations` 注册 `.pdf`（为 4.12 文件关联做准备）。
@@ -247,10 +267,12 @@
 **目标**：翻译浮层渲染时保证不超出所在 PDF 页面边界；若下方空间不足则自动显示在标记上方。
 
 **涉及文件**：
+
 - `src/components/TranslatePopup.tsx`
 - `src/App.css`
 
 **关键改动**：
+
 1. 在 `TranslatePopup` 中通过 `popupRef.current.closest('.pdf-page-wrapper')` 获取所在页面容器（比 `offsetParent` 更可靠）。
 2. 使用 `useLayoutEffect` 测量 popup 实际宽高与 wrapper 宽高，计算 `displayLeft / displayTop`：
    - 水平限制在 `[0, wrapperWidth - popupWidth]`；
@@ -265,11 +287,13 @@
 **目标**：LLM 流式输出时，AI 面板输入区的发送按钮变为中止按钮；点击后停止流式生成并保留已输出内容；中止后按钮恢复为发送按钮。不需要“继续生成”。
 
 **涉及文件**：
+
 - `src/hooks/usePersistence.ts`
 - `src/components/AiChatPanel.tsx`
 - `src/App.css`
 
 **关键改动**：
+
 1. `usePersistence.ts`：
    - 已有 `abortControllersRef` 按 `messageId` 保存 `AbortController`。
    - 新增 `interruptSession(sessionId)`：
@@ -292,12 +316,14 @@
 **目标**：实现 PDF-A \| PDF-B \| AI 三栏；通过拖拽未激活 tab 到内容区进入并排；退出后恢复单 PDF + AI。
 
 **涉及文件**：
+
 - `src/hooks/useTabs.ts`
 - `src/App.tsx`
 - `src/components/PdfViewer.tsx`（复用，必要时 minor 调整）
 - `src/App.css`
 
 **关键改动**：
+
 1. `useTabs.ts`：
    - 增加状态 `splitMode: boolean` 和 `secondaryTabId: string | null`。
    - 增加 `enterSplit(secondaryTabId)`、`exitSplit()`。
@@ -331,12 +357,14 @@
 **目标**：同一时刻只允许运行一个 SpecReader AI 进程；第二次启动或双击 PDF 时聚焦已有窗口并打开文件。
 
 **涉及文件**：
+
 - `src-tauri/Cargo.toml`
 - `src-tauri/tauri.conf.json`
 - `src-tauri/src/lib.rs`
 - `src/App.tsx`
 
 **关键改动**：
+
 1. `tauri.conf.json`：
    - 在 `bundle` 中注册 `fileAssociations`，示例：
      ```json
@@ -380,6 +408,7 @@
 ## 5. 测试要点
 
 ### 5.1 前端单元测试
+
 - `services/llm.test.ts`：prompt 模板需增加 `targetLanguage` 参数断言，包括 system prompt。
 - `services/settings.test.ts`（新增）：AppSettings 默认值、后端 invoke mock、localStorage 旧配置迁移。
 - `hooks/usePersistence.test.ts`（新增）：
@@ -390,6 +419,7 @@
 - `App.test.tsx`：Recent Files 渲染、双栏布局切换。
 
 ### 5.2 后端测试
+
 - `src-tauri/src/lib.rs` 中：
   - `app_data_dir` 返回路径不再包含多余 `Photonee`。
   - `load_settings` / `save_settings` 往返测试。
@@ -398,6 +428,7 @@
   - 文件关联配置 JSON 结构正确性（可选）。
 
 ### 5.3 E2E 测试
+
 - `app.spec.ts`：Recent Files 区域、设置 Modal。
 - 新增/扩展双栏视图、适合宽度、翻译浮层边界的 E2E 用例。
 - 单实例与文件关联需在打包后的安装包上手动验证，E2E 较难覆盖。
@@ -427,6 +458,7 @@
 - 生产构建：`npm run build` 通过。
 
 主要新增/修改文件：
+
 - `src/components/SettingsModal.tsx` + `SettingsModal.test.tsx`
 - `src/components/RecentFilesBar.tsx` + `RecentFilesBar.test.tsx`
 - `src/services/settings.ts` + `settings.test.ts`

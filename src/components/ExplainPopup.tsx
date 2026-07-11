@@ -1,5 +1,7 @@
+import { useTranslation } from "react-i18next";
 import { Annotation } from "../services/annotations";
 import Icon from "./Icon";
+import "./ExplainPopup.css";
 
 interface ExplainPopupProps {
   annotation: Annotation;
@@ -16,6 +18,7 @@ export default function ExplainPopup({
   onDelete,
   onClose,
 }: ExplainPopupProps) {
+  const { t } = useTranslation();
   const left = annotation.position.x * scale;
   const top = annotation.position.y * scale;
 
@@ -25,32 +28,32 @@ export default function ExplainPopup({
       style={{ left, top }}
       onClick={(e) => e.stopPropagation()}
       role="dialog"
-      aria-label="解读标记"
+      aria-label={t("explain.popupLabel")}
     >
       <div className="explain-popup-header">
         <span className="explain-popup-title">
           <Icon name="explain" size={14} />
-          解读
+          {t("explain.title")}
         </span>
         <div className="explain-popup-actions">
           <button
             className="icon-btn"
             onClick={onClose}
-            aria-label="关闭"
-            title="关闭"
+            aria-label={t("common.close")}
+            title={t("common.close")}
           >
             <Icon name="close" size={14} />
           </button>
         </div>
       </div>
       <div className="explain-popup-body">
-        <div className="explain-popup-label">原文片段</div>
+        <div className="explain-popup-label">{t("common.sourceText")}</div>
         <div className="explain-popup-source">{annotation.text}</div>
       </div>
       <div className="explain-popup-footer">
-        <button onClick={onGotoSession}>查看解读</button>
+        <button onClick={onGotoSession}>{t("session.viewSession")}</button>
         <button className="danger" onClick={onDelete}>
-          删除
+          {t("common.delete")}
         </button>
       </div>
     </div>

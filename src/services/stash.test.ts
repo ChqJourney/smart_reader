@@ -63,8 +63,14 @@ describe("stash service", () => {
 
   describe("removeStash", () => {
     it("removes the item with matching id", () => {
-      const item1: StashItem = { ...createStashItem(makeSource(), "first"), id: "stash-1" };
-      const item2: StashItem = { ...createStashItem(makeSource(), "second"), id: "stash-2" };
+      const item1: StashItem = {
+        ...createStashItem(makeSource(), "first"),
+        id: "stash-1",
+      };
+      const item2: StashItem = {
+        ...createStashItem(makeSource(), "second"),
+        id: "stash-2",
+      };
       const stashes = [item1, item2];
 
       const result = removeStash(stashes, item1.id);
@@ -86,8 +92,14 @@ describe("stash service", () => {
 
   describe("updateStash", () => {
     it("updates the text of the matching stash", () => {
-      const item1: StashItem = { ...createStashItem(makeSource(), "first"), id: "stash-1" };
-      const item2: StashItem = { ...createStashItem(makeSource(), "second"), id: "stash-2" };
+      const item1: StashItem = {
+        ...createStashItem(makeSource(), "first"),
+        id: "stash-1",
+      };
+      const item2: StashItem = {
+        ...createStashItem(makeSource(), "second"),
+        id: "stash-2",
+      };
       const stashes = [item1, item2];
 
       const result = updateStash(stashes, item1.id, "updated");
@@ -107,6 +119,4 @@ describe("stash service", () => {
       expect(result).toEqual(stashes);
     });
   });
-
-
 });

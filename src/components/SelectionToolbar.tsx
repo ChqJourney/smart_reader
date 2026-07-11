@@ -1,6 +1,8 @@
+import { useTranslation } from "react-i18next";
 import { useEffect, useRef } from "react";
-import { SelectionAction, ACTION_LABELS } from "../services/llm";
+import { SelectionAction } from "../services/llm";
 import Icon from "./Icon";
+import "./SelectionToolbar.css";
 
 interface SelectionToolbarProps {
   selection: { text: string; x: number; y: number } | null;
@@ -9,14 +11,23 @@ interface SelectionToolbarProps {
   onDismiss: () => void;
 }
 
-export default function SelectionToolbar({ selection, onAction, onAddToStash, onDismiss }: SelectionToolbarProps) {
+export default function SelectionToolbar({
+  selection,
+  onAction,
+  onAddToStash,
+  onDismiss,
+}: SelectionToolbarProps) {
+  const { t } = useTranslation();
   const toolbarRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!selection) return;
 
     const handleMouseDown = (e: MouseEvent) => {
-      if (toolbarRef.current && !toolbarRef.current.contains(e.target as Node)) {
+      if (
+        toolbarRef.current &&
+        !toolbarRef.current.contains(e.target as Node)
+      ) {
         onDismiss();
       }
     };
@@ -66,29 +77,29 @@ export default function SelectionToolbar({ selection, onAction, onAddToStash, on
       <button
         className="icon-btn"
         onClick={handleAddToStashClick}
-        aria-label="加入暂存"
-        title="加入暂存"
+        aria-label={t("stash.add")}
+        title={t("stash.add")}
       >
         <Icon name="stash" size={16} />
-        <span>加入暂存</span>
+        <span>{t("stash.add")}</span>
       </button>
       <button
         className="icon-btn"
         onClick={() => handleClick("explain")}
-        aria-label={ACTION_LABELS.explain}
-        title={ACTION_LABELS.explain}
+        aria-label={t("action.explain")}
+        title={t("action.explain")}
       >
         <Icon name="explain" size={16} />
-        <span>{ACTION_LABELS.explain}</span>
+        <span>{t("action.explain")}</span>
       </button>
       <button
         className="icon-btn"
         onClick={() => handleClick("translate")}
-        aria-label={ACTION_LABELS.translate}
-        title={ACTION_LABELS.translate}
+        aria-label={t("action.translate")}
+        title={t("action.translate")}
       >
         <Icon name="translate" size={16} />
-        <span>{ACTION_LABELS.translate}</span>
+        <span>{t("action.translate")}</span>
       </button>
     </div>
   );

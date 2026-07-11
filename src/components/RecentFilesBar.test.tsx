@@ -9,14 +9,16 @@ const files = [
 
 describe("RecentFilesBar", () => {
   it("renders empty hint when no files", () => {
-    render(<RecentFilesBar files={[]} onFileClick={vi.fn()} onClear={vi.fn()} />
+    render(
+      <RecentFilesBar files={[]} onFileClick={vi.fn()} onClear={vi.fn()} />
     );
     expect(screen.getByText("最近打开的文件将显示在这里")).toBeInTheDocument();
     expect(screen.queryByLabelText("清空最近文件")).not.toBeInTheDocument();
   });
 
   it("renders file cards with names", () => {
-    render(<RecentFilesBar files={files} onFileClick={vi.fn()} onClear={vi.fn()} />
+    render(
+      <RecentFilesBar files={files} onFileClick={vi.fn()} onClear={vi.fn()} />
     );
     expect(screen.getByText("a.pdf")).toBeInTheDocument();
     expect(screen.getByText("b.pdf")).toBeInTheDocument();
@@ -24,7 +26,8 @@ describe("RecentFilesBar", () => {
 
   it("calls onFileClick with file when card clicked", () => {
     const onClick = vi.fn();
-    render(<RecentFilesBar files={files} onFileClick={onClick} onClear={vi.fn()} />
+    render(
+      <RecentFilesBar files={files} onFileClick={onClick} onClear={vi.fn()} />
     );
     fireEvent.click(screen.getByText("b.pdf"));
     expect(onClick).toHaveBeenCalledWith(files[1]);
@@ -46,7 +49,8 @@ describe("RecentFilesBar", () => {
 
   it("calls onClear when clear button clicked", () => {
     const onClear = vi.fn();
-    render(<RecentFilesBar files={files} onFileClick={vi.fn()} onClear={onClear} />
+    render(
+      <RecentFilesBar files={files} onFileClick={vi.fn()} onClear={onClear} />
     );
     fireEvent.click(screen.getByLabelText("清空最近文件"));
     expect(onClear).toHaveBeenCalled();

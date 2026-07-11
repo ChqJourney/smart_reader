@@ -24,7 +24,10 @@ export interface InterpretationSession {
 
 const LEGACY_STORAGE_KEY = "standardread-interpretation-sessions";
 
-function createMessage(role: "user" | "assistant", content: string): InterpretationMessage {
+function createMessage(
+  role: "user" | "assistant",
+  content: string
+): InterpretationMessage {
   return {
     id: crypto.randomUUID(),
     role,
@@ -50,7 +53,10 @@ export function createSession(
   };
 }
 
-export function appendUserMessage(session: InterpretationSession, content: string): InterpretationSession {
+export function appendUserMessage(
+  session: InterpretationSession,
+  content: string
+): InterpretationSession {
   return {
     ...session,
     messages: [...session.messages, createMessage("user", content)],
@@ -58,7 +64,9 @@ export function appendUserMessage(session: InterpretationSession, content: strin
   };
 }
 
-export function startAssistantResponse(session: InterpretationSession): InterpretationSession {
+export function startAssistantResponse(
+  session: InterpretationSession
+): InterpretationSession {
   const message = createMessage("assistant", "");
   return {
     ...session,
@@ -86,11 +94,16 @@ export function updateMessageContent(
   };
 }
 
-export function deleteSession(sessions: InterpretationSession[], id: string): InterpretationSession[] {
+export function deleteSession(
+  sessions: InterpretationSession[],
+  id: string
+): InterpretationSession[] {
   return sessions.filter((s) => s.id !== id);
 }
 
-export function finishStreaming(session: InterpretationSession): InterpretationSession {
+export function finishStreaming(
+  session: InterpretationSession
+): InterpretationSession {
   return {
     ...session,
     isStreaming: false,
@@ -121,7 +134,9 @@ export function clearLegacySessionsStorage(): void {
 }
 
 // Backend storage helpers
-export async function loadSession(sessionId: string): Promise<InterpretationSession | null> {
+export async function loadSession(
+  sessionId: string
+): Promise<InterpretationSession | null> {
   try {
     return await invoke<InterpretationSession>("load_session", { sessionId });
   } catch (err) {
@@ -130,7 +145,9 @@ export async function loadSession(sessionId: string): Promise<InterpretationSess
   }
 }
 
-export async function saveSession(session: InterpretationSession): Promise<void> {
+export async function saveSession(
+  session: InterpretationSession
+): Promise<void> {
   try {
     await invoke("save_session", { session });
   } catch (err) {

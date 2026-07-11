@@ -21,6 +21,7 @@ export interface Annotation {
   sessionId?: string;
   interpretedGroupSize?: number;
   interpretedIndex?: number;
+  fileHash?: string;
 }
 
 export interface PdfData {
@@ -51,6 +52,15 @@ export async function savePdfData(
   }
 }
 
+export async function authorizePdfPath(filePath: string): Promise<void> {
+  if (!filePath) return;
+  try {
+    await invoke("authorize_pdf_path", { filePath });
+  } catch (err) {
+    console.error("Failed to authorize PDF path:", err);
+  }
+}
+
 export async function getPdfHash(filePath: string): Promise<string> {
   return await invoke<string>("get_pdf_hash", { filePath });
 }
@@ -61,7 +71,12 @@ export function createAnnotation(
   page: number,
   x: number,
   y: number,
-  options?: { stashId?: string; width?: number; height?: number }
+  options?: {
+    stashId?: string;
+    width?: number;
+    height?: number;
+    fileHash?: string;
+  }
 ): Annotation {
   return {
     id: crypto.randomUUID(),
@@ -73,6 +88,7 @@ export function createAnnotation(
     hidden: type === "translate" ? false : undefined,
     createdAt: Date.now(),
     stashId: options?.stashId,
+    fileHash: options?.fileHash,
   };
 }
 
@@ -84,6 +100,9 @@ export function updateAnnotation(
   return annotations.map((a) => (a.id === id ? { ...a, ...patch } : a));
 }
 
-export function deleteAnnotation(annotations: Annotation[], id: string): Annotation[] {
+export function deleteAnnotation(
+  annotations: Annotation[],
+  id: string
+): Annotation[] {
   return annotations.filter((a) => a.id !== id);
 }

@@ -9,7 +9,9 @@ describe("useRecentFiles", () => {
 
   it("loads recent files from backend", async () => {
     mockTauriInvoke({
-      load_recent_files: () => [{ path: "/a.pdf", fileName: "a.pdf", openedAt: 1 }],
+      load_recent_files: () => [
+        { path: "/a.pdf", fileName: "a.pdf", openedAt: 1 },
+      ],
     });
     const { useRecentFiles } = await import("../hooks/useRecentFiles");
     const { result } = renderHook(() => useRecentFiles());
@@ -89,7 +91,9 @@ describe("useRecentFiles", () => {
   it("clears recent files", async () => {
     let saved: any = null;
     mockTauriInvoke({
-      load_recent_files: () => [{ path: "/a.pdf", fileName: "a.pdf", openedAt: 1 }],
+      load_recent_files: () => [
+        { path: "/a.pdf", fileName: "a.pdf", openedAt: 1 },
+      ],
       save_recent_files: (args) => {
         saved = args.files;
         return null;

@@ -1,13 +1,21 @@
+import { useTranslation } from "react-i18next";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Annotation } from "../services/annotations";
 import Icon from "./Icon";
 import MarkdownRenderer from "./MarkdownRenderer";
-import { buildSelectionPrompt, buildSystemPrompt, ChatMessage, streamChatCompletion } from "../services/llm";
-import { loadSettings } from "../services/settings";
+import {
+  buildSelectionPrompt,
+  buildSystemPrompt,
+  ChatMessage,
+} from "../services/llm";
+import { AppSettings } from "../services/settings";
+import { useStreaming } from "../hooks/useStreaming";
+import "./TranslatePopup.css";
 
 interface TranslatePopupProps {
   annotation: Annotation;
   scale: number;
+  settings: AppSettings;
   onUpdate: (patch: Partial<Omit<Annotation, "id">>) => void;
   onHide: () => void;
   onClose: () => void;
@@ -16,16 +24,22 @@ interface TranslatePopupProps {
 export default function TranslatePopup({
   annotation,
   scale,
+  settings,
   onUpdate,
   onHide,
   onClose,
 }: TranslatePopupProps) {
+  const { t } = useTranslation();
   const [localContent, setLocalContent] = useState(annotation.content);
   const [isStreaming, setIsStreaming] = useState(annotation.isStreaming);
   const [error, setError] = useState<string | null>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
   const accumulatedRef = useRef(localContent);
+  const onUpdateRef = useRef(onUpdate);
+
+  // Keep a fresh callback reference so the cleanup function does not close
+  // over a stale `onUpdate` when the component unmounts.
+  onUpdateRef.current = onUpdate;
 
   const left = annotation.position.x * scale;
   const top = annotation.position.y * scale;
@@ -38,7 +52,9 @@ export default function TranslatePopup({
   // the page boundary after initial placement, content changes, or dragging.
   useLayoutEffect(() => {
     if (!popupRef.current) return;
-    const wrapper = popupRef.current.closest(".pdf-page-wrapper") as HTMLElement | null;
+    const wrapper = popupRef.current.closest(
+      ".pdf-page-wrapper"
+    ) as HTMLElement | null;
     if (!wrapper) return;
 
     const popupWidth = popupRef.current.offsetWidth;
@@ -52,59 +68,52 @@ export default function TranslatePopup({
     });
   }, [left, top, localContent, isStreaming]);
 
+  const { run: runStream, abort: abortStream } = useStreaming();
+
   // Stream translation on mount
   useEffect(() => {
     if (!isStreaming || annotation.content) return;
 
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-    const signal = controller.signal;
+    const prompt = buildSelectionPrompt(
+      "translate",
+      annotation.text,
+      settings.targetLanguage
+    );
+    const messages: ChatMessage[] = [
+      {
+        role: "system",
+        content: buildSystemPrompt(
+          "translate",
+          settings.targetLanguage,
+          settings.systemPrompts
+        ),
+      },
+      { role: "user", content: prompt },
+    ];
 
-    let accumulated = "";
-    let cancelled = false;
-
-    const runTranslation = async () => {
-      const settings = await loadSettings();
-      if (cancelled) return;
-      const prompt = buildSelectionPrompt("translate", annotation.text, settings.targetLanguage);
-      const messages: ChatMessage[] = [
-        {
-          role: "system",
-          content: buildSystemPrompt("translate", settings.targetLanguage, settings.systemPrompts),
-        },
-        { role: "user", content: prompt },
-      ];
-
-      try {
-        for await (const event of streamChatCompletion(settings.llm, messages, signal)) {
-          if (signal.aborted) return;
-          if (event.type === "chunk") {
-            accumulated += event.content;
-            accumulatedRef.current = accumulated;
-            setLocalContent(accumulated);
-          } else if (event.type === "error") {
-            setError(event.message);
-            break;
-          }
-        }
-      } catch (err) {
-        if (!signal.aborted) {
-          setError(`请求失败: ${err}`);
-        }
-      } finally {
-        if (!signal.aborted) {
-          setIsStreaming(false);
-        }
-      }
-    };
-
-    runTranslation();
+    runStream("translate", settings.llm, messages, {
+      onChunk: (_chunk, accumulated) => {
+        accumulatedRef.current = accumulated;
+        setLocalContent(accumulated);
+      },
+      onError: (message) => {
+        setError(message);
+        setIsStreaming(false);
+      },
+      onDone: () => {
+        setIsStreaming(false);
+      },
+    });
 
     return () => {
-      cancelled = true;
-      controller.abort();
-      onUpdate({ content: accumulatedRef.current });
+      abortStream("translate");
+      onUpdateRef.current({ content: accumulatedRef.current });
     };
+    // This effect intentionally runs only once on mount to start the stream for
+    // a newly created translation annotation. `settings` is included so the
+    // stream uses the current LLM config; the effect guard above prevents
+    // restarts once content has started accumulating.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync external content updates (e.g. after persistence load)
@@ -164,22 +173,22 @@ export default function TranslatePopup({
       <div className="translate-popup-header" onMouseDown={handleMouseDown}>
         <span className="translate-popup-title">
           <Icon name="translate" size={14} />
-          翻译
+          {t("translate.title")}
         </span>
         <div className="translate-popup-actions">
           <button
             className="icon-btn"
             onClick={onHide}
-            aria-label="隐藏浮层"
-            title="隐藏浮层"
+            aria-label={t("translate.hidePopup")}
+            title={t("translate.hidePopup")}
           >
             <Icon name="minus" size={14} />
           </button>
           <button
             className="icon-btn"
             onClick={onClose}
-            aria-label="删除"
-            title="删除"
+            aria-label={t("common.delete")}
+            title={t("common.delete")}
           >
             <Icon name="close" size={14} />
           </button>
@@ -195,13 +204,13 @@ export default function TranslatePopup({
           <p className="translate-popup-error">{error}</p>
         ) : (
           <>
-            {localContent ? (
-              <MarkdownRenderer content={localContent} />
-            ) : null}
+            {localContent ? <MarkdownRenderer content={localContent} /> : null}
             {isStreaming && (
-              <div className={`translate-popup-loading ${localContent ? "with-content" : ""}`}>
+              <div
+                className={`translate-popup-loading ${localContent ? "with-content" : ""}`}
+              >
                 <span className="loading-spinner" />
-                <span>翻译中…</span>
+                <span>{t("translate.loading")}</span>
               </div>
             )}
           </>

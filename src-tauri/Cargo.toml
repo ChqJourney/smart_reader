@@ -1,10 +1,10 @@
 [package]
 name = "app"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+description = "AI assistant for reading and interpreting standard PDFs"
+authors = ["SpecReader AI Team"]
+license = "Proprietary"
+repository = "https://github.com/photonee/specreader-ai"
 edition = "2021"
 rust-version = "1.77.2"
 
@@ -29,8 +29,11 @@ sha2 = "0.10"
 hex = "0.4"
 open = "5"
 tempfile = "3"
-tauri-plugin-single-instance = "2"
 reqwest = { version = "0.12", features = ["stream"] }
-tokio = { version = "1", features = ["fs", "io-util"] }
+tokio = { version = "1", features = ["fs", "io-util", "time"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
+keyring = "3"
+
+[target.'cfg(any(target_os = "windows", target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "2"

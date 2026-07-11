@@ -22,7 +22,7 @@
 - 自定义解读：把多个暂存片段一次性发给 LLM。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
-- LLM 配置（Base URL、API Key、Model）保存于 `localStorage`。
+- LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 单独存放于系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不再落入 `settings.json`。
 
 明确未实现（已规划到后续版本）：
 
@@ -33,19 +33,19 @@
 
 ## 2. 技术栈
 
-| 层级 | 技术 |
-|------|------|
-| 桌面框架 | Tauri 2.0（Rust 后端 + Web 前端） |
-| 前端框架 | React 18 + TypeScript 5.6 |
-| 构建工具 | Vite 6 |
-| PDF 渲染 | pdfjs-dist 4.8 |
-| UI 图标 | 自定义 `Icon` 组件（SVG 集合） |
-| Markdown 渲染 | react-markdown |
-| 后端语言 | Rust（tauri 2.11, edition 2021） |
-| 后端存储 | 本地 JSON 文件（AppData） |
-| 前端单元测试 | Vitest 4.1 + jsdom + @testing-library/react |
-| E2E 测试 | Playwright 1.61 |
-| 后端测试 | `cargo test` |
+| 层级          | 技术                                        |
+| ------------- | ------------------------------------------- |
+| 桌面框架      | Tauri 2.0（Rust 后端 + Web 前端）           |
+| 前端框架      | React 18 + TypeScript 5.6                   |
+| 构建工具      | Vite 6                                      |
+| PDF 渲染      | pdfjs-dist 4.8                              |
+| UI 图标       | 自定义 `Icon` 组件（SVG 集合）              |
+| Markdown 渲染 | react-markdown                              |
+| 后端语言      | Rust（tauri 2.11, edition 2021）            |
+| 后端存储      | 本地 JSON 文件（AppData）                   |
+| 前端单元测试  | Vitest 4.1 + jsdom + @testing-library/react |
+| E2E 测试      | Playwright 1.61                             |
+| 后端测试      | `cargo test`                                |
 
 ## 3. 开发环境要求
 
@@ -80,7 +80,7 @@ npm install
 │   │   ├── ExplainPopup.tsx           # 解读详情浮层
 │   │   ├── StashInterpretedPopup.tsx  # 已解读暂存浮层
 │   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录、流式中止）
-│   │   ├── SettingsModal.tsx          # 全局设置 Modal（LLM + 目标语言 + 悬停翻译）
+│   │   ├── SettingsModal.tsx          # 全局设置 Modal（左侧分页：模型设置 / 功能设置 / 系统设置）
 │   │   ├── RecentFilesBar.tsx         # 顶部最近文件栏
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
@@ -151,7 +151,7 @@ npm run build
 npm run tauri-build
 ```
 
-### 5.3 测试
+### 5.3 测试与代码质量
 
 ```bash
 # 前端单元 / 集成测试
@@ -172,6 +172,15 @@ npm run test:e2e:ui
 # 依次运行单元测试与 E2E 测试
 npm run test:all
 
+# TypeScript 类型检查
+npm run type-check
+
+# ESLint 代码检查
+npm run lint
+
+# Prettier 格式检查
+npm run format:check
+
 # 后端 Rust 测试
 cd src-tauri && cargo test
 ```
@@ -191,9 +200,11 @@ cd src-tauri && cargo test
 - `load_session(sessionId: string)`：加载单个会话 JSON。
 - `save_session(session: InterpretationSession)`：保存会话 JSON。
 - `delete_session(sessionId: string)`：删除会话文件。
-- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM + 目标语言 + 悬停翻译开关）。
+- `authorize_pdf_path(filePath: string)`：将用户通过对话框选择的 PDF 路径加入后端授权白名单，`read_pdf_bytes` / `get_pdf_hash` 会校验该白名单。
+- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM + 目标语言 + 悬停翻译开关）；API Key 通过系统钥匙串读写。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表。
-- `open_path(path: string)`：使用系统默认程序打开路径。
+- `open_path(path: string)`：仅允许打开 `http://` / `https://` URL，禁止本地文件路径与目录。
+- `open_logs_dir()`：打开应用日志目录，供用户导出排查。
 - `check_dictionary()`：检查本地 ECDICT 词典是否存在及大小。
 - `download_dictionary()`：下载 ECDICT SQLite 词典（支持断点续传），通过 `dictionary-download-progress` event 推送进度。
 - `lookup_word(word: string)`：查询单词释义。
@@ -211,6 +222,8 @@ cd src-tauri && cargo test
     │       └── {session_id}.json  # 解读会话详情
     ├── dict/
     │   └── ecdict.sqlite          # ECDICT 本地离线词典（首次启用悬停翻译时下载）
+    ├── logs/
+    │   └── app.log                # 应用运行日志（Release 默认 Warn 级别，保留最近 10 MB）
     ├── settings.json              # LLM 配置 + 目标语言 + 悬停翻译开关
     └── recent_files.json          # 最近打开文件列表
 ```
@@ -253,7 +266,7 @@ AiChatPanel.tsx
 └── 检测到 isStreaming 会话时启动 SSE 流
 
 SettingsModal.tsx
-└── LLM 配置 + 目标语言设置弹窗
+└── 左侧分页设置弹窗：模型设置（LLM）、功能设置（语言/悬停翻译/系统提示词）、系统设置（版本/License/日志）
 ```
 
 ## 7. 代码组织约定
@@ -305,11 +318,12 @@ SettingsModal.tsx
   - `services/llm.test.ts`：LLM 配置默认值、SSE 流解析、Prompt 构建（含目标语言）。
   - `services/sessions.test.ts`：会话消息更新、流状态。
   - `services/stash.test.ts`：暂存片段管理。
+  - `hooks/usePersistence.test.tsx`：StrictMode 下 `handleFollowUp` 不双发、流式中断、annotation 删除、分屏 annotation 隔离、关闭 Tab 资源清理。
   - `hooks/useRecentFiles.test.ts`：最近文件增删与上限。
   - `hooks/useSplitView.test.ts`：双排视图进入/退出。
   - `components/SelectionToolbar.test.tsx`：工具条渲染、点击外部关闭。
   - `components/AnnotationMarker.test.tsx`：拖拽后不误触发点击。
-  - `components/PdfAnnotations.test.tsx`：按页过滤、交互回调。
+  - `components/PdfAnnotations.test.tsx`：按页与 `fileHash` 过滤、交互回调。
   - `components/AiChatPanel.test.tsx`：流式更新、中止按钮。
   - `components/SettingsModal.test.tsx`：设置表单与保存回调。
   - `components/RecentFilesBar.test.tsx`：文件点击与清空。
@@ -334,14 +348,15 @@ SettingsModal.tsx
 ### 8.3 后端测试
 
 - `src-tauri/src/lib.rs` 包含 `#[cfg(test)]` 模块。
-- 覆盖：hash 计算、annotation 路径确定性、批注持久化往返、旧格式兼容、会话 CRUD。
+- 覆盖：hash 计算、annotation 路径确定性、批注持久化往返、旧格式兼容、会话 CRUD、session id 路径穿越防护、PDF 路径授权、原子文件写入、`check_dictionary` / `lookup_word` 非阻塞 I/O。
+- `src-tauri/src/secure_storage.rs` 包含 `MemoryStorage` 测试实现，覆盖 API Key 钥匙串存取、失败降级。
 - 纯逻辑与 `tauri::AppHandle` 解耦，便于测试。
 
 ## 9. 安全与隐私注意事项
 
 - **PDF 不上传云端**：文件仅在本地读取和渲染。
 - **仅主动选择的内容发送给 LLM**：翻译 / 解读只发送用户选中的文本片段，不会自动上传整篇文档。
-- **API Key 存储**：目前保存在前端 `localStorage`，未加密。后续计划使用系统安全存储 / Keychain。
+- **API Key 存储**：API Key 通过 Rust `keyring` crate 存入系统钥匙串；`settings.json` 中只保留空占位。钥匙串不可用时 `save_settings` 会明确拒绝保存并返回错误，不回退明文存储。
 - **不要在前端日志中打印 API Key 或完整文件内容**。
 - Tauri CSP 当前配置为 `null`，后续如引入外部资源需要收紧。
 

@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+/* eslint-disable react-refresh/only-export-components */
+import { useTranslation } from "react-i18next";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   checkDictionary,
   downloadDictionary,
@@ -16,7 +25,16 @@ export interface UseDictionaryStatusResult {
   refresh: () => Promise<void>;
 }
 
-export function useDictionaryStatus(): UseDictionaryStatusResult {
+const DictionaryStatusContext = createContext<UseDictionaryStatusResult | null>(
+  null
+);
+
+export function DictionaryStatusProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<DictionaryStatus | null>(null);
   const [progress, setProgress] = useState<DownloadProgress | null>(null);
   const [downloading, setDownloading] = useState(false);
@@ -44,7 +62,7 @@ export function useDictionaryStatus(): UseDictionaryStatusResult {
         refresh();
       } else if (p.status === "error") {
         setDownloading(false);
-        setError(p.message || "词典下载失败");
+        setError(p.message || t("dictionary.downloadFailed"));
       }
     })
       .then((unlisten) => {
@@ -60,7 +78,7 @@ export function useDictionaryStatus(): UseDictionaryStatusResult {
         unlistenRef.current = null;
       }
     };
-  }, [refresh]);
+  }, [refresh, t]);
 
   const startDownload = useCallback(async () => {
     setDownloading(true);
@@ -74,7 +92,7 @@ export function useDictionaryStatus(): UseDictionaryStatusResult {
     }
   }, []);
 
-  return {
+  const value: UseDictionaryStatusResult = {
     status,
     progress,
     downloading,
@@ -82,4 +100,20 @@ export function useDictionaryStatus(): UseDictionaryStatusResult {
     startDownload,
     refresh,
   };
+
+  return (
+    <DictionaryStatusContext.Provider value={value}>
+      {children}
+    </DictionaryStatusContext.Provider>
+  );
+}
+
+export function useDictionaryStatus(): UseDictionaryStatusResult {
+  const ctx = useContext(DictionaryStatusContext);
+  if (!ctx) {
+    throw new Error(
+      "useDictionaryStatus must be used within a DictionaryStatusProvider"
+    );
+  }
+  return ctx;
 }

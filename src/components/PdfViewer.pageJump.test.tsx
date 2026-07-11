@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
-import PdfViewer, { computeContinuousScrollTop, PageViewportInfo } from "./PdfViewer";
+import PdfViewer, {
+  computeContinuousScrollTop,
+  PageViewportInfo,
+} from "./PdfViewer";
 import { invoke } from "@tauri-apps/api/core";
+import { DEFAULT_SETTINGS } from "../services/settings";
 
 // --- Helpers for computeContinuousScrollTop unit tests ---
 
@@ -23,7 +27,10 @@ function makeElement(rect: Partial<DOMRect>): HTMLDivElement {
   } as HTMLDivElement;
 }
 
-function makeContainer(rect: Partial<DOMRect>, scrollTop: number): HTMLDivElement {
+function makeContainer(
+  rect: Partial<DOMRect>,
+  scrollTop: number
+): HTMLDivElement {
   return {
     getBoundingClientRect: () =>
       ({
@@ -75,7 +82,10 @@ function createMockPdf() {
         width: 200 * SCALE,
         height: height * SCALE,
         scale: SCALE,
-        convertToViewportPoint: (x: number, y: number) => [x * SCALE, y * SCALE],
+        convertToViewportPoint: (x: number, y: number) => [
+          x * SCALE,
+          y * SCALE,
+        ],
       };
       return {
         getViewport: () => viewport,
@@ -122,12 +132,7 @@ describe("computeContinuousScrollTop", () => {
 
     // Page 3 top = (page1 height + spacing) + (page2 height + spacing)
     //            = (200 + 24) + (250 + 24) = 498
-    const top = computeContinuousScrollTop(
-      3,
-      container,
-      () => null,
-      viewports
-    );
+    const top = computeContinuousScrollTop(3, container, () => null, viewports);
 
     expect(top).toBe(498);
   });
@@ -209,7 +214,10 @@ describe("PdfViewer continuous mode page jump", () => {
 
     // jsdom does not implement scrollTop/scrollTo consistently, so we install
     // our own scrollTop storage and a scrollTo mock that writes into it.
-    originalScrollTopDescriptor = Object.getOwnPropertyDescriptor(Element.prototype, "scrollTop");
+    originalScrollTopDescriptor = Object.getOwnPropertyDescriptor(
+      Element.prototype,
+      "scrollTop"
+    );
     Object.defineProperty(Element.prototype, "scrollTop", {
       get: function (this: Element) {
         return scrollTops.get(this) ?? 0;
@@ -221,8 +229,11 @@ describe("PdfViewer continuous mode page jump", () => {
     });
 
     const originalScrollTo = (Element.prototype as any).scrollTo;
-    (Element.prototype as any).scrollTo = vi.fn(function (this: Element, options: ScrollToOptions | number) {
-      const top = typeof options === "number" ? options : options?.top ?? 0;
+    (Element.prototype as any).scrollTo = vi.fn(function (
+      this: Element,
+      options: ScrollToOptions | number
+    ) {
+      const top = typeof options === "number" ? options : (options?.top ?? 0);
       this.scrollTop = top;
     });
     scrollToSpy = vi.spyOn(Element.prototype, "scrollTo" as any);
@@ -235,13 +246,19 @@ describe("PdfViewer continuous mode page jump", () => {
       (Element.prototype as any).scrollTo = originalScrollToRef;
     }
     if (originalScrollTopDescriptor) {
-      Object.defineProperty(Element.prototype, "scrollTop", originalScrollTopDescriptor);
+      Object.defineProperty(
+        Element.prototype,
+        "scrollTop",
+        originalScrollTopDescriptor
+      );
     }
     scrollTops.delete(document.body);
   });
 
   it("jumps to the requested page and scrolls to the correct position", async () => {
-    const { container } = render(<PdfViewer filePath="/fake/test.pdf" />);
+    const { container } = render(
+      <PdfViewer filePath="/fake/test.pdf" settings={DEFAULT_SETTINGS} />
+    );
 
     // Wait until the viewer has loaded the PDF and viewports are ready.
     const pageInput = await waitFor<HTMLInputElement>(() => {
@@ -271,14 +288,20 @@ describe("PdfViewer continuous mode page jump", () => {
 
     // Verify the container was scrolled to the exact position that puts the
     // target page at the top of the viewport.
-    const canvasContainer = container.querySelector(".pdf-canvas-container.continuous");
+    const canvasContainer = container.querySelector(
+      ".pdf-canvas-container.continuous"
+    );
     expect(canvasContainer).not.toBeNull();
     expect(scrollToSpy).toHaveBeenCalled();
-    expect(canvasContainer!.scrollTop).toBe(expectedScrollTopForPage(targetPage));
+    expect(canvasContainer!.scrollTop).toBe(
+      expectedScrollTopForPage(targetPage)
+    );
   });
 
   it("fits page width to container when fit-to-width button is clicked", async () => {
-    const { container } = render(<PdfViewer filePath="/fake/test.pdf" />);
+    const { container } = render(
+      <PdfViewer filePath="/fake/test.pdf" settings={DEFAULT_SETTINGS} />
+    );
 
     // Wait until the viewer has loaded the PDF and viewports are ready.
     await waitFor<HTMLInputElement>(() => {
@@ -292,7 +315,9 @@ describe("PdfViewer continuous mode page jump", () => {
     expect(screen.getByText("150%")).toBeInTheDocument();
 
     // Provide a stable container width for the fit calculation.
-    const canvasContainer = container.querySelector(".pdf-canvas-container.continuous") as HTMLDivElement;
+    const canvasContainer = container.querySelector(
+      ".pdf-canvas-container.continuous"
+    ) as HTMLDivElement;
     expect(canvasContainer).not.toBeNull();
     Object.defineProperty(canvasContainer, "clientWidth", {
       value: 400,

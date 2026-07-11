@@ -7,6 +7,7 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import { defaultSchema, type Schema } from "hast-util-sanitize";
 import "katex/dist/katex.min.css";
+import "./MarkdownRenderer.css";
 
 interface MarkdownRendererProps {
   content: string;
@@ -84,14 +85,22 @@ const sanitizeSchema: Schema = {
     polyline: [...(defaultSchema.attributes?.polyline ?? []), ...svgAttributes],
     polygon: [...(defaultSchema.attributes?.polygon ?? []), ...svgAttributes],
     ellipse: [...(defaultSchema.attributes?.ellipse ?? []), ...svgAttributes],
-    text: [...(defaultSchema.attributes?.text ?? []), ...svgAttributes, "fontSize", "fontFamily"],
+    text: [
+      ...(defaultSchema.attributes?.text ?? []),
+      ...svgAttributes,
+      "fontSize",
+      "fontFamily",
+    ],
     tspan: [...(defaultSchema.attributes?.tspan ?? []), ...svgAttributes],
   },
 };
 
 // 流式输出中可能出现在数学公式中间被截断，导致 remark-math 解析失败。
 // ErrorBoundary 在 Markdown 解析异常时降级为纯文本，避免整个消息白屏。
-class MarkdownErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class MarkdownErrorBoundary extends React.Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false };
@@ -103,19 +112,30 @@ class MarkdownErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBou
 
   render() {
     if (this.state.hasError) {
-      return <div className={`markdown-content ${this.props.className}`}>{this.props.content}</div>;
+      return (
+        <div className={`markdown-content ${this.props.className}`}>
+          {this.props.content}
+        </div>
+      );
     }
     return this.props.children;
   }
 }
 
-export default function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
+export default function MarkdownRenderer({
+  content,
+  className = "",
+}: MarkdownRendererProps) {
   return (
     <MarkdownErrorBoundary content={content} className={className}>
       <div className={`markdown-content ${className}`}>
         <ReactMarkdown
           remarkPlugins={[remarkGfm, remarkMath]}
-          rehypePlugins={[rehypeRaw, [rehypeSanitize, sanitizeSchema], rehypeKatex]}
+          rehypePlugins={[
+            rehypeRaw,
+            [rehypeSanitize, sanitizeSchema],
+            rehypeKatex,
+          ]}
           components={{
             a: ({ node: _node, ...props }) => (
               <a target="_blank" rel="noopener noreferrer" {...props} />

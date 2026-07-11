@@ -3,7 +3,10 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import AnnotationMarker from "../components/AnnotationMarker";
 import { Annotation } from "../services/annotations";
 
-function makeAnnotation(type: Annotation["type"] = "explain", overrides: Partial<Annotation> = {}): Annotation {
+function makeAnnotation(
+  type: Annotation["type"] = "explain",
+  overrides: Partial<Annotation> = {}
+): Annotation {
   return {
     id: "1",
     type,
@@ -59,7 +62,10 @@ describe("AnnotationMarker", () => {
   it("renders interpreted stash marker with group info", () => {
     render(
       <AnnotationMarker
-        annotation={makeAnnotation("stash", { interpretedGroupSize: 3, interpretedIndex: 1 })}
+        annotation={makeAnnotation("stash", {
+          interpretedGroupSize: 3,
+          interpretedIndex: 1,
+        })}
         scale={1.5}
         onClick={vi.fn()}
         onMove={vi.fn()}
@@ -148,7 +154,10 @@ describe("AnnotationMarker", () => {
     const onMove = vi.fn();
     render(
       <AnnotationMarker
-        annotation={makeAnnotation("stash", { interpretedGroupSize: 3, interpretedIndex: 1 })}
+        annotation={makeAnnotation("stash", {
+          interpretedGroupSize: 3,
+          interpretedIndex: 1,
+        })}
         scale={1}
         onClick={onClick}
         onMove={onMove}

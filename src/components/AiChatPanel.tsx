@@ -1,9 +1,11 @@
+import { useTranslation } from "react-i18next";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StashItem } from "../services/stash";
 import { InterpretationSession } from "../services/sessions";
 import Icon from "./Icon";
 import CustomInterpretModal from "./CustomInterpretModal";
 import MarkdownRenderer from "./MarkdownRenderer";
+import "./AiChatPanel.css";
 
 interface AiChatPanelProps {
   stashes: StashItem[];
@@ -34,9 +36,16 @@ export default function AiChatPanel({
   onInterrupt,
   onToggleVisibility,
 }: AiChatPanelProps) {
-  const [activeTab, setActiveTab] = useState<Tab>(stashes.length > 0 ? "stash" : "sessions");
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(expandedSessionId ?? null);
-  const [expandedStashIds, setExpandedStashIds] = useState<Set<string>>(new Set());
+  const { t } = useTranslation();
+  const [activeTab, setActiveTab] = useState<Tab>(
+    stashes.length > 0 ? "stash" : "sessions"
+  );
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(
+    expandedSessionId ?? null
+  );
+  const [expandedStashIds, setExpandedStashIds] = useState<Set<string>>(
+    new Set()
+  );
   const [editingStashId, setEditingStashId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [showModal, setShowModal] = useState(false);
@@ -50,8 +59,13 @@ export default function AiChatPanel({
   // We only react to prop changes so that the user can navigate back without being
   // immediately pushed into the chatbox again.
   const prevExpandedSessionIdRef = useRef(expandedSessionId);
+  const hasUserManuallySwitchedTabRef = useRef(false);
+
   useEffect(() => {
-    if (expandedSessionId && expandedSessionId !== prevExpandedSessionIdRef.current) {
+    if (
+      expandedSessionId &&
+      expandedSessionId !== prevExpandedSessionIdRef.current
+    ) {
       setActiveSessionId(expandedSessionId);
       setActiveTab("sessions");
     }
@@ -65,7 +79,11 @@ export default function AiChatPanel({
     }
   }, [activeSessionId, activeSession]);
 
+  // Automatically switch tabs only on the initial stash/session state and only
+  // if the user has not manually selected a tab. This prevents the UI from
+  // jumping away from the user's current context as stashes are added/removed.
   useEffect(() => {
+    if (hasUserManuallySwitchedTabRef.current) return;
     setActiveTab(stashes.length > 0 ? "stash" : "sessions");
   }, [stashes.length]);
 
@@ -81,9 +99,13 @@ export default function AiChatPanel({
     onGotoStash?.(stash);
   };
 
-  const sortedSessions = [...sessions].sort((a, b) => b.createdAt - a.createdAt);
+  const sortedSessions = useMemo(
+    () => [...sessions].sort((a, b) => b.createdAt - a.createdAt),
+    [sessions]
+  );
 
-  const truncate = (text: string, max: number) => (text.length > max ? text.slice(0, max) + "…" : text);
+  const truncate = (text: string, max: number) =>
+    text.length > max ? text.slice(0, max) + "…" : text;
   const STASH_TRUNCATE_LEN = 120;
 
   const toggleExpandStash = (id: string) => {
@@ -121,8 +143,8 @@ export default function AiChatPanel({
           <button
             onClick={onToggleVisibility}
             className="icon-btn panel-hide-btn"
-            aria-label="隐藏面板"
-            title="隐藏面板"
+            aria-label={t("panel.hide")}
+            title={t("panel.hide")}
           >
             <Icon name="hide-right" size={16} />
           </button>
@@ -132,7 +154,9 @@ export default function AiChatPanel({
   );
 
   const renderSessionSource = (session: InterpretationSession) =>
-    session.sources.map((s) => `${s.source.fileName} p.${s.source.page}`).join(" · ");
+    session.sources
+      .map((s) => `${s.source.fileName} p.${s.source.page}`)
+      .join(" · ");
 
   return (
     <div className="ai-chat-panel">
@@ -143,12 +167,14 @@ export default function AiChatPanel({
               <button
                 onClick={exitSessionChatbox}
                 className="icon-btn session-back-btn"
-                aria-label="返回解读记录"
-                title="返回解读记录"
+                aria-label={t("session.backToList")}
+                title={t("session.backToList")}
               >
                 <Icon name="chevron-left" size={18} />
               </button>
-              <span className="ai-chat-back-title">{renderSessionSource(activeSession)}</span>
+              <span className="ai-chat-back-title">
+                {renderSessionSource(activeSession)}
+              </span>
             </>
           )}
           <div className="ai-chat-messages" role="log" aria-live="polite">
@@ -156,11 +182,15 @@ export default function AiChatPanel({
               <div
                 key={message.id}
                 className={`ai-chat-message ${message.role} ${
-                  message.role === "assistant" && !message.content ? "streaming" : ""
+                  message.role === "assistant" && !message.content
+                    ? "streaming"
+                    : ""
                 }`}
               >
                 <div className="ai-chat-role">
-                  {message.role === "user" ? "你" : "AI"}
+                  {message.role === "user"
+                    ? t("chat.userLabel")
+                    : t("chat.aiLabel")}
                 </div>
                 <div className="ai-chat-content">
                   {message.role === "assistant" && !message.content ? (
@@ -186,7 +216,7 @@ export default function AiChatPanel({
           {renderHeader(
             <>
               <Icon name="chat" size={18} />
-              <h2>AI 助手</h2>
+              <h2>{t("chat.aiAssistant")}</h2>
             </>
           )}
 
@@ -195,42 +225,55 @@ export default function AiChatPanel({
               role="tab"
               aria-selected={activeTab === "stash"}
               className={activeTab === "stash" ? "active" : ""}
-              onClick={() => setActiveTab("stash")}
+              onClick={() => {
+                hasUserManuallySwitchedTabRef.current = true;
+                setActiveTab("stash");
+              }}
             >
-              暂存区 ({stashes.length})
+              {t("stash.tabLabel", { count: stashes.length })}
             </button>
             <button
               role="tab"
               aria-selected={activeTab === "sessions"}
               className={activeTab === "sessions" ? "active" : ""}
-              onClick={() => setActiveTab("sessions")}
+              onClick={() => {
+                hasUserManuallySwitchedTabRef.current = true;
+                setActiveTab("sessions");
+              }}
             >
-              解读记录 ({sessions.length})
+              {t("session.tabLabel", { count: sessions.length })}
             </button>
           </div>
 
           {activeTab === "stash" && (
             <div className="ai-chat-content stash-list" role="tabpanel">
               {stashes.length === 0 && (
-                <p className="ai-chat-placeholder">暂无暂存片段，在 PDF 中选中内容后点击「加入暂存」。</p>
+                <p className="ai-chat-placeholder">{t("stash.emptyHint")}</p>
               )}
               {stashes.map((stash) => {
                 const isExpanded = expandedStashIds.has(stash.id);
                 const isEditing = editingStashId === stash.id;
                 const needsTruncate = stash.text.length > STASH_TRUNCATE_LEN;
                 return (
-                  <div key={stash.id} className="stash-item" data-stash-id={stash.id}>
+                  <div
+                    key={stash.id}
+                    className="stash-item"
+                    data-stash-id={stash.id}
+                  >
                     <div className="stash-item-header">
                       <span className="stash-item-source">
-                        {stash.source.fileName} · 第 {stash.source.page} 页
+                        {t("stash.source", {
+                          fileName: stash.source.fileName,
+                          page: stash.source.page,
+                        })}
                       </span>
                       <div className="stash-item-actions">
                         {!isEditing && (
                           <button
                             className="icon-btn stash-item-edit"
                             onClick={() => startEditStash(stash)}
-                            aria-label="编辑"
-                            title="编辑"
+                            aria-label={t("common.edit")}
+                            title={t("common.edit")}
                           >
                             <Icon name="edit" size={12} />
                           </button>
@@ -238,8 +281,8 @@ export default function AiChatPanel({
                         <button
                           className="icon-btn stash-item-delete"
                           onClick={() => onRemoveStash(stash.id)}
-                          aria-label="删除"
-                          title="删除"
+                          aria-label={t("common.delete")}
+                          title={t("common.delete")}
                         >
                           <Icon name="close" size={12} />
                         </button>
@@ -254,9 +297,15 @@ export default function AiChatPanel({
                           autoFocus
                         />
                         <div className="stash-item-edit-actions">
-                          <button onClick={cancelEditStash}>取消</button>
-                          <button className="primary" onClick={saveEditStash} disabled={!editText.trim()}>
-                            保存
+                          <button onClick={cancelEditStash}>
+                            {t("common.cancel")}
+                          </button>
+                          <button
+                            className="primary"
+                            onClick={saveEditStash}
+                            disabled={!editText.trim()}
+                          >
+                            {t("common.save")}
                           </button>
                         </div>
                       </div>
@@ -265,7 +314,9 @@ export default function AiChatPanel({
                         className={`stash-item-text ${needsTruncate ? "truncated" : ""}`}
                         onClick={() => handleGotoStash(stash)}
                       >
-                        {isExpanded ? stash.text : truncate(stash.text, STASH_TRUNCATE_LEN)}
+                        {isExpanded
+                          ? stash.text
+                          : truncate(stash.text, STASH_TRUNCATE_LEN)}
                         {needsTruncate && (
                           <button
                             className="stash-item-expand"
@@ -273,10 +324,20 @@ export default function AiChatPanel({
                               e.stopPropagation();
                               toggleExpandStash(stash.id);
                             }}
-                            aria-label={isExpanded ? "收起" : "展开"}
-                            title={isExpanded ? "收起" : "展开"}
+                            aria-label={
+                              isExpanded
+                                ? t("common.collapse")
+                                : t("common.expand")
+                            }
+                            title={
+                              isExpanded
+                                ? t("common.collapse")
+                                : t("common.expand")
+                            }
                           >
-                            {isExpanded ? "收起" : "展开"}
+                            {isExpanded
+                              ? t("common.collapse")
+                              : t("common.expand")}
                           </button>
                         )}
                       </div>
@@ -286,13 +347,13 @@ export default function AiChatPanel({
               })}
               {stashes.length > 0 && (
                 <div className="stash-actions">
-                  <button onClick={onClearStashes}>清空暂存</button>
+                  <button onClick={onClearStashes}>{t("stash.clear")}</button>
                   <button
                     className="primary"
                     onClick={() => setShowModal(true)}
                     disabled={stashes.length === 0}
                   >
-                    自定义解读
+                    {t("customInterpret.title")}
                   </button>
                 </div>
               )}
@@ -302,9 +363,7 @@ export default function AiChatPanel({
           {activeTab === "sessions" && (
             <div className="ai-chat-content session-list" role="tabpanel">
               {sortedSessions.length === 0 && (
-                <p className="ai-chat-placeholder">
-                  在 PDF 中选中内容，点击「解读」生成解释，或先「加入暂存」再使用自定义解读。
-                </p>
+                <p className="ai-chat-placeholder">{t("session.emptyHint")}</p>
               )}
               {sortedSessions.map((session) => {
                 const lastUserMessage = [...session.messages]
@@ -318,8 +377,14 @@ export default function AiChatPanel({
                   >
                     <div className="session-item-header">
                       <div className="session-item-meta">
-                        <span className="session-item-source">{renderSessionSource(session)}</span>
-                        {session.isStreaming && <span className="session-item-status">解读中…</span>}
+                        <span className="session-item-source">
+                          {renderSessionSource(session)}
+                        </span>
+                        {session.isStreaming && (
+                          <span className="session-item-status">
+                            {t("session.streamingStatus")}
+                          </span>
+                        )}
                       </div>
                     </div>
                     <div className="session-item-prompt">
@@ -355,7 +420,13 @@ interface FollowUpInputProps {
   onInterrupt: () => void;
 }
 
-function FollowUpInput({ session, disabled, onSend, onInterrupt }: FollowUpInputProps) {
+function FollowUpInput({
+  session,
+  disabled,
+  onSend,
+  onInterrupt,
+}: FollowUpInputProps) {
+  const { t } = useTranslation();
   const [text, setText] = useState("");
   const isStreaming = session.isStreaming;
 
@@ -383,7 +454,11 @@ function FollowUpInput({ session, disabled, onSend, onInterrupt }: FollowUpInput
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder={isStreaming ? "生成中…" : "继续追问..."}
+        placeholder={
+          isStreaming
+            ? t("chat.generatingPlaceholder")
+            : t("chat.followUpPlaceholder")
+        }
         rows={2}
         disabled={disabled}
       />
@@ -392,7 +467,7 @@ function FollowUpInput({ session, disabled, onSend, onInterrupt }: FollowUpInput
         disabled={!isStreaming && !text.trim()}
         className={isStreaming ? "interrupt" : ""}
       >
-        {isStreaming ? "中止" : "发送"}
+        {isStreaming ? t("common.stop") : t("common.send")}
       </button>
     </div>
   );

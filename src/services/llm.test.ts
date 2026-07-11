@@ -20,7 +20,11 @@ describe("llm service", () => {
 
   describe("buildSystemPrompt", () => {
     it("uses translate prompt for translate action", () => {
-      const prompt = buildSystemPrompt("translate", "English", sampleSystemPrompts);
+      const prompt = buildSystemPrompt(
+        "translate",
+        "English",
+        sampleSystemPrompts
+      );
       expect(prompt).toBe("Translate to English.");
     });
 
@@ -32,14 +36,10 @@ describe("llm service", () => {
     });
 
     it("replaces all targetLanguage placeholders", () => {
-      const prompt = buildSystemPrompt(
-        "translate",
-        "English",
-        {
-          translate: "Use {targetLanguage} and only {targetLanguage}.",
-          explain: "Explain.",
-        }
-      );
+      const prompt = buildSystemPrompt("translate", "English", {
+        translate: "Use {targetLanguage} and only {targetLanguage}.",
+        explain: "Explain.",
+      });
       expect(prompt).toBe("Use English and only English.");
     });
   });
@@ -53,13 +53,21 @@ describe("llm service", () => {
     });
 
     it("builds translate prompt in target language", () => {
-      const prompt = buildSelectionPrompt("translate", "Sample text", "English");
+      const prompt = buildSelectionPrompt(
+        "translate",
+        "Sample text",
+        "English"
+      );
       expect(prompt).toContain("Sample text");
       expect(prompt).toContain("English");
     });
 
     it("returns text for unknown action", () => {
-      const prompt = buildSelectionPrompt("unknown" as any, "Sample text", "中文");
+      const prompt = buildSelectionPrompt(
+        "unknown" as any,
+        "Sample text",
+        "中文"
+      );
       expect(prompt).toBe("Sample text");
     });
   });

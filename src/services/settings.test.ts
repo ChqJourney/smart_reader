@@ -35,7 +35,11 @@ describe("settings service", () => {
   it("merges backend settings when backend has custom values", async () => {
     mockTauriInvoke({
       load_settings: () => ({
-        llm: { baseUrl: "https://custom.example.com", apiKey: "sk-test", model: "gpt-4" },
+        llm: {
+          baseUrl: "https://custom.example.com",
+          apiKey: "sk-test",
+          model: "gpt-4",
+        },
         targetLanguage: "English",
       }),
     });
@@ -50,7 +54,11 @@ describe("settings service", () => {
   it("fills default system prompts when backend returns old format", async () => {
     mockTauriInvoke({
       load_settings: () => ({
-        llm: { baseUrl: "https://api.openai.com/v1", apiKey: "sk-test", model: "gpt-4o-mini" },
+        llm: {
+          baseUrl: "https://api.openai.com/v1",
+          apiKey: "sk-test",
+          model: "gpt-4o-mini",
+        },
         targetLanguage: "中文",
       }),
     });
@@ -83,11 +91,18 @@ describe("settings service", () => {
   });
 
   it("does not migrate legacy config when backend already has apiKey", async () => {
-    localStorage.setItem("standardread-llm-config", JSON.stringify({ apiKey: "legacy-key" }));
+    localStorage.setItem(
+      "standardread-llm-config",
+      JSON.stringify({ apiKey: "legacy-key" })
+    );
     let savedSettings: any = "not-called";
     mockTauriInvoke({
       load_settings: () => ({
-        llm: { baseUrl: "https://api.example.com", apiKey: "backend-key", model: "gpt-4" },
+        llm: {
+          baseUrl: "https://api.example.com",
+          apiKey: "backend-key",
+          model: "gpt-4",
+        },
         targetLanguage: "中文",
       }),
       save_settings: (args) => {
@@ -102,7 +117,10 @@ describe("settings service", () => {
   });
 
   it("falls back to defaults and legacy config when backend fails", async () => {
-    localStorage.setItem("standardread-llm-config", JSON.stringify({ apiKey: "legacy-key" }));
+    localStorage.setItem(
+      "standardread-llm-config",
+      JSON.stringify({ apiKey: "legacy-key" })
+    );
     mockTauriInvoke({
       load_settings: () => Promise.reject(new Error("backend error")),
     });

@@ -41,10 +41,10 @@ export function useRecentFiles(): UseRecentFilesReturn {
   const addRecentFile = useCallback((path: string, fileName: string) => {
     setRecentFiles((prev) => {
       const filtered = prev.filter((f) => f.path !== path);
-      const next = [{ path, fileName, openedAt: Date.now() }, ...filtered].slice(
-        0,
-        MAX_RECENT_FILES
-      );
+      const next = [
+        { path, fileName, openedAt: Date.now() },
+        ...filtered,
+      ].slice(0, MAX_RECENT_FILES);
       invoke("save_recent_files", { files: next }).catch((err) =>
         console.error("Failed to save recent files:", err)
       );

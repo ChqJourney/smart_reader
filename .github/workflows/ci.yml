@@ -33,6 +33,18 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
+      - name: Type check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build frontend production bundle
+        run: npm run build
+
+      - name: Audit frontend dependencies
+        run: npm audit --audit-level=moderate
+
       - name: Install Playwright browsers
         run: npx playwright install --with-deps chromium
 
@@ -42,6 +54,13 @@ jobs:
       - name: Run Rust backend tests
         working-directory: ./src-tauri
         run: cargo test
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Audit Rust dependencies
+        working-directory: ./src-tauri
+        run: cargo audit
 
       - name: Run E2E tests
         run: npm run test:e2e

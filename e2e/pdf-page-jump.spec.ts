@@ -2,11 +2,22 @@ import { test, expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
 
-const SAMPLE_PDF_PATH = path.join(import.meta.dirname, "fixtures", "sample.pdf");
-const SHORT_PAGES_PDF_PATH = path.join(import.meta.dirname, "fixtures", "sample-short-pages.pdf");
+const SAMPLE_PDF_PATH = path.join(
+  import.meta.dirname,
+  "fixtures",
+  "sample.pdf"
+);
+const SHORT_PAGES_PDF_PATH = path.join(
+  import.meta.dirname,
+  "fixtures",
+  "sample-short-pages.pdf"
+);
 const JUMP_SETTLE_TIMEOUT = 1500;
 
-async function setupTauriMock(page: import("@playwright/test").Page, pdfPath: string = SAMPLE_PDF_PATH) {
+async function setupTauriMock(
+  page: import("@playwright/test").Page,
+  pdfPath: string = SAMPLE_PDF_PATH
+) {
   const pdfBytes = Array.from(fs.readFileSync(pdfPath));
 
   await page.addInitScript(
@@ -28,7 +39,11 @@ async function setupTauriMock(page: import("@playwright/test").Page, pdfPath: st
           }
           if (cmd === "load_settings") {
             return {
-              llm: { baseUrl: "https://api.openai.com/v1", apiKey: "", model: "gpt-4o-mini" },
+              llm: {
+                baseUrl: "https://api.openai.com/v1",
+                apiKey: "",
+                model: "gpt-4o-mini",
+              },
               targetLanguage: "中文",
             };
           }
@@ -52,20 +67,27 @@ async function setupTauriMock(page: import("@playwright/test").Page, pdfPath: st
  * This matches the component's own logic: the visible page whose top edge is
  * closest to the top of the viewport is considered the current page.
  */
-async function getVisiblePage(page: import("@playwright/test").Page): Promise<number | null> {
+async function getVisiblePage(
+  page: import("@playwright/test").Page
+): Promise<number | null> {
   return page.evaluate(() => {
-    const container = document.querySelector(".pdf-canvas-container.continuous") as HTMLElement | null;
+    const container = document.querySelector(
+      ".pdf-canvas-container.continuous"
+    ) as HTMLElement | null;
     if (!container) return null;
 
     const containerRect = container.getBoundingClientRect();
-    const wrappers = Array.from(document.querySelectorAll(".pdf-page-wrapper")) as HTMLElement[];
+    const wrappers = Array.from(
+      document.querySelectorAll(".pdf-page-wrapper")
+    ) as HTMLElement[];
 
     let bestPage = 1;
     let bestDistance = Infinity;
 
     wrappers.forEach((wrapper, index) => {
       const rect = wrapper.getBoundingClientRect();
-      if (rect.bottom <= containerRect.top || rect.top >= containerRect.bottom) return;
+      if (rect.bottom <= containerRect.top || rect.top >= containerRect.bottom)
+        return;
 
       const distance = Math.abs(rect.top - containerRect.top);
       if (distance < bestDistance) {
@@ -107,7 +129,9 @@ test.describe("PDF continuous mode page jump", () => {
     expect(await getVisiblePage(page)).toBe(5);
   });
 
-  test("jumping from a scrolled position lands on the right page", async ({ page }) => {
+  test("jumping from a scrolled position lands on the right page", async ({
+    page,
+  }) => {
     await page.getByRole("button", { name: "Open PDF" }).click();
 
     const pageInput = page.getByLabel("页码");
@@ -122,7 +146,9 @@ test.describe("PDF continuous mode page jump", () => {
     expect(await getVisiblePage(page)).toBe(3);
   });
 
-  test("multiple sequential jumps settle on the final requested page", async ({ page }) => {
+  test("multiple sequential jumps settle on the final requested page", async ({
+    page,
+  }) => {
     await page.getByRole("button", { name: "Open PDF" }).click();
 
     const pageInput = page.getByLabel("页码");
@@ -149,7 +175,9 @@ test.describe("PDF continuous mode page jump", () => {
     expect(await getVisiblePage(page)).toBe(5);
   });
 
-  test("jump lands correctly on short pages in a large viewport", async ({ page }) => {
+  test("jump lands correctly on short pages in a large viewport", async ({
+    page,
+  }) => {
     await setupTauriMock(page, SHORT_PAGES_PDF_PATH);
     await page.goto("/");
 
@@ -167,7 +195,9 @@ test.describe("PDF continuous mode page jump", () => {
     expect(await getVisiblePage(page)).toBe(5);
   });
 
-  test("page input must not drift after the jump lock releases", async ({ page }) => {
+  test("page input must not drift after the jump lock releases", async ({
+    page,
+  }) => {
     await page.getByRole("button", { name: "Open PDF" }).click();
 
     const pageInput = page.getByLabel("页码");

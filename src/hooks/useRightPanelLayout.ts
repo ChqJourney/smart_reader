@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const DIVIDER_WIDTH = 6;
+export const DIVIDER_WIDTH = 6;
 const MIN_PANEL_WIDTH = 240;
 const RIGHT_PANEL_MIN_WIDTH = 180;
 const RIGHT_PANEL_DEFAULT_FRACTION = 3 / 8;
@@ -27,6 +27,7 @@ export interface UseRightPanelLayoutReturn {
   leftVisible: boolean;
   rightVisible: boolean;
   rightPanelWidth: number;
+  setRightPanelWidth: (width: number) => void;
   toggleLeft: () => void;
   toggleRight: () => void;
   openRightPanel: () => void;
@@ -40,7 +41,11 @@ export function useRightPanelLayout(): UseRightPanelLayoutReturn {
   const rightPanelLayout = useMemo(() => loadRightPanelLayout(), []);
   const [leftVisible, setLeftVisible] = useState(true);
   const [rightVisible, setRightVisible] = useState(rightPanelLayout.visible);
-  const [rightPanelWidth, setRightPanelWidth] = useState<number>(rightPanelLayout.width);
+  const [rightPanelWidth, setRightPanelWidthInternal] = useState<number>(rightPanelLayout.width);
+
+  const setRightPanelWidth = useCallback((width: number) => {
+    setRightPanelWidthInternal(width);
+  }, []);
 
   const mainRef = useRef<HTMLElement>(null);
   const isDraggingRef = useRef(false);
@@ -52,7 +57,7 @@ export function useRightPanelLayout(): UseRightPanelLayoutReturn {
       0,
       (mainRef.current?.getBoundingClientRect().width ?? window.innerWidth) - DIVIDER_WIDTH
     );
-    setRightPanelWidth(Math.max(availableWidth * RIGHT_PANEL_DEFAULT_FRACTION, RIGHT_PANEL_MIN_WIDTH));
+    setRightPanelWidthInternal(Math.max(availableWidth * RIGHT_PANEL_DEFAULT_FRACTION, RIGHT_PANEL_MIN_WIDTH));
   }, [rightPanelWidth]);
 
   // Persist right panel width and visibility
@@ -81,7 +86,7 @@ export function useRightPanelLayout(): UseRightPanelLayoutReturn {
         Math.min(availableWidth - RIGHT_PANEL_MIN_WIDTH, x)
       );
       const newRightPx = Math.max(RIGHT_PANEL_MIN_WIDTH, availableWidth - newLeftPx);
-      setRightPanelWidth(newRightPx);
+      setRightPanelWidthInternal(newRightPx);
     };
 
     const handleMouseUp = () => {
@@ -134,6 +139,7 @@ export function useRightPanelLayout(): UseRightPanelLayoutReturn {
     leftVisible,
     rightVisible,
     rightPanelWidth,
+    setRightPanelWidth,
     toggleLeft,
     toggleRight,
     openRightPanel,

@@ -9,7 +9,7 @@ import { StashItem } from "./services/stash";
 import { SelectionAction } from "./services/llm";
 import { useTabs } from "./hooks/useTabs";
 import { usePersistence, SelectionState } from "./hooks/usePersistence";
-import { useRightPanelLayout } from "./hooks/useRightPanelLayout";
+import { useRightPanelLayout, DIVIDER_WIDTH } from "./hooks/useRightPanelLayout";
 import { useRecentFiles } from "./hooks/useRecentFiles";
 import { useSplitView } from "./hooks/useSplitView";
 import RecentFilesBar from "./components/RecentFilesBar";
@@ -20,6 +20,9 @@ import {
   saveSettings,
 } from "./services/settings";
 import "./App.css";
+
+const RIGHT_PANEL_SPLIT_FRACTION = 0.2;
+const RIGHT_PANEL_SPLIT_MIN_WIDTH = 200;
 
 function App() {
   const tabs = useTabs();
@@ -67,6 +70,29 @@ function App() {
   const middleDividerRef = useRef<HTMLDivElement>(null);
   const isResizingSplitRef = useRef(false);
   const currentSplitPctRef = useRef(50);
+  const prevRightWidthRef = useRef<number | null>(null);
+
+  // Auto-shrink right panel when entering split view
+  useEffect(() => {
+    if (!layout.mainRef.current) return;
+    if (splitView.isSplitView) {
+      if (prevRightWidthRef.current === null) {
+        prevRightWidthRef.current = layout.rightPanelWidth;
+        const mainWidth = layout.mainRef.current.getBoundingClientRect().width;
+        const availableWidth = Math.max(0, mainWidth - DIVIDER_WIDTH);
+        const targetWidth = Math.max(availableWidth * RIGHT_PANEL_SPLIT_FRACTION, RIGHT_PANEL_SPLIT_MIN_WIDTH);
+        layout.setRightPanelWidth(targetWidth);
+      }
+      if (!layout.rightVisible) {
+        layout.openRightPanel();
+      }
+    } else {
+      if (prevRightWidthRef.current !== null) {
+        layout.setRightPanelWidth(prevRightWidthRef.current);
+        prevRightWidthRef.current = null;
+      }
+    }
+  }, [splitView.isSplitView, layout.rightPanelWidth, layout.rightVisible, layout.setRightPanelWidth, layout.openRightPanel, layout.mainRef]);
 
   // Cleanup highlight timeout on unmount
   useEffect(() => {

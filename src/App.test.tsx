@@ -495,4 +495,56 @@ describe("App", () => {
       expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(1);
     });
   });
+
+  it("shrinks right panel to 20% with min 200px when entering split view", async () => {
+    (open as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("/test/file-a.pdf")
+      .mockResolvedValueOnce("/test/file-b.pdf");
+
+    render(<App />);
+
+    await openPdf("/test/file-a.pdf");
+    fireEvent.click(screen.getByRole("button", { name: /Open PDF/i }));
+    await waitFor(() => {
+      expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
+    });
+
+    const main = document.querySelector("main") as HTMLElement;
+    const originalGetBoundingClientRect = main.getBoundingClientRect.bind(main);
+    main.getBoundingClientRect = vi.fn(() => ({
+      width: 2000,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 2000,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => "",
+    } as DOMRect));
+
+    const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i }).parentElement as HTMLElement;
+    let draggedTabId = "";
+    const dataTransfer = {
+      setData: vi.fn((_format: string, value: string) => {
+        draggedTabId = value;
+      }),
+      effectAllowed: "",
+      getData: vi.fn(() => draggedTabId),
+      dropEffect: "",
+    };
+
+    fireEvent.dragStart(inactiveTab, { dataTransfer });
+    fireEvent.dragOver(main, { dataTransfer });
+    fireEvent.drop(main, { dataTransfer });
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);
+    });
+
+    const rightPanel = document.querySelector(".right-panel") as HTMLElement;
+    expect(rightPanel.style.width).toBe("20%");
+
+    main.getBoundingClientRect = originalGetBoundingClientRect;
+  });
 });

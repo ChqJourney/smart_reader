@@ -1,6 +1,6 @@
-use tauri::{Emitter, Manager};
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
+use tauri::{Emitter, Manager};
 
 const LOG_FILE_NAME: &str = "app";
 const MAX_LOG_FILE_SIZE: u128 = 10 * 1024 * 1024; // 10 MB
@@ -31,7 +31,10 @@ impl AppState {
     }
 
     fn authorize_path(&self, path: &std::path::Path) {
-        self.allowed_paths.lock().unwrap().insert(path.to_path_buf());
+        self.allowed_paths
+            .lock()
+            .unwrap()
+            .insert(path.to_path_buf());
     }
 
     fn is_path_allowed(&self, path: &std::path::Path) -> bool {
@@ -79,7 +82,9 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .manage(AppState::new())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_shell::init());
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
 
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
@@ -89,10 +94,7 @@ pub fn run() {
     let app = builder
         .setup(|app| {
             let handle = app.handle().clone();
-            emit_open_pdf(
-                &handle,
-                &std::env::args().collect::<Vec<_>>(),
-            );
+            emit_open_pdf(&handle, &std::env::args().collect::<Vec<_>>());
 
             // Initialize logging for both debug and release builds so users can
             // provide logs when reporting issues. Logs are written under the app
@@ -189,7 +191,10 @@ fn validate_open_url(path: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn authorize_pdf_path(state: tauri::State<'_, AppState>, file_path: String) -> Result<(), String> {
+async fn authorize_pdf_path(
+    state: tauri::State<'_, AppState>,
+    file_path: String,
+) -> Result<(), String> {
     if !is_pdf_path(&file_path) {
         return Err(format!("Not a PDF file: {}", file_path));
     }
@@ -230,8 +235,8 @@ fn compute_pdf_hash(file_path: &str) -> Result<String, String> {
 
     const CHUNK_SIZE: usize = 64 * 1024; // 64 KB
 
-    let mut file = std::fs::File::open(file_path)
-        .map_err(|e| format!("Failed to open PDF file: {}", e))?;
+    let mut file =
+        std::fs::File::open(file_path).map_err(|e| format!("Failed to open PDF file: {}", e))?;
     let mut hasher = Sha256::new();
     let mut buffer = [0u8; CHUNK_SIZE];
 
@@ -421,14 +426,20 @@ fn sessions_dir(base_dir: &std::path::Path) -> std::path::PathBuf {
     dir
 }
 
-fn annotations_path(base_dir: &std::path::Path, file_path: &str) -> Result<std::path::PathBuf, String> {
+fn annotations_path(
+    base_dir: &std::path::Path,
+    file_path: &str,
+) -> Result<std::path::PathBuf, String> {
     let hash = compute_pdf_hash(file_path)?;
     let file_name = format!("{}.json", hash);
     let dir = annotations_dir(base_dir);
     Ok(dir.join(file_name))
 }
 
-fn session_path(base_dir: &std::path::Path, session_id: &str) -> Result<std::path::PathBuf, String> {
+fn session_path(
+    base_dir: &std::path::Path,
+    session_id: &str,
+) -> Result<std::path::PathBuf, String> {
     validate_session_id(session_id)?;
     let dir = sessions_dir(base_dir);
     Ok(dir.join(format!("{}.json", session_id)))
@@ -438,7 +449,10 @@ fn validate_session_id(session_id: &str) -> Result<(), String> {
     if session_id.is_empty() {
         return Err("Invalid session id: empty".to_string());
     }
-    if !session_id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+    if !session_id
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
+    {
         return Err(format!("Invalid session id: {}", session_id));
     }
     Ok(())
@@ -472,7 +486,10 @@ fn atomic_write(path: &std::path::Path, content: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-fn load_pdf_data_from_disk(base_dir: &std::path::Path, file_path: &str) -> Result<PdfAnnotationsFile, String> {
+fn load_pdf_data_from_disk(
+    base_dir: &std::path::Path,
+    file_path: &str,
+) -> Result<PdfAnnotationsFile, String> {
     let path = annotations_path(base_dir, file_path)?;
     if !path.exists() {
         return Ok(PdfAnnotationsFile::default());
@@ -487,7 +504,10 @@ fn load_pdf_data_from_disk(base_dir: &std::path::Path, file_path: &str) -> Resul
 
     // Backward compatibility: old format was a plain array of annotations
     if let Ok(annotations) = serde_json::from_str::<Vec<Annotation>>(&raw) {
-        return Ok(PdfAnnotationsFile { annotations, session_ids: Vec::new() });
+        return Ok(PdfAnnotationsFile {
+            annotations,
+            session_ids: Vec::new(),
+        });
     }
 
     Err("Failed to parse annotations file".to_string())
@@ -506,15 +526,18 @@ fn save_pdf_data_to_disk(
     Ok(())
 }
 
-fn load_session_from_disk(base_dir: &std::path::Path, session_id: &str) -> Result<InterpretationSession, String> {
+fn load_session_from_disk(
+    base_dir: &std::path::Path,
+    session_id: &str,
+) -> Result<InterpretationSession, String> {
     let path = session_path(base_dir, session_id)?;
     if !path.exists() {
         return Err(format!("Session file not found: {}", session_id));
     }
     let raw = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read session file: {}", e))?;
-    let session: InterpretationSession = serde_json::from_str(&raw)
-        .map_err(|e| format!("Failed to parse session: {}", e))?;
+    let session: InterpretationSession =
+        serde_json::from_str(&raw).map_err(|e| format!("Failed to parse session: {}", e))?;
     Ok(session)
 }
 
@@ -533,8 +556,7 @@ fn save_session_to_disk(
 fn delete_session_from_disk(base_dir: &std::path::Path, session_id: &str) -> Result<(), String> {
     let path = session_path(base_dir, session_id)?;
     if path.exists() {
-        std::fs::remove_file(&path)
-            .map_err(|e| format!("Failed to delete session file: {}", e))?;
+        std::fs::remove_file(&path).map_err(|e| format!("Failed to delete session file: {}", e))?;
     }
     Ok(())
 }
@@ -546,8 +568,8 @@ fn load_settings_from_disk(base_dir: &std::path::Path) -> Result<AppSettings, St
     }
     let raw = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read settings file: {}", e))?;
-    let settings: AppSettings = serde_json::from_str(&raw)
-        .map_err(|e| format!("Failed to parse settings: {}", e))?;
+    let settings: AppSettings =
+        serde_json::from_str(&raw).map_err(|e| format!("Failed to parse settings: {}", e))?;
     Ok(settings)
 }
 
@@ -609,12 +631,15 @@ fn load_recent_files_from_disk(base_dir: &std::path::Path) -> Result<Vec<RecentF
     }
     let raw = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read recent files file: {}", e))?;
-    let files: Vec<RecentFile> = serde_json::from_str(&raw)
-        .map_err(|e| format!("Failed to parse recent files: {}", e))?;
+    let files: Vec<RecentFile> =
+        serde_json::from_str(&raw).map_err(|e| format!("Failed to parse recent files: {}", e))?;
     Ok(files)
 }
 
-fn save_recent_files_to_disk(base_dir: &std::path::Path, files: Vec<RecentFile>) -> Result<(), String> {
+fn save_recent_files_to_disk(
+    base_dir: &std::path::Path,
+    files: Vec<RecentFile>,
+) -> Result<(), String> {
     let path = recent_files_path(base_dir);
     let raw = serde_json::to_string_pretty(&files)
         .map_err(|e| format!("Failed to serialize recent files: {}", e))?;
@@ -664,10 +689,7 @@ async fn load_session(
 }
 
 #[tauri::command]
-async fn save_session(
-    app: tauri::AppHandle,
-    session: InterpretationSession,
-) -> Result<(), String> {
+async fn save_session(app: tauri::AppHandle, session: InterpretationSession) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let base_dir = paths::app_data_dir(&app)?;
         save_session_to_disk(&base_dir, session)
@@ -677,10 +699,7 @@ async fn save_session(
 }
 
 #[tauri::command]
-async fn delete_session(
-    app: tauri::AppHandle,
-    session_id: String,
-) -> Result<(), String> {
+async fn delete_session(app: tauri::AppHandle, session_id: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let base_dir = paths::app_data_dir(&app)?;
         delete_session_from_disk(&base_dir, &session_id)
@@ -719,9 +738,7 @@ async fn save_settings(
 }
 
 #[tauri::command]
-async fn load_recent_files(
-    app: tauri::AppHandle,
-) -> Result<Vec<RecentFile>, String> {
+async fn load_recent_files(app: tauri::AppHandle) -> Result<Vec<RecentFile>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         let base_dir = paths::app_data_dir(&app)?;
         load_recent_files_from_disk(&base_dir)
@@ -731,10 +748,7 @@ async fn load_recent_files(
 }
 
 #[tauri::command]
-async fn save_recent_files(
-    app: tauri::AppHandle,
-    files: Vec<RecentFile>,
-) -> Result<(), String> {
+async fn save_recent_files(app: tauri::AppHandle, files: Vec<RecentFile>) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let base_dir = paths::app_data_dir(&app)?;
         save_recent_files_to_disk(&base_dir, files)
@@ -748,8 +762,8 @@ async fn check_dictionary(app: tauri::AppHandle) -> Result<dictionary::Dictionar
     tauri::async_runtime::spawn_blocking(move || -> Result<dictionary::DictionaryStatus, String> {
         dictionary::check_dictionary(&app)
     })
-        .await
-        .map_err(|e| format!("Task failed: {}", e))?
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -758,12 +772,17 @@ async fn download_dictionary(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn lookup_word(app: tauri::AppHandle, word: String) -> Result<Option<dictionary::DictEntry>, String> {
-    tauri::async_runtime::spawn_blocking(move || -> Result<Option<dictionary::DictEntry>, String> {
-        dictionary::lookup_word(&app, word)
-    })
-        .await
-        .map_err(|e| format!("Task failed: {}", e))?
+async fn lookup_word(
+    app: tauri::AppHandle,
+    word: String,
+) -> Result<Option<dictionary::DictEntry>, String> {
+    tauri::async_runtime::spawn_blocking(
+        move || -> Result<Option<dictionary::DictEntry>, String> {
+            dictionary::lookup_word(&app, word)
+        },
+    )
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[cfg(test)]
@@ -775,7 +794,13 @@ mod tests {
             id: id.to_string(),
             annotation_type: "explain".to_string(),
             text: "hello".to_string(),
-            position: AnnotationPosition { page: 1, x: 10.0, y: 20.0, width: None, height: None },
+            position: AnnotationPosition {
+                page: 1,
+                x: 10.0,
+                y: 20.0,
+                width: None,
+                height: None,
+            },
             content: "content".to_string(),
             is_streaming: false,
             hidden: false,
@@ -951,11 +976,26 @@ mod tests {
 
         let path = annotations_path(base.path(), pdf_path.to_str().unwrap()).unwrap();
         let raw = std::fs::read_to_string(&path).unwrap();
-        assert!(raw.contains("\"sessionId\":"), "serialized annotation should use camelCase sessionId");
-        assert!(raw.contains("\"sessionIds\":"), "serialized file should use camelCase sessionIds");
-        assert!(raw.contains("\"interpretedGroupSize\":"), "serialized annotation should use camelCase interpretedGroupSize");
-        assert!(raw.contains("\"createdAt\":"), "serialized annotation should use camelCase createdAt");
-        assert!(!raw.contains("\"session_id\":"), "serialized annotation should not use snake_case session_id");
+        assert!(
+            raw.contains("\"sessionId\":"),
+            "serialized annotation should use camelCase sessionId"
+        );
+        assert!(
+            raw.contains("\"sessionIds\":"),
+            "serialized file should use camelCase sessionIds"
+        );
+        assert!(
+            raw.contains("\"interpretedGroupSize\":"),
+            "serialized annotation should use camelCase interpretedGroupSize"
+        );
+        assert!(
+            raw.contains("\"createdAt\":"),
+            "serialized annotation should use camelCase createdAt"
+        );
+        assert!(
+            !raw.contains("\"session_id\":"),
+            "serialized annotation should not use snake_case session_id"
+        );
     }
 
     #[test]
@@ -1176,10 +1216,22 @@ mod tests {
         save_settings_to_disk(base.path(), settings).unwrap();
 
         let raw = std::fs::read_to_string(settings_path(base.path())).unwrap();
-        assert!(raw.contains("\"targetLanguage\":"), "serialized settings should use camelCase targetLanguage");
-        assert!(raw.contains("\"baseUrl\":"), "serialized llm config should use camelCase baseUrl");
-        assert!(raw.contains("\"apiKey\":"), "serialized llm config should use camelCase apiKey");
-        assert!(raw.contains("\"systemPrompts\":"), "serialized settings should use camelCase systemPrompts");
+        assert!(
+            raw.contains("\"targetLanguage\":"),
+            "serialized settings should use camelCase targetLanguage"
+        );
+        assert!(
+            raw.contains("\"baseUrl\":"),
+            "serialized llm config should use camelCase baseUrl"
+        );
+        assert!(
+            raw.contains("\"apiKey\":"),
+            "serialized llm config should use camelCase apiKey"
+        );
+        assert!(
+            raw.contains("\"systemPrompts\":"),
+            "serialized settings should use camelCase systemPrompts"
+        );
     }
 
     // H-10: API key must be stored in secure storage, never in the JSON file.
@@ -1202,7 +1254,8 @@ mod tests {
     #[test]
     fn save_settings_with_storage_stores_key_in_keyring_and_clears_disk_field() {
         let base = tempfile::tempdir().unwrap();
-        let storage: Arc<dyn secure_storage::ApiKeyStorage> = Arc::new(secure_storage::MemoryStorage::new());
+        let storage: Arc<dyn secure_storage::ApiKeyStorage> =
+            Arc::new(secure_storage::MemoryStorage::new());
         let settings = sample_settings();
 
         save_settings_with_storage(base.path(), settings.clone(), storage.as_ref()).unwrap();
@@ -1214,7 +1267,10 @@ mod tests {
             "apiKey field on disk should be empty, got: {}",
             raw
         );
-        assert!(!raw.contains("sk-test"), "API key must not appear in settings JSON");
+        assert!(
+            !raw.contains("sk-test"),
+            "API key must not appear in settings JSON"
+        );
 
         let loaded = load_settings_with_storage(base.path(), storage.as_ref()).unwrap();
         assert_eq!(loaded.llm.api_key, "sk-test");
@@ -1250,8 +1306,7 @@ mod tests {
         settings.llm.api_key = "sk-from-plaintext".to_string();
         save_settings_to_disk(base.path(), settings).unwrap();
 
-        let loaded =
-            load_settings_with_storage(base.path(), storage.as_ref()).unwrap();
+        let loaded = load_settings_with_storage(base.path(), storage.as_ref()).unwrap();
         assert_eq!(loaded.llm.api_key, "sk-from-plaintext");
 
         // The plaintext key should have been removed from disk.
@@ -1259,15 +1314,15 @@ mod tests {
         assert_eq!(from_disk.llm.api_key, "");
 
         // A subsequent load should retrieve the key from secure storage.
-        let loaded_again =
-            load_settings_with_storage(base.path(), storage.as_ref()).unwrap();
+        let loaded_again = load_settings_with_storage(base.path(), storage.as_ref()).unwrap();
         assert_eq!(loaded_again.llm.api_key, "sk-from-plaintext");
     }
 
     #[test]
     fn load_settings_returns_empty_api_key_when_keyring_has_no_entry() {
         let base = tempfile::tempdir().unwrap();
-        let storage: Arc<dyn secure_storage::ApiKeyStorage> = Arc::new(secure_storage::MemoryStorage::new());
+        let storage: Arc<dyn secure_storage::ApiKeyStorage> =
+            Arc::new(secure_storage::MemoryStorage::new());
         let mut settings = sample_settings();
         settings.llm.api_key = String::new();
         save_settings_to_disk(base.path(), settings).unwrap();

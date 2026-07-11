@@ -199,7 +199,11 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
                 "downloading",
                 downloaded,
                 total_size,
-                Some(format!("HTTP {}，第 {} 次重试...", response.status(), retries)),
+                Some(format!(
+                    "HTTP {}，第 {} 次重试...",
+                    response.status(),
+                    retries
+                )),
             );
             tokio::time::sleep(RETRY_DELAY).await;
             continue;
@@ -408,8 +412,7 @@ fn extract_sqlite(
         }
         let mut out = std::fs::File::create(&out_path)
             .map_err(|e| format!("Failed to create extracted file: {}", e))?;
-        std::io::copy(&mut file, &mut out)
-            .map_err(|e| format!("Failed to extract file: {}", e))?;
+        std::io::copy(&mut file, &mut out).map_err(|e| format!("Failed to extract file: {}", e))?;
     }
 
     // Locate the SQLite file by its magic header.

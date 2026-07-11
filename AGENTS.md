@@ -149,9 +149,32 @@ npm run build
 
 # 构建完整桌面应用安装包（nsis / dmg / app）
 npm run tauri-build
+
+# 仅构建可执行文件（CI 发布模式，不生成安装包）
+npm run tauri build -- --no-bundle
 ```
 
-### 5.3 测试与代码质量
+### 5.3 发版流程
+
+当前仅发布 Windows 可执行文件，不生成安装包，也不进行 Windows 代码签名。
+
+1. 同步版本号：
+   ```bash
+   npm run bump 0.1.1
+   git add -A && git commit -m "release: v0.1.1"
+   git tag v0.1.1
+   git push origin v0.1.1
+   ```
+2. GitHub Actions `cd.yml` 自动：
+   - 用 `--no-bundle` 构建 Windows `exe`
+   - 将 `exe` 打包为 zip（Tauri Updater 更新包）
+   - 用私钥生成 `latest.json`
+   - 上传 `SpecReader AI v{version}.exe`、`SpecReader-AI_{version}_x64.zip`、`latest.json` 到 Release
+3. 客户端启动 3 秒后自动检查 `latest.json`，发现新版本提示下载并重启。
+
+> 注意：Tauri 更新包签名私钥保存在 `~/.tauri/specreader.key`，需配置为 GitHub Secret `TAURI_SIGNING_PRIVATE_KEY`。
+
+### 5.4 测试与代码质量
 
 ```bash
 # 前端单元 / 集成测试

@@ -34,15 +34,18 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      # --no-bundle skips the bundling step and only produces the executable.
-      - name: Build Tauri app
+      # Build only the executable, skip installer bundles.
+      - name: Build Tauri executable
         run: npm run tauri build -- --no-bundle
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
-      - name: Locate and rename built executable
-        id: locate_exe
+      - name: Prepare release assets
+        id: assets
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
+          $version = $tag -replace '^v', ''
           $releaseDir = "src-tauri/target/release"
           $exe = Get-ChildItem -Path $releaseDir -Filter "*.exe" |
             Sort-Object LastWriteTime -Descending |
@@ -50,15 +53,33 @@ jobs:
           if (-not $exe) {
             throw "No executable found in $releaseDir"
           }
-          $newName = "SpecReader light $tag.exe"
-          $newPath = Join-Path $releaseDir $newName
-          Copy-Item -Path $exe.FullName -Destination $newPath -Force
-          "EXE_PATH=$newPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Upload executable to GitHub Release
+          # Human-readable executable for direct download.
+          $exeName = "SpecReader AI v$version.exe"
+          Copy-Item -Path $exe.FullName -Destination $exeName -Force
+
+          # Updater expects a .zip archive containing the executable.
+          $zipName = "SpecReader-AI_${version}_x64.zip"
+          Compress-Archive -Path $exe.FullName -DestinationPath $zipName -Force
+
+          "EXE_PATH=$exeName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "ZIP_PATH=$zipName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      # Generate the updater manifest (latest.json) signed with the private key.
+      - name: Generate updater JSON
+        shell: pwsh
+        run: |
+          cargo tauri updater --ci
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+
+      - name: Upload assets to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.locate_exe.outputs.EXE_PATH }}
+          files: |
+            ${{ steps.assets.outputs.EXE_PATH }}
+            ${{ steps.assets.outputs.ZIP_PATH }}
+            latest.json
           name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false

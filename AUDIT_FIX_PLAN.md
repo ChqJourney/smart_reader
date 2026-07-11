@@ -47,7 +47,7 @@
 
 尚未实施的项：
 
-- **P3**：C-3（自动更新）、C-4（代码签名）
+- **P3**：无（C-4 代码签名已根据产品策略放弃，仅发布未签名 Windows exe；C-3 已完成）
 
 已实施的项（本次 P4 与 Settings 改版完成后追加）：
 
@@ -85,28 +85,25 @@
 
 - **位置**：全项目
 - **核实**：已确认。`Cargo.toml` 无 `tauri-plugin-updater`，`tauri.conf.json` 无 updater 配置。
-- **修复**：
-  1. 后端：添加 `tauri-plugin-updater = "2"` 依赖，在 `lib.rs` 初始化插件。
-  2. 生成签名密钥对：
-     ```bash
-     cargo tauri signer generate -w ~/.tauri/specreader.key
-     ```
-     私钥 `specreader.key` 妥善保管并作为 CI secret；公钥写入 `tauri.conf.json` 的 `plugins.updater.pubkey`。
-  3. 配置：在 `tauri.conf.json` 增加 `plugins.updater` 节点，配置 `endpoints`（指向 CDN/Release 下的 `.json` 更新清单）。
-  4. 前端：应用启动后调用 `check()`，发现更新时提示用户；支持后台下载与安装重启。
-  5. 签名：配合 C-4 完成更新包签名。
-- **验收**：发布新版本后，旧版客户端能检测到更新并下载安装；更新包签名验证通过。
+- **状态**：✅ 已实施
+- **实现概要**：
+  1. 后端：添加 `tauri-plugin-updater = "2"` 与 `tauri-plugin-process = "2"` 依赖，在 `lib.rs` 初始化插件。
+  2. 生成签名密钥对（私钥保存于 `~/.tauri/specreader.key`，公钥写入 `tauri.conf.json`）。
+  3. `tauri.conf.json` 增加 `plugins.updater` 节点，endpoint 指向 GitHub Release `latest.json`；Windows `installMode` 设为 `passive`（适配便携 exe）。
+  4. `capabilities/default.json` 增加 `updater:default` 与 `process:default` 权限。
+  5. 前端新增 `src/services/updater.ts`，应用启动 3 秒后调用 `check()`，发现更新时弹窗确认，确认后 `downloadAndInstall()` + `relaunch()`。
+  6. CD 工作流改为：Windows runner 用 `--no-bundle` 构建裸 `exe`；将 `exe` 打包为 zip 作为更新包；调用 `cargo tauri updater --ci` 生成签名后的 `latest.json`；一起上传到 Release。
+  7. 新增 `scripts/bump-version.mjs`，同步修改 `package.json`、`Cargo.toml`、`tauri.conf.json` 版本号。
+- **注意**：更新包签名（Tauri）已启用；Windows 代码签名未启用，SmartScreen 仍会提示。
+- **验收**：发布新版本后，旧版客户端能检测到更新并下载安装；`latest.json` 签名验证通过。
 
 ### C-4. 无代码签名配置
 
 - **位置**：`src-tauri/tauri.conf.json:42`、`.github/workflows/cd.yml`
 - **核实**：已确认。macOS `signingIdentity: "-"` 为 ad-hoc 签名；Windows 无签名；CD 仅 Windows 且 `--no-bundle`。
-- **修复**：
-  1. macOS：申请 Apple Developer ID，配置 `signingIdentity`、notarization（`APPLE_ID`、`APPLE_PASSWORD`、`APPLE_TEAM_ID` 通过 CI secrets 注入）。
-  2. Windows：申请代码签名证书（OV/EV），在 CI 中使用 `signtool` 或 Tauri 的 `windows.certificateThumbprint`。
-  3. CD：新增 `release-macos`（x64 + aarch64，可构建 universal binary）和 `release-linux`（x64 + aarch64 AppImage/deb）。
-  4. 移除 `--no-bundle`，生成 `.dmg`、`.app`、`.msi`、`.appimage` 等可分发包。
-- **验收**：Gatekeeper / SmartScreen 不再拦截；GitHub Release 包含多平台安装包。
+- **状态**：⏹️ 已放弃（按产品策略）
+- **说明**：团队决定当前阶段仅发布未签名的 Windows 可执行文件，不购买 Apple Developer ID / Windows 代码签名证书。后续商业化扩展时再评估是否补签。
+- **影响**：Windows 首次运行会触发 SmartScreen「未知发布者」提示；macOS / Linux 版本暂不发布。
 
 ### C-5. 无 LICENSE 文件与元数据缺失
 
@@ -330,9 +327,9 @@
 10. **H-7** 收紧 CSP `connect-src`
 11. **H-10** API Key 迁移到系统钥匙串
 12. **H-11** CI 增加 type-check / lint / build / audit
-13. **C-3** 添加自动更新机制
-14. **C-4** 配置代码签名 + 多平台 CD
-15. **C-5** 添加 LICENSE + 填写元数据
+13. **C-3** 添加自动更新机制 ✅
+14. **C-4** 配置代码签名 + 多平台 CD ⏹️（已放弃，仅 Windows 未签名 exe）
+15. **C-5** 添加 LICENSE + 填写元数据 ✅
 
 ---
 
@@ -348,6 +345,7 @@
 - [x] `settings.json` 中无 API Key 明文（H-10 实现并测试）。
 - [x] 非法 session id 无法写入 sessions 目录外（C-2 测试通过）。
 - [x] CI 包含 type-check、lint、build、audit（H-11 已更新 `.github/workflows/ci.yml`）。
+- [x] 自动更新机制已接入：应用启动检查 `latest.json`，发现新版本提示下载并重启（C-3）。
 
 ---
 

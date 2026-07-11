@@ -24,6 +24,7 @@ import {
   saveSettings,
 } from "./services/settings";
 import { useDictionaryStatus } from "./hooks/useDictionaryStatus";
+import { checkForUpdate } from "./services/updater";
 import "./App.css";
 
 const RIGHT_PANEL_SPLIT_FRACTION = 0.2;
@@ -50,6 +51,18 @@ function App() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  // Check for application updates shortly after startup. Errors are ignored
+  // so that a missing network or non-Tauri test environment does not break
+  // the app launch flow.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      checkForUpdate().catch(() => {
+        // ignored
+      });
+    }, 3000);
+    return () => clearTimeout(timer);
   }, []);
 
   const secondaryTab = useMemo(

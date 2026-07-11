@@ -6,19 +6,33 @@ use tauri::Manager;
 const APP_DIR_NAME: &str = "SpecReader";
 const OLD_IDENTIFIER: &str = "photonee";
 
-fn copy_dir_all(src: impl AsRef<std::path::Path>, dst: impl AsRef<std::path::Path>) -> Result<(), String> {
+fn copy_dir_all(
+    src: impl AsRef<std::path::Path>,
+    dst: impl AsRef<std::path::Path>,
+) -> Result<(), String> {
     let dst = dst.as_ref();
-    std::fs::create_dir_all(dst).map_err(|e| format!("Failed to create migration target dir: {}", e))?;
-    for entry in std::fs::read_dir(src).map_err(|e| format!("Failed to read old app data dir: {}", e))? {
+    std::fs::create_dir_all(dst)
+        .map_err(|e| format!("Failed to create migration target dir: {}", e))?;
+    for entry in
+        std::fs::read_dir(src).map_err(|e| format!("Failed to read old app data dir: {}", e))?
+    {
         let entry = entry.map_err(|e| format!("Failed to read dir entry: {}", e))?;
-        let ty = entry.file_type().map_err(|e| format!("Failed to read file type: {}", e))?;
+        let ty = entry
+            .file_type()
+            .map_err(|e| format!("Failed to read file type: {}", e))?;
         let src_path = entry.path();
         let dst_path = dst.join(entry.file_name());
         if ty.is_dir() {
             copy_dir_all(&src_path, &dst_path)?;
         } else {
-            std::fs::copy(&src_path, &dst_path)
-                .map_err(|e| format!("Failed to copy {} to {}: {}", src_path.display(), dst_path.display(), e))?;
+            std::fs::copy(&src_path, &dst_path).map_err(|e| {
+                format!(
+                    "Failed to copy {} to {}: {}",
+                    src_path.display(),
+                    dst_path.display(),
+                    e
+                )
+            })?;
         }
     }
     Ok(())

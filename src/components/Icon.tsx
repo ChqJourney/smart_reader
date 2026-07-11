@@ -62,7 +62,7 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
     <>
       <circle cx="10" cy="10" r="2.5" fill="none" stroke="currentColor" strokeWidth="1.5" />
       <path
-        d="M10 2 L12.1 4.5 L14.7 5.3 L16.6 7.2 L18 10 L16.6 12.8 L14.7 14.7 L12.1 15.5 L10 18 L7.9 15.5 L5.3 14.7 L3.4 12.8 L2 10 L3.4 7.2 L5.3 5.3 L7.9 4.5 Z"
+        d="M18 10L15.39 11.07L14.57 13.06L15.66 15.66L13.06 14.57L11.07 15.39L10 18L8.93 15.39L6.94 14.57L4.34 15.66L5.43 13.06L4.61 11.07L2 10L4.61 8.93L5.43 6.94L4.34 4.34L6.94 5.43L8.93 4.61L10 2L11.07 4.61L13.06 5.43L15.66 4.34L14.57 6.94L15.39 8.93Z"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"

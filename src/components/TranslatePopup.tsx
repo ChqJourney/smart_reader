@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
 import { Annotation } from "../services/annotations";
 import Icon from "./Icon";
+import MarkdownRenderer from "./MarkdownRenderer";
 import { buildSelectionPrompt, buildSystemPrompt, ChatMessage, streamChatCompletion } from "../services/llm";
 import { loadSettings } from "../services/settings";
 
@@ -70,7 +70,7 @@ export default function TranslatePopup({
       const messages: ChatMessage[] = [
         {
           role: "system",
-          content: buildSystemPrompt(settings.targetLanguage),
+          content: buildSystemPrompt("translate", settings.targetLanguage, settings.systemPrompts),
         },
         { role: "user", content: prompt },
       ];
@@ -196,9 +196,7 @@ export default function TranslatePopup({
         ) : (
           <>
             {localContent ? (
-              <div className="markdown">
-                <ReactMarkdown>{localContent}</ReactMarkdown>
-              </div>
+              <MarkdownRenderer content={localContent} />
             ) : null}
             {isStreaming && (
               <div className={`translate-popup-loading ${localContent ? "with-content" : ""}`}>

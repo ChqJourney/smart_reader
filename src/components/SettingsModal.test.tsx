@@ -1,6 +1,17 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import SettingsModal from "./SettingsModal";
+
+const mockInvoke = vi.hoisted(() => vi.fn());
+const mockListen = vi.hoisted(() => vi.fn());
+
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: mockInvoke,
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: mockListen,
+}));
 
 const defaultSettings = {
   llm: { baseUrl: "https://api.openai.com/v1", apiKey: "", model: "gpt-4o-mini" },
@@ -9,9 +20,25 @@ const defaultSettings = {
     translate: "翻译提示词 {targetLanguage}",
     explain: "解读提示词 {targetLanguage}",
   },
+  hoverTranslate: false,
 };
 
 describe("SettingsModal", () => {
+  beforeEach(() => {
+    mockInvoke.mockReset();
+    mockListen.mockReset();
+    mockListen.mockResolvedValue(() => {});
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "check_dictionary") {
+        return Promise.resolve({ exists: false, path: "" });
+      }
+      if (command === "download_dictionary") {
+        return Promise.resolve(undefined);
+      }
+      return Promise.reject(new Error(`No mock handler for command: ${command}`));
+    });
+  });
+
   it("does not render when closed", () => {
     render(
       <SettingsModal
@@ -58,6 +85,7 @@ describe("SettingsModal", () => {
       llm: { baseUrl: "https://api.openai.com/v1", apiKey: "", model: "gpt-4" },
       targetLanguage: "English",
       systemPrompts: defaultSettings.systemPrompts,
+      hoverTranslate: false,
     });
   });
 
@@ -116,6 +144,42 @@ describe("SettingsModal", () => {
     const saved = onSave.mock.calls[0][0];
     expect(saved.llm.model).toBe("gpt-4o-mini");
     expect(saved.systemPrompts.translate).toContain("翻译助手");
+  });
+
+  it("does not auto-save when toggling hover translate off", () => {
+    const onSave = vi.fn();
+    render(
+      <SettingsModal
+        open
+        initialSettings={{ ...defaultSettings, hoverTranslate: true }}
+        onClose={vi.fn()}
+        onSave={onSave}
+      />
+    );
+
+    const toggle = screen.getByLabelText("启用悬停取词翻译");
+    fireEvent.click(toggle);
+
+    expect(toggle).not.toBeChecked();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("shows download confirm when toggling hover translate on without dictionary", () => {
+    const onSave = vi.fn();
+    render(
+      <SettingsModal
+        open
+        initialSettings={defaultSettings}
+        onClose={vi.fn()}
+        onSave={onSave}
+      />
+    );
+
+    const toggle = screen.getByLabelText("启用悬停取词翻译");
+    fireEvent.click(toggle);
+
+    expect(screen.getByText("下载离线词典")).toBeInTheDocument();
+    expect(onSave).not.toHaveBeenCalled();
   });
 
   it("calls onClose when cancel clicked or overlay clicked", () => {

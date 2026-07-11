@@ -64,11 +64,13 @@ Vitest 配置位于 `vite.config.ts`：
 - **components/AiChatPanel.test.tsx**：设置面板、解释流更新、暂存区与追问渲染。
 - **components/CustomInterpretModal.test.tsx**：自定义解读弹窗打开、提交、关闭。
 - **components/PdfViewer.pageJump.test.tsx**：连续滚动页码跳转逻辑。
-- **App.test.tsx**：面板显隐切换、头部渲染、会话清理。
+- **components/SettingsModal.test.tsx**：设置表单、保存回调、悬停翻译开关与下载确认弹窗。
+- **App.test.tsx**：面板显隐切换、头部渲染、会话清理、悬停翻译开关集成。
 
 ### Mock 策略
 
 - `@tauri-apps/api/core` 的 `invoke` 在相关测试中被 mock。
+- `@tauri-apps/api/event` 的 `listen` 在涉及下载进度监听的测试中被 mock（如 `App.test.tsx`、`SettingsModal.test.tsx`）。
 - `localStorage`、`IntersectionObserver`、`ResizeObserver`、`matchMedia` 在 `setup.ts` 中全局 mock。
 - `crypto.randomUUID` 被固定为 `test-uuid-1234`。
 - `PdfViewer` 在 `App.test.tsx` 中被 mock，避免加载 pdfjs-dist。
@@ -159,6 +161,23 @@ E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 
    - 问题：连续滚动模式下，旧版可见页检测以页面中心为基准，在大视口或短页面场景下，跳转到目标页后当前页码会漂移到相邻页。
    - 修复：`src/components/PdfViewer.tsx` 改为以「页面顶部距离视口顶部最近」作为当前页判断标准，并引入跳转锁避免可见页检测与跳转滚动竞争。
    - 回归测试：`src/components/PdfViewer.pageJump.test.tsx` 与 `e2e/pdf-page-jump.spec.ts`
+
+## 悬停取词翻译测试
+
+新增功能「悬停取词翻译」涉及前端、后端与第三方资源下载，测试时需注意：
+
+1. **离线词典下载**
+   - 后端 `src-tauri/src/dictionary.rs` 的下载逻辑支持 HTTP Range 断点续传，并在连接中断、单块超时或服务器返回非成功状态码时自动重试最多 5 次；完整下载测试需要真实网络与较大临时空间，单元测试不覆盖真实下载。
+   - 前端 `useDictionaryStatus` 与 `SettingsModal` 的测试通过 mock `invoke` 与 `listen` 验证状态流转：开关开启 → 检查词典 → 提示下载 → 下载完成 → 开关自动变 checked（本地状态）→ 用户点击保存后生效。开关切换本身不会立即保存或关闭设置窗口。
+
+2. **单词提取与 tooltip**
+   - `PdfViewer.tsx` 内的单词提取依赖 pdfjs 渲染后的 `TextItem` 几何信息，主要在集成环境 / E2E 中验证。
+   - `WordTooltip.tsx` 为纯展示组件，可通过传入 `entry` / `loading` 等 props 单独测试。
+
+3. **Mock 要点**
+   - `check_dictionary`：返回 `{ exists: false, path: "" }` 模拟未下载；返回 `{ exists: true, path: "...", size: ... }` 模拟已就绪。
+   - `download_dictionary`：返回 resolved Promise，并通过 `listen` 的回调推送 `{ status: "done", downloaded, total }` 模拟下载完成。
+   - `lookup_word`：返回 `{ word, phonetic, translation, ... }` 或 `null`。
 
 ## 持续集成建议
 

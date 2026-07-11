@@ -1,5 +1,7 @@
 use tauri::{Emitter, Manager};
 
+mod dictionary;
+
 const OPEN_PDF_EVENT: &str = "open-pdf";
 
 fn extract_pdf_path(args: &[String]) -> Option<String> {
@@ -55,7 +57,10 @@ pub fn run() {
             load_settings,
             save_settings,
             load_recent_files,
-            save_recent_files
+            save_recent_files,
+            check_dictionary,
+            download_dictionary,
+            lookup_word
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -524,6 +529,21 @@ async fn save_recent_files(
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
+async fn check_dictionary(app: tauri::AppHandle) -> Result<dictionary::DictionaryStatus, String> {
+    dictionary::check_dictionary(&app)
+}
+
+#[tauri::command]
+async fn download_dictionary(app: tauri::AppHandle) -> Result<(), String> {
+    dictionary::download_dictionary(app).await
+}
+
+#[tauri::command]
+async fn lookup_word(app: tauri::AppHandle, word: String) -> Result<Option<dictionary::DictEntry>, String> {
+    dictionary::lookup_word(&app, word)
 }
 
 #[cfg(test)]

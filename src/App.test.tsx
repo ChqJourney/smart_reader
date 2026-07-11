@@ -6,9 +6,14 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { DEFAULT_SETTINGS } from "./services/settings";
 
 const mockInvoke = vi.hoisted(() => vi.fn());
+const mockListen = vi.hoisted(() => vi.fn());
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: mockInvoke,
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: mockListen,
 }));
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -116,6 +121,10 @@ function setupMockInvoke() {
         return Promise.resolve({ ...DEFAULT_SETTINGS });
       case "load_recent_files":
         return Promise.resolve([]);
+      case "check_dictionary":
+        return Promise.resolve({ exists: false, path: "" });
+      case "download_dictionary":
+        return Promise.resolve(undefined);
       case "save_session":
       case "save_pdf_data":
       case "delete_session":
@@ -126,6 +135,7 @@ function setupMockInvoke() {
         return Promise.reject(new Error(`No mock handler for command: ${command}`));
     }
   });
+  mockListen.mockResolvedValue(() => {});
 }
 
 describe("App", () => {

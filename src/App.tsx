@@ -19,6 +19,7 @@ import {
   loadSettings,
   saveSettings,
 } from "./services/settings";
+import { useDictionaryStatus } from "./hooks/useDictionaryStatus";
 import "./App.css";
 
 const RIGHT_PANEL_SPLIT_FRACTION = 0.2;
@@ -32,6 +33,7 @@ function App() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const dictionaryStatus = useDictionaryStatus();
 
   useEffect(() => {
     let cancelled = false;
@@ -47,6 +49,9 @@ function App() {
 
   const secondaryTab =
     tabs.tabs.find((t) => t.id === splitView.secondaryTabId) || null;
+
+  const hoverTranslateActive =
+    settings.hoverTranslate && dictionaryStatus.status?.exists === true;
 
   const persistence = usePersistence({
     activeTab: tabs.activeTab,
@@ -385,6 +390,7 @@ function App() {
                 onAnnotationUpdate={persistence.handleAnnotationUpdate}
                 onAnnotationDelete={persistence.handleAnnotationDelete}
                 onExplainClick={handleExplainClick}
+                hoverTranslate={hoverTranslateActive}
               />
             </div>
             <div
@@ -419,6 +425,7 @@ function App() {
                 onAnnotationUpdate={persistence.handleAnnotationUpdate}
                 onAnnotationDelete={persistence.handleAnnotationDelete}
                 onExplainClick={handleExplainClick}
+                hoverTranslate={hoverTranslateActive}
               />
             </div>
             {layout.rightVisible ? (
@@ -490,6 +497,7 @@ function App() {
                 onAnnotationUpdate={persistence.handleAnnotationUpdate}
                 onAnnotationDelete={persistence.handleAnnotationDelete}
                 onExplainClick={handleExplainClick}
+                hoverTranslate={hoverTranslateActive}
               />
             </div>
             {showBoth && (

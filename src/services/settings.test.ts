@@ -14,6 +14,7 @@ const DEFAULT_SETTINGS = {
     explain:
       "你是一位检测认证行业标准文档阅读助手，擅长把复杂的英文标准条款解释得清晰易懂。请基于用户提供的文档片段用{targetLanguage}回答，不要编造片段中未提及的条款或页码。",
   },
+  hoverTranslate: false,
 };
 
 describe("settings service", () => {
@@ -128,6 +129,7 @@ describe("settings service", () => {
         translate: "translate prompt",
         explain: "explain prompt",
       },
+      hoverTranslate: true,
     };
     await saveSettings(settings);
     expect(saved).toEqual(settings);

@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   AppSettings,
   DEFAULT_SETTINGS,
   DEFAULT_SYSTEM_PROMPTS,
   SystemPrompts,
 } from "../services/settings";
+import { useDictionaryStatus } from "../hooks/useDictionaryStatus";
 
 type PromptTab = "translate" | "explain";
 
@@ -23,11 +24,58 @@ export default function SettingsModal({
 }: SettingsModalProps) {
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [activePromptTab, setActivePromptTab] = useState<PromptTab>("translate");
+  const [showDownloadConfirm, setShowDownloadConfirm] = useState(false);
+  const [downloadPending, setDownloadPending] = useState(false);
+  const dictionaryStatus = useDictionaryStatus();
 
   useEffect(() => {
     setSettings(initialSettings);
     setActivePromptTab("translate");
+    setShowDownloadConfirm(false);
+    setDownloadPending(false);
   }, [initialSettings, open]);
+
+  // When a download started from this modal finishes, automatically check the
+  // hover-translate toggle locally so the user can click Save to enable it.
+  useEffect(() => {
+    if (
+      open &&
+      downloadPending &&
+      dictionaryStatus.progress?.status === "done"
+    ) {
+      setSettings((prev) => ({ ...prev, hoverTranslate: true }));
+      setShowDownloadConfirm(false);
+      setDownloadPending(false);
+    }
+  }, [open, downloadPending, dictionaryStatus.progress]);
+
+  const handleHoverTranslateToggle = useCallback(
+    async (checked: boolean) => {
+      if (!checked) {
+        setSettings((prev) => ({ ...prev, hoverTranslate: false }));
+        return;
+      }
+
+      if (dictionaryStatus.status?.exists) {
+        setSettings((prev) => ({ ...prev, hoverTranslate: true }));
+        return;
+      }
+
+      setShowDownloadConfirm(true);
+    },
+    [dictionaryStatus.status]
+  );
+
+  const handleConfirmDownload = useCallback(async () => {
+    setShowDownloadConfirm(false);
+    setDownloadPending(true);
+    await dictionaryStatus.startDownload();
+  }, [dictionaryStatus]);
+
+  const handleCancelDownload = useCallback(() => {
+    setShowDownloadConfirm(false);
+    setDownloadPending(false);
+  }, []);
 
   if (!open) return null;
 
@@ -58,6 +106,18 @@ export default function SettingsModal({
   const currentPrompt = settings.systemPrompts[activePromptTab];
   const currentDefault = DEFAULT_SYSTEM_PROMPTS[activePromptTab];
 
+  const downloadProgressPercent =
+    dictionaryStatus.progress && dictionaryStatus.progress.total > 0
+      ? Math.min(
+          100,
+          Math.round(
+            (dictionaryStatus.progress.downloaded /
+              dictionaryStatus.progress.total) *
+              100
+          )
+        )
+      : 0;
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -71,10 +131,16 @@ export default function SettingsModal({
           <p className="modal-hint">配置 LLM API、目标语言与系统提示词。</p>
         </div>
 
-        <form id="settings-form" className="settings-modal-body" onSubmit={handleSubmit}>
+        <form
+          id="settings-form"
+          className="settings-modal-body"
+          onSubmit={handleSubmit}
+        >
           <section className="settings-section">
             <div className="settings-section-title">LLM API</div>
-            <div className="settings-section-hint">用于翻译、解读与自定义问答的模型接入信息。</div>
+            <div className="settings-section-hint">
+              用于翻译、解读与自定义问答的模型接入信息。
+            </div>
             <div className="settings-form-row">
               <label className="settings-field">
                 API Base URL
@@ -108,7 +174,9 @@ export default function SettingsModal({
 
           <section className="settings-section">
             <div className="settings-section-title">输出语言</div>
-            <div className="settings-section-hint">翻译与解读结果默认使用的语言。</div>
+            <div className="settings-section-hint">
+              翻译与解读结果默认使用的语言。
+            </div>
             <div className="settings-form-row">
               <label className="settings-field">
                 目标语言
@@ -122,6 +190,42 @@ export default function SettingsModal({
                 />
               </label>
             </div>
+          </section>
+
+          <section className="settings-section">
+            <div className="settings-section-title">悬停取词翻译</div>
+            <div className="settings-section-hint">
+              鼠标悬停在英文单词上时，使用本地 ECDICT 词典显示翻译。
+            </div>
+            <label className="settings-toggle">
+              <input
+                type="checkbox"
+                checked={settings.hoverTranslate}
+                onChange={(e) => handleHoverTranslateToggle(e.target.checked)}
+                disabled={dictionaryStatus.downloading}
+              />
+              启用悬停取词翻译
+            </label>
+            {settings.hoverTranslate && dictionaryStatus.status?.exists && (
+              <p className="settings-status-ok">词典已就绪</p>
+            )}
+            {dictionaryStatus.downloading && (
+              <div className="settings-download-progress">
+                <div className="settings-progress-bar">
+                  <div
+                    className="settings-progress-fill"
+                    style={{ width: `${downloadProgressPercent}%` }}
+                  />
+                </div>
+                <span className="settings-progress-text">
+                  {dictionaryStatus.progress?.message ||
+                    `下载中 ${downloadProgressPercent}%`}
+                </span>
+              </div>
+            )}
+            {dictionaryStatus.error && (
+              <p className="settings-status-error">{dictionaryStatus.error}</p>
+            )}
           </section>
 
           <section className="settings-section">
@@ -150,7 +254,9 @@ export default function SettingsModal({
                 value={currentPrompt}
                 onChange={(e) => updateSystemPrompt(activePromptTab, e.target.value)}
                 rows={5}
-                aria-label={`${activePromptTab === "translate" ? "翻译" : "解读"}系统提示词`}
+                aria-label={`${
+                  activePromptTab === "translate" ? "翻译" : "解读"
+                }系统提示词`}
               />
               <div className="settings-prompt-meta">
                 <span>{currentPrompt.length} 字符</span>
@@ -181,6 +287,32 @@ export default function SettingsModal({
           </div>
         </div>
       </div>
+
+      {showDownloadConfirm && (
+        <div className="modal-overlay" onClick={handleCancelDownload}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="下载离线词典"
+          >
+            <div className="settings-modal-header">
+              <h3>下载离线词典</h3>
+              <p className="modal-hint">
+                悬停取词翻译需要下载 ECDICT 英汉词典（约 200 MB），下载后保存在本地应用数据目录，无需再次下载。
+              </p>
+            </div>
+            <div className="settings-modal-footer">
+              <button type="button" onClick={handleCancelDownload}>
+                取消
+              </button>
+              <button type="button" className="primary" onClick={handleConfirmDownload}>
+                立即下载
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

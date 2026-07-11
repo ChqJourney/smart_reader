@@ -21,6 +21,7 @@
 - 解读生成蓝色标记，并在右侧面板展示可点击跳转的解读记录。
 - 自定义解读：把多个暂存片段一次性发给 LLM。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
+- 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
 - LLM 配置（Base URL、API Key、Model）保存于 `localStorage`。
 
 明确未实现（已规划到后续版本）：
@@ -79,19 +80,23 @@ npm install
 │   │   ├── ExplainPopup.tsx           # 解读详情浮层
 │   │   ├── StashInterpretedPopup.tsx  # 已解读暂存浮层
 │   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录、流式中止）
-│   │   ├── SettingsModal.tsx          # 全局设置 Modal（LLM + 目标语言）
+│   │   ├── SettingsModal.tsx          # 全局设置 Modal（LLM + 目标语言 + 悬停翻译）
 │   │   ├── RecentFilesBar.tsx         # 顶部最近文件栏
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗
+│   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
 │   │   └── Icon.tsx                   # SVG 图标组件
 │   ├── hooks/                         # 可复用状态逻辑
 │   │   ├── useTabs.ts                 # Tab 管理
 │   │   ├── usePersistence.ts          # 批注/会话/暂存状态与持久化
 │   │   ├── useRightPanelLayout.ts     # 右侧面板布局
 │   │   ├── useRecentFiles.ts          # 最近文件列表
-│   │   └── useSplitView.ts            # 双排视图状态
+│   │   ├── useSplitView.ts            # 双排视图状态
+│   │   ├── useDictionaryStatus.ts     # 本地词典下载状态与进度
+│   │   └── useWordLookup.ts           # 悬停取词查词逻辑
 │   ├── services/                      # 业务逻辑与 Tauri 命令封装
 │   │   ├── annotations.ts             # Annotation 类型 + CRUD + 持久化调用
-│   │   ├── settings.ts                # 应用设置（LLM + 目标语言）CRUD
+│   │   ├── settings.ts                # 应用设置（LLM + 目标语言 + 悬停翻译开关）CRUD
+│   │   ├── dictionary.ts              # ECDICT 本地词典查询与下载进度监听
 │   │   ├── llm.ts                     # LLM 配置读取、SSE 流式请求、Prompt 模板
 │   │   ├── sessions.ts                # 解读会话数据结构与管理
 │   │   └── stash.ts                   # 暂存片段数据结构与管理
@@ -100,7 +105,8 @@ npm install
 │       └── mocks/tauri.ts             # mockTauriInvoke 辅助函数
 ├── src-tauri/                         # Tauri Rust 后端
 │   ├── src/
-│   │   ├── lib.rs                     # Tauri 命令：read_pdf_bytes / get_pdf_hash / load_pdf_data / save_pdf_data / load_session / save_session / delete_session
+│   │   ├── lib.rs                     # Tauri 命令：read_pdf_bytes / get_pdf_hash / load_pdf_data / save_pdf_data / load_session / save_session / delete_session / check_dictionary / download_dictionary / lookup_word
+│   │   ├── dictionary.rs              # ECDICT 本地词典下载（断点续传）、解压、查询
 │   │   └── main.rs                    # 后端入口
 │   ├── capabilities/                  # Tauri 权限配置
 │   ├── icons/                         # 应用图标
@@ -185,9 +191,12 @@ cd src-tauri && cargo test
 - `load_session(sessionId: string)`：加载单个会话 JSON。
 - `save_session(session: InterpretationSession)`：保存会话 JSON。
 - `delete_session(sessionId: string)`：删除会话文件。
-- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM + 目标语言）。
+- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM + 目标语言 + 悬停翻译开关）。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表。
 - `open_path(path: string)`：使用系统默认程序打开路径。
+- `check_dictionary()`：检查本地 ECDICT 词典是否存在及大小。
+- `download_dictionary()`：下载 ECDICT SQLite 词典（支持断点续传），通过 `dictionary-download-progress` event 推送进度。
+- `lookup_word(word: string)`：查询单词释义。
 
 ### 6.2 数据持久化
 
@@ -200,7 +209,9 @@ cd src-tauri && cargo test
     │   ├── {pdf_hash}.json        # 批注 + 关联 session ids
     │   └── sessions/
     │       └── {session_id}.json  # 解读会话详情
-    ├── settings.json              # LLM 配置 + 目标语言
+    ├── dict/
+    │   └── ecdict.sqlite          # ECDICT 本地离线词典（首次启用悬停翻译时下载）
+    ├── settings.json              # LLM 配置 + 目标语言 + 悬停翻译开关
     └── recent_files.json          # 最近打开文件列表
 ```
 
@@ -228,12 +239,14 @@ App.tsx
 ├── rightVisible / rightPanelWidth        # 面板布局
 ├── recentFiles                           # 最近打开文件列表
 ├── settings / settingsOpen               # 全局设置与 Modal
+├── dictionaryStatus                      # 本地 ECDICT 词典状态（存在性、下载进度）
 └── splitPct                              # 并排视图左右面板比例
 
 PdfViewer.tsx
 ├── pdf / numPages / pageNum / scale / viewMode
 ├── visiblePages / pageViewports          # 连续滚动懒加载 + 精确跳转
-└── 文本选区 → onSelection
+├── 文本选区 → onSelection
+└── hoverTranslate → WordTooltip          # 悬停取词翻译
 
 AiChatPanel.tsx
 ├── expandedId / expandedStashIds
@@ -302,11 +315,14 @@ SettingsModal.tsx
   - `components/RecentFilesBar.test.tsx`：文件点击与清空。
   - `components/PdfViewer.pageJump.test.tsx`：连续滚动页码跳转。
   - `App.test.tsx`：面板显隐、会话清理、Recent Files。
+  - `components/WordTooltip.test.tsx`：悬停翻译 tooltip 渲染（可选，与 PdfViewer 集成测试覆盖）。
+  - `services/dictionary.test.ts` / `hooks/useDictionaryStatus.test.ts`：词典状态与下载进度（如补充）。
 - Mock 策略：
   - `setup.ts` 中全局 mock `crypto.randomUUID`、`localStorage`、`matchMedia`、`IntersectionObserver`、`ResizeObserver`。
   - 相关测试用 `vi.doMock("@tauri-apps/api/core")` mock `invoke`。
   - `App.test.tsx` mock `PdfViewer` 避免加载 pdfjs-dist。
   - `AiChatPanel.test.tsx` mock `streamChatCompletion`。
+  - 涉及悬停翻译的测试还需 mock `@tauri-apps/api/event` 的 `listen`，并为 `check_dictionary` / `download_dictionary` 提供 handler。
 
 ### 8.2 E2E 测试
 
@@ -340,9 +356,17 @@ SettingsModal.tsx
 
 ### 10.2 修改数据模型
 
-- Rust 与 TypeScript 的 `Annotation`、`InterpretationSession`、`StashSource` 等类型需要**保持同步**。
+- Rust 与 TypeScript 的 `Annotation`、`InterpretationSession`、`StashSource`、`AppSettings` 等类型需要**保持同步**。
 - 新增字段尽量使用 `#[serde(default)]` 和 `?` / `skip_serializing_if`，保持旧数据兼容。
 - 如需破坏性变更，请同时编写旧数据迁移逻辑。
+
+### 10.3 修改本地词典
+
+- ECDICT 下载源、临时文件路径、最终文件路径集中在 `src-tauri/src/dictionary.rs` 顶部常量。
+- 下载支持断点续传：依赖服务器 `Accept-Ranges: bytes`，临时文件为 `ecdict.sqlite.zip.tmp`，最终文件为 `dict/ecdict.sqlite`。
+- 下载过程带重试机制：单块读取超时、连接中断或服务器返回非成功状态码时，会自动从已下载位置重试最多 5 次，并继续通过 `dictionary-download-progress` event 推送进度。
+- 解压后的 SQLite 文件通过文件头魔数 `SQLite format 3\0` 定位，不依赖 zip 内的文件名（避免中文文件名编码问题）。
+- 替换词库时，建议同时删除旧 `ecdict.sqlite` 与 `.tmp`，并清空 `DICT_CONNECTION` 缓存。
 
 ### 10.3 修改 Prompt
 

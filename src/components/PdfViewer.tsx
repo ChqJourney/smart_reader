@@ -11,6 +11,8 @@ import * as pdfjsLib from "pdfjs-dist";
 import { Annotation } from "../services/annotations";
 import PdfAnnotations from "./PdfAnnotations";
 import Icon from "./Icon";
+import { useWordLookup } from "../hooks/useWordLookup";
+import WordTooltip from "./WordTooltip";
 
 // @ts-ignore - pdfjs-dist worker import with ?url
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -55,6 +57,7 @@ interface PdfViewerProps {
   onAnnotationUpdate?: (id: string, patch: Partial<Omit<Annotation, "id">>) => void;
   onAnnotationDelete?: (id: string) => void;
   onExplainClick?: (id: string) => void;
+  hoverTranslate?: boolean;
 }
 
 const CLICK_DRAG_THRESHOLD = 10; // px
@@ -120,10 +123,11 @@ interface PdfPageProps {
   onAnnotationUpdate?: (id: string, patch: Partial<Omit<Annotation, "id">>) => void;
   onAnnotationDelete?: (id: string) => void;
   onExplainClick?: (id: string) => void;
+  hoverTranslate?: boolean;
   containerRef?: React.Ref<HTMLDivElement>;
 }
 
-function PdfPage({ pdf, pageNum, scale, shouldRender, pageViewports, onSelection, onVisibilityChange, annotations, highlightedAnnotationId, onAnnotationUpdate, onAnnotationDelete, onExplainClick, containerRef }: PdfPageProps) {
+function PdfPage({ pdf, pageNum, scale, shouldRender, pageViewports, onSelection, onVisibilityChange, annotations, highlightedAnnotationId, onAnnotationUpdate, onAnnotationDelete, onExplainClick, hoverTranslate, containerRef }: PdfPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -135,6 +139,7 @@ function PdfPage({ pdf, pageNum, scale, shouldRender, pageViewports, onSelection
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
   const renderTaskRef = useRef<pdfjsLib.RenderTask | undefined>(undefined);
   const hasRenderedRef = useRef(false);
+  const [tooltip, showTooltip, hideTooltip] = useWordLookup(!!hoverTranslate, 500);
 
   const setWrapperRef = useCallback((node: HTMLDivElement | null) => {
     wrapperRef.current = node;
@@ -346,7 +351,36 @@ function PdfPage({ pdf, pageNum, scale, shouldRender, pageViewports, onSelection
     return lines.map((line) => line.join(" ")).join("\n");
   };
 
+  const extractWordFromText = (text: string, index: number): string | null => {
+    if (index < 0 || index >= text.length) return null;
+    const wordChars = /[a-zA-Z0-9'\-]/;
+    if (!wordChars.test(text[index])) return null;
+
+    let start = index;
+    while (start > 0 && wordChars.test(text[start - 1])) start--;
+
+    let end = index;
+    while (end < text.length - 1 && wordChars.test(text[end + 1])) end++;
+
+    const word = text.slice(start, end + 1);
+    if (!/^[a-zA-Z][a-zA-Z0-9'\-]*$/.test(word) || word.length < 2) return null;
+    return word;
+  };
+
+  const extractWordAtPoint = (x: number, y: number): string | null => {
+    const items = textItemsRef.current;
+    const item = items.find(
+      (i) => x >= i.x && x <= i.x + i.width && y >= i.y && y <= i.y + i.height
+    );
+    if (!item || item.width <= 0) return null;
+
+    const ratio = Math.max(0, Math.min(1, (x - item.x) / item.width));
+    const charIndex = Math.floor(ratio * item.text.length);
+    return extractWordFromText(item.text, charIndex);
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
+    hideTooltip();
     const pos = getMousePosInWrapper(e);
     isDraggingRef.current = true;
     dragStartRef.current = pos;
@@ -355,17 +389,26 @@ function PdfPage({ pdf, pageNum, scale, shouldRender, pageViewports, onSelection
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDraggingRef.current || !dragStartRef.current) return;
-
     const pos = getMousePosInWrapper(e);
-    const start = dragStartRef.current;
 
-    const x = Math.min(start.x, pos.x);
-    const y = Math.min(start.y, pos.y);
-    const width = Math.abs(pos.x - start.x);
-    const height = Math.abs(pos.y - start.y);
+    if (isDraggingRef.current && dragStartRef.current) {
+      const start = dragStartRef.current;
+      const x = Math.min(start.x, pos.x);
+      const y = Math.min(start.y, pos.y);
+      const width = Math.abs(pos.x - start.x);
+      const height = Math.abs(pos.y - start.y);
+      setSelectionRect({ x, y, width, height });
+      return;
+    }
 
-    setSelectionRect({ x, y, width, height });
+    if (hoverTranslate) {
+      const word = extractWordAtPoint(pos.x, pos.y);
+      if (word) {
+        showTooltip(word, pos.x, pos.y - 4);
+      } else {
+        hideTooltip();
+      }
+    }
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
@@ -438,6 +481,7 @@ function PdfPage({ pdf, pageNum, scale, shouldRender, pageViewports, onSelection
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={() => {
+          hideTooltip();
           isDraggingRef.current = false;
           dragStartRef.current = null;
           setSelectionRect(null);
@@ -485,6 +529,15 @@ function PdfPage({ pdf, pageNum, scale, shouldRender, pageViewports, onSelection
         onDelete={onAnnotationDelete || (() => {})}
         onExplainClick={onExplainClick || (() => {})}
       />
+      {tooltip.visible && (
+        <WordTooltip
+          word={tooltip.word}
+          entry={tooltip.entry}
+          loading={tooltip.loading}
+          x={tooltip.x}
+          y={tooltip.y}
+        />
+      )}
     </div>
   );
 }
@@ -501,6 +554,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
     onAnnotationUpdate,
     onAnnotationDelete,
     onExplainClick,
+    hoverTranslate,
   },
   ref
 ) {
@@ -1022,6 +1076,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
               onAnnotationUpdate={onAnnotationUpdate}
               onAnnotationDelete={onAnnotationDelete}
               onExplainClick={onExplainClick}
+              hoverTranslate={hoverTranslate}
             />
           ) : (
             Array.from({ length: numPages }, (_, i) => i + 1).map((p) => (
@@ -1039,6 +1094,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(function PdfViewer
                 onAnnotationUpdate={onAnnotationUpdate}
                 onAnnotationDelete={onAnnotationDelete}
                 onExplainClick={onExplainClick}
+                hoverTranslate={hoverTranslate}
                 containerRef={setPageWrapperRef(p)}
               />
             ))

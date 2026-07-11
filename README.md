@@ -83,9 +83,12 @@ cd src-tauri && cargo test
 │   │   ├── StashInterpretedPopup.tsx  # 已解读暂存浮层
 │   │   ├── AiChatPanel.tsx            # 右侧面板（设置、暂存区、解读记录）
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗
+│   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
 │   │   └── Icon.tsx                   # SVG 图标组件
 │   ├── services/                      # 业务逻辑与 Tauri 命令封装
 │   │   ├── annotations.ts             # Annotation 类型 + CRUD + 持久化调用
+│   │   ├── settings.ts                # 应用设置（LLM + 目标语言 + 悬停翻译开关）CRUD
+│   │   ├── dictionary.ts              # ECDICT 本地词典查询与下载进度监听
 │   │   ├── llm.ts                     # LLM 配置、SSE 流式请求、Prompt 模板
 │   │   ├── sessions.ts                # 解读会话数据结构与管理
 │   │   └── stash.ts                   # 暂存片段数据结构与管理
@@ -117,6 +120,7 @@ cd src-tauri && cargo test
 - 自定义解读：把多个暂存片段一次性发给 LLM。
 - 解读记录支持多轮追问。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
+- 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
 - LLM 配置（Base URL、API Key、Model）保存于 `localStorage`。
 
 明确未实现（已规划到后续版本）：

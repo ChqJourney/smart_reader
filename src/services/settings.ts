@@ -15,6 +15,7 @@ export interface AppSettings {
   llm: LlmConfig;
   targetLanguage: string;
   systemPrompts: SystemPrompts;
+  hoverTranslate: boolean;
 }
 
 const LEGACY_STORAGE_KEY = "standardread-llm-config";
@@ -34,6 +35,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
   targetLanguage: "中文",
   systemPrompts: DEFAULT_SYSTEM_PROMPTS,
+  hoverTranslate: false,
 };
 
 function isValidSettings(value: unknown): value is Partial<AppSettings> {
@@ -61,6 +63,7 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
       explain:
         value.systemPrompts?.explain ?? DEFAULT_SYSTEM_PROMPTS.explain,
     },
+    hoverTranslate: value.hoverTranslate ?? DEFAULT_SETTINGS.hoverTranslate,
   };
 }
 

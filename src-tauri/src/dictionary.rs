@@ -1,5 +1,6 @@
 use rusqlite::{Connection, OptionalExtension};
-use tauri::{Emitter, Manager};
+use sha2::{Digest, Sha256};
+use tauri::Emitter;
 use tokio::io::{AsyncSeekExt, AsyncWriteExt};
 
 const DEFAULT_DICT_DOWNLOAD_URL: &str =
@@ -18,6 +19,19 @@ const DICT_FILE: &str = "ecdict.sqlite";
 const DICT_ZIP_TMP: &str = "ecdict.sqlite.zip.tmp";
 const DICT_EXTRACT_DIR: &str = "ecdict.sqlite.extract";
 const SQLITE_MAGIC: &[u8] = b"SQLite format 3\0";
+/// Maximum total bytes allowed when extracting the dictionary archive.
+/// This guards against zip bombs / decompression bombs.
+const MAX_DICT_EXTRACT_BYTES: u64 = 500 * 1024 * 1024; // 500 MB
+
+/// Expected SHA-256 of the downloaded dictionary zip archive.
+/// Leave empty to skip zip-level verification. When non-empty, the downloaded
+/// file is hashed before extraction and rejected on mismatch.
+const EXPECTED_DICT_ZIP_SHA256: &str = "";
+
+/// Expected SHA-256 of the extracted `ecdict.sqlite` file.
+/// This guards against tampering of the final dictionary file.
+const EXPECTED_DICT_SQLITE_SHA256: &str =
+    "2b5b40c2bdba04da0a51c8672e090f166987d5d895f32eb3fbfc5a516455fc75";
 
 const DOWNLOAD_PROGRESS_EVENT: &str = "dictionary-download-progress";
 
@@ -214,6 +228,7 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
         let mut file = tokio::fs::OpenOptions::new()
             .create(true)
             .write(true)
+            .truncate(false)
             .open(&tmp_path)
             .await
             .map_err(|e| format!("Failed to open temp file: {}", e))?;
@@ -321,6 +336,24 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
         ));
     }
 
+    // Verify the downloaded zip archive matches the expected hash, if configured.
+    if !EXPECTED_DICT_ZIP_SHA256.is_empty() {
+        emit_progress(
+            &app_handle,
+            "verifying",
+            downloaded,
+            total_size,
+            Some("正在校验词典包...".to_string()),
+        );
+        let tmp_path_clone = tmp_path.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            verify_file_hash(&tmp_path_clone, EXPECTED_DICT_ZIP_SHA256)
+        })
+        .await
+        .map_err(|e| format!("Dictionary zip hash verification task failed: {}", e))?
+        .map_err(|e| format!("Dictionary zip hash verification failed: {}", e))?;
+    }
+
     emit_progress(
         &app_handle,
         "verifying",
@@ -374,6 +407,17 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
         }
     }
 
+    // Verify the extracted SQLite file matches the expected hash.
+    {
+        let final_path_clone = final_path.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            verify_file_hash(&final_path_clone, EXPECTED_DICT_SQLITE_SHA256)
+        })
+        .await
+        .map_err(|e| format!("Dictionary SQLite hash verification task failed: {}", e))?
+        .map_err(|e| format!("Dictionary SQLite hash verification failed: {}", e))?;
+    }
+
     // Clean up temp files.
     if let Err(e) = tokio::fs::remove_file(&tmp_path).await {
         log::warn!("Failed to remove dictionary temp file: {}", e);
@@ -397,6 +441,7 @@ fn extract_sqlite(
 
     // Extract every entry. We do not rely on file names because some releases
     // use non-UTF8 encodings (e.g. GBK) for Chinese file names.
+    let mut extracted_size: u64 = 0;
     for i in 0..archive.len() {
         let mut file = archive
             .by_index(i)
@@ -412,7 +457,15 @@ fn extract_sqlite(
         }
         let mut out = std::fs::File::create(&out_path)
             .map_err(|e| format!("Failed to create extracted file: {}", e))?;
-        std::io::copy(&mut file, &mut out).map_err(|e| format!("Failed to extract file: {}", e))?;
+        let copied = std::io::copy(&mut file, &mut out)
+            .map_err(|e| format!("Failed to extract file: {}", e))?;
+        extracted_size += copied;
+        if extracted_size > MAX_DICT_EXTRACT_BYTES {
+            return Err(format!(
+                "Extracted dictionary size exceeds the maximum allowed {} bytes",
+                MAX_DICT_EXTRACT_BYTES
+            ));
+        }
     }
 
     // Locate the SQLite file by its magic header.
@@ -447,6 +500,40 @@ fn find_sqlite_file(dir: &std::path::Path) -> Option<std::path::PathBuf> {
         }
     }
     None
+}
+
+/// Compute the SHA-256 hex digest of a file.
+fn hash_file(path: &std::path::Path) -> Result<String, String> {
+    let mut file =
+        std::fs::File::open(path).map_err(|e| format!("Failed to open file for hashing: {}", e))?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let n = std::io::Read::read(&mut file, &mut buffer)
+            .map_err(|e| format!("Failed to read file for hashing: {}", e))?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buffer[..n]);
+    }
+    Ok(hex::encode(hasher.finalize()))
+}
+
+/// Verify a file's SHA-256 hex digest matches the expected value.
+/// An empty `expected` disables the check.
+fn verify_file_hash(path: &std::path::Path, expected: &str) -> Result<(), String> {
+    if expected.is_empty() {
+        return Ok(());
+    }
+    let actual = hash_file(path)?;
+    if actual.eq_ignore_ascii_case(expected) {
+        Ok(())
+    } else {
+        Err(format!(
+            "SHA-256 mismatch: expected {}, got {}",
+            expected, actual
+        ))
+    }
 }
 
 pub fn lookup_word(app: &tauri::AppHandle, word: String) -> Result<Option<DictEntry>, String> {

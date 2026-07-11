@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::sync::{Arc, Mutex};
-use tauri::{Emitter, Manager};
+use tauri::Emitter;
 
 const LOG_FILE_NAME: &str = "app";
 const MAX_LOG_FILE_SIZE: u128 = 10 * 1024 * 1024; // 10 MB

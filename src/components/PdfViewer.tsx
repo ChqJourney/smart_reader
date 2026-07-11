@@ -17,7 +17,6 @@ import Icon from "./Icon";
 import PdfPage from "./PdfPage";
 import "./PdfViewer.css";
 
-// @ts-ignore - pdfjs-dist worker import with ?url
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;

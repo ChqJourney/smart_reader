@@ -118,7 +118,7 @@ test.describe("PDF continuous mode page jump", () => {
   });
 
   test("jumping to a page scrolls to the correct page", async ({ page }) => {
-    await page.getByRole("button", { name: "Open PDF" }).click();
+    await page.getByTestId("open-pdf-btn").click();
 
     const pageInput = page.getByLabel("页码");
     await expect(pageInput).toBeVisible();
@@ -132,7 +132,7 @@ test.describe("PDF continuous mode page jump", () => {
   test("jumping from a scrolled position lands on the right page", async ({
     page,
   }) => {
-    await page.getByRole("button", { name: "Open PDF" }).click();
+    await page.getByTestId("open-pdf-btn").click();
 
     const pageInput = page.getByLabel("页码");
     await expect(pageInput).toBeVisible();
@@ -149,7 +149,7 @@ test.describe("PDF continuous mode page jump", () => {
   test("multiple sequential jumps settle on the final requested page", async ({
     page,
   }) => {
-    await page.getByRole("button", { name: "Open PDF" }).click();
+    await page.getByTestId("open-pdf-btn").click();
 
     const pageInput = page.getByLabel("页码");
     await expect(pageInput).toBeVisible();
@@ -165,7 +165,7 @@ test.describe("PDF continuous mode page jump", () => {
 
   test("jump remains accurate with a large viewport", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 1000 });
-    await page.getByRole("button", { name: "Open PDF" }).click();
+    await page.getByTestId("open-pdf-btn").click();
 
     const pageInput = page.getByLabel("页码");
     await expect(pageInput).toBeVisible();
@@ -184,7 +184,7 @@ test.describe("PDF continuous mode page jump", () => {
     // A large viewport that fits more than one short page is the scenario where
     // the old centre-biased visible-page detector would report the wrong page.
     await page.setViewportSize({ width: 1280, height: 1300 });
-    await page.getByRole("button", { name: "Open PDF" }).click();
+    await page.getByTestId("open-pdf-btn").click();
 
     const pageInput = page.getByLabel("页码");
     await expect(pageInput).toBeVisible();
@@ -198,7 +198,7 @@ test.describe("PDF continuous mode page jump", () => {
   test("page input must not drift after the jump lock releases", async ({
     page,
   }) => {
-    await page.getByRole("button", { name: "Open PDF" }).click();
+    await page.getByTestId("open-pdf-btn").click();
 
     const pageInput = page.getByLabel("页码");
     await expect(pageInput).toBeVisible();

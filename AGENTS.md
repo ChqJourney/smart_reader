@@ -443,4 +443,4 @@ cd src-tauri && cargo test
 - 前端版本：`0.1.0`
 - Tauri 应用版本：`0.1.0`
 - 产品名称：`SpecReader AI`
-- 应用标识：`com.standardread.app`
+- 应用标识：`com.photonee.specreader`

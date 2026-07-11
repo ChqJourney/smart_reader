@@ -7,7 +7,7 @@ test.describe("App E2E", () => {
 
   test("renders the main layout", async ({ page }) => {
     await expect(page.getByLabel("最近打开的文件")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Open PDF" })).toBeVisible();
+    await expect(page.getByTestId("open-pdf-btn")).toBeVisible();
   });
 
   test("toggles PDF panel", async ({ page }) => {

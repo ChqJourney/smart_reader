@@ -55,6 +55,10 @@ jobs:
         working-directory: ./src-tauri
         run: cargo test
 
+      - name: Run Rust clippy
+        working-directory: ./src-tauri
+        run: cargo clippy --all -- -D warnings
+
       - name: Install cargo-audit
         run: cargo install cargo-audit
 

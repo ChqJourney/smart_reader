@@ -149,7 +149,7 @@ pub fn run() {
             // and Warn in release builds if the setting is missing or invalid.
             let settings = load_settings_from_disk(&base_dir).unwrap_or_default();
             let log_level = parse_log_level(&settings.log_level)
-                .or_else(|| {
+                .or({
                     if cfg!(debug_assertions) {
                         Some(log::LevelFilter::Info)
                     } else {

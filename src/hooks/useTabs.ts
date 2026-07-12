@@ -4,6 +4,7 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { PdfViewerState } from "../components/PdfViewer";
 import { authorizePdfPath, getPdfHash } from "../services/annotations";
 import { showMessage } from "../services/dialog";
+import { getBasename } from "../utils/path";
 
 const MAX_TABS = 10;
 
@@ -66,7 +67,7 @@ export function useTabs(): UseTabsReturn {
         const newTab: PdfTab = {
           id: crypto.randomUUID(),
           filePath: path,
-          fileName: path.split("/").pop() || path,
+          fileName: getBasename(path),
           fileHash,
         };
 

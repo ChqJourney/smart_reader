@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { RecentFile } from "../hooks/useRecentFiles";
+import { getBasename } from "../utils/path";
 import Icon from "./Icon";
 import "./RecentFilesBar.css";
 
@@ -29,10 +30,10 @@ export default function RecentFilesBar({
             key={file.path}
             className={`recent-file-card ${file.path === activeFilePath ? "active" : ""}`}
             onClick={() => onFileClick(file)}
-            title={file.fileName}
+            title={file.path}
           >
             <Icon name="pdf" size={14} />
-            <span className="recent-file-name">{file.fileName}</span>
+            <span className="recent-file-name">{getBasename(file.path)}</span>
           </button>
         ))}
       </div>

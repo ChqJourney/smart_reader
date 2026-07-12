@@ -25,6 +25,7 @@ import {
 } from "./services/settings";
 import { useDictionaryStatus } from "./hooks/useDictionaryStatus";
 import { checkForUpdate } from "./services/updater";
+import { getBasename } from "./utils/path";
 import "./App.css";
 
 const RIGHT_PANEL_SPLIT_FRACTION = 0.2;
@@ -216,7 +217,7 @@ function App() {
     let unsubscribe: (() => void) | undefined;
     listen<string>("open-pdf", (event) => {
       const path = event.payload;
-      const fileName = path.split("/").pop() || path;
+      const fileName = getBasename(path);
       tabs.openPdfByPath(path, fileName).then((tab) => {
         if (tab) recentFiles.addRecentFile(tab.filePath, tab.fileName);
       });

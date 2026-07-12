@@ -24,6 +24,48 @@ describe("RecentFilesBar", () => {
     expect(screen.getByText("b.pdf")).toBeInTheDocument();
   });
 
+  it("derives the display name from the path on Windows", () => {
+    const windowsFiles = [
+      {
+        path: "C:\\Users\\Alice\\report.pdf",
+        fileName: "report.pdf",
+        openedAt: 1,
+      },
+    ];
+    render(
+      <RecentFilesBar
+        files={windowsFiles}
+        onFileClick={vi.fn()}
+        onClear={vi.fn()}
+      />
+    );
+    expect(screen.getByText("report.pdf")).toBeInTheDocument();
+    expect(
+      screen.getByTitle("C:\\Users\\Alice\\report.pdf")
+    ).toBeInTheDocument();
+  });
+
+  it("shows the full path on hover even when fileName is a path", () => {
+    const staleFiles = [
+      {
+        path: "C:\\Users\\Alice\\report.pdf",
+        fileName: "C:\\Users\\Alice\\report.pdf",
+        openedAt: 1,
+      },
+    ];
+    render(
+      <RecentFilesBar
+        files={staleFiles}
+        onFileClick={vi.fn()}
+        onClear={vi.fn()}
+      />
+    );
+    expect(screen.getByText("report.pdf")).toBeInTheDocument();
+    expect(
+      screen.getByTitle("C:\\Users\\Alice\\report.pdf")
+    ).toBeInTheDocument();
+  });
+
   it("calls onFileClick with file when card clicked", () => {
     const onClick = vi.fn();
     render(

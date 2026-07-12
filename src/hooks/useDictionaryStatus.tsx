@@ -8,6 +8,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { error as logError, info, warn } from "../services/logs";
 import {
   checkDictionary,
   downloadDictionary,
@@ -46,7 +47,7 @@ export function DictionaryStatusProvider({
       const s = await checkDictionary();
       setStatus(s);
     } catch (err) {
-      console.error("Failed to check dictionary:", err);
+      logError(`Failed to check dictionary: ${err}`);
     }
   }, []);
 
@@ -59,17 +60,20 @@ export function DictionaryStatusProvider({
       setProgress(p);
       if (p.status === "done") {
         setDownloading(false);
+        info("dictionaryDownloadCompleted");
         refresh();
       } else if (p.status === "error") {
         setDownloading(false);
-        setError(p.message || t("dictionary.downloadFailed"));
+        const message = p.message || t("dictionary.downloadFailed");
+        warn(`dictionaryDownloadFailed: ${message}`);
+        setError(message);
       }
     })
       .then((unlisten) => {
         unlistenRef.current = unlisten;
       })
       .catch((err) => {
-        console.error("Failed to listen download progress:", err);
+        logError(`Failed to listen download progress: ${err}`);
       });
 
     return () => {
@@ -84,10 +88,12 @@ export function DictionaryStatusProvider({
     setDownloading(true);
     setError(null);
     setProgress(null);
+    info("dictionaryDownloadStarted");
     try {
       await downloadDictionary();
     } catch (err) {
       setDownloading(false);
+      warn(`dictionaryDownloadFailed: ${err}`);
       setError(String(err));
     }
   }, []);

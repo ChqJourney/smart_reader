@@ -224,7 +224,7 @@ cd src-tauri && cargo test
 - `save_session(session: InterpretationSession)`：保存会话 JSON。
 - `delete_session(sessionId: string)`：删除会话文件。
 - `authorize_pdf_path(filePath: string)`：将用户通过对话框选择的 PDF 路径加入后端授权白名单，`read_pdf_bytes` / `get_pdf_hash` 会校验该白名单。
-- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM + 目标语言 + 悬停翻译开关）；API Key 通过系统钥匙串读写。
+- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM + 目标语言 + 悬停翻译开关 + 日志级别）；API Key 通过系统钥匙串读写。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表。
 - `open_path(path: string)`：仅允许打开 `http://` / `https://` URL，禁止本地文件路径与目录。
 - `open_logs_dir()`：打开应用日志目录，供用户导出排查。
@@ -246,8 +246,8 @@ cd src-tauri && cargo test
     ├── dict/
     │   └── ecdict.sqlite          # ECDICT 本地离线词典（首次启用悬停翻译时下载）
     ├── logs/
-    │   └── app.log                # 应用运行日志（Release 默认 Warn 级别，保留最近 10 MB）
-    ├── settings.json              # LLM 配置 + 目标语言 + 悬停翻译开关
+    │   └── app.log                # 应用运行日志（默认 Warn 级别，可在设置中调整，保留最近 3 个文件各 10 MB）
+    ├── settings.json              # LLM 配置 + 目标语言 + 悬停翻译开关 + 日志级别
     └── recent_files.json          # 最近打开文件列表
 ```
 
@@ -440,7 +440,7 @@ cd src-tauri && cargo test
 
 ## 13. 版本信息
 
-- 前端版本：`0.1.0`
-- Tauri 应用版本：`0.1.0`
+- 前端版本：`0.5.5`
+- Tauri 应用版本：`0.5.5`
 - 产品名称：`SpecReader AI`
 - 应用标识：`com.photonee.specreader`

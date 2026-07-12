@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { error } from "../services/logs";
 
 const MAX_RECENT_FILES = 20;
 
@@ -30,7 +31,7 @@ export function useRecentFiles(): UseRecentFilesReturn {
       })
       .catch((err) => {
         if (cancelled) return;
-        console.error("Failed to load recent files:", err);
+        error(`Failed to load recent files: ${err}`);
         setLoaded(true);
       });
     return () => {
@@ -46,7 +47,7 @@ export function useRecentFiles(): UseRecentFilesReturn {
         ...filtered,
       ].slice(0, MAX_RECENT_FILES);
       invoke("save_recent_files", { files: next }).catch((err) =>
-        console.error("Failed to save recent files:", err)
+        error(`Failed to save recent files: ${err}`)
       );
       return next;
     });
@@ -55,7 +56,7 @@ export function useRecentFiles(): UseRecentFilesReturn {
   const clearRecentFiles = useCallback(() => {
     setRecentFiles([]);
     invoke("save_recent_files", { files: [] }).catch((err) =>
-      console.error("Failed to save recent files:", err)
+      error(`Failed to save recent files: ${err}`)
     );
   }, []);
 

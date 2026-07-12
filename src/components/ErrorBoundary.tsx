@@ -1,6 +1,6 @@
 import React, { Component, ReactNode } from "react";
 import i18n from "i18next";
-import { openLogsDir } from "../services/logs";
+import { error as logError, openLogsDir } from "../services/logs";
 import "./ErrorBoundary.css";
 
 interface Props {
@@ -23,7 +23,11 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("Uncaught error:", error, errorInfo);
+    logError(
+      `React ErrorBoundary caught error: ${error.toString()}\n` +
+        `Stack: ${error.stack}\n` +
+        `ComponentStack: ${errorInfo.componentStack}`
+    );
   }
 
   private handleReload = () => {
@@ -34,7 +38,7 @@ export default class ErrorBoundary extends Component<Props, State> {
     try {
       await openLogsDir();
     } catch (e) {
-      console.error("Failed to open logs directory:", e);
+      logError(`Failed to open logs directory: ${e}`);
     }
   };
 

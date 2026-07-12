@@ -6,12 +6,13 @@ import {
   AppSettings,
   DEFAULT_SETTINGS,
   DEFAULT_SYSTEM_PROMPTS,
+  LogLevel,
   SystemPrompts,
   openDefaultAppsSettings,
 } from "../services/settings";
 import { useDictionaryStatus } from "../hooks/useDictionaryStatus";
 import { useModal } from "../hooks/useModal";
-import { openLogsDir } from "../services/logs";
+import { error, openLogsDir } from "../services/logs";
 import {
   checkUpdateInfo,
   installUpdate,
@@ -158,7 +159,7 @@ export default function SettingsModal({
     try {
       await openLogsDir();
     } catch (e) {
-      console.error("Failed to open logs directory:", e);
+      error(`Failed to open logs directory: ${e}`);
     }
   }, []);
 
@@ -166,7 +167,7 @@ export default function SettingsModal({
     try {
       await openDefaultAppsSettings();
     } catch (e) {
-      console.error("Failed to open default apps settings:", e);
+      error(`Failed to open default apps settings: ${e}`);
     }
   }, []);
 
@@ -222,6 +223,10 @@ export default function SettingsModal({
       ...s,
       systemPrompts: { ...s.systemPrompts, [key]: value },
     }));
+  };
+
+  const updateLogLevel = (value: LogLevel) => {
+    setSettings((s) => ({ ...s, logLevel: value }));
   };
 
   const resetPrompt = (key: keyof SystemPrompts) => {
@@ -487,6 +492,38 @@ export default function SettingsModal({
                         <dd>com.photonee.specreader</dd>
                       </div>
                     </dl>
+                  </section>
+
+                  <section className="settings-section">
+                    <div className="settings-section-title">
+                      {t("settings.logLevel")}
+                    </div>
+                    <div className="settings-section-hint">
+                      {t("settings.logLevelHint")}
+                    </div>
+                    <div className="settings-field">
+                      <select
+                        id="log-level"
+                        value={settings.logLevel}
+                        onChange={(e) =>
+                          updateLogLevel(e.target.value as LogLevel)
+                        }
+                      >
+                        {(
+                          [
+                            "trace",
+                            "debug",
+                            "info",
+                            "warn",
+                            "error",
+                          ] as LogLevel[]
+                        ).map((level) => (
+                          <option key={level} value={level}>
+                            {level.toUpperCase()}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </section>
 
                   <section className="settings-section">

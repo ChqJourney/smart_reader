@@ -136,7 +136,7 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
     }
 
     let client = reqwest::Client::builder()
-        .user_agent("SpecReader/0.1.0")
+        .user_agent(concat!("SpecReader/", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 

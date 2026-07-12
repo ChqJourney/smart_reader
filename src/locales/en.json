@@ -112,6 +112,8 @@
     "licenseError": "Unable to load license content",
     "resetAll": "Reset All Defaults",
     "openLogs": "Open Logs Directory",
+    "logLevel": "Log Level",
+    "logLevelHint": "Takes effect after restarting the app. Defaults to Warn in release builds.",
     "defaultPdfReader": "Default PDF Reader",
     "defaultPdfReaderHint": "Open Windows default apps settings, find .pdf in the list and set SpecReader AI as the default.",
     "setAsDefaultPdfReader": "Set as Default PDF Reader",

@@ -13,6 +13,7 @@ import { invoke } from "@tauri-apps/api/core";
 import * as pdfjsLib from "pdfjs-dist";
 import { Annotation } from "../services/annotations";
 import { AppSettings } from "../services/settings";
+import { error as logError } from "../services/logs";
 import Icon from "./Icon";
 import PdfPage from "./PdfPage";
 import "./PdfViewer.css";
@@ -252,7 +253,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           setPageNum(1);
         } catch (err) {
           if (!isCancelled) {
-            console.error("Error loading PDF:", err);
+            logError(`Error loading PDF: ${err}`);
             setError(`Failed to load PDF: ${err}`);
           }
         } finally {
@@ -359,7 +360,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
             const vp = page.getViewport({ scale });
             map.set(i, { width: vp.width, height: vp.height });
           } catch (err) {
-            console.error(`Failed to get viewport for page ${i}:`, err);
+            logError(`Failed to get viewport for page ${i}: ${err}`);
           }
         }
         if (!cancelled) {

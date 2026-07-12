@@ -1,6 +1,7 @@
 import i18n from "i18next";
 import { useCallback, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { error as logError, info } from "../services/logs";
 import { PdfViewerState } from "../components/PdfViewer";
 import { authorizePdfPath, getPdfHash } from "../services/annotations";
 import { showMessage } from "../services/dialog";
@@ -73,9 +74,10 @@ export function useTabs(): UseTabsReturn {
 
         setTabs((prev) => [...prev, newTab]);
         setActiveTabId(newTab.id);
+        info(`pdfOpened: tabId=${newTab.id} fileHash=${newTab.fileHash}`);
         return newTab;
       } catch (error) {
-        console.error("Failed to open PDF:", error);
+        logError(`Failed to open PDF: ${error}`);
         return null;
       }
     },
@@ -100,7 +102,7 @@ export function useTabs(): UseTabsReturn {
       const path = Array.isArray(selected) ? selected[0] : selected;
       return await addTab(path);
     } catch (error) {
-      console.error("Failed to open PDF:", error);
+      logError(`Failed to open PDF: ${error}`);
       return null;
     }
   }, [addTab]);
@@ -128,6 +130,7 @@ export function useTabs(): UseTabsReturn {
       }
 
       setTabs(nextTabs);
+      info(`pdfClosed: tabId=${tabId} remainingTabs=${nextTabs.length}`);
       onClose?.();
     },
     [tabs, activeTabId]

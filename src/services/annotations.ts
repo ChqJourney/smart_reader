@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { error } from "./logs";
 
 export interface AnnotationPosition {
   page: number;
@@ -35,7 +36,7 @@ export async function loadPdfData(filePath: string): Promise<PdfData> {
     const result = await invoke<PdfData>("load_pdf_data", { filePath });
     return result;
   } catch (err) {
-    console.error("Failed to load PDF data:", err);
+    error(`Failed to load PDF data: ${err}`);
     return { annotations: [], sessionIds: [] };
   }
 }
@@ -48,7 +49,7 @@ export async function savePdfData(
   try {
     await invoke("save_pdf_data", { filePath, data });
   } catch (err) {
-    console.error("Failed to save PDF data:", err);
+    error(`Failed to save PDF data: ${err}`);
   }
 }
 
@@ -57,7 +58,7 @@ export async function authorizePdfPath(filePath: string): Promise<void> {
   try {
     await invoke("authorize_pdf_path", { filePath });
   } catch (err) {
-    console.error("Failed to authorize PDF path:", err);
+    error(`Failed to authorize PDF path: ${err}`);
   }
 }
 

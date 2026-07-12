@@ -51,6 +51,7 @@ const defaultSettings = {
     explain: "解读提示词 {targetLanguage}",
   },
   hoverTranslate: false,
+  logLevel: "warn" as const,
 };
 
 function switchToFeaturePage() {
@@ -140,6 +141,7 @@ describe("SettingsModal", () => {
       targetLanguage: "English",
       systemPrompts: defaultSettings.systemPrompts,
       hoverTranslate: false,
+      logLevel: "warn",
     });
   });
 

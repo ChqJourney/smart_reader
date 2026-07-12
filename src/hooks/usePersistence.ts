@@ -9,7 +9,7 @@ import {
   updateAnnotation,
 } from "../services/annotations";
 import { showConfirm } from "../services/dialog";
-import { logError } from "../services/logs";
+import { error, info } from "../services/logs";
 import {
   InterpretationSession,
   SessionAction,
@@ -279,9 +279,11 @@ export function usePersistence({
           annotations: activeAnnotations,
           sessionIds: activeSessionIds,
         });
+        info(
+          `savePdfData succeeded: fileHash=${activeFileHash} annotations=${activeAnnotations.length} sessions=${activeSessionIds.length}`
+        );
       } catch (err) {
-        console.error("Failed to save PDF data:", err);
-        logError("savePdfData failed", err);
+        error(`savePdfData failed: ${err}`);
       }
 
       // Secondary PDF in split view: annotations now live in state with fileHash,
@@ -306,9 +308,11 @@ export function usePersistence({
             annotations: secondaryAnnotations,
             sessionIds: secondarySessionIds,
           });
+          info(
+            `savePdfData secondary succeeded: fileHash=${secondaryFileHash} annotations=${secondaryAnnotations.length} sessions=${secondarySessionIds.length}`
+          );
         } catch (err) {
-          console.error("Failed to save secondary PDF data:", err);
-          logError("savePdfData secondary failed", err);
+          error(`savePdfData secondary failed: ${err}`);
         }
       }
     }, 500);
@@ -339,26 +343,34 @@ export function usePersistence({
             await deleteSessionOnDisk(sessionId);
             deletedSessionIds.push(sessionId);
           } catch (err) {
-            console.error("Failed to delete session:", err);
-            logError("deleteSessionOnDisk failed", err);
+            error(`deleteSessionOnDisk failed: ${err}`);
           }
         }
+      }
+      if (deletedSessionIds.length > 0) {
+        info(
+          `deleteSessionOnDisk succeeded: count=${deletedSessionIds.length}`
+        );
       }
       deletedSessionIds.forEach((sessionId) => {
         delete savedSessionsRef.current[sessionId];
       });
 
+      let savedSessionCount = 0;
       for (const session of sessions) {
         const saved = savedSessionsRef.current[session.id];
         if (!saved || JSON.stringify(saved) !== JSON.stringify(session)) {
           try {
             await saveSession(session);
             savedSessionsRef.current[session.id] = session;
+            savedSessionCount += 1;
           } catch (err) {
-            console.error("Failed to save session:", err);
-            logError("saveSession failed", err);
+            error(`saveSession failed: ${err}`);
           }
         }
+      }
+      if (savedSessionCount > 0) {
+        info(`saveSession succeeded: count=${savedSessionCount}`);
       }
     }, 500);
     return () => {

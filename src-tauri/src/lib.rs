@@ -72,12 +72,27 @@ fn is_pdf_path(path: &str) -> bool {
 fn validate_pdf_access(state: &AppState, file_path: &str) -> Result<(), String> {
     let path = std::path::Path::new(file_path);
     if !is_pdf_path(file_path) {
+        log::warn!(
+            "Security audit: rejected non-PDF access attempt: {}",
+            sanitize_path_for_log(file_path)
+        );
         return Err(format!("Not a PDF file: {}", file_path));
     }
     if !state.is_path_allowed(path) {
+        log::warn!(
+            "Security audit: unauthorized PDF access attempt: {}",
+            sanitize_path_for_log(file_path)
+        );
         return Err(format!("PDF path is not authorized: {}", file_path));
     }
     Ok(())
+}
+
+fn sanitize_path_for_log(path: &str) -> &str {
+    std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or(path)
 }
 
 fn extract_pdf_path(args: &[String]) -> Option<String> {
@@ -90,6 +105,10 @@ fn extract_pdf_path(args: &[String]) -> Option<String> {
 
 fn emit_open_pdf(app_handle: &tauri::AppHandle, args: &[String]) {
     if let Some(path) = extract_pdf_path(args) {
+        log::info!(
+            "Security audit: single-instance activation with PDF: {}",
+            sanitize_path_for_log(&path)
+        );
         if let Err(e) = app_handle.emit(OPEN_PDF_EVENT, path) {
             log::warn!("Failed to emit open-pdf event: {}", e);
         }
@@ -125,11 +144,20 @@ pub fn run() {
                 std::fs::create_dir_all(&logs_dir)
                     .map_err(|e| format!("Failed to create logs directory: {}", e))?;
             }
-            let log_level = if cfg!(debug_assertions) {
-                log::LevelFilter::Info
-            } else {
-                log::LevelFilter::Warn
-            };
+
+            // Honor the log level from settings; fall back to Info in debug builds
+            // and Warn in release builds if the setting is missing or invalid.
+            let settings = load_settings_from_disk(&base_dir).unwrap_or_default();
+            let log_level = parse_log_level(&settings.log_level)
+                .or_else(|| {
+                    if cfg!(debug_assertions) {
+                        Some(log::LevelFilter::Info)
+                    } else {
+                        Some(log::LevelFilter::Warn)
+                    }
+                })
+                .unwrap();
+
             app.handle().plugin(
                 tauri_plugin_log::Builder::default()
                     .level(log_level)
@@ -140,7 +168,7 @@ pub fn run() {
                         },
                     ))
                     .max_file_size(MAX_LOG_FILE_SIZE)
-                    .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                    .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(3))
                     .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
                     .build(),
             )?;
@@ -151,7 +179,6 @@ pub fn run() {
             open_path,
             open_logs_dir,
             open_default_apps_settings,
-            log_error,
             get_pdf_hash,
             authorize_pdf_path,
             load_pdf_data,
@@ -178,6 +205,10 @@ pub fn run() {
             for url in urls {
                 let path = url.to_string();
                 if path.to_lowercase().ends_with(".pdf") {
+                    log::info!(
+                        "Security audit: macOS open-url activation with PDF: {}",
+                        sanitize_path_for_log(&path)
+                    );
                     let _ = _app_handle.emit(OPEN_PDF_EVENT, path);
                     break;
                 }
@@ -247,8 +278,8 @@ fn compute_pdf_hash_cached(
     file_path: &str,
 ) -> Result<String, String> {
     let path = PathBuf::from(file_path);
-    let metadata = std::fs::metadata(&path)
-        .map_err(|e| format!("Failed to read PDF metadata: {}", e))?;
+    let metadata =
+        std::fs::metadata(&path).map_err(|e| format!("Failed to read PDF metadata: {}", e))?;
     let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
     let size = metadata.len();
 
@@ -285,8 +316,8 @@ async fn read_pdf_bytes(
     // the async runtime thread before moving file I/O to spawn_blocking.
     validate_pdf_access(&state, &file_path)?;
     tauri::async_runtime::spawn_blocking(move || {
-        let bytes = std::fs::read(&file_path)
-            .map_err(|e| format!("Failed to read PDF file: {}", e))?;
+        let bytes =
+            std::fs::read(&file_path).map_err(|e| format!("Failed to read PDF file: {}", e))?;
         Ok::<_, String>(tauri::ipc::Response::new(bytes))
     })
     .await
@@ -453,10 +484,18 @@ struct AppSettings {
     target_language: String,
     #[serde(default)]
     system_prompts: SystemPrompts,
+    #[serde(default)]
+    hover_translate: bool,
+    #[serde(default = "default_log_level")]
+    log_level: String,
 }
 
 fn default_target_language() -> String {
     "中文".to_string()
+}
+
+fn default_log_level() -> String {
+    "warn".to_string()
 }
 
 impl Default for AppSettings {
@@ -469,7 +508,20 @@ impl Default for AppSettings {
             },
             target_language: default_target_language(),
             system_prompts: SystemPrompts::default(),
+            hover_translate: false,
+            log_level: default_log_level(),
         }
+    }
+}
+
+fn parse_log_level(level: &str) -> Option<log::LevelFilter> {
+    match level.to_lowercase().as_str() {
+        "trace" => Some(log::LevelFilter::Trace),
+        "debug" => Some(log::LevelFilter::Debug),
+        "info" => Some(log::LevelFilter::Info),
+        "warn" => Some(log::LevelFilter::Warn),
+        "error" => Some(log::LevelFilter::Error),
+        _ => None,
     }
 }
 
@@ -895,11 +947,6 @@ async fn lookup_word(
     .map_err(|e| format!("Task failed: {}", e))?
 }
 
-#[tauri::command]
-fn log_error(message: String) {
-    log::error!("{}", message);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -967,6 +1014,8 @@ mod tests {
             },
             target_language: "中文".to_string(),
             system_prompts: SystemPrompts::default(),
+            hover_translate: false,
+            log_level: "warn".to_string(),
         }
     }
 

@@ -2,6 +2,7 @@ import { check, Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
+import { error as logError } from "./logs";
 
 /**
  * Check for Tauri application updates and prompt the user to install.
@@ -27,7 +28,7 @@ export async function checkForUpdate(): Promise<void> {
       await relaunch();
     }
   } catch (error) {
-    console.error("[updater] 检查更新失败:", error);
+    logError(`[updater] 检查更新失败: ${error}`);
     throw error;
   }
 }

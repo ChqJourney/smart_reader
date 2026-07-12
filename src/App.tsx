@@ -25,6 +25,7 @@ import {
 } from "./services/settings";
 import { useDictionaryStatus } from "./hooks/useDictionaryStatus";
 import { checkForUpdate } from "./services/updater";
+import { error } from "./services/logs";
 import { getBasename } from "./utils/path";
 import "./App.css";
 
@@ -61,7 +62,7 @@ function App() {
     const timer = setTimeout(() => {
       checkForUpdate().catch((err) => {
         // 更新检查失败不应打断启动流程，但保留日志便于排查。
-        console.error("[App] 启动时更新检查失败:", err);
+        error(`[App] 启动时更新检查失败: ${err}`);
       });
     }, 3000);
     return () => clearTimeout(timer);

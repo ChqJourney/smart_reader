@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { error } from "./logs";
 
 export interface LlmConfig {
   baseUrl: string;
@@ -11,11 +12,14 @@ export interface SystemPrompts {
   explain: string;
 }
 
+export type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
+
 export interface AppSettings {
   llm: LlmConfig;
   targetLanguage: string;
   systemPrompts: SystemPrompts;
   hoverTranslate: boolean;
+  logLevel: LogLevel;
 }
 
 const LEGACY_STORAGE_KEY = "standardread-llm-config";
@@ -36,6 +40,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   targetLanguage: "中文",
   systemPrompts: DEFAULT_SYSTEM_PROMPTS,
   hoverTranslate: false,
+  logLevel: "warn",
 };
 
 function isValidSettings(value: unknown): value is Partial<AppSettings> {
@@ -63,7 +68,17 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
       explain: value.systemPrompts?.explain ?? DEFAULT_SYSTEM_PROMPTS.explain,
     },
     hoverTranslate: value.hoverTranslate ?? DEFAULT_SETTINGS.hoverTranslate,
+    logLevel: isLogLevel(value.logLevel)
+      ? value.logLevel
+      : DEFAULT_SETTINGS.logLevel,
   };
+}
+
+function isLogLevel(value: unknown): value is LogLevel {
+  return (
+    typeof value === "string" &&
+    ["trace", "debug", "info", "warn", "error"].includes(value)
+  );
 }
 
 function mergeWithLegacy(base: AppSettings): AppSettings {
@@ -91,7 +106,7 @@ export async function loadSettings(): Promise<AppSettings> {
       return normalized;
     }
   } catch (err) {
-    console.error("Failed to load settings:", err);
+    error(`Failed to load settings: ${err}`);
   }
   return mergeWithLegacy({ ...DEFAULT_SETTINGS });
 }
@@ -110,7 +125,7 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
   try {
     await invoke("save_settings", { settings });
   } catch (err) {
-    console.error("Failed to save settings:", err);
+    error(`Failed to save settings: ${err}`);
   }
 }
 

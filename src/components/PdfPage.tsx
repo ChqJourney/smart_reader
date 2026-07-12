@@ -4,6 +4,7 @@ import type { TextItem as PdfjsTextItem } from "pdfjs-dist/types/src/display/api
 import type { PageViewportInfo } from "./PdfViewer";
 import { Annotation } from "../services/annotations";
 import { AppSettings } from "../services/settings";
+import { error } from "../services/logs";
 import PdfAnnotations from "./PdfAnnotations";
 import { useWordLookup } from "../hooks/useWordLookup";
 import WordTooltip from "./WordTooltip";
@@ -133,7 +134,7 @@ function PdfPage({
           wrapperRef.current.style.minHeight = "";
         }
       } catch (err) {
-        console.error(`Failed to get viewport for page ${pageNum}:`, err);
+        error(`Failed to get viewport for page ${pageNum}: ${err}`);
       }
     };
     getViewport();
@@ -204,7 +205,7 @@ function PdfPage({
         hasRenderedRef.current = true;
       } catch (err) {
         if (!isCancelled) {
-          console.error(`Failed to render page ${pageNum}:`, err);
+          error(`Failed to render page ${pageNum}: ${err}`);
         }
       }
     };

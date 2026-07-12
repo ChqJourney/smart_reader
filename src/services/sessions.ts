@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { error } from "./logs";
 import { StashItem } from "./stash";
 import { SelectionAction } from "./llm";
 
@@ -140,7 +141,7 @@ export async function loadSession(
   try {
     return await invoke<InterpretationSession>("load_session", { sessionId });
   } catch (err) {
-    console.error("Failed to load session:", err);
+    error(`Failed to load session: ${err}`);
     return null;
   }
 }
@@ -151,7 +152,7 @@ export async function saveSession(
   try {
     await invoke("save_session", { session });
   } catch (err) {
-    console.error("Failed to save session:", err);
+    error(`Failed to save session: ${err}`);
   }
 }
 
@@ -159,6 +160,6 @@ export async function deleteSessionOnDisk(sessionId: string): Promise<void> {
   try {
     await invoke("delete_session", { sessionId });
   } catch (err) {
-    console.error("Failed to delete session:", err);
+    error(`Failed to delete session: ${err}`);
   }
 }

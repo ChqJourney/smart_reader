@@ -149,7 +149,8 @@
 }
 
 .settings-field input,
-.settings-field textarea {
+.settings-field textarea,
+.settings-field select {
   padding: 8px 10px;
   border: 1px solid #d1d1d1;
   border-radius: 6px;
@@ -161,10 +162,16 @@
 }
 
 .settings-field input:focus,
-.settings-field textarea:focus {
+.settings-field textarea:focus,
+.settings-field select:focus {
   outline: none;
   border-color: #0078d4;
   box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
+}
+
+.settings-field select {
+  cursor: pointer;
+  min-width: 160px;
 }
 
 .settings-info-list {

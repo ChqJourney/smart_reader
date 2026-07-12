@@ -1,4 +1,5 @@
 import i18n from "i18next";
+import { info, warn, redactSensitiveInfo } from "./logs";
 import { LlmConfig, SystemPrompts } from "./settings";
 
 export type { LlmConfig, SystemPrompts };
@@ -30,6 +31,9 @@ export async function* streamChatCompletion(
     return;
   }
 
+  info(`llmRequestStarted: model=${config.model}`);
+  const start = performance.now();
+
   try {
     const response = await fetch(`${config.baseUrl}/chat/completions`, {
       method: "POST",
@@ -46,7 +50,11 @@ export async function* streamChatCompletion(
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
+      const errorText = redactSensitiveInfo(await response.text());
+      const duration = Math.round(performance.now() - start);
+      warn(
+        `llmRequestFailed: status=${response.status} model=${config.model} durationMs=${duration}`
+      );
       yield {
         type: "error",
         message: i18n.t("llm.error.apiError", {
@@ -59,6 +67,10 @@ export async function* streamChatCompletion(
 
     const reader = response.body?.getReader();
     if (!reader) {
+      const duration = Math.round(performance.now() - start);
+      warn(
+        `llmRequestFailed: empty response body model=${config.model} durationMs=${duration}`
+      );
       yield { type: "error", message: i18n.t("llm.error.streamReadError") };
       return;
     }
@@ -87,6 +99,10 @@ export async function* streamChatCompletion(
         try {
           const data = JSON.parse(trimmed.slice(6));
           if (data.error) {
+            const duration = Math.round(performance.now() - start);
+            warn(
+              `llmRequestFailed: apiError model=${config.model} durationMs=${duration}`
+            );
             yield {
               type: "error",
               message: i18n.t("llm.error.llmApiError", {
@@ -104,10 +120,17 @@ export async function* streamChatCompletion(
         }
       }
     }
+
+    const duration = Math.round(performance.now() - start);
+    info(`llmRequestCompleted: model=${config.model} durationMs=${duration}`);
   } catch (err) {
     if ((err as Error).name === "AbortError") {
       return;
     }
+    const duration = Math.round(performance.now() - start);
+    warn(
+      `llmRequestFailed: error=${err} model=${config.model} durationMs=${duration}`
+    );
     yield {
       type: "error",
       message: i18n.t("llm.error.requestFailed", { message: String(err) }),

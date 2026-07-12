@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockTauriInvoke } from "../test/mocks/tauri";
+import { AppSettings } from "../services/settings";
 
 const DEFAULT_SETTINGS = {
   llm: {
@@ -15,6 +16,7 @@ const DEFAULT_SETTINGS = {
       "你是一位检测认证行业标准文档阅读助手，擅长把复杂的英文标准条款解释得清晰易懂。请基于用户提供的文档片段用{targetLanguage}回答，不要编造片段中未提及的条款或页码。",
   },
   hoverTranslate: false,
+  logLevel: "warn",
 };
 
 describe("settings service", () => {
@@ -140,7 +142,7 @@ describe("settings service", () => {
       },
     });
     const { saveSettings } = await import("../services/settings");
-    const settings = {
+    const settings: AppSettings = {
       llm: { baseUrl: "x", apiKey: "y", model: "z" },
       targetLanguage: "中文",
       systemPrompts: {
@@ -148,6 +150,7 @@ describe("settings service", () => {
         explain: "explain prompt",
       },
       hoverTranslate: true,
+      logLevel: "warn",
     };
     await saveSettings(settings);
     expect(saved).toEqual(settings);

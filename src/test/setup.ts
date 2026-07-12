@@ -3,6 +3,18 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+// Mock tauri-plugin-log so tests that trigger error paths don't attempt
+// real backend invokes.
+vi.mock("@tauri-apps/plugin-log", () => ({
+  debug: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+  trace: vi.fn(),
+  warn: vi.fn(),
+  attachLogger: vi.fn(),
+  attachConsole: vi.fn(),
+}));
+
 // Clean up after each test to avoid side effects
 afterEach(() => {
   uuidCounter = 0;

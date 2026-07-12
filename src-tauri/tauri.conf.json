@@ -70,7 +70,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUyREUyMEU2RjhDOEU2NEQKUldSTjVzajQ1aURlVWtnU1JBTEJMOXdSVmozNUMwbExTWWl4S2hkVXhpTHhPU2Qyc0x4MmhvZzAK",
       "endpoints": [
-        "https://github.com/photonee/specreader-ai/releases/latest/download/latest.json"
+        "https://github.com/ChqJourney/smart_reader/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

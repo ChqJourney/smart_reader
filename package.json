@@ -7,7 +7,7 @@
   "license": "Proprietary",
   "repository": {
     "type": "git",
-    "url": "https://github.com/photonee/specreader-ai"
+    "url": "https://github.com/ChqJourney/smart_reader"
   },
   "type": "module",
   "scripts": {

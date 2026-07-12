@@ -91,7 +91,7 @@ jobs:
             platforms = @{
               "windows-x86_64" = @{
                 signature = $signature
-                url = "https://github.com/photonee/specreader-ai/releases/download/$tag/$nsisName"
+                url = "https://github.com/ChqJourney/smart_reader/releases/download/$tag/$nsisName"
               }
             }
           }

@@ -4,7 +4,7 @@ version = "0.5.4"
 description = "AI assistant for reading and interpreting standard PDFs"
 authors = ["SpecReader AI Team"]
 license = "Proprietary"
-repository = "https://github.com/photonee/specreader-ai"
+repository = "https://github.com/ChqJourney/smart_reader"
 edition = "2021"
 rust-version = "1.77.2"
 

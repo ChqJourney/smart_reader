@@ -58,8 +58,9 @@ function App() {
   // the app launch flow.
   useEffect(() => {
     const timer = setTimeout(() => {
-      checkForUpdate().catch(() => {
-        // ignored
+      checkForUpdate().catch((err) => {
+        // 更新检查失败不应打断启动流程，但保留日志便于排查。
+        console.error("[App] 启动时更新检查失败:", err);
       });
     }, 3000);
     return () => clearTimeout(timer);

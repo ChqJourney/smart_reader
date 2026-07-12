@@ -10,19 +10,24 @@ import { ask } from "@tauri-apps/plugin-dialog";
  * against the embedded public key before extraction.
  */
 export async function checkForUpdate(): Promise<void> {
-  const update = await check();
-  if (!update?.available) {
-    return;
-  }
+  try {
+    const update = await check();
+    if (!update?.available) {
+      return;
+    }
 
-  const yes = await ask(
-    `发现新版本 ${update.version}，是否立即下载并重启安装？`,
-    { title: "SpecReader AI 更新", kind: "info" }
-  );
+    const yes = await ask(
+      `发现新版本 ${update.version}，是否立即下载并重启安装？`,
+      { title: "SpecReader AI 更新", kind: "info" }
+    );
 
-  if (yes) {
-    await update.downloadAndInstall();
-    await relaunch();
+    if (yes) {
+      await update.downloadAndInstall();
+      await relaunch();
+    }
+  } catch (error) {
+    console.error("[updater] 检查更新失败:", error);
+    throw error;
   }
 }
 

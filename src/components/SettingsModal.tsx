@@ -12,11 +12,24 @@ import {
 import { useDictionaryStatus } from "../hooks/useDictionaryStatus";
 import { useModal } from "../hooks/useModal";
 import { openLogsDir } from "../services/logs";
+import {
+  checkUpdateInfo,
+  installUpdate,
+  UpdateInfo,
+} from "../services/updater";
 import "./CustomInterpretModal.css";
 import "./SettingsModal.css";
 
 type PromptTab = "translate" | "explain";
 type SettingsPage = "model" | "feature" | "system";
+type UpdateState =
+  | "idle"
+  | "checking"
+  | "noUpdate"
+  | "available"
+  | "installing"
+  | "noPlatformUpdate"
+  | "error";
 
 interface SettingsModalProps {
   open: boolean;
@@ -26,6 +39,15 @@ interface SettingsModalProps {
 }
 
 const PAGE_LIST: SettingsPage[] = ["model", "feature", "system"];
+
+function isNoPlatformUpdateError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    message.includes("were found in the response") &&
+    message.includes("platforms") &&
+    message.includes("fallback platforms")
+  );
+}
 
 export default function SettingsModal({
   open,
@@ -43,6 +65,10 @@ export default function SettingsModal({
   const [version, setVersion] = useState<string>("0.1.0");
   const [licenseText, setLicenseText] = useState<string | null>(null);
   const [currentPlatform, setCurrentPlatform] = useState<string | null>(null);
+  const [updateState, setUpdateState] = useState<UpdateState>("idle");
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const [pendingUpdate, setPendingUpdate] = useState<UpdateInfo | null>(null);
   const dictionaryStatus = useDictionaryStatus();
 
   useEffect(() => {
@@ -51,6 +77,10 @@ export default function SettingsModal({
     setActivePage("model");
     setShowDownloadConfirm(false);
     setDownloadPending(false);
+    setUpdateState("idle");
+    setUpdateVersion(null);
+    setUpdateError(null);
+    setPendingUpdate(null);
   }, [initialSettings, open]);
 
   useEffect(() => {
@@ -139,6 +169,40 @@ export default function SettingsModal({
       console.error("Failed to open default apps settings:", e);
     }
   }, []);
+
+  const handleCheckUpdate = useCallback(async () => {
+    setUpdateState("checking");
+    setUpdateError(null);
+    try {
+      const result = await checkUpdateInfo();
+      if (result.available && result.update) {
+        setUpdateVersion(result.version ?? null);
+        setPendingUpdate(result.update);
+        setUpdateState("available");
+      } else {
+        setUpdateState("noUpdate");
+      }
+    } catch (err) {
+      if (isNoPlatformUpdateError(err)) {
+        setUpdateState("noPlatformUpdate");
+      } else {
+        setUpdateState("error");
+        setUpdateError(err instanceof Error ? err.message : String(err));
+      }
+    }
+  }, []);
+
+  const handleUpgrade = useCallback(async () => {
+    if (!pendingUpdate) return;
+    setUpdateState("installing");
+    setUpdateError(null);
+    try {
+      await installUpdate(pendingUpdate);
+    } catch (err) {
+      setUpdateState("error");
+      setUpdateError(err instanceof Error ? err.message : String(err));
+    }
+  }, [pendingUpdate]);
 
   const { contentRef } = useModal({ open, onClose });
 
@@ -423,6 +487,65 @@ export default function SettingsModal({
                         <dd>com.photonee.specreader</dd>
                       </div>
                     </dl>
+                  </section>
+
+                  <section className="settings-section">
+                    <div className="settings-section-title">
+                      {t("settings.softwareUpdate")}
+                    </div>
+                    <div className="settings-section-hint">
+                      {t("settings.softwareUpdateHint", { version })}
+                    </div>
+                    {updateState === "idle" && (
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={handleCheckUpdate}
+                      >
+                        {t("settings.checkForUpdates")}
+                      </button>
+                    )}
+                    {updateState === "checking" && (
+                      <span className="settings-status-info">
+                        {t("settings.checkingForUpdates")}
+                      </span>
+                    )}
+                    {updateState === "noUpdate" && (
+                      <span className="settings-status-ok">
+                        {t("settings.noUpdateAvailable")}
+                      </span>
+                    )}
+                    {updateState === "available" && (
+                      <div className="settings-update-available">
+                        <span>
+                          {t("settings.updateAvailable", {
+                            version: updateVersion,
+                          })}
+                        </span>
+                        <button
+                          type="button"
+                          className="icon-btn primary"
+                          onClick={handleUpgrade}
+                        >
+                          {t("settings.upgradeNow")}
+                        </button>
+                      </div>
+                    )}
+                    {updateState === "installing" && (
+                      <span className="settings-status-info">
+                        {t("settings.installingUpdate")}
+                      </span>
+                    )}
+                    {updateState === "noPlatformUpdate" && (
+                      <span className="settings-status-info">
+                        {t("settings.noUpdateForPlatform")}
+                      </span>
+                    )}
+                    {updateState === "error" && updateError && (
+                      <span className="settings-status-error">
+                        {t("settings.updateError", { error: updateError })}
+                      </span>
+                    )}
                   </section>
 
                   <section className="settings-section">

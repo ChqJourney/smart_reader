@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import SettingsModal from "./SettingsModal";
 import { DictionaryStatusProvider } from "../hooks/useDictionaryStatus";
 
@@ -15,6 +15,9 @@ const mockInvoke = vi.hoisted(() => vi.fn());
 const mockListen = vi.hoisted(() => vi.fn());
 const mockGetVersion = vi.hoisted(() => vi.fn());
 const mockFetch = vi.hoisted(() => vi.fn());
+const mockCheckUpdate = vi.hoisted(() => vi.fn());
+const mockDownloadAndInstall = vi.hoisted(() => vi.fn());
+const mockRelaunch = vi.hoisted(() => vi.fn());
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: mockInvoke,
@@ -26,6 +29,14 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("@tauri-apps/api/app", () => ({
   getVersion: mockGetVersion,
+}));
+
+vi.mock("@tauri-apps/plugin-updater", () => ({
+  check: mockCheckUpdate,
+}));
+
+vi.mock("@tauri-apps/plugin-process", () => ({
+  relaunch: mockRelaunch,
 }));
 
 const defaultSettings = {
@@ -56,6 +67,9 @@ describe("SettingsModal", () => {
     mockListen.mockReset();
     mockGetVersion.mockReset();
     mockFetch.mockReset();
+    mockCheckUpdate.mockReset();
+    mockDownloadAndInstall.mockReset();
+    mockRelaunch.mockReset();
     mockListen.mockResolvedValue(() => {});
     mockGetVersion.mockResolvedValue("0.1.0");
     mockFetch.mockResolvedValue({
@@ -266,5 +280,132 @@ describe("SettingsModal", () => {
 
     // License text is loaded asynchronously.
     await screen.findByText("SpecReader AI Proprietary License");
+  });
+
+  it("renders check for updates button on system page", () => {
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    switchToSystemPage();
+
+    expect(screen.getByText("软件更新")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /检查更新/i })
+    ).toBeInTheDocument();
+  });
+
+  it("shows no update available when check returns none", async () => {
+    mockCheckUpdate.mockResolvedValue({ available: false });
+
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    switchToSystemPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /检查更新/i }));
+
+    await screen.findByText(/当前已是最新版本/i);
+    expect(
+      screen.queryByRole("button", { name: /检查更新/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows upgrade button when an update is available", async () => {
+    mockCheckUpdate.mockResolvedValue({
+      available: true,
+      version: "0.2.0",
+      downloadAndInstall: mockDownloadAndInstall,
+    });
+
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    switchToSystemPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /检查更新/i }));
+
+    await screen.findByText(/发现新版本 0\.2\.0/i);
+    expect(
+      screen.getByRole("button", { name: /马上升级/i })
+    ).toBeInTheDocument();
+  });
+
+  it("downloads, installs and relaunches when upgrade is clicked", async () => {
+    mockDownloadAndInstall.mockResolvedValue(undefined);
+    mockCheckUpdate.mockResolvedValue({
+      available: true,
+      version: "0.2.0",
+      downloadAndInstall: mockDownloadAndInstall,
+    });
+
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    switchToSystemPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /检查更新/i }));
+    await screen.findByText(/发现新版本 0\.2\.0/i);
+
+    fireEvent.click(screen.getByRole("button", { name: /马上升级/i }));
+
+    await waitFor(() => {
+      expect(mockDownloadAndInstall).toHaveBeenCalledTimes(1);
+      expect(mockRelaunch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("shows friendly message when no update package is available for current platform", async () => {
+    mockCheckUpdate.mockRejectedValue(
+      new Error(
+        'None of the fallback platforms `["darwin-aarch64-app", "darwin-aarch64"]` were found in the response `platforms` object'
+      )
+    );
+
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    switchToSystemPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /检查更新/i }));
+
+    await screen.findByText(/当前暂无适用于本系统的更新包/i);
+    expect(screen.queryByText(/检查更新失败/i)).not.toBeInTheDocument();
+  });
+
+  it("shows error message when update check fails", async () => {
+    mockCheckUpdate.mockRejectedValue(new Error("network error"));
+
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    switchToSystemPage();
+
+    fireEvent.click(screen.getByRole("button", { name: /检查更新/i }));
+
+    await screen.findByText(/检查更新失败.*network error/i);
   });
 });

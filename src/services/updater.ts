@@ -1,6 +1,7 @@
 import { check, Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { ask } from "@tauri-apps/plugin-dialog";
+import { getVersion } from "@tauri-apps/api/app";
 
 /**
  * Check for Tauri application updates and prompt the user to install.
@@ -32,6 +33,41 @@ export async function checkForUpdate(): Promise<void> {
 }
 
 /**
- * Expose the raw update info for callers that want custom UI.
+ * Raw update info returned by the Tauri updater.
  */
 export type UpdateInfo = Update;
+
+export interface UpdateCheckResult {
+  available: boolean;
+  version?: string;
+  currentVersion?: string;
+  update?: Update;
+}
+
+/**
+ * Check for updates and return structured info for custom UI.
+ *
+ * In non-Tauri environments (e.g. browser tests) the underlying `check()`
+ * will throw; callers should catch and surface a friendly message.
+ */
+export async function checkUpdateInfo(): Promise<UpdateCheckResult> {
+  const update = await check();
+  const currentVersion = await getVersion();
+  if (!update?.available) {
+    return { available: false, currentVersion };
+  }
+  return {
+    available: true,
+    version: update.version,
+    currentVersion,
+    update,
+  };
+}
+
+/**
+ * Download, install the given update and relaunch the application.
+ */
+export async function installUpdate(update: Update): Promise<void> {
+  await update.downloadAndInstall();
+  await relaunch();
+}

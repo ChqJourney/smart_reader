@@ -372,3 +372,26 @@
   font-size: 0.8rem;
   color: #616161;
 }
+
+.settings-update-available {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.settings-update-available .icon-btn.primary {
+  background: #0078d4;
+  color: #fff;
+  border-color: #0078d4;
+}
+
+.settings-update-available .icon-btn.primary:hover:not(:disabled) {
+  background: #006cbe;
+}
+
+.settings-status-info {
+  font-size: 0.8rem;
+  color: #616161;
+}

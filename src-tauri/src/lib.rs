@@ -150,6 +150,7 @@ pub fn run() {
             read_pdf_bytes,
             open_path,
             open_logs_dir,
+            open_default_apps_settings,
             log_error,
             get_pdf_hash,
             authorize_pdf_path,
@@ -194,6 +195,19 @@ fn open_logs_dir(app: tauri::AppHandle) -> Result<(), String> {
             .map_err(|e| format!("Failed to create logs directory: {}", e))?;
     }
     open::that(&logs_dir).map_err(|e| format!("Failed to open logs directory: {}", e))
+}
+
+#[tauri::command]
+fn open_default_apps_settings() -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        open::that("ms-settings:defaultapps")
+            .map_err(|e| format!("Failed to open default apps settings: {}", e))
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("Setting the default PDF reader is only supported on Windows".to_string())
+    }
 }
 
 #[tauri::command]

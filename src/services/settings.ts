@@ -114,4 +114,8 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
   }
 }
 
+export async function openDefaultAppsSettings(): Promise<void> {
+  await invoke("open_default_apps_settings");
+}
+
 export { DEFAULT_SETTINGS, DEFAULT_SYSTEM_PROMPTS };

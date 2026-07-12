@@ -6,6 +6,7 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_SYSTEM_PROMPTS,
   SystemPrompts,
+  openDefaultAppsSettings,
 } from "../services/settings";
 import { useDictionaryStatus } from "../hooks/useDictionaryStatus";
 import { useModal } from "../hooks/useModal";
@@ -40,6 +41,7 @@ export default function SettingsModal({
   const [downloadPending, setDownloadPending] = useState(false);
   const [version, setVersion] = useState<string>("0.1.0");
   const [licenseText, setLicenseText] = useState<string | null>(null);
+  const [currentPlatform, setCurrentPlatform] = useState<string | null>(null);
   const dictionaryStatus = useDictionaryStatus();
 
   useEffect(() => {
@@ -55,6 +57,11 @@ export default function SettingsModal({
     getVersion()
       .then(setVersion)
       .catch(() => setVersion("0.1.0"));
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    setCurrentPlatform(navigator.platform);
   }, [open]);
 
   useEffect(() => {
@@ -121,6 +128,14 @@ export default function SettingsModal({
       await openLogsDir();
     } catch (e) {
       console.error("Failed to open logs directory:", e);
+    }
+  }, []);
+
+  const handleOpenDefaultApps = useCallback(async () => {
+    try {
+      await openDefaultAppsSettings();
+    } catch (e) {
+      console.error("Failed to open default apps settings:", e);
     }
   }, []);
 
@@ -423,6 +438,24 @@ export default function SettingsModal({
                       {t("settings.openLogs")}
                     </button>
                   </section>
+
+                  {currentPlatform?.startsWith("Win") && (
+                    <section className="settings-section">
+                      <div className="settings-section-title">
+                        {t("settings.defaultPdfReader")}
+                      </div>
+                      <div className="settings-section-hint">
+                        {t("settings.defaultPdfReaderHint")}
+                      </div>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={handleOpenDefaultApps}
+                      >
+                        {t("settings.setAsDefaultPdfReader")}
+                      </button>
+                    </section>
+                  )}
                 </>
               )}
             </div>

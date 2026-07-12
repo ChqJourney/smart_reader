@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useCallback, useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
+import Icon from "./Icon";
 import {
   AppSettings,
   DEFAULT_SETTINGS,
@@ -188,15 +189,22 @@ export default function SettingsModal({
       : t("action.explain");
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className="modal-overlay">
       <div
         ref={contentRef}
         className="modal-content settings-modal-content"
-        onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-label={t("settings.title")}
       >
         <div className="settings-modal-header">
+          <button
+            type="button"
+            className="settings-modal-close"
+            onClick={onClose}
+            aria-label={t("common.close")}
+          >
+            <Icon name="close" size={18} />
+          </button>
           <h3>{t("settings.title")}</h3>
           <p className="modal-hint">{t("settings.description")}</p>
         </div>

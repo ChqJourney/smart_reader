@@ -1,7 +1,7 @@
 .settings-modal-content {
   width: 720px;
   max-width: 92vw;
-  max-height: 90vh;
+  height: min(720px, 90vh);
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -9,6 +9,7 @@
 }
 
 .settings-modal-header {
+  position: relative;
   padding: 20px 24px;
   border-bottom: 1px solid #e5e5e5;
   flex-shrink: 0;
@@ -16,6 +17,37 @@
 
 .settings-modal-header h3 {
   margin-bottom: 4px;
+  padding-right: 32px;
+}
+
+.settings-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #757575;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.settings-modal-close:hover {
+  background: #f3f3f3;
+  color: #1f1f1f;
+}
+
+.settings-modal-close:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.25);
 }
 
 .settings-modal-body {

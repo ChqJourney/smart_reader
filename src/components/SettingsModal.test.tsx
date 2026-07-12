@@ -226,16 +226,25 @@ describe("SettingsModal", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
-  it("calls onClose when cancel clicked or overlay clicked", () => {
+  it("calls onClose when close, cancel or save clicked, but not overlay", () => {
     const onClose = vi.fn();
+    const onSave = vi.fn();
     const { container } = renderModal({
       open: true,
       initialSettings: defaultSettings,
       onClose,
-      onSave: vi.fn(),
+      onSave,
     });
-    fireEvent.click(screen.getByText("取消"));
+
+    fireEvent.click(screen.getByLabelText("关闭"));
     expect(onClose).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByText("取消"));
+    expect(onClose).toHaveBeenCalledTimes(2);
+
+    fireEvent.click(screen.getByText("保存"));
+    expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onClose).toHaveBeenCalledTimes(2);
 
     fireEvent.click(container.querySelector(".modal-overlay")!);
     expect(onClose).toHaveBeenCalledTimes(2);

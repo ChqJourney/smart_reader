@@ -57,14 +57,10 @@ jobs:
           $exeName = "SpecReader AI v$version.exe"
           Copy-Item -Path $exe.FullName -Destination $exeName -Force
 
-          # Write the private key to a file and use the path env var.
-          # This avoids issues with trailing newlines or shell mangling of
-          # TAURI_SIGNING_PRIVATE_KEY when passed as a string.
-          $keyContent = $env:TAURI_SIGNING_PRIVATE_KEY.Trim()
-          $keyPath = Join-Path $env:RUNNER_TEMP "specreader.key"
-          $keyContent | Out-File -FilePath $keyPath -NoNewline
-          $env:TAURI_SIGNING_PRIVATE_KEY_PATH = $keyPath
-          Remove-Item Env:TAURI_SIGNING_PRIVATE_KEY
+          # Normalize the private key env var. GitHub Secrets may include a
+          # trailing newline, which breaks Tauri's base64 decoding. Trim it
+          # before invoking tauri bundle so signing can generate the .sig file.
+          $env:TAURI_SIGNING_PRIVATE_KEY = $env:TAURI_SIGNING_PRIVATE_KEY.Trim()
 
           # Build the NSIS installer bundle. With createUpdaterArtifacts enabled,
           # Tauri also generates the *.sig signature file for the updater.

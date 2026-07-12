@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="SpecReader AI - 面向检测认证工程师的桌面端 AI 助手，降低阅读、理解和执行标准 PDF 的认知开销。"
+    />
+    <title>SpecReader AI - 标准 PDF 阅读副驾驶</title>
+    <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
+    <!-- 顶部导航 -->
+    <nav class="navbar" aria-label="主导航">
+      <div class="container nav-inner">
+        <a class="brand" href="#" aria-label="SpecReader AI 首页">
+          <img src="assets/logo.svg" alt="" class="brand-logo" width="32" height="32" />
+          <span class="brand-text">SpecReader AI</span>
+        </a>
+        <div class="nav-links">
+          <a href="#features">核心功能</a>
+          <a href="#privacy">隐私安全</a>
+          <a href="#start">快速上手</a>
+          <a
+            class="btn btn-primary btn-sm"
+            href="https://github.com/ChqJourney/smart_reader/releases"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            下载使用
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Hero 区域 -->
+    <header class="hero">
+      <div class="container hero-inner">
+        <div class="hero-content">
+          <h1 class="hero-title">
+            把标准文件<br />
+            <span class="text-gradient">读得更快、理解得更准</span>
+          </h1>
+          <p class="hero-subtitle">
+            SpecReader AI 是面向检测认证工程师的桌面端 AI 助手，<br />
+            本地打开 PDF，选中即可翻译、解读与追问，让
+            <span id="typewriter" class="typewriter"></span>
+          </p>
+          <div class="hero-actions">
+            <a
+              class="btn btn-primary btn-lg"
+              href="https://github.com/ChqJourney/smart_reader/releases"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              免费下载
+            </a>
+            <a
+              class="btn btn-secondary btn-lg"
+              href="https://github.com/ChqJourney/smart_reader"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              查看 GitHub
+            </a>
+          </div>
+          <p class="hero-note">
+            当前为「超轻量版」，支持 Windows / macOS；PDF 不上传云端。
+          </p>
+        </div>
+        <div class="hero-visual">
+          <div class="demo-placeholder hero-demo" data-demo="hero">
+            <div class="demo-placeholder-icon">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="12" y1="18" x2="12" y2="12"></line>
+                <line x1="9" y1="15" x2="15" y2="15"></line>
+              </svg>
+            </div>
+            <p class="demo-placeholder-title">主界面演示</p>
+            <p class="demo-placeholder-hint">请替换为 1440×900 的 GIF</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- 痛点区域 -->
+    <section class="section section-painpoints" id="painpoints">
+      <div class="container">
+        <div class="section-header reveal">
+          <span class="section-tag">痛点</span>
+          <h2 class="section-title">读标准，不该这么累</h2>
+          <p class="section-desc">
+            IEC / ISO / EN / GB / UL / ASTM / IEEE……每份标准都是数百页的专业文本，反复查术语、跳条款、理逻辑，耗时又费神。
+          </p>
+        </div>
+        <div class="painpoint-grid">
+          <div class="painpoint-card reveal">
+            <div class="painpoint-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </div>
+            <h3>术语密密麻麻</h3>
+            <p>专业缩写和生僻词汇反复打断阅读节奏，查完词典又忘了上下文。</p>
+          </div>
+          <div class="painpoint-card reveal">
+            <div class="painpoint-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+              </svg>
+            </div>
+            <h3>条款跳来跳去</h3>
+            <p>"see Clause 5.2.3" 出现一次，就要手动翻页、定位、再找回原来的位置。</p>
+          </div>
+          <div class="painpoint-card reveal">
+            <div class="painpoint-icon">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+            </div>
+            <h3>要求难以落地</h3>
+            <p>读完后仍要手动整理 "测什么、怎么测、判定依据"，效率低下。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 核心功能区域 -->
+    <section class="section section-features" id="features">
+      <div class="container">
+        <div class="section-header reveal">
+          <span class="section-tag">核心功能</span>
+          <h2 class="section-title">选中即得答案，无需离开文档</h2>
+          <p class="section-desc">
+            在 PDF 页面上直接完成翻译、解读与追问，所有结果可定位、可持久化、可追溯。
+          </p>
+        </div>
+
+        <!-- 功能 1 -->
+        <div class="feature-row reveal">
+          <div class="feature-text">
+            <span class="feature-index">01</span>
+            <h3>本地打开，多份标准并排读</h3>
+            <p>
+              同时打开多达 10 个 PDF，顶部 Tab 快速切换；支持左右分屏，对照不同版本或引用标准，宽度可自由拖拽。
+            </p>
+            <ul class="feature-list">
+              <li>本地渲染，文件不上传云端</li>
+              <li>单页 / 连续滚动双模式</li>
+              <li>缩放、页码跳转、键盘导航</li>
+            </ul>
+          </div>
+          <div class="feature-visual">
+            <div class="demo-placeholder" data-demo="open-pdf">
+              <div class="demo-placeholder-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                  <polyline points="14 2 14 8 20 8"></polyline>
+                </svg>
+              </div>
+              <p class="demo-placeholder-title">打开 PDF / 多 Tab 切换</p>
+              <p class="demo-placeholder-hint">替换为 open-pdf.gif</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 功能 2 -->
+        <div class="feature-row feature-row-reverse reveal">
+          <div class="feature-text">
+            <span class="feature-index">02</span>
+            <h3>选中即译，批注留在原文</h3>
+            <p>
+              选中任意段落，点击"翻译"即可在页面上生成浮层批注。批注可拖动、可隐藏、可删除，位置按 PDF 原始坐标持久化保存。
+            </p>
+            <ul class="feature-list">
+              <li>支持用户自定义目标语言</li>
+              <li>流式显示翻译结果</li>
+              <li>重开同一文件自动恢复批注</li>
+            </ul>
+          </div>
+          <div class="feature-visual">
+            <div class="demo-placeholder" data-demo="translate">
+              <div class="demo-placeholder-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M5 8l6 6"></path>
+                  <path d="M4 14l6-6 2-3"></path>
+                  <path d="M2 5h12"></path>
+                  <path d="M7 2h1"></path>
+                  <path d="M22 22l-5-10-5 10"></path>
+                  <path d="M14 17h6"></path>
+                </svg>
+              </div>
+              <p class="demo-placeholder-title">选中文本翻译</p>
+              <p class="demo-placeholder-hint">替换为 translate.gif</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 功能 3 -->
+        <div class="feature-row reveal">
+          <div class="feature-text">
+            <span class="feature-index">03</span>
+            <h3>AI 解读：这条到底在说什么</h3>
+            <p>
+              选中复杂条款，AI 从"要求概述、适用场景、测试条件、判定依据"等维度给出结构化解释，并在右侧面板生成可点击跳转的解读记录。
+            </p>
+            <ul class="feature-list">
+              <li>结构化 Prompt，工程化输出</li>
+              <li>解读标记与来源页码绑定</li>
+              <li>支持多轮追问</li>
+            </ul>
+          </div>
+          <div class="feature-visual">
+            <div class="demo-placeholder" data-demo="explain">
+              <div class="demo-placeholder-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="16" x2="12" y2="12"></line>
+                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+              </div>
+              <p class="demo-placeholder-title">选中段落 AI 解读</p>
+              <p class="demo-placeholder-hint">替换为 explain.gif</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 功能 4 -->
+        <div class="feature-row feature-row-reverse reveal">
+          <div class="feature-text">
+            <span class="feature-index">04</span>
+            <h3>暂存区：跨页片段组合解读</h3>
+            <p>
+              遇到分散在多个页面的相关描述，先把它们"加入暂存"，再一次性选中多个片段发起自定义解读，让 AI 综合回答。
+            </p>
+            <ul class="feature-list">
+              <li>暂存片段支持编辑、删除、清空</li>
+              <li>点击片段一键跳回原文位置</li>
+              <li>自定义 Prompt，按需提问</li>
+            </ul>
+          </div>
+          <div class="feature-visual">
+            <div class="demo-placeholder" data-demo="stash-interpret">
+              <div class="demo-placeholder-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+                </svg>
+              </div>
+              <p class="demo-placeholder-title">暂存 + 自定义解读</p>
+              <p class="demo-placeholder-hint">替换为 stash-interpret.gif</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 功能 5 -->
+        <div class="feature-row reveal">
+          <div class="feature-text">
+            <span class="feature-index">05</span>
+            <h3>悬停取词，离线也能查</h3>
+            <p>
+              鼠标悬停英文单词约 500ms，自动弹出 ECDICT 离线词典释义。词库本地下载，不调用 LLM，也不消耗任何 Token。
+            </p>
+            <ul class="feature-list">
+              <li>首次启用自动提示下载</li>
+              <li>支持断点续传</li>
+              <li>设置中可自由开关</li>
+            </ul>
+          </div>
+          <div class="feature-visual">
+            <div class="demo-placeholder" data-demo="hover-word">
+              <div class="demo-placeholder-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                  <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+              </div>
+              <p class="demo-placeholder-title">悬停单词翻译</p>
+              <p class="demo-placeholder-hint">替换为 hover-word.gif</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 功能 6 -->
+        <div class="feature-row feature-row-reverse reveal">
+          <div class="feature-text">
+            <span class="feature-index">06</span>
+            <h3>布局自由，阅读顺手</h3>
+            <p>
+              左右分栏宽度可拖拽，两个面板均可隐藏；支持单页精读与连续滚动浏览，满足不同阅读习惯。
+            </p>
+            <ul class="feature-list">
+              <li>拖拽分隔条实时调整宽度</li>
+              <li>右侧面板可折叠为边缘按钮</li>
+              <li>分屏时自动优化比例</li>
+            </ul>
+          </div>
+          <div class="feature-visual">
+            <div class="demo-placeholder" data-demo="layout">
+              <div class="demo-placeholder-icon">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                  <line x1="12" y1="3" x2="12" y2="21"></line>
+                </svg>
+              </div>
+              <p class="demo-placeholder-title">分栏与阅读模式</p>
+              <p class="demo-placeholder-hint">替换为 layout.gif</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 隐私安全区域 -->
+    <section class="section section-privacy" id="privacy">
+      <div class="container">
+        <div class="section-header reveal">
+          <span class="section-tag">隐私安全</span>
+          <h2 class="section-title">你的文件，始终属于你</h2>
+          <p class="section-desc">
+            检测认证行业的标准文件往往涉及保密要求，我们把"本地优先"作为第一性原则。
+          </p>
+        </div>
+        <div class="privacy-grid">
+          <div class="privacy-card reveal">
+            <div class="privacy-icon">🔒</div>
+            <h3>PDF 不上传云端</h3>
+            <p>文件仅在本地读取和渲染，不会发送给任何第三方服务器。</p>
+          </div>
+          <div class="privacy-card reveal">
+            <div class="privacy-icon">✂️</div>
+            <h3>仅发送选中片段</h3>
+            <p>只有用户主动选中的文本才会发送给你配置的 LLM API。</p>
+          </div>
+          <div class="privacy-card reveal">
+            <div class="privacy-icon">🗝️</div>
+            <h3>API Key 进系统钥匙串</h3>
+            <p>API Key 通过 Rust keyring 存入系统安全存储，settings.json 中不留明文。</p>
+          </div>
+          <div class="privacy-card reveal">
+            <div class="privacy-icon">💾</div>
+            <h3>数据本地持久化</h3>
+            <p>批注、解读记录、暂存片段按 PDF 文件 hash 保存到本地 AppData。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 快速上手 -->
+    <section class="section section-start" id="start">
+      <div class="container">
+        <div class="section-header reveal">
+          <span class="section-tag">快速上手</span>
+          <h2 class="section-title">三步开始用</h2>
+        </div>
+        <div class="steps">
+          <div class="step reveal">
+            <div class="step-number">1</div>
+            <h3>下载并安装</h3>
+            <p>从 GitHub Releases 下载对应平台的安装包，完成安装。</p>
+          </div>
+          <div class="step-divider reveal" aria-hidden="true"></div>
+          <div class="step reveal">
+            <div class="step-number">2</div>
+            <h3>配置 LLM</h3>
+            <p>在设置中填入你的 OpenAI 兼容 API（DeepSeek / Kimi / Qwen / OpenAI 等），API Key 会进入系统钥匙串。</p>
+          </div>
+          <div class="step-divider reveal" aria-hidden="true"></div>
+          <div class="step reveal">
+            <div class="step-number">3</div>
+            <h3>打开 PDF 开始阅读</h3>
+            <p>选中任意文本即可翻译或解读；遇到专业单词可开启悬停取词。</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CTA 区域 -->
+    <section class="section section-cta">
+      <div class="container">
+        <div class="cta-card reveal">
+          <h2>现在就让 AI 帮你读标准</h2>
+          <p>超轻量版免费开放使用，下载即用，无需 License。</p>
+          <div class="cta-actions">
+            <a
+              class="btn btn-primary btn-lg"
+              href="https://github.com/ChqJourney/smart_reader/releases"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              免费下载
+            </a>
+            <a
+              class="btn btn-secondary btn-lg"
+              href="https://github.com/ChqJourney/smart_reader"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              查看源码
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+      <div class="container footer-inner">
+        <div class="footer-brand">
+          <img src="assets/logo.svg" alt="" width="24" height="24" />
+          <span>SpecReader AI</span>
+        </div>
+        <p class="footer-copy">
+          © 2026 SpecReader AI Team. 商业软件，超轻量版暂不强制 License 校验。
+        </p>
+        <div class="footer-links">
+          <a href="https://github.com/ChqJourney/smart_reader" target="_blank" rel="noopener noreferrer">GitHub</a>
+          <a href="https://github.com/ChqJourney/smart_reader/releases" target="_blank" rel="noopener noreferrer">Releases</a>
+        </div>
+      </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+  </body>
+</html>

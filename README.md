@@ -2,6 +2,8 @@
 
 面向检测认证工程师的桌面端 AI 助手，用于降低阅读、理解和执行各类标准 PDF 文件时的认知与智力开销。
 
+👉 [查看产品演示页](https://chqjourney.github.io/smart_reader/) | [下载最新版](https://github.com/ChqJourney/smart_reader/releases)
+
 ## 技术栈
 
 - **桌面框架**：Tauri 2.0（Rust 后端 + Web 前端）

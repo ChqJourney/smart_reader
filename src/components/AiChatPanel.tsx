@@ -146,7 +146,7 @@ export default function AiChatPanel({
             aria-label={t("panel.hide")}
             title={t("panel.hide")}
           >
-            <Icon name="hide-right" size={16} />
+            <Icon name="panel-collapse-right" size={16} />
           </button>
         )}
       </div>

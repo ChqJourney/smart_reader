@@ -26,6 +26,10 @@ export type IconName =
   | "edit"
   | "panel-left"
   | "panel-right"
+  | "panel-collapse-left"
+  | "panel-expand-left"
+  | "panel-collapse-right"
+  | "panel-expand-right"
   | "fit-to-width";
 
 interface IconProps {
@@ -398,6 +402,82 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
       />
       <path
         d="M13 3v14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </>
+  ),
+  "panel-collapse-left": (
+    <>
+      <path
+        d="M3 6h8M3 10h8M3 14h8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M15 6l-4 4 4 4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  "panel-expand-left": (
+    <>
+      <path
+        d="M3 6h8M3 10h8M3 14h8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M11 6l4 4-4 4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  "panel-collapse-right": (
+    <>
+      <path
+        d="M5 6l4 4-4 4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9 6h8M9 10h8M9 14h8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </>
+  ),
+  "panel-expand-right": (
+    <>
+      <path
+        d="M9 6l-4 4 4 4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9 6h8M9 10h8M9 14h8"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"

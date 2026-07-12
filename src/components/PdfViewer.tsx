@@ -583,7 +583,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                 aria-label={t("pdf.hidePanel")}
                 title={t("pdf.hidePanel")}
               >
-                <Icon name="hide-left" size={16} />
+                <Icon name="panel-collapse-left" size={16} />
               </button>
             )}
             <button

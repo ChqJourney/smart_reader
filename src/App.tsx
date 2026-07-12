@@ -587,7 +587,7 @@ function App() {
                 aria-label={t("app.showAiAssistant")}
                 title={t("app.showAiAssistant")}
               >
-                <Icon name="panel-right" size={16} />
+                <Icon name="panel-expand-right" size={16} />
               </button>
             )}
           </>
@@ -677,7 +677,7 @@ function App() {
                 aria-label={t("app.showAiAssistant")}
                 title={t("app.showAiAssistant")}
               >
-                <Icon name="panel-right" size={16} />
+                <Icon name="panel-expand-right" size={16} />
               </button>
             )}
           </>
@@ -689,7 +689,7 @@ function App() {
               aria-label={t("app.showPdf")}
               title={t("app.showPdf")}
             >
-              <Icon name="panel-left" size={16} />
+              <Icon name="panel-expand-left" size={16} />
             </button>
             {layout.rightVisible ? (
               <div className="right-panel expanded" style={{ flex: 1 }}>
@@ -721,7 +721,7 @@ function App() {
                 aria-label={t("app.showAiAssistant")}
                 title={t("app.showAiAssistant")}
               >
-                <Icon name="panel-right" size={16} />
+                <Icon name="panel-expand-right" size={16} />
               </button>
             )}
           </>

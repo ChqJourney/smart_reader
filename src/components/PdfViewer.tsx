@@ -22,6 +22,14 @@ import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
+function safeDestroyDocument(doc: pdfjsLib.PDFDocumentProxy | null | undefined) {
+  if (!doc) return;
+  if (typeof doc.destroy !== "function") return;
+  doc.destroy().catch((err) => {
+    logError(`Failed to destroy PDF document: ${err}`);
+  });
+}
+
 export interface PageViewportInfo {
   width: number;
   height: number;
@@ -188,6 +196,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     const searchInputRef = useRef<HTMLInputElement>(null);
     const scaleInputRef = useRef<HTMLInputElement>(null);
     const isJumpingRef = useRef(false);
+    const pdfRef = useRef<pdfjsLib.PDFDocumentProxy | null>(null);
     const jumpScrollCleanupRef = useRef<(() => void) | null>(null);
     const wheelDeltaRef = useRef(0);
     const lastWheelDirectionRef = useRef(0);
@@ -293,6 +302,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       }
 
       let isCancelled = false;
+      let loadingTask: pdfjsLib.PDFDocumentLoadingTask | undefined;
 
       const loadPdf = async () => {
         setError("");
@@ -305,11 +315,16 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           if (isCancelled) return;
 
           const uint8Array = new Uint8Array(bytes);
-          const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+          loadingTask = pdfjsLib.getDocument({ data: uint8Array });
 
           const loadedPdf = await loadingTask.promise;
-          if (isCancelled) return;
+          loadingTask = undefined;
+          if (isCancelled) {
+            safeDestroyDocument(loadedPdf);
+            return;
+          }
 
+          pdfRef.current = loadedPdf;
           setPdf(loadedPdf);
           setNumPages(loadedPdf.numPages);
           setPageNum(1);
@@ -329,6 +344,14 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
       return () => {
         isCancelled = true;
+        if (typeof loadingTask?.destroy === "function") {
+          loadingTask.destroy().catch((err) => {
+            logError(`Failed to destroy PDF loading task: ${err}`);
+          });
+        }
+        const docToDestroy = pdfRef.current;
+        pdfRef.current = null;
+        safeDestroyDocument(docToDestroy);
       };
     }, [filePath]);
 

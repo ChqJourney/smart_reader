@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SpecReader AI · 商业级代码审核报告</title>
+<style>
+  :root{
+    --bg:#0f1420; --panel:#161c2b; --panel2:#1c2334; --line:#2a3349;
+    --txt:#e7ecf4; --muted:#9aa6bd; --accent:#5b8cff; --accent2:#37c0a0;
+    --crit:#ff5d6c; --high:#ff9f43; --med:#ffd166; --low:#5bc0ff; --ok:#37c0a0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.6;font-size:15px}
+  .wrap{max-width:1080px;margin:0 auto;padding:32px 24px 64px}
+  header.hero{background:linear-gradient(135deg,#1b2440,#10141f);
+    border:1px solid var(--line);border-radius:16px;padding:28px 30px;margin-bottom:26px}
+  .hero h1{margin:0 0 6px;font-size:26px;letter-spacing:.3px}
+  .hero .sub{color:var(--muted);font-size:14px}
+  .badges{margin-top:16px;display:flex;gap:10px;flex-wrap:wrap}
+  .badge{background:var(--panel2);border:1px solid var(--line);border-radius:999px;
+    padding:5px 14px;font-size:12.5px;color:var(--muted)}
+  .scorewrap{display:flex;gap:26px;align-items:center;flex-wrap:wrap;margin-top:22px}
+  .score{width:148px;height:148px;border-radius:50%;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;flex:0 0 auto;
+    background:conic-gradient(var(--accent) 0 72%,#26304a 72% 100%);
+    position:relative}
+  .score:after{content:"";position:absolute;width:116px;height:116px;border-radius:50%;
+    background:var(--panel);top:16px;left:16px}
+  .score .num{position:relative;font-size:38px;font-weight:800;z-index:1}
+  .score .lab{position:relative;font-size:12px;color:var(--muted);z-index:1}
+  .gradebox{flex:1;min-width:240px}
+  .grade{display:inline-block;font-size:13px;font-weight:700;color:#0f1420;
+    background:var(--med);padding:3px 12px;border-radius:6px;margin-bottom:8px}
+  .gradebox p{margin:6px 0 0;color:var(--muted);font-size:13.5px}
+  h2{margin:34px 0 12px;font-size:19px;border-left:4px solid var(--accent);padding-left:12px}
+  h3{margin:20px 0 8px;font-size:15.5px}
+  p{margin:8px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:16px 18px;margin:12px 0}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:12.5px;text-transform:uppercase;letter-spacing:.5px}
+  .bar{height:10px;border-radius:6px;background:#26304a;overflow:hidden;min-width:120px}
+  .bar > i{display:block;height:100%;border-radius:6px}
+  .pill{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 9px;border-radius:6px;white-space:nowrap}
+  .p-crit{background:rgba(255,93,108,.16);color:var(--crit);border:1px solid rgba(255,93,108,.4)}
+  .p-high{background:rgba(255,159,67,.16);color:var(--high);border:1px solid rgba(255,159,67,.4)}
+  .p-med{background:rgba(255,209,102,.14);color:var(--med);border:1px solid rgba(255,209,102,.4)}
+  .p-low{background:rgba(91,192,255,.14);color:var(--low);border:1px solid rgba(91,192,255,.4)}
+  .p-ok{background:rgba(55,192,160,.14);color:var(--ok);border:1px solid rgba(55,192,160,.4)}
+  .finding{border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:12px 0;background:var(--panel)}
+  .finding .top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .finding .ttl{font-weight:700;font-size:15px}
+  .finding .meta{color:var(--muted);font-size:12.5px;margin-top:4px}
+  .finding code{background:var(--panel2);padding:1px 6px;border-radius:5px;font-size:12.5px;color:#cdd7ec}
+  .finding .sec{margin-top:10px}
+  .finding .sec b{color:var(--accent2)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}.scorewrap{flex-direction:column;align-items:flex-start}}
+  .blk{background:rgba(255,93,108,.06);border:1px solid rgba(255,93,108,.3);border-radius:12px;padding:14px 16px}
+  .blk h3{color:var(--crit);margin-top:0}
+  ul{margin:8px 0;padding-left:22px}
+  li{margin:5px 0}
+  .ok{color:var(--ok)} .muted{color:var(--muted)}
+  .foot{margin-top:40px;color:var(--muted);font-size:12.5px;border-top:1px solid var(--line);padding-top:16px}
+  .tag{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:5px;padding:1px 7px;margin-right:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>SpecReader AI · 商业级代码审核报告</h1>
+  <div class="sub">面向检测认证工程师的桌面端 AI 标准 PDF 阅读助手 · 以商业级（可公开发布）软件标准审核</div>
+  <div class="badges">
+    <span class="badge">版本 v0.6.0（超轻量版）</span>
+    <span class="badge">技术栈 Tauri 2.0 + React 18 + Rust</span>
+    <span class="badge">审核日期 2026-07-13</span>
+    <span class="badge">审核范围 后端 Rust / 前端 TS / 构建与分发 / 测试与 CI</span>
+  </div>
+  <div class="scorewrap">
+    <div class="score"><div class="num">72</div><div class="lab">/ 100</div></div>
+    <div class="gradebox">
+      <span class="grade">综合等级 B−</span>
+      <p>安全基础扎实、工程质量高于同体量团队平均水平，但距离“可商业公开发布”仍有 4 项硬性阻断项：<b>代码签名、API Key 不应驻留前端、PDF 文档内存泄漏、大文档性能扩展</b>。当前为“高质量 MVP 基础”，尚未完成产品化。</p>
+    </div>
+  </div>
+</header>
+
+<h2>1. 评分明细</h2>
+<div class="card">
+  <table>
+    <thead><tr><th>维度</th><th>权重</th><th>得分</th><th style="width:38%">可视化</th></tr></thead>
+    <tbody>
+      <tr><td>安全与隐私</td><td>25%</td><td>72</td><td><div class="bar"><i style="width:72%;background:var(--accent)"></i></div></td></tr>
+      <tr><td>可靠性与正确性</td><td>20%</td><td>70</td><td><div class="bar"><i style="width:70%;background:var(--high)"></i></div></td></tr>
+      <tr><td>性能与可扩展性</td><td>15%</td><td>62</td><td><div class="bar"><i style="width:62%;background:var(--high)"></i></div></td></tr>
+      <tr><td>架构与代码质量</td><td>15%</td><td>78</td><td><div class="bar"><i style="width:78%;background:var(--ok)"></i></div></td></tr>
+      <tr><td>测试与质量门禁</td><td>15%</td><td>85</td><td><div class="bar"><i style="width:85%;background:var(--ok)"></i></div></td></tr>
+      <tr><td>体验与可访问性</td><td>5%</td><td>74</td><td><div class="bar"><i style="width:74%;background:var(--accent)"></i></div></td></tr>
+      <tr><td>文档与分发</td><td>5%</td><td>60</td><td><div class="bar"><i style="width:60%;background:var(--high)"></i></div></td></tr>
+    </tbody>
+  </table>
+  <p class="muted">加权计算：0.25×72 + 0.20×70 + 0.15×62 + 0.15×78 + 0.15×85 + 0.05×74 + 0.05×60 ≈ <b>72</b>。评分基于源码实测与现有测试/CI 运行结果，非主观印象。</p>
+</div>
+
+<h2>2. 方法论</h2>
+<div class="card">
+  <ul>
+    <li>通读 <code>README.md</code> / <code>PRD.md</code> / <code>TESTING.md</code> / <code>AGENTS.md</code> 确认产品范围与非功能目标（含 PRD 的“100MB PDF 30s、打开&lt;5s、AI 首字&lt;3s”指标）。</li>
+    <li>逐文件审查后端 <code>src-tauri/src/*.rs</code>、<code>tauri.conf.json</code>、<code>capabilities</code>、<code>Cargo.toml</code>。</li>
+    <li>逐文件审查前端 <code>src/services</code>、<code>src/hooks</code>、<code>src/components</code> 中与安全、流式、持久化、渲染相关的核心模块。</li>
+    <li>运行验证：<code>tsc --noEmit</code> 通过；前端 184 测试全过（21 文件）；Rust <code>cargo test</code> 37 测试全过（含路径穿越/钥匙串/原子写）。
+
+    <li>对照 2026-07-11 历史审核（<code>AUDIT_REPORT.html</code> / <code>AUDIT_FIX_PLAN.md</code>）确认已修复项，并独立发现新增/残留问题。</li>
+  </ul>
+</div>
+
+<h2>3. 已验证的优势（值得保留）</h2>
+<div class="grid2">
+  <div class="card">
+    <h3 class="ok">安全基础到位</h3>
+    <ul>
+      <li>API Key 存系统钥匙串，磁盘 <code>settings.json</code> 仅留空占位；钥匙串不可用时<b>拒绝保存</b>而非回退明文（<code>secure_storage.rs</code>、<code>lib.rs</code>）。</li>
+      <li>PDF 读取命令强制<b>授权白名单 + 扩展名校验</b>（<code>validate_pdf_access</code>）。</li>
+      <li>会话 id 路径穿越防护 + 单测覆盖（<code>validate_session_id</code>）。</li>
+      <li>文件写入采用 <b>tmp + rename 原子写</b> 且同文件串行锁。</li>
+      <li>LLM 输出 Markdown 经 <code>rehype-raw → rehype-sanitize</code> 净化，阻断脚本注入。</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3 class="ok">工程化与质量门禁</h3>
+    <ul>
+      <li>CI 含 type-check / lint / build / npm audit / cargo test / clippy -D warnings / cargo audit / e2e，属小型团队中的高标准。</li>
+      <li>184 前端单测 + 37 Rust 单测全绿；后端将纯逻辑与 <code>AppHandle</code> 解耦，可测性好。</li>
+      <li>词典下载支持 Range 断点续传、zip 炸弹防护、schema 校验。</li>
+      <li>旧 identifier → 新 identifier 数据目录自动迁移（<code>paths.rs</code>）。</li>
+      <li>旧明文 Key 自动迁移至钥匙串并清空磁盘字段。</li>
+    </ul>
+  </div>
+</div>
+
+<h2>4. 问题清单（按严重度）</h2>
+
+<!-- ===== HIGH / CRITICAL ===== -->
+<div class="finding">
+  <div class="top"><div class="ttl">S1 · API Key 驻留前端内存，LLM 请求由 WebView 直连</div><span class="pill p-high">High</span></div>
+  <div class="meta">位置：<code>src/services/llm.ts:38-50</code> · <code>src/services/settings.ts:98-112</code> · <code>src-tauri/src/lib.rs:870-889</code></div>
+  <div class="sec"><b>描述：</b>后端从钥匙串读出 API Key 经 IPC 返回前端，Key 长期驻留 JS 内存；<code>fetch</code> 的 <code>Authorization: Bearer</code> 直接在前端构造。当前 CSP <code>connect-src</code> 允许任意 <code>https:</code>（见 S3），一旦 WebView 存在任何注入面（含被篡改/恶意的 LLM 端点通过未净化路径），Key 可被读取外泄。</div>
+  <div class="sec"><b>影响：</b>违背“密钥不出后端”的商业级安全基线；调试构建下可通过 DevTools 直接读取 Key。</div>
+  <div class="sec"><b>建议：</b>将 LLM 调用<b>代理到 Rust 后端</b>（新增 Tauri 命令透传 SSE），Key 仅存于 Rust；此后 CSP 可收紧为 <code>'self' http://localhost:*</code>，彻底消除 S1+S3 的耦合风险。这是商业级最关键架构改进。</div>
+</div>
+
+<div class="finding">
+  <div class="top"><div class="ttl">D1 · 无代码签名（macOS ad-hoc / Windows 未签名）</div><span class="pill p-high">High · 发布阻断</span></div>
+  <div class="meta">位置：<code>src-tauri/tauri.conf.json:43</code> · <code>.github/workflows/cd.yml</code></div>
+  <div class="sec"><b>描述：</b>macOS <code>signingIdentity: "-"</code>（ad-hoc），Windows 仅产出未签名 exe。正式发布时 Gatekeeper 会报“应用已损坏”，Windows SmartScreen 报“未知发布者”。</div>
+  <div class="sec"><b>影响：</b>商业公开发布的硬门槛，直接决定用户能否正常安装运行。</div>
+  <div class="sec"><b>建议：</b>采购 Apple Developer ID 并完成 notarization；Windows 采用 Authenticode 签名（CI 注入证书）。此为对外发布前必须项。</div>
+</div>
+
+<div class="finding">
+  <div class="top"><div class="ttl">R1 · pdf.js 文档未 destroy，切换/关闭 PDF 内存泄漏</div><span class="pill p-high">High · 可靠性</span></div>
+  <div class="meta">位置：<code>src/components/PdfViewer.tsx:280-333</code>（load 的 cleanup 仅置 <code>isCancelled</code>，未 <code>pdf.destroy()</code>）</div>
+  <div class="sec"><b>描述：</b><code>loadPdf</code> 在 <code>filePath</code> 变化时直接替换 <code>pdf</code> 状态，旧 <code>PDFDocumentProxy</code> 从未调用 <code>.destroy()</code>。pdf.js 会保留已解析页面、文本与 worker 任务。</div>
+  <div class="sec"><b>影响：</b>桌面应用常开数小时、连续打开多个大 PDF，解析数据持续堆积，最终内存膨胀甚至卡顿/崩溃。对“常驻桌面工具”是核心可靠性缺陷。</div>
+  <div class="sec"><b>建议：</b>在 load effect 的 cleanup 中 <code>pdf?.destroy()</code>；切换前先销毁旧文档再置空。</div>
+</div>
+
+<div class="finding">
+  <div class="top"><div class="ttl">P1 · 大文档性能：全页遍历 + 搜索无防抖</div><span class="pill p-high">Medium · 性能</span></div>
+  <div class="meta">位置：<code>PdfViewer.tsx:542-563</code>（视口预计算）· <code>PdfViewer.tsx:629-682</code>（搜索）</div>
+  <div class="sec"><b>描述：</b><code>loadViewports</code> 对每一页调用 <code>getPage(i)</code>，且 <code>viewportsReady</code> 不就绪前禁止跳页；<code>build()</code> 对每页 <code>getTextContent()</code> 且在每次按键（<code>searchQuery</code> 变化）重跑全量扫描，无防抖。</div>
+  <div class="sec"><b>影响：</b>对 PRD 明确目标的 100MB / 200 页文档，打开就绪与搜索会明显超阈值（&lt;5s、流畅），主线程卡顿。</div>
+  <div class="sec"><b>建议：</b>视口尺寸改为按需/懒计算或仅计算可视页；搜索 query 增加 250–300ms 防抖；大文档文本抽取可放到 Web Worker。</div>
+</div>
+
+<!-- ===== MEDIUM ===== -->
+<div class="finding">
+  <div class="top"><div class="ttl">S2 · 离线词典下载无完整性校验</div><span class="pill p-med">Medium</span></div>
+  <div class="meta">位置：<code>src-tauri/src/dictionary.rs:32,37</code>（<code>EXPECTED_DICT_ZIP_SHA256</code> / <code>EXPECTED_DICT_SQLITE_SHA256</code> 均为空串）</div>
+  <div class="sec"><b>描述：</b>下载后仅做 schema 校验（是否存在 <code>stardict</code> 表），未校验 SHA-256。代码已预留校验入口但常量留空。</div>
+  <div class="sec"><b>影响：</b>供应链/MITM 风险下可能加载被篡改的 sqlite 并由 rusqlite 打开查询（潜在利用 CVE）。下载本身走 HTTPS，风险中等。</div>
+  <div class="sec"><b>建议：</b>发布时计算并固化两个 SHA-256；校验失败删除并重试/提示。</div>
+</div>
+
+<div class="finding">
+  <div class="top"><div class="ttl">S3 · CSP connect-src 允许任意 https:</div><span class="pill p-med">Medium</span></div>
+  <div class="meta">位置：<code>src-tauri/tauri.conf.json:26</code></div>
+  <div class="sec"><b>描述：</b>因 LLM 请求由前端直发（S1），CSP 必须放行任意 https，属于“为兼容用户自定义 Base URL 而放宽”的妥协。</div>
+  <div class="sec"><b>建议：</b>完成 S1（LLM 代理到后端）后，将 CSP 收紧为 <code>'self' http://localhost:*</code>，WebView 不再直连外网，大幅收缩 XSS 外泄面。</div>
+</div>
+
+<div class="finding">
+  <div class="top"><div class="ttl">D2 · 未产出 macOS / Linux 安装包</div><span class="pill p-med">Medium · 分发</span></div>
+  <div class="meta">位置：<code>.github/workflows/cd.yml</code>（仅 Windows runner）</div>
+  <div class="sec"><b>描述：</b>PRD 承诺支持 macOS 12+（Intel + Apple Silicon），但 CD 仅构建 Windows。即便本地可打 dmg，也无签名/notarize 流水线。</div>
+  <div class="sec"><b>建议：</b>补齐 macOS runner（含签名+notarize）与可选 Linux 包，与 D1 一并纳入发布流水线。</div>
+</div>
+
+<!-- ===== LOW ===== -->
+<div class="finding">
+  <div class="top"><div class="ttl">S4 · capabilities 授予未使用的 shell:default</div><span class="pill p-low">Low</span></div>
+  <div class="meta">位置：<code>src-tauri/capabilities/default.json:10</code></div>
+  <div class="sec"><b>描述：</b>应用通过 <code>open</code> crate 直接打开路径，并未使用 <code>tauri-plugin-shell</code> 的执行能力，但 capability 仍授予 <code>shell:default</code>。</div>
+  <div class="sec"><b>建议：</b>移除 <code>shell:default</code> 与 <code>tauri-plugin-shell</code> 依赖，缩小攻击面。</div>
+</div>
+
+<div class="finding">
+  <div class="top"><div class="ttl">S5 · load/save_pdf_data 未调用 validate_pdf_access</div><span class="pill p-low">Low</span></div>
+  <div class="meta">位置：<code>src-tauri/src/lib.rs:798-827</code></div>
+  <div class="sec"><b>描述：</b><code>read_pdf_bytes</code>/<code>get_pdf_hash</code> 强制白名单校验，但 <code>load_pdf_data</code>/<code>save_pdf_data</code> 未校验（写入仅落在 AppData 目录、按 hash 命名，实际风险低）。这与既有安全模型不一致。</div>
+  <div class="sec"><b>建议：</b>在这两个命令入口也调用 <code>validate_pdf_access</code>，保持纵深防御一致。</div>
+</div>
+
+<div class="finding">
+  <div class="top"><div class="ttl">S6 · 日志脱敏为“尽力而为”</div><span class="pill p-low">Low</span></div>
+  <div class="meta">位置：<code>src/services/logs.ts:22-34</code></div>
+  <div class="sec"><b>描述：</b>仅匹配 <code>sk-[A-Za-z0-9_-]{20,}</code> 与 <code>Bearer ...</code>；非 <code>sk-</code> 格式（如某些厂商前缀、Azure 长密钥）可能漏脱敏。当前 Key 本身未被记录（好），但若后续有人记录请求体则可能泄露。</div>
+  <div class="sec"><b>建议：</b>扩展规则覆盖常见前缀，并对“任何包含 secret/key/token 的日志”做更保守处理。</div>
+</div>
+
+<div class="finding">
+  <div class="top"><div class="ttl">R2 · saveSettings/loadSettings 静默吞错</div><span class="pill p-low">Low</span></div>
+  <div class="meta">位置：<code>src/services/settings.ts:124-130, 108-112</code></div>
+  <div class="sec"><b>描述：</b>钥匙串写入失败时被 <code>catch</code> 吞掉，用户无感知；内存中的 Key 仍可用但重启后配置丢失。</div>
+  <div class="sec"><b>建议：</b>将错误回传给调用方并在 UI 提示“配置保存失败”。</div>
+</div>
+
+<div class="finding">
+  <div class="top"><div class="ttl">S7 · open_path 命令已无前端调用方（死代码）</div><span class="pill p-low">Low</span></div>
+  <div class="meta">位置：<code>src-tauri/src/lib.rs:244-256</code></div>
+  <div class="sec"><b>描述：</b>历史审核已确认该命令无调用方。保留它扩大了 IPC 攻击面。</div>
+  <div class="sec"><b>建议：</b>移除命令或在 capability 中严格限制协议。</div>
+</div>
+
+<div class="finding">
+  <div class="top"><div class="ttl">C1 · Mutex 用 .unwrap()，panic=abort 下 poison 即进程退出</div><span class="pill p-low">Low</span></div>
+  <div class="meta">位置：<code>src-tauri/src/lib.rs:52-61</code></div>
+  <div class="sec"><b>描述：</b><code>authorize_path</code>/<code>is_path_allowed</code> 对锁 <code>.unwrap()</code>；release 用 <code>panic="abort"</code>，一旦锁被 poison 整个进程中止。</div>
+  <div class="sec"><b>建议：</b>改为 <code>unwrap_or_else(|e| e.into_inner())</code>。</div>
+</div>
+
+<div class="finding">
+  <div class="top"><div class="ttl">C2 · 写锁注册表与哈希缓存长期不下发</div><span class="pill p-low">Low</span></div>
+  <div class="meta">位置：<code>src-tauri/src/lib.rs:600-612</code>（ATOMIC_WRITE_LOCKS）· <code>AppState.pdf_hash_cache</code></div>
+  <div class="sec"><b>描述：</b>两者均为进程级长期增长结构，随打开文件数缓慢膨胀。对单用户桌面影响有限。</div>
+  <div class="sec"><b>建议：</b>写锁用完后移除；哈希缓存加容量上限/LRU。</div>
+</div>
+
+<div class="finding">
+  <div class="top"><div class="ttl">P2 · read_pdf_bytes 整文件读入内存 + IPC ArrayBuffer</div><span class="pill p-low">Low</span></div>
+  <div class="meta">位置：<code>src-tauri/src/lib.rs:310-325</code> · <code>PdfViewer.tsx:302-308</code></div>
+  <div class="sec"><b>描述：</b>整个 PDF 一次性读入 <code>Vec&lt;u8&gt;</code> 并经 IPC 传为 ArrayBuffer 交给 pdf.js，100MB+ 文件内存峰值高。</div>
+  <div class="sec"><b>建议：</b>对大文件可改流式分块或自定义 transport；至少给出内存上限与降级提示。</div>
+</div>
+
+<div class="finding">
+  <div class="top"><div class="ttl">D3/D4/D5 · 体验与分发细节</div><span class="pill p-low">Low</span></div>
+  <div class="meta">位置：设置/关于页、<code>e2e/</code>、<code>vite.config.ts</code></div>
+  <div class="sec">
+    <ul>
+      <li><b>D3</b> 设置保存失败无反馈；缺“关于/许可”页（C-5 仅加 LICENSE 文件）。</li>
+      <li><b>D4</b> E2E 仅覆盖布局与页码跳转，缺“打开→选中→翻译/解读→持久化→重开恢复”黄金路径端到端覆盖。</li>
+      <li><b>D5</b> 测试覆盖率阈值未强制（vite 未设 <code>thresholds</code>）；部分测试有 <code>act()</code> 警告。</li>
+      <li><b>R3</b> 旧明文 Key 迁移中若钥匙串写入失败，明文会残留磁盘（边角场景）。</li>
+    </ul>
+  </div>
+</div>
+
+<h2>5. 商业发布阻断项（必须修复）</h2>
+<div class="blk">
+  <h3>发布前 Must-Fix（4 + 1 项）</h3>
+  <ul>
+    <li><b>D1</b> 代码签名：macOS Developer ID + notarization，Windows Authenticode。</li>
+    <li><b>S1</b> LLM 代理到 Rust 后端，API Key 不进入 WebView 内存。</li>
+    <li><b>R1</b> pdf.js 文档 <code>destroy()</code>，消除长会话内存泄漏。</li>
+    <li><b>P1</b> 大文档（100MB/200 页）性能：视口懒计算 + 搜索防抖。</li>
+    <li><b>D2</b> 补齐 macOS（及可选 Linux）构建与签名流水线，兑现 PRD 平台承诺。</li>
+  </ul>
+</div>
+
+<h2>6. 优先级路线图</h2>
+<div class="card">
+  <table>
+    <thead><tr><th>阶段</th><th>事项</th><th>预计</th></tr></thead>
+    <tbody>
+      <tr><td>P0 发布阻断</td><td>D1 签名 · S1 LLM 代理 · R1 pdf.js destroy · P1 性能 · D2 多平台</td><td>2–3 周</td></tr>
+      <tr><td>P1 安全收敛</td><td>S2 词典哈希固化 · S3 CSP 收紧 · S4 移除 shell 能力 · S5 load/save 校验</td><td>3–4 天</td></tr>
+      <tr><td>P2 健壮性</td><td>R2 错误可见 · C1 锁 poison · C2 缓存/锁回收 · S6/S7 日志与死代码</td><td>2–3 天</td></tr>
+      <tr><td>P3 工程体验</td><td>D4 黄金路径 E2E · D5 覆盖率阈值 · D3 关于页/错误反馈 · P2 大文件流式</td><td>持续</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2>7. 结论</h2>
+<div class="card">
+  <p>SpecReader AI 在 <b>安全基础、原子持久化、密钥管理、净化渲染与 CI 质量门禁</b> 上已达到甚至超过同体量团队的平均水平，2026-07-11 历史审核中的 Critical / High 项也基本落实。代码可读、结构清晰、测试可信。</p>
+  <p>但以“商业级公开发布”标准衡量，仍存在若干<b>产品化阻断项</b>：<b>未签名</b>导致用户无法顺畅安装、<b>API Key 仍在前端</b>、<b>PDF 文档内存泄漏</b>与<b>大文档性能</b>不满足 PRD 指标。修复 P0 五项后即可视为达到商业发布门槛；其余为可使产品更稳健、更专业的收敛项。</p>
+  <p class="muted">综合评分 <b>72 / 100（B−）</b>：高质量 MVP 基础，尚未完成产品化。</p>
+</div>
+
+<div class="foot">
+  本报告由 WorkBuddy 基于源码实测与测试结果生成，独立成稿、不与历史审核结论绑定。证据均引用具体文件与行号，便于复核与回归验证。
+</div>
+
+</div>
+</body>
+</html>

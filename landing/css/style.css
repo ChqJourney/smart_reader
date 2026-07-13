@@ -18,9 +18,12 @@
   --color-border: #e2e8f0;
   --color-border-light: #f1f5f9;
   --shadow-sm: 0 1px 2px 0 rgb(15 23 42 / 0.04);
-  --shadow: 0 4px 6px -1px rgb(15 23 42 / 0.06), 0 2px 4px -2px rgb(15 23 42 / 0.06);
-  --shadow-lg: 0 10px 15px -3px rgb(15 23 42 / 0.08), 0 4px 6px -4px rgb(15 23 42 / 0.08);
-  --shadow-xl: 0 20px 25px -5px rgb(15 23 42 / 0.08), 0 8px 10px -6px rgb(15 23 42 / 0.08);
+  --shadow:
+    0 4px 6px -1px rgb(15 23 42 / 0.06), 0 2px 4px -2px rgb(15 23 42 / 0.06);
+  --shadow-lg:
+    0 10px 15px -3px rgb(15 23 42 / 0.08), 0 4px 6px -4px rgb(15 23 42 / 0.08);
+  --shadow-xl:
+    0 20px 25px -5px rgb(15 23 42 / 0.08), 0 8px 10px -6px rgb(15 23 42 / 0.08);
   --radius-sm: 8px;
   --radius: 12px;
   --radius-lg: 16px;
@@ -42,8 +45,10 @@ html {
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB",
-    "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial,
+    sans-serif;
   font-size: 16px;
   line-height: 1.7;
   color: var(--color-text);
@@ -114,7 +119,11 @@ ul {
 
 .btn-primary {
   color: #fff;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-primary-dark) 100%
+  );
   border-color: transparent;
   box-shadow: 0 4px 14px 0 rgb(30 64 175 / 0.25);
 }
@@ -204,7 +213,11 @@ ul {
 .hero {
   position: relative;
   padding: 80px 0 100px;
-  background: linear-gradient(180deg, var(--color-bg) 0%, var(--color-bg-soft) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--color-bg) 0%,
+    var(--color-bg-soft) 100%
+  );
   overflow: hidden;
 }
 
@@ -215,7 +228,11 @@ ul {
   right: -10%;
   width: 600px;
   height: 600px;
-  background: radial-gradient(circle, rgba(30, 64, 175, 0.06) 0%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(30, 64, 175, 0.06) 0%,
+    transparent 70%
+  );
   pointer-events: none;
 }
 
@@ -226,7 +243,11 @@ ul {
   left: -5%;
   width: 500px;
   height: 500px;
-  background: radial-gradient(circle, rgba(14, 165, 233, 0.05) 0%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(14, 165, 233, 0.05) 0%,
+    transparent 70%
+  );
   pointer-events: none;
 }
 
@@ -253,7 +274,11 @@ ul {
 }
 
 .text-gradient {
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-accent) 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -484,7 +509,11 @@ ul {
   align-items: center;
   justify-content: center;
   gap: 12px;
-  background: linear-gradient(135deg, var(--color-bg-muted) 0%, var(--color-bg-soft) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--color-bg-muted) 0%,
+    var(--color-bg-soft) 100%
+  );
   border: 2px dashed var(--color-border);
   border-radius: var(--radius-lg);
   color: var(--color-text-tertiary);
@@ -516,7 +545,11 @@ ul {
 
 /* ========== 隐私安全 ========== */
 .section-privacy {
-  background: linear-gradient(180deg, var(--color-bg-soft) 0%, var(--color-bg) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--color-bg-soft) 0%,
+    var(--color-bg) 100%
+  );
 }
 
 .privacy-grid {
@@ -604,7 +637,11 @@ ul {
   font-size: 18px;
   font-weight: 800;
   color: #fff;
-  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary) 0%,
+    var(--color-primary-light) 100%
+  );
   border-radius: 50%;
   margin-bottom: 20px;
   box-shadow: 0 4px 12px rgb(30 64 175 / 0.2);
@@ -627,7 +664,12 @@ ul {
   align-self: center;
   width: 40px;
   height: 2px;
-  background: linear-gradient(90deg, var(--color-border), var(--color-primary-light), var(--color-border));
+  background: linear-gradient(
+    90deg,
+    var(--color-border),
+    var(--color-primary-light),
+    var(--color-border)
+  );
   border-radius: 2px;
 }
 
@@ -646,7 +688,11 @@ ul {
 .cta-card {
   padding: 56px 32px;
   text-align: center;
-  background: linear-gradient(135deg, var(--color-primary-dark) 0%, var(--color-primary) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--color-primary-dark) 0%,
+    var(--color-primary) 100%
+  );
   border-radius: var(--radius-xl);
   color: #fff;
   box-shadow: var(--shadow-xl);
@@ -743,7 +789,9 @@ ul {
 .reveal {
   opacity: 0;
   transform: translateY(24px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
+  transition:
+    opacity 0.6s ease,
+    transform 0.6s ease;
 }
 
 .reveal.is-visible {
@@ -752,11 +800,21 @@ ul {
 }
 
 /* 交错延迟 */
-.reveal:nth-child(1) { transition-delay: 0ms; }
-.reveal:nth-child(2) { transition-delay: 80ms; }
-.reveal:nth-child(3) { transition-delay: 160ms; }
-.reveal:nth-child(4) { transition-delay: 240ms; }
-.reveal:nth-child(5) { transition-delay: 320ms; }
+.reveal:nth-child(1) {
+  transition-delay: 0ms;
+}
+.reveal:nth-child(2) {
+  transition-delay: 80ms;
+}
+.reveal:nth-child(3) {
+  transition-delay: 160ms;
+}
+.reveal:nth-child(4) {
+  transition-delay: 240ms;
+}
+.reveal:nth-child(5) {
+  transition-delay: 320ms;
+}
 
 /* ========== 响应式微调 ========== */
 @media (max-width: 767px) {

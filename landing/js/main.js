@@ -12,12 +12,7 @@
     const el = document.getElementById("typewriter");
     if (!el) return;
 
-    const phrases = [
-      "翻译术语",
-      "解读条款",
-      "整理测试要求",
-      "追溯来源页码",
-    ];
+    const phrases = ["翻译术语", "解读条款", "整理测试要求", "追溯来源页码"];
 
     let phraseIndex = 0;
     let charIndex = 0;

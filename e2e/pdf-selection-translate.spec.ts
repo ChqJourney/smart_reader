@@ -72,25 +72,22 @@ test.describe("PDF text selection → translate", () => {
   });
 
   test("selects text and creates a translation popup", async ({ page }) => {
-    await page.route(
-      `${MOCK_LLM_BASE_URL}/chat/completions`,
-      async (route) => {
-        const chunks = [
-          `data: ${JSON.stringify({
-            choices: [{ delta: { content: "翻译结果：" } }],
-          })}\n\n`,
-          `data: ${JSON.stringify({
-            choices: [{ delta: { content: "第1页" } }],
-          })}\n\n`,
-          "data: [DONE]\n\n",
-        ];
-        await route.fulfill({
-          status: 200,
-          headers: { "Content-Type": "text/event-stream" },
-          body: buildSseResponse(chunks),
-        });
-      }
-    );
+    await page.route(`${MOCK_LLM_BASE_URL}/chat/completions`, async (route) => {
+      const chunks = [
+        `data: ${JSON.stringify({
+          choices: [{ delta: { content: "翻译结果：" } }],
+        })}\n\n`,
+        `data: ${JSON.stringify({
+          choices: [{ delta: { content: "第1页" } }],
+        })}\n\n`,
+        "data: [DONE]\n\n",
+      ];
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "text/event-stream" },
+        body: buildSseResponse(chunks),
+      });
+    });
 
     await page.getByTestId("open-pdf-btn").click();
 

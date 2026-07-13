@@ -28,9 +28,14 @@
         --success-bg: rgba(63, 185, 80, 0.12);
         --code-bg: #0d1117;
       }
-      * { box-sizing: border-box; margin: 0; padding: 0; }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC",
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC",
           "PingFang SC", "Microsoft YaHei", sans-serif;
         background: var(--bg);
         color: var(--text);
@@ -38,7 +43,11 @@
         font-size: 15px;
         -webkit-font-smoothing: antialiased;
       }
-      .container { max-width: 1120px; margin: 0 auto; padding: 40px 24px 80px; }
+      .container {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 40px 24px 80px;
+      }
       .hero {
         background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
         border: 1px solid var(--border);
@@ -47,84 +56,398 @@
         margin-bottom: 32px;
       }
       .hero h1 {
-        font-size: 28px; font-weight: 700; margin-bottom: 8px;
+        font-size: 28px;
+        font-weight: 700;
+        margin-bottom: 8px;
         background: linear-gradient(90deg, #e6edf3, #2f81f7);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
       }
-      .hero .subtitle { color: var(--text-muted); font-size: 15px; margin-bottom: 20px; }
-      .hero-meta { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; }
-      .meta-item { display: flex; flex-direction: column; gap: 2px; }
-      .meta-label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
-      .meta-value { font-size: 14px; color: var(--text); font-weight: 500; }
-      .score-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 16px; margin-top: 24px; }
-      .score-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 18px 16px; text-align: center; }
-      .score-card .label { font-size: 13px; color: var(--text-muted); margin-bottom: 6px; }
-      .score-card .value { font-size: 26px; font-weight: 700; }
-      .score-card .stars { font-size: 13px; margin-top: 4px; }
-      section { margin-bottom: 36px; }
-      h2 { font-size: 20px; font-weight: 600; padding-bottom: 10px; margin-bottom: 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
-      h3 { font-size: 16px; font-weight: 600; margin: 20px 0 12px; }
-      p { margin-bottom: 12px; }
-      ul, ol { margin: 8px 0 16px 20px; }
-      li { margin-bottom: 6px; }
-      .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0; }
-      .stat-box { border-radius: 10px; padding: 16px; text-align: center; border: 1px solid; }
-      .stat-box .num { font-size: 28px; font-weight: 700; }
-      .stat-box .lbl { font-size: 12px; margin-top: 4px; }
-      .stat-fixed { background: var(--success-bg); border-color: var(--success); }
-      .stat-fixed .num { color: var(--success); }
-      .stat-partial { background: var(--medium-bg); border-color: var(--medium); }
-      .stat-partial .num { color: var(--medium); }
-      .stat-defer { background: var(--high-bg); border-color: var(--high); }
-      .stat-defer .num { color: var(--high); }
-      .stat-new { background: var(--critical-bg); border-color: var(--critical); }
-      .stat-new .num { color: var(--critical); }
-      .issue { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 20px 22px; margin-bottom: 14px; transition: background 0.15s; }
-      .issue:hover { background: var(--bg-card-hover); }
-      .issue-header { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
-      .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; white-space: nowrap; }
-      .badge-critical { background: var(--critical-bg); color: var(--critical); border: 1px solid var(--critical); }
-      .badge-high { background: var(--high-bg); color: var(--high); border: 1px solid var(--high); }
-      .badge-medium { background: var(--medium-bg); color: var(--medium); border: 1px solid var(--medium); }
-      .badge-low { background: var(--low-bg); color: var(--low); border: 1px solid var(--low); }
-      .badge-fixed { background: var(--success-bg); color: var(--success); border: 1px solid var(--success); }
-      .badge-partial { background: var(--medium-bg); color: var(--medium); border: 1px solid var(--medium); }
-      .badge-defer { background: var(--high-bg); color: var(--high); border: 1px solid var(--high); }
-      .badge-new { background: var(--critical-bg); color: var(--critical); border: 1px solid var(--critical); }
-      .issue-title { font-weight: 600; font-size: 15px; flex: 1; min-width: 200px; }
-      .issue-body { color: var(--text-muted); font-size: 14px; }
-      .issue-body strong { color: var(--text); }
-      .issue-meta { font-size: 12px; color: var(--text-dim); margin-top: 8px; font-family: "SF Mono", "Fira Code", monospace; }
-      .issue-solution { margin-top: 10px; padding: 10px 14px; background: var(--accent-bg); border-left: 3px solid var(--accent); border-radius: 4px; font-size: 13px; }
-      code { background: var(--code-bg); padding: 2px 6px; border-radius: 4px; font-family: "SF Mono", "Fira Code", "Consolas", monospace; font-size: 13px; color: #79c0ff; }
-      table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 14px; }
-      th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border-light); }
-      th { font-weight: 600; color: var(--text-muted); font-size: 13px; }
-      tr:hover { background: var(--bg-card-hover); }
-      .dim-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
-      .dim-card { background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 20px; }
-      .dim-card h4 { font-size: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-      .dim-card .rating { font-size: 13px; color: var(--text-muted); }
-      .dim-card p { font-size: 13px; color: var(--text-muted); }
-      .callout { background: var(--accent-bg); border: 1px solid var(--accent); border-radius: 12px; padding: 18px 22px; margin: 20px 0; }
-      .callout strong { color: var(--accent); }
-      .callout-warn { background: var(--critical-bg); border-color: var(--critical); }
-      .callout-warn strong { color: var(--critical); }
-      .verify-list { list-style: none; margin: 0; padding: 0; }
-      .verify-item { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 10px; margin-bottom: 8px; }
-      .verify-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
-      .verify-content { flex: 1; }
-      .verify-title { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
-      .verify-desc { font-size: 13px; color: var(--text-muted); }
-      .priority-list { counter-reset: prio; list-style: none; margin: 0; padding: 0; }
-      .priority-item { counter-increment: prio; display: flex; gap: 14px; padding: 14px 16px; background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 10px; margin-bottom: 8px; align-items: flex-start; }
-      .priority-item::before { content: counter(prio); flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
-      .priority-content { flex: 1; }
-      .priority-title { font-weight: 600; font-size: 14px; margin-bottom: 2px; }
-      .priority-desc { font-size: 13px; color: var(--text-muted); }
-      .footer { text-align: center; color: var(--text-dim); font-size: 13px; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); }
-      .highlight { color: var(--accent); font-weight: 600; }
-      .big-score { font-size: 56px; font-weight: 800; line-height: 1; }
+      .hero .subtitle {
+        color: var(--text-muted);
+        font-size: 15px;
+        margin-bottom: 20px;
+      }
+      .hero-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-top: 16px;
+      }
+      .meta-item {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .meta-label {
+        font-size: 12px;
+        color: var(--text-dim);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .meta-value {
+        font-size: 14px;
+        color: var(--text);
+        font-weight: 500;
+      }
+      .score-bar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 16px;
+        margin-top: 24px;
+      }
+      .score-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 12px;
+        padding: 18px 16px;
+        text-align: center;
+      }
+      .score-card .label {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+      }
+      .score-card .value {
+        font-size: 26px;
+        font-weight: 700;
+      }
+      .score-card .stars {
+        font-size: 13px;
+        margin-top: 4px;
+      }
+      section {
+        margin-bottom: 36px;
+      }
+      h2 {
+        font-size: 20px;
+        font-weight: 600;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      h3 {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 20px 0 12px;
+      }
+      p {
+        margin-bottom: 12px;
+      }
+      ul,
+      ol {
+        margin: 8px 0 16px 20px;
+      }
+      li {
+        margin-bottom: 6px;
+      }
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 12px;
+        margin: 20px 0;
+      }
+      .stat-box {
+        border-radius: 10px;
+        padding: 16px;
+        text-align: center;
+        border: 1px solid;
+      }
+      .stat-box .num {
+        font-size: 28px;
+        font-weight: 700;
+      }
+      .stat-box .lbl {
+        font-size: 12px;
+        margin-top: 4px;
+      }
+      .stat-fixed {
+        background: var(--success-bg);
+        border-color: var(--success);
+      }
+      .stat-fixed .num {
+        color: var(--success);
+      }
+      .stat-partial {
+        background: var(--medium-bg);
+        border-color: var(--medium);
+      }
+      .stat-partial .num {
+        color: var(--medium);
+      }
+      .stat-defer {
+        background: var(--high-bg);
+        border-color: var(--high);
+      }
+      .stat-defer .num {
+        color: var(--high);
+      }
+      .stat-new {
+        background: var(--critical-bg);
+        border-color: var(--critical);
+      }
+      .stat-new .num {
+        color: var(--critical);
+      }
+      .issue {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 12px;
+        padding: 20px 22px;
+        margin-bottom: 14px;
+        transition: background 0.15s;
+      }
+      .issue:hover {
+        background: var(--bg-card-hover);
+      }
+      .issue-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .badge-critical {
+        background: var(--critical-bg);
+        color: var(--critical);
+        border: 1px solid var(--critical);
+      }
+      .badge-high {
+        background: var(--high-bg);
+        color: var(--high);
+        border: 1px solid var(--high);
+      }
+      .badge-medium {
+        background: var(--medium-bg);
+        color: var(--medium);
+        border: 1px solid var(--medium);
+      }
+      .badge-low {
+        background: var(--low-bg);
+        color: var(--low);
+        border: 1px solid var(--low);
+      }
+      .badge-fixed {
+        background: var(--success-bg);
+        color: var(--success);
+        border: 1px solid var(--success);
+      }
+      .badge-partial {
+        background: var(--medium-bg);
+        color: var(--medium);
+        border: 1px solid var(--medium);
+      }
+      .badge-defer {
+        background: var(--high-bg);
+        color: var(--high);
+        border: 1px solid var(--high);
+      }
+      .badge-new {
+        background: var(--critical-bg);
+        color: var(--critical);
+        border: 1px solid var(--critical);
+      }
+      .issue-title {
+        font-weight: 600;
+        font-size: 15px;
+        flex: 1;
+        min-width: 200px;
+      }
+      .issue-body {
+        color: var(--text-muted);
+        font-size: 14px;
+      }
+      .issue-body strong {
+        color: var(--text);
+      }
+      .issue-meta {
+        font-size: 12px;
+        color: var(--text-dim);
+        margin-top: 8px;
+        font-family: "SF Mono", "Fira Code", monospace;
+      }
+      .issue-solution {
+        margin-top: 10px;
+        padding: 10px 14px;
+        background: var(--accent-bg);
+        border-left: 3px solid var(--accent);
+        border-radius: 4px;
+        font-size: 13px;
+      }
+      code {
+        background: var(--code-bg);
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-family: "SF Mono", "Fira Code", "Consolas", monospace;
+        font-size: 13px;
+        color: #79c0ff;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+        font-size: 14px;
+      }
+      th,
+      td {
+        padding: 10px 14px;
+        text-align: left;
+        border-bottom: 1px solid var(--border-light);
+      }
+      th {
+        font-weight: 600;
+        color: var(--text-muted);
+        font-size: 13px;
+      }
+      tr:hover {
+        background: var(--bg-card-hover);
+      }
+      .dim-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        gap: 16px;
+      }
+      .dim-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .dim-card h4 {
+        font-size: 15px;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .dim-card .rating {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+      .dim-card p {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+      .callout {
+        background: var(--accent-bg);
+        border: 1px solid var(--accent);
+        border-radius: 12px;
+        padding: 18px 22px;
+        margin: 20px 0;
+      }
+      .callout strong {
+        color: var(--accent);
+      }
+      .callout-warn {
+        background: var(--critical-bg);
+        border-color: var(--critical);
+      }
+      .callout-warn strong {
+        color: var(--critical);
+      }
+      .verify-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .verify-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 10px;
+        margin-bottom: 8px;
+      }
+      .verify-icon {
+        font-size: 18px;
+        flex-shrink: 0;
+        margin-top: 1px;
+      }
+      .verify-content {
+        flex: 1;
+      }
+      .verify-title {
+        font-weight: 600;
+        font-size: 14px;
+        margin-bottom: 4px;
+      }
+      .verify-desc {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+      .priority-list {
+        counter-reset: prio;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .priority-item {
+        counter-increment: prio;
+        display: flex;
+        gap: 14px;
+        padding: 14px 16px;
+        background: var(--bg-card);
+        border: 1px solid var(--border-light);
+        border-radius: 10px;
+        margin-bottom: 8px;
+        align-items: flex-start;
+      }
+      .priority-item::before {
+        content: counter(prio);
+        flex-shrink: 0;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .priority-content {
+        flex: 1;
+      }
+      .priority-title {
+        font-weight: 600;
+        font-size: 14px;
+        margin-bottom: 2px;
+      }
+      .priority-desc {
+        font-size: 13px;
+        color: var(--text-muted);
+      }
+      .footer {
+        text-align: center;
+        color: var(--text-dim);
+        font-size: 13px;
+        margin-top: 40px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border);
+      }
+      .highlight {
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .big-score {
+        font-size: 56px;
+        font-weight: 800;
+        line-height: 1;
+      }
     </style>
   </head>
   <body>
@@ -193,8 +516,9 @@
         <h2><span class="icon">📋</span> 复检总结</h2>
         <p>
           本次复检以<strong>商业级桌面软件</strong>为标准，对
-          <code>AUDIT_REPORT.html</code>（2026-07-11，48 项问题）中列出的全部 Critical /
-          High 项逐一对照<strong>当前实际源码</strong>进行了复核，并补充了初版未覆盖的新视角。结论：<strong>初版发现的安全与数据可靠性硬伤已基本修复且有回归测试保护</strong>，自动更新、崩溃日志、LICENSE、钥匙串、原子写入等商业化基础设施已补齐，工程成熟度较初版显著提升。
+          <code>AUDIT_REPORT.html</code>（2026-07-11，48 项问题）中列出的全部
+          Critical / High
+          项逐一对照<strong>当前实际源码</strong>进行了复核，并补充了初版未覆盖的新视角。结论：<strong>初版发现的安全与数据可靠性硬伤已基本修复且有回归测试保护</strong>，自动更新、崩溃日志、LICENSE、钥匙串、原子写入等商业化基础设施已补齐，工程成熟度较初版显著提升。
         </p>
 
         <div class="stats-grid">
@@ -217,23 +541,27 @@
         </div>
 
         <div class="callout">
-          <strong>核心结论：</strong
-          >5 个 Critical 中 4 个已彻底修复并验证（C-1 / C-2 / C-3 / C-5），C-4
-          代码签名按产品策略<strong>主动暂缓</strong>；11 个 High 中 10 个已修复验证，H-7
-          因需支持自定义 LLM 端点保留 <code>https:</code> 通配（已在报告中标注为可接受的权衡，并给出代理化路线）。复检另发现
-          <span class="highlight">7 项新问题</span
-          >，其中最关键的是 <code>load_pdf_data</code> / <code>save_pdf_data</code>
-          <strong>未与</strong> <code>read_pdf_bytes</code> / <code>get_pdf_hash</code>
-          <strong>一致地做 PDF 路径授权/扩展名校验</strong>（N-1），建议下个里程碑优先修正。
+          <strong>核心结论：</strong>5 个 Critical 中 4 个已彻底修复并验证（C-1
+          / C-2 / C-3 / C-5），C-4
+          代码签名按产品策略<strong>主动暂缓</strong>；11 个 High 中 10
+          个已修复验证，H-7 因需支持自定义 LLM 端点保留
+          <code>https:</code>
+          通配（已在报告中标注为可接受的权衡，并给出代理化路线）。复检另发现
+          <span class="highlight">7 项新问题</span>，其中最关键的是
+          <code>load_pdf_data</code> / <code>save_pdf_data</code>
+          <strong>未与</strong> <code>read_pdf_bytes</code> /
+          <code>get_pdf_hash</code>
+          <strong>一致地做 PDF 路径授权/扩展名校验</strong
+          >（N-1），建议下个里程碑优先修正。
         </div>
 
         <div class="callout-warn">
           <strong>客观证据：</strong><code>npm run type-check</code>
           通过（0 错误）；前端单元测试
-          <strong>155 / 155 全部通过</strong>；CI 含
-          type-check / lint / build / <code>npm audit</code> / <code>cargo test</code> /
-          <code>clippy -D warnings</code> / <code>cargo audit</code> / E2E（chromium +
-          webkit）。代码处于可编译、可测试、可内测的扎实状态。
+          <strong>155 / 155 全部通过</strong>；CI 含 type-check / lint / build /
+          <code>npm audit</code> / <code>cargo test</code> /
+          <code>clippy -D warnings</code> / <code>cargo audit</code> /
+          E2E（chromium + webkit）。代码处于可编译、可测试、可内测的扎实状态。
         </div>
       </section>
 
@@ -249,10 +577,14 @@
           <li class="verify-item">
             <span class="verify-icon">✅</span>
             <div class="verify-content">
-              <div class="verify-title">[C-1] handleFollowUp 在 state updater 内发起副作用（已实测）</div>
+              <div class="verify-title">
+                [C-1] handleFollowUp 在 state updater 内发起副作用（已实测）
+              </div>
               <div class="verify-desc">
                 <code>usePersistence.ts:574-596</code>：先以
-                <code>sessionsRef.current</code> 计算新 session，<code>setSessions</code>
+                <code>sessionsRef.current</code> 计算新 session，<code
+                  >setSessions</code
+                >
                 仅做纯更新，流式请求在 updater 之外调用。StrictMode 双发已消除。
               </div>
             </div>
@@ -260,10 +592,13 @@
           <li class="verify-item">
             <span class="verify-icon">✅</span>
             <div class="verify-content">
-              <div class="verify-title">[C-2] session_path 路径穿越（已实测）</div>
+              <div class="verify-title">
+                [C-2] session_path 路径穿越（已实测）
+              </div>
               <div class="verify-desc">
-                <code>lib.rs:448-459</code> <code>validate_session_id</code>
-                仅允许字母数字与 <code>-</code>/<code>_</code>；并有 3 个 Rust
+                <code>lib.rs:448-459</code>
+                <code>validate_session_id</code> 仅允许字母数字与
+                <code>-</code>/<code>_</code>；并有 3 个 Rust
                 单测覆盖保存/加载/删除的穿越拒绝。
               </div>
             </div>
@@ -273,11 +608,15 @@
             <div class="verify-content">
               <div class="verify-title">[C-3] 自动更新机制（已实测）</div>
               <div class="verify-desc">
-                <code>tauri-plugin-updater</code> + <code>tauri-plugin-process</code>
-                已接入；<code>tauri.conf.json</code> 含签名公钥与
-                GitHub Release 端点；<code>src/services/updater.ts</code>
-                实现启动检查 + 下载安装 + 重启；<code>cd.yml</code>
-                生成签名 <code>latest.json</code>。
+                <code>tauri-plugin-updater</code> +
+                <code>tauri-plugin-process</code> 已接入；<code
+                  >tauri.conf.json</code
+                >
+                含签名公钥与 GitHub Release 端点；<code
+                  >src/services/updater.ts</code
+                >
+                实现启动检查 + 下载安装 + 重启；<code>cd.yml</code> 生成签名
+                <code>latest.json</code>。
               </div>
             </div>
           </li>
@@ -286,9 +625,12 @@
             <div class="verify-content">
               <div class="verify-title">[C-4] 代码签名（主动暂缓）</div>
               <div class="verify-desc">
-                <code>tauri.conf.json</code> macOS <code>signingIdentity: "-"</code>
-                ad-hoc，Windows 无签名。团队基于产品策略决定当前仅发布未签名 Windows
-                exe。属<strong>已知商业决策</strong>，非遗漏，但仍是正式商业化发行的硬门槛（见 N-0）。
+                <code>tauri.conf.json</code> macOS
+                <code>signingIdentity: "-"</code>
+                ad-hoc，Windows 无签名。团队基于产品策略决定当前仅发布未签名
+                Windows
+                exe。属<strong>已知商业决策</strong>，非遗漏，但仍是正式商业化发行的硬门槛（见
+                N-0）。
               </div>
             </div>
           </li>
@@ -297,10 +639,11 @@
             <div class="verify-content">
               <div class="verify-title">[C-5] LICENSE 与元数据（已实测）</div>
               <div class="verify-desc">
-                根目录 <code>LICENSE</code>（Proprietary）已存在；<code>package.json</code>
-                与 <code>Cargo.toml</code> 已填 license/author/description/repository；<code
-                  >identifier</code
+                根目录 <code>LICENSE</code>（Proprietary）已存在；<code
+                  >package.json</code
                 >
+                与 <code>Cargo.toml</code> 已填
+                license/author/description/repository；<code>identifier</code>
                 已改为 <code>com.photonee.specreader</code>（同时修复 M-11）。
               </div>
             </div>
@@ -312,7 +655,10 @@
           <li class="verify-item">
             <span class="verify-icon">✅</span>
             <div class="verify-content">
-              <div class="verify-title">[H-1] read_pdf_bytes / open_path / get_pdf_hash 路径校验（已实测，见 N-1 例外）</div>
+              <div class="verify-title">
+                [H-1] read_pdf_bytes / open_path / get_pdf_hash
+                路径校验（已实测，见 N-1 例外）
+              </div>
               <div class="verify-desc">
                 <code>validate_pdf_access</code>（扩展名 + 授权白名单）已应用于
                 <code>read_pdf_bytes</code> 与 <code>get_pdf_hash</code>，并有 3
@@ -327,23 +673,30 @@
               <div class="verify-title">[H-2] 文件写入非原子（已实测）</div>
               <div class="verify-desc">
                 <code>atomic_write</code>（写 .tmp → rename）+ 全局
-                <code>ATOMIC_WRITE_LOCK</code>，所有 save_* 函数复用；3 个单测覆盖。
+                <code>ATOMIC_WRITE_LOCK</code>，所有 save_* 函数复用；3
+                个单测覆盖。
               </div>
             </div>
           </li>
           <li class="verify-item">
             <span class="verify-icon">✅</span>
             <div class="verify-content">
-              <div class="verify-title">[H-3] lookup_word / check_dictionary 阻塞 I/O（已实测）</div>
+              <div class="verify-title">
+                [H-3] lookup_word / check_dictionary 阻塞 I/O（已实测）
+              </div>
               <div class="verify-desc">
-                两命令均已用 <code>tauri::async_runtime::spawn_blocking</code> 包裹（<code>lib.rs:761-786</code>）。
+                两命令均已用
+                <code>tauri::async_runtime::spawn_blocking</code>
+                包裹（<code>lib.rs:761-786</code>）。
               </div>
             </div>
           </li>
           <li class="verify-item">
             <span class="verify-icon">✅</span>
             <div class="verify-content">
-              <div class="verify-title">[H-4] handleAnnotationDelete 手动写盘竞态（已实测）</div>
+              <div class="verify-title">
+                [H-4] handleAnnotationDelete 手动写盘竞态（已实测）
+              </div>
               <div class="verify-desc">
                 <code>usePersistence.ts:630-654</code>：仅更新内存
                 state，持久化统一交给防抖 effect，无手动 load/save。
@@ -355,20 +708,25 @@
             <div class="verify-content">
               <div class="verify-title">[H-5] 分屏标注跨文件错显（已实测）</div>
               <div class="verify-desc">
-                Annotation 携带 <code>fileHash</code>；<code>PdfAnnotations.tsx:39</code>
-                按 <code>fileHash + page</code> 过滤；加载时回填 fileHash。App.tsx
-                向两个 PdfViewer 各自传 fileHash。
+                Annotation 携带 <code>fileHash</code>；<code
+                  >PdfAnnotations.tsx:39</code
+                >
+                按 <code>fileHash + page</code> 过滤；加载时回填
+                fileHash。App.tsx 向两个 PdfViewer 各自传 fileHash。
               </div>
             </div>
           </li>
           <li class="verify-item">
             <span class="verify-icon">✅</span>
             <div class="verify-content">
-              <div class="verify-title">[H-6] 关闭 Tab 未 abort 流式请求（已实测）</div>
+              <div class="verify-title">
+                [H-6] 关闭 Tab 未 abort 流式请求（已实测）
+              </div>
               <div class="verify-desc">
                 <code>usePersistence.ts:658</code>
                 <code>abortSessionsForTab</code> 在 App.tsx
-                <code>handleCloseTab</code>（:290）调用，中止流、清理非共享 session 与标注。
+                <code>handleCloseTab</code>（:290）调用，中止流、清理非共享
+                session 与标注。
               </div>
             </div>
           </li>
@@ -377,29 +735,41 @@
             <div class="verify-content">
               <div class="verify-title">[H-7] CSP connect-src（部分修复）</div>
               <div class="verify-desc">
-                <code>http:</code> 已收紧为
-                <code>localhost/127.0.0.1</code>；但 <code>https:</code>
-                仍通配（用户需配置任意自定义 LLM 端点，含自托管）。属<strong>功能必需的权衡</strong>；更安全的方案是将 LLM 请求代理到 Rust 后端（见 N-5）。
+                <code>http:</code> 已收紧为 <code>localhost/127.0.0.1</code>；但
+                <code>https:</code>
+                仍通配（用户需配置任意自定义 LLM
+                端点，含自托管）。属<strong>功能必需的权衡</strong>；更安全的方案是将
+                LLM 请求代理到 Rust 后端（见 N-5）。
               </div>
             </div>
           </li>
           <li class="verify-item">
             <span class="verify-icon">✅</span>
             <div class="verify-content">
-              <div class="verify-title">[H-8] 崩溃监控 / 错误上报（已实测）</div>
+              <div class="verify-title">
+                [H-8] 崩溃监控 / 错误上报（已实测）
+              </div>
               <div class="verify-desc">
-                全局 <code>ErrorBoundary</code> 包裹 App（main.tsx）；<code>main.rs</code>
-                panic hook 写日志；<code>tauri-plugin-log</code> 在 debug/release
-                均初始化（Warn 级，本地文件）；<code>open_logs_dir</code> 命令。
+                全局 <code>ErrorBoundary</code> 包裹 App（main.tsx）；<code
+                  >main.rs</code
+                >
+                panic hook 写日志；<code>tauri-plugin-log</code> 在
+                debug/release 均初始化（Warn 级，本地文件）；<code
+                  >open_logs_dir</code
+                >
+                命令。
               </div>
             </div>
           </li>
           <li class="verify-item">
             <span class="verify-icon">✅</span>
             <div class="verify-content">
-              <div class="verify-title">[H-9] usePersistence 零测试（已实测）</div>
+              <div class="verify-title">
+                [H-9] usePersistence 零测试（已实测）
+              </div>
               <div class="verify-desc">
-                <code>usePersistence.test.tsx</code> 存在，覆盖加载/流式/中止/删除/多文件联动/StrictMode
+                <code>usePersistence.test.tsx</code>
+                存在，覆盖加载/流式/中止/删除/多文件联动/StrictMode
                 双发断言；前端单测共 155 项全部通过。
               </div>
             </div>
@@ -409,7 +779,8 @@
             <div class="verify-content">
               <div class="verify-title">[H-10] API Key 明文存储（已实测）</div>
               <div class="verify-desc">
-                <code>secure_storage.rs</code> 用 <code>keyring</code> 存入系统钥匙串；<code
+                <code>secure_storage.rs</code> 用
+                <code>keyring</code> 存入系统钥匙串；<code
                   >save_settings_with_storage</code
                 >
                 先存钥匙串再清空磁盘字段；钥匙串不可用时<strong>拒绝保存</strong>（无静默回退）；含旧版明文迁移逻辑与单测。
@@ -421,9 +792,10 @@
             <div class="verify-content">
               <div class="verify-title">[H-11] CI 缺少质量门禁（已实测）</div>
               <div class="verify-desc">
-                <code>ci.yml</code> 含 type-check / lint / build / <code>npm audit</code>
-                / <code>cargo test</code> / <code>clippy -D warnings</code> /
-                <code>cargo audit</code> / E2E，且 E2E 已覆盖 chromium + webkit。
+                <code>ci.yml</code> 含 type-check / lint / build /
+                <code>npm audit</code> / <code>cargo test</code> /
+                <code>clippy -D warnings</code> / <code>cargo audit</code> /
+                E2E，且 E2E 已覆盖 chromium + webkit。
               </div>
             </div>
           </li>
@@ -433,14 +805,20 @@
         <p>
           初版 18 个 Medium 与 14 个 Low 项的修复已在
           <code>AUDIT_FIX_PLAN.md</code>
-          中逐项标注完成。本次复检对其中的高影响项做了源码实测确认：M-1（全局写入锁）✅、M-2（流式哈希）✅、M-3（<code>useStreaming</code>
-          抽取，<code>TranslatePopup</code> 已复用）✅、M-8（dict 结构体 camelCase）✅、M-10（webkit
-          E2E）✅、M-11（identifier）✅、M-15（tokio time feature）✅、M-16（词典
-          SHA-256 校验 + 防 zip 炸弹）✅、M-17（macOS 文件关联：后端 emit
-          <code>open-pdf</code> + 前端 <code>addTab</code> 先
-          <code>authorizePdfPath</code> 再读取，功能闭环）✅、M-18（single-instance
-          平台条件化）✅。其余 M-4/M-12/M-13 等代码整洁类项与 L-1~L-14
-          体验项，<code>type-check</code> 与 CI 门禁通过佐证其已落地；未逐项逐行复验，但无证据显示回退。
+          中逐项标注完成。本次复检对其中的高影响项做了源码实测确认：M-1（全局写入锁）✅、M-2（流式哈希）✅、M-3（<code
+            >useStreaming</code
+          >
+          抽取，<code>TranslatePopup</code> 已复用）✅、M-8（dict 结构体
+          camelCase）✅、M-10（webkit E2E）✅、M-11（identifier）✅、M-15（tokio
+          time feature）✅、M-16（词典 SHA-256 校验 + 防 zip
+          炸弹）✅、M-17（macOS 文件关联：后端 emit <code>open-pdf</code> + 前端
+          <code>addTab</code> 先
+          <code>authorizePdfPath</code>
+          再读取，功能闭环）✅、M-18（single-instance 平台条件化）✅。其余
+          M-4/M-12/M-13 等代码整洁类项与 L-1~L-14 体验项，<code
+            >type-check</code
+          >
+          与 CI 门禁通过佐证其已落地；未逐项逐行复验，但无证据显示回退。
         </p>
       </section>
 
@@ -453,24 +831,29 @@
             <span class="badge badge-new">New</span>
             <span class="badge badge-medium">Medium</span>
             <span class="issue-title"
-              >N-1. load_pdf_data / save_pdf_data 未做 PDF 路径授权与扩展名校验</span
+              >N-1. load_pdf_data / save_pdf_data 未做 PDF
+              路径授权与扩展名校验</span
             >
           </div>
           <div class="issue-body">
-            <strong>文件：</strong
-            ><code>src-tauri/src/lib.rs:651-676</code><br />
-            <code>read_pdf_bytes</code> 与
-            <code>get_pdf_hash</code> 入口均调用 <code>validate_pdf_access</code>（扩展名
-            <code>.pdf</code> + 授权白名单），但 <code>load_pdf_data</code> /
+            <strong>文件：</strong><code>src-tauri/src/lib.rs:651-676</code
+            ><br />
+            <code>read_pdf_bytes</code> 与 <code>get_pdf_hash</code> 入口均调用
+            <code>validate_pdf_access</code>（扩展名 <code>.pdf</code> +
+            授权白名单），但 <code>load_pdf_data</code> /
             <code>save_pdf_data</code> 仅经
             <code>annotations_path → compute_pdf_hash(file_path)</code>
             直接打开并读取任意路径文件以计算哈希，<strong>无任何校验</strong>。后果：在
-            webview 被 XSS 控制时，可对任意文件触发读取（用于哈希，存在文件存在性/内容相等性侧信道）并向可预测的标注文件写入 JSON。虽不泄露完整文件字节，但与既有安全模型不一致，属于遗漏的攻击面。
+            webview 被 XSS
+            控制时，可对任意文件触发读取（用于哈希，存在文件存在性/内容相等性侧信道）并向可预测的标注文件写入
+            JSON。虽不泄露完整文件字节，但与既有安全模型不一致，属于遗漏的攻击面。
           </div>
           <div class="issue-solution">
-            在 <code>load_pdf_data</code> / <code>save_pdf_data</code> 命令开头加
+            在 <code>load_pdf_data</code> /
+            <code>save_pdf_data</code> 命令开头加
             <code>validate_pdf_access(state, &amp;file_path)?</code>，与
-            <code>read_pdf_bytes</code> / <code>get_pdf_hash</code> 保持同一安全基线；并补充 Rust 单测。
+            <code>read_pdf_bytes</code> /
+            <code>get_pdf_hash</code> 保持同一安全基线；并补充 Rust 单测。
           </div>
         </div>
 
@@ -479,14 +862,15 @@
             <span class="badge badge-new">New</span>
             <span class="badge badge-low">Low</span>
             <span class="issue-title"
-              >N-2. shell:default 能力已授权但插件未被前端使用（多余攻击面）</span
+              >N-2. shell:default
+              能力已授权但插件未被前端使用（多余攻击面）</span
             >
           </div>
           <div class="issue-body">
-            <strong>文件：</strong
-            ><code>capabilities/default.json:10</code> +
+            <strong>文件：</strong><code>capabilities/default.json:10</code> +
             <code>lib.rs:85</code> + <code>Cargo.toml:27</code><br />
-            初版 L-13 曾指出 <code>tauri-plugin-shell</code> 初始化却未授权；修订时反过来在
+            初版 L-13 曾指出
+            <code>tauri-plugin-shell</code> 初始化却未授权；修订时反过来在
             capabilities 中授予了 <code>shell:default</code>。但经核查，<code
               >open_path</code
             >
@@ -497,7 +881,8 @@
           </div>
           <div class="issue-solution">
             若近期无 shell 调用计划，移除 <code>shell:default</code> 权限及
-            <code>tauri-plugin-shell</code> 依赖/插件初始化；如需保留供未来使用，应在报告中明确记录。
+            <code>tauri-plugin-shell</code>
+            依赖/插件初始化；如需保留供未来使用，应在报告中明确记录。
           </div>
         </div>
 
@@ -510,15 +895,18 @@
             >
           </div>
           <div class="issue-body">
-            <strong>文件：</strong
-            ><code>src-tauri/src/lib.rs:591-612</code><br />
-            <code>load_settings_with_storage</code> 在迁移时先把 key 存入钥匙串，再调用
+            <strong>文件：</strong><code>src-tauri/src/lib.rs:591-612</code
+            ><br />
+            <code>load_settings_with_storage</code> 在迁移时先把 key
+            存入钥匙串，再调用
             <code>save_settings_to_disk(cleared)</code>
-            清空磁盘字段。若本次清空写盘失败（磁盘满/权限），磁盘文件仍含明文 key，而钥匙串已有副本；后续加载从钥匙串命中、不再重清，明文<strong>永久残留</strong>。概率低，但属数据泄露边角。
+            清空磁盘字段。若本次清空写盘失败（磁盘满/权限），磁盘文件仍含明文
+            key，而钥匙串已有副本；后续加载从钥匙串命中、不再重清，明文<strong>永久残留</strong>。概率低，但属数据泄露边角。
           </div>
           <div class="issue-solution">
             先构造 <code>cleared</code>（清空 api_key）并成功写入磁盘后，再
-            <code>storage.store</code>；或在 store 前先以原子写覆盖为清空版本，确保“磁盘无明文”优先于“钥匙串有值”。
+            <code>storage.store</code>；或在 store
+            前先以原子写覆盖为清空版本，确保“磁盘无明文”优先于“钥匙串有值”。
           </div>
         </div>
 
@@ -531,14 +919,14 @@
             >
           </div>
           <div class="issue-body">
-            <strong>文件：</strong
-            ><code>src-tauri/src/lib.rs:268-291</code><br />
-            前端 <code>Annotation</code> 含 <code>fileHash</code>（分屏过滤用），但 Rust
-            结构体无此字段。当前因标注按 PDF 文件（以内容哈希命名）分文件存储，<code
-              >fileHash</code
-            >
-            仅在内存用于过滤，序列化时被忽略、加载时回填，<strong>功能正确</strong>。但若未来将多 PDF
-            标注存入同一文件，<code>fileHash</code> 会静默丢失，埋下脆弱性。
+            <strong>文件：</strong><code>src-tauri/src/lib.rs:268-291</code
+            ><br />
+            前端 <code>Annotation</code> 含
+            <code>fileHash</code>（分屏过滤用），但 Rust
+            结构体无此字段。当前因标注按 PDF
+            文件（以内容哈希命名）分文件存储，<code>fileHash</code>
+            仅在内存用于过滤，序列化时被忽略、加载时回填，<strong>功能正确</strong>。但若未来将多
+            PDF 标注存入同一文件，<code>fileHash</code> 会静默丢失，埋下脆弱性。
           </div>
           <div class="issue-solution">
             在 Rust <code>Annotation</code> 增加
@@ -558,14 +946,15 @@
           <div class="issue-body">
             <strong>文件：</strong><code>tauri.conf.json:26</code><br />
             webview 直接持有 API Key 并向任意
-            <code>https:</code> LLM 端点发起 fetch（<code>llm.ts</code>）。一旦 webview 被
-            XSS，Key 可外发至任意 https 域名。当前因需支持自定义/自托管 LLM
+            <code>https:</code> LLM 端点发起 fetch（<code>llm.ts</code>）。一旦
+            webview 被 XSS，Key 可外发至任意 https
+            域名。当前因需支持自定义/自托管 LLM
             端点而保留通配，是<strong>可接受的权衡</strong>。
           </div>
           <div class="issue-solution">
-            中长期建议将 LLM 请求代理到 Rust 后端：webview 仅与本地后端通信，API Key
-            永不离后端，CSP 即可收紧为仅 <code>https://localhost</code>，从根本上消除 Key
-            外泄面。
+            中长期建议将 LLM 请求代理到 Rust 后端：webview 仅与本地后端通信，API
+            Key 永不离后端，CSP 即可收紧为仅
+            <code>https://localhost</code>，从根本上消除 Key 外泄面。
           </div>
         </div>
 
@@ -573,16 +962,20 @@
           <div class="issue-header">
             <span class="badge badge-new">New</span>
             <span class="badge badge-low">Low</span>
-            <span class="issue-title">N-6. i18n 框架已接入，但 UI 文案仍仅中文</span>
+            <span class="issue-title"
+              >N-6. i18n 框架已接入，但 UI 文案仍仅中文</span
+            >
           </div>
           <div class="issue-body">
             <strong>文件：</strong><code>package.json</code>（i18next +
-            react-i18next）、<code>src/i18n</code>、各组件使用 <code>i18n.t</code
-            >。<br />
-            框架与文案抽取已完成（满足 M-6 的工程要求），但实际仅提供中文本地化，尚无其他语言资源文件。对以中文为目标用户的产品可接受，但“国际化”能力尚未落地。
+            react-i18next）、<code>src/i18n</code>、各组件使用
+            <code>i18n.t</code>。<br />
+            框架与文案抽取已完成（满足 M-6
+            的工程要求），但实际仅提供中文本地化，尚无其他语言资源文件。对以中文为目标用户的产品可接受，但“国际化”能力尚未落地。
           </div>
           <div class="issue-solution">
-            如需面向海外工程师，补齐 en / ja / de 等语言包；否则在文档中标注当前仅支持中文界面。
+            如需面向海外工程师，补齐 en / ja / de
+            等语言包；否则在文档中标注当前仅支持中文界面。
           </div>
         </div>
 
@@ -595,14 +988,17 @@
             >
           </div>
           <div class="issue-body">
-            <strong>文件：</strong><code>e2e/</code>、<code>App.test.tsx</code> 等<br />
-            前端 155 项单测 + Rust 序列化/安全单测 + CI 门禁均已就位。但初版指出的核心用户流程
-            E2E（打开 PDF → 选中 → 翻译/解读 → 持久化 → 重启恢复）在浏览器 E2E
-            中仍偏薄（当前 E2E 以布局/页码跳转为主）；且测试运行时出现 React
+            <strong>文件：</strong><code>e2e/</code>、<code>App.test.tsx</code>
+            等<br />
+            前端 155 项单测 + Rust 序列化/安全单测 + CI
+            门禁均已就位。但初版指出的核心用户流程 E2E（打开 PDF → 选中 →
+            翻译/解读 → 持久化 → 重启恢复）在浏览器 E2E 中仍偏薄（当前 E2E
+            以布局/页码跳转为主）；且测试运行时出现 React
             <code>act()</code> 告警，建议收敛。
           </div>
           <div class="issue-solution">
-            增补“重启后标注/会话恢复”的端到端 E2E（可借 Tauri 持久化目录注入）；为流式状态更新包裹
+            增补“重启后标注/会话恢复”的端到端 E2E（可借 Tauri
+            持久化目录注入）；为流式状态更新包裹
             <code>act()</code> 消除告警。
           </div>
         </div>
@@ -616,7 +1012,9 @@
             <h4>架构设计 <span class="rating">92 · A-</span></h4>
             <p>
               Tauri 命令与纯逻辑解耦清晰，7 个自定义 Hook 拆分合理，service
-              层职责明确。较初版进一步提升：单一防抖写入入口、<code>useStreaming</code>
+              层职责明确。较初版进一步提升：单一防抖写入入口、<code
+                >useStreaming</code
+              >
               统一流式逻辑、<code>paths</code>/<code>secure_storage</code>
               模块抽取。整体具备良好的可维护性。
             </p>
@@ -625,7 +1023,8 @@
             <h4>代码质量 <span class="rating">88 · B+</span></h4>
             <p>
               TS strict + Rust 无裸 unwrap + CI 强制 clippy -D
-              warnings。残留少量 <code>as any</code>（PdfViewer）、魔法数字等已从初版收敛；<code
+              warnings。残留少量
+              <code>as any</code>（PdfViewer）、魔法数字等已从初版收敛；<code
                 >window.confirm/alert</code
               >
               已替换为 Tauri dialog。属于高质量工程。
@@ -634,17 +1033,17 @@
           <div class="dim-card">
             <h4>安全性 <span class="rating">80 · B-</span></h4>
             <p>
-              初版硬伤（路径穿越 C-2、路径校验 H-1、钥匙串 H-10、原子写入 H-2、CSP
-              http 收紧 H-7）均已修复。剩余：N-1（load/save_pdf_data 校验缺失）、N-2（多余
-              shell 能力）、N-5（https 通配权衡）。XSS 防护（rehype-sanitize）保持良好。
+              初版硬伤（路径穿越 C-2、路径校验 H-1、钥匙串 H-10、原子写入
+              H-2、CSP http 收紧 H-7）均已修复。剩余：N-1（load/save_pdf_data
+              校验缺失）、N-2（多余 shell 能力）、N-5（https 通配权衡）。XSS
+              防护（rehype-sanitize）保持良好。
             </p>
           </div>
           <div class="dim-card">
             <h4>数据可靠性 <span class="rating">90 · A-</span></h4>
             <p>
-              原子写入 + 全局锁、单一防抖持久化入口、按 PDF 文件作用域存储、<code
-                >fileHash</code
-              >
+              原子写入 + 全局锁、单一防抖持久化入口、按 PDF
+              文件作用域存储、<code>fileHash</code>
               分屏隔离，均到位。序列化往返有专门单测保护，初版“重启丢失会话”类问题已根除。
             </p>
           </div>
@@ -652,14 +1051,16 @@
             <h4>性能 <span class="rating">86 · B</span></h4>
             <p>
               流式哈希（M-2）、dict 查询 <code>spawn_blocking</code>、PDF
-              懒加载、AbortController 资源清理均合理。Memoization 在关键路径已应用；大文件场景内存友好。
+              懒加载、AbortController 资源清理均合理。Memoization
+              在关键路径已应用；大文件场景内存友好。
             </p>
           </div>
           <div class="dim-card">
             <h4>测试覆盖 <span class="rating">86 · B</span></h4>
             <p>
-              前端 155 项单测 + Rust 安全/序列化单测 + CI 多门禁。核心 Hook 已有直接测试。短板：核心用户流程
-              E2E 偏薄（N-7），覆盖率阈值未在 CI 强制（建议设 80%）。
+              前端 155 项单测 + Rust 安全/序列化单测 + CI 多门禁。核心 Hook
+              已有直接测试。短板：核心用户流程 E2E 偏薄（N-7），覆盖率阈值未在
+              CI 强制（建议设 80%）。
             </p>
           </div>
           <div class="dim-card">
@@ -667,16 +1068,16 @@
             <p>
               自动更新（C-3）、崩溃日志（H-8）、LICENSE（C-5）、i18n
               框架（M-6）均已补齐。<strong>主要短板</strong>：C-4
-              代码签名主动暂缓（macOS 需 notarization、Windows 触发 SmartScreen）；CD
-              仅构建 Windows exe；无远程崩溃上报（Sentry）。
+              代码签名主动暂缓（macOS 需 notarization、Windows 触发
+              SmartScreen）；CD 仅构建 Windows exe；无远程崩溃上报（Sentry）。
             </p>
           </div>
           <div class="dim-card">
             <h4>可访问性 <span class="rating">78 · B-</span></h4>
             <p>
               图标按钮有 aria-label，ErrorBoundary
-              友好，模态框已用自定义确认。初版 M-5（Esc/焦点陷阱）未见显式回归，建议补 WAI-ARIA
-              Modal 规范核验。
+              友好，模态框已用自定义确认。初版
+              M-5（Esc/焦点陷阱）未见显式回归，建议补 WAI-ARIA Modal 规范核验。
             </p>
           </div>
           <div class="dim-card">
@@ -693,21 +1094,30 @@
       <section>
         <h2><span class="icon">🏁</span> 综合评分</h2>
         <div class="callout">
-          <div style="display: flex; align-items: center; gap: 24px; flex-wrap: wrap">
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 24px;
+              flex-wrap: wrap;
+            "
+          >
             <div class="big-score" style="color: var(--success)">84</div>
             <div>
               <div style="font-size: 18px; font-weight: 700">等级 B · 良好</div>
               <div style="color: var(--text-muted); margin-top: 4px">
-                较初版（商业化就绪 D、综合约 C 级）显著提升，已达<strong>早期商用 / 内部可放心推广</strong>水平。
+                较初版（商业化就绪 D、综合约 C 级）显著提升，已达<strong
+                  >早期商用 / 内部可放心推广</strong
+                >水平。
               </div>
             </div>
           </div>
         </div>
         <p>
-          评分取九维度加权近似：架构 92、代码质量 88、安全性 80、数据可靠性 90、性能
-          86、测试 86、商业化 70、可访问性 78、文档 86 → 均值约
-          <strong>84</strong>。其中“商业化就绪”是拉低综合分的主要维度，根因是 C-4
-          代码签名暂缓与 Windows-only 发布。
+          评分取九维度加权近似：架构 92、代码质量 88、安全性 80、数据可靠性
+          90、性能 86、测试 86、商业化 70、可访问性 78、文档 86 → 均值约
+          <strong>84</strong>。其中“商业化就绪”是拉低综合分的主要维度，根因是
+          C-4 代码签名暂缓与 Windows-only 发布。
         </p>
       </section>
 
@@ -717,44 +1127,71 @@
         <ol class="priority-list">
           <li class="priority-item">
             <div class="priority-content">
-              <div class="priority-title">[N-1 / Medium] 统一 load/save_pdf_data 路径校验</div>
-              <div class="priority-desc">补 validate_pdf_access，与 read_pdf_bytes/get_pdf_hash 同基线，加单测。</div>
+              <div class="priority-title">
+                [N-1 / Medium] 统一 load/save_pdf_data 路径校验
+              </div>
+              <div class="priority-desc">
+                补 validate_pdf_access，与 read_pdf_bytes/get_pdf_hash
+                同基线，加单测。
+              </div>
             </div>
           </li>
           <li class="priority-item">
             <div class="priority-content">
-              <div class="priority-title">[C-4 / Critical-决策] 评估代码签名与多平台发布</div>
-              <div class="priority-desc">macOS Developer ID + notarization；Windows 代码签名消除 SmartScreen；CD 增加 macOS/Linux 构建。当前为商业发行硬门槛。</div>
+              <div class="priority-title">
+                [C-4 / Critical-决策] 评估代码签名与多平台发布
+              </div>
+              <div class="priority-desc">
+                macOS Developer ID + notarization；Windows 代码签名消除
+                SmartScreen；CD 增加 macOS/Linux 构建。当前为商业发行硬门槛。
+              </div>
             </div>
           </li>
           <li class="priority-item">
             <div class="priority-content">
               <div class="priority-title">[N-2 / Low] 收敛多余 shell 能力</div>
-              <div class="priority-desc">无 shell 调用则移除 shell:default 与 tauri-plugin-shell 依赖。</div>
+              <div class="priority-desc">
+                无 shell 调用则移除 shell:default 与 tauri-plugin-shell 依赖。
+              </div>
             </div>
           </li>
           <li class="priority-item">
             <div class="priority-content">
               <div class="priority-title">[N-3 / Low] 修正明文迁移写盘顺序</div>
-              <div class="priority-desc">确保“磁盘先清空”优先于“钥匙串写入”，杜绝明文残留边角。</div>
+              <div class="priority-desc">
+                确保“磁盘先清空”优先于“钥匙串写入”，杜绝明文残留边角。
+              </div>
             </div>
           </li>
           <li class="priority-item">
             <div class="priority-content">
-              <div class="priority-title">[N-4 / Low] Rust Annotation 增加 file_hash 字段</div>
-              <div class="priority-desc">消除前后端隐式耦合，增强未来多文件同存健壮性。</div>
+              <div class="priority-title">
+                [N-4 / Low] Rust Annotation 增加 file_hash 字段
+              </div>
+              <div class="priority-desc">
+                消除前后端隐式耦合，增强未来多文件同存健壮性。
+              </div>
             </div>
           </li>
           <li class="priority-item">
             <div class="priority-content">
-              <div class="priority-title">[N-5 / 路线] LLM 请求代理到 Rust 后端</div>
-              <div class="priority-desc">webview 不再持有 API Key，CSP 收紧为 localhost，从根本上消除 Key 外泄面。</div>
+              <div class="priority-title">
+                [N-5 / 路线] LLM 请求代理到 Rust 后端
+              </div>
+              <div class="priority-desc">
+                webview 不再持有 API Key，CSP 收紧为 localhost，从根本上消除 Key
+                外泄面。
+              </div>
             </div>
           </li>
           <li class="priority-item">
             <div class="priority-content">
-              <div class="priority-title">[N-7 / Low] 强化核心 E2E + 收敛 act() 告警</div>
-              <div class="priority-desc">补充“重启恢复”端到端用例；CI 设覆盖率阈值 80%。</div>
+              <div class="priority-title">
+                [N-7 / Low] 强化核心 E2E + 收敛 act() 告警
+              </div>
+              <div class="priority-desc">
+                补充“重启恢复”端到端用例；CI 设覆盖率阈值 80%。
+              </div>
             </div>
           </li>
         </ol>
@@ -764,19 +1201,26 @@
       <section>
         <h2><span class="icon">💡</span> 结论</h2>
         <div class="callout">
-          <strong>工程底子扎实，初版硬伤已修复，距正式商业发行仅差“签名 + 多平台”。</strong>
-          复检证实：初版 48 项问题中 44 项已修复并实测验证，1 项（H-7）为功能必需的
-          CSP 权衡，1 项（C-4）为产品策略主动暂缓。代码通过
-          <code>type-check</code>、155 项单测与完整 CI 门禁，处于<strong>可编译、可测试、可内测</strong>的扎实状态。复检新发现 7
-          项，多为一致性/边角问题，最关键的是 N-1（load/save_pdf_data 路径校验缺失）。
-          建议下个里程碑优先处理 N-1 与 C-4，即可达到<strong>可放心对外商业发行</strong>的质量水位。
+          <strong
+            >工程底子扎实，初版硬伤已修复，距正式商业发行仅差“签名 +
+            多平台”。</strong
+          >
+          复检证实：初版 48 项问题中 44 项已修复并实测验证，1
+          项（H-7）为功能必需的 CSP 权衡，1
+          项（C-4）为产品策略主动暂缓。代码通过
+          <code>type-check</code>、155 项单测与完整 CI
+          门禁，处于<strong>可编译、可测试、可内测</strong>的扎实状态。复检新发现
+          7 项，多为一致性/边角问题，最关键的是 N-1（load/save_pdf_data
+          路径校验缺失）。 建议下个里程碑优先处理 N-1 与
+          C-4，即可达到<strong>可放心对外商业发行</strong>的质量水位。
         </div>
       </section>
 
       <div class="footer">
         <p>
-          SpecReader AI 商业级审核报告（复检版） · 审核日期 2026-07-11 · 初版 48 项：
-          44 已修复实测 / 1 部分 / 1 接受暂缓 · 复检新发现 7 项 · 综合 84/100（B）
+          SpecReader AI 商业级审核报告（复检版） · 审核日期 2026-07-11 · 初版 48
+          项： 44 已修复实测 / 1 部分 / 1 接受暂缓 · 复检新发现 7 项 · 综合
+          84/100（B）
         </p>
       </div>
     </div>

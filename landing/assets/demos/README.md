@@ -4,15 +4,15 @@
 
 ## 建议命名与对应位置
 
-| 文件名 | 对应页面位置 | 建议尺寸 | 建议内容 |
-|---|---|---|---|
-| `open-pdf.gif` | 功能 01 右侧 | 1280×720 或 1440×900 | 打开本地 PDF、多 Tab 切换 |
-| `translate.gif` | 功能 02 右侧 | 同上 | 选中文本 → 点击翻译 → 浮层批注 |
-| `explain.gif` | 功能 03 右侧 | 同上 | 选中文本 → 点击解读 → 右侧面板流式输出 |
-| `stash-interpret.gif` | 功能 04 右侧 | 同上 | 多个片段加入暂存 → 自定义解读 |
-| `hover-word.gif` | 功能 05 右侧 | 同上 | 悬停英文单词显示 ECDICT 释义 |
-| `layout.gif` | 功能 06 右侧 | 同上 | 分栏拖拽、单页/连续模式切换 |
-| `hero.gif` | Hero 区域右侧 | 1440×900 或更大 | 主界面整体演示，可选 |
+| 文件名                | 对应页面位置  | 建议尺寸             | 建议内容                               |
+| --------------------- | ------------- | -------------------- | -------------------------------------- |
+| `open-pdf.gif`        | 功能 01 右侧  | 1280×720 或 1440×900 | 打开本地 PDF、多 Tab 切换              |
+| `translate.gif`       | 功能 02 右侧  | 同上                 | 选中文本 → 点击翻译 → 浮层批注         |
+| `explain.gif`         | 功能 03 右侧  | 同上                 | 选中文本 → 点击解读 → 右侧面板流式输出 |
+| `stash-interpret.gif` | 功能 04 右侧  | 同上                 | 多个片段加入暂存 → 自定义解读          |
+| `hover-word.gif`      | 功能 05 右侧  | 同上                 | 悬停英文单词显示 ECDICT 释义           |
+| `layout.gif`          | 功能 06 右侧  | 同上                 | 分栏拖拽、单页/连续模式切换            |
+| `hero.gif`            | Hero 区域右侧 | 1440×900 或更大      | 主界面整体演示，可选                   |
 
 ## 替换方法
 
@@ -45,7 +45,14 @@
 如需用视频替代，可参考如下结构：
 
 ```html
-<video class="feature-gif" autoplay muted loop playsinline poster="assets/demos/xxx-poster.jpg">
+<video
+  class="feature-gif"
+  autoplay
+  muted
+  loop
+  playsinline
+  poster="assets/demos/xxx-poster.jpg"
+>
   <source src="assets/demos/xxx.webm" type="video/webm" />
   <source src="assets/demos/xxx.mp4" type="video/mp4" />
 </video>

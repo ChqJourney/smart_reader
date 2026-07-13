@@ -56,6 +56,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+.pdf-controls .page-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
 .pdf-controls .page-input {
   width: 42px;
   height: 26px;

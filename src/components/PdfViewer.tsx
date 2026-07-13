@@ -165,6 +165,13 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       scale: initialState?.scale ?? 1.5,
       viewMode: initialState?.viewMode ?? "continuous",
     });
+    // Keep a live ref of the current page number so the scroll-driven page
+    // detection can read the latest value without re-creating its listener.
+    const pageNumRef = useRef(pageNum);
+
+    useEffect(() => {
+      pageNumRef.current = pageNum;
+    }, [pageNum]);
 
     // Expose imperative goToPage for external triggers (e.g. annotation goto)
     useImperativeHandle(ref, () => ({
@@ -456,47 +463,47 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       const container = continuousContainerRef.current;
       if (!container) return;
 
-      let ticking = false;
       let cancelled = false;
+      let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
-      const updateVisiblePage = () => {
+      const computeAndSyncPage = () => {
         const container = continuousContainerRef.current;
         if (!container) return;
         if (cancelled || isJumpingRef.current) return;
-        if (ticking) return;
-        ticking = true;
-        requestAnimationFrame(() => {
-          ticking = false;
-          if (cancelled || isJumpingRef.current) return;
 
-          const containerRect = container.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
 
-          let bestPage = pageNum;
-          let bestDistance = Infinity;
+        let bestPage = pageNumRef.current;
+        let bestDistance = Infinity;
 
-          pageWrapperRefs.current.forEach((wrapper, i) => {
-            if (!wrapper) return;
-            const rect = wrapper.getBoundingClientRect();
-            // Only consider pages that actually intersect the viewport.
-            if (
-              rect.bottom <= containerRect.top ||
-              rect.top >= containerRect.bottom
-            )
-              return;
+        pageWrapperRefs.current.forEach((wrapper, i) => {
+          if (!wrapper) return;
+          const rect = wrapper.getBoundingClientRect();
+          // Only consider pages that actually intersect the viewport.
+          if (
+            rect.bottom <= containerRect.top ||
+            rect.top >= containerRect.bottom
+          )
+            return;
 
-            const pageTop = rect.top - containerRect.top;
-            const distance = Math.abs(pageTop);
+          const pageTop = rect.top - containerRect.top;
+          const distance = Math.abs(pageTop);
 
-            if (distance < bestDistance) {
-              bestDistance = distance;
-              bestPage = i + 1;
-            }
-          });
-
-          if (bestPage !== pageNum) {
-            setPageNum(bestPage);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestPage = i + 1;
           }
         });
+
+        setPageNum((current) => (current === bestPage ? current : bestPage));
+      };
+
+      const updateVisiblePage = () => {
+        if (cancelled || isJumpingRef.current) return;
+        if (debounceTimeout) clearTimeout(debounceTimeout);
+        debounceTimeout = setTimeout(() => {
+          requestAnimationFrame(computeAndSyncPage);
+        }, 100);
       };
 
       container.addEventListener("scroll", updateVisiblePage);
@@ -506,10 +513,11 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
       return () => {
         cancelled = true;
+        if (debounceTimeout) clearTimeout(debounceTimeout);
         container.removeEventListener("scroll", updateVisiblePage);
         resizeObserver.disconnect();
       };
-    }, [viewMode, pageNum]);
+    }, [viewMode]);
 
     const goToPrevPage = () => setPageNum((p) => Math.max(1, p - 1));
     const goToNextPage = () => setPageNum((p) => Math.min(numPages, p + 1));
@@ -663,6 +671,20 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                   t("pdf.loading")
                 ) : numPages > 0 ? (
                   <>
+                    <button
+                      className="icon-btn"
+                      onClick={() => goToPage(pageNum - 1)}
+                      disabled={
+                        pageNum <= 1 ||
+                        numPages === 0 ||
+                        isLoading ||
+                        !viewportsReady
+                      }
+                      aria-label={t("pdf.previousPage")}
+                      title={t("pdf.previousPage")}
+                    >
+                      <Icon name="page-prev" size={16} />
+                    </button>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -677,6 +699,20 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                       title={t("pdf.pageNumberHint")}
                     />
                     <span> / {numPages}</span>
+                    <button
+                      className="icon-btn"
+                      onClick={() => goToPage(pageNum + 1)}
+                      disabled={
+                        pageNum >= numPages ||
+                        numPages === 0 ||
+                        isLoading ||
+                        !viewportsReady
+                      }
+                      aria-label={t("pdf.nextPage")}
+                      title={t("pdf.nextPage")}
+                    >
+                      <Icon name="page-next" size={16} />
+                    </button>
                   </>
                 ) : (
                   ""

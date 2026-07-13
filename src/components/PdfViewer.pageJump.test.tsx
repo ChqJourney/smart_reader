@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  waitFor,
+  fireEvent,
+  act,
+} from "@testing-library/react";
 import PdfViewer, {
   computeContinuousScrollTop,
   PageViewportInfo,
@@ -334,5 +340,143 @@ describe("PdfViewer continuous mode page jump", () => {
     await waitFor(() => {
       expect(screen.getByText("176%")).toBeInTheDocument();
     });
+  });
+
+  it("turns pages with prev/next buttons in continuous mode", async () => {
+    const { container } = render(
+      <PdfViewer filePath="/fake/test.pdf" settings={DEFAULT_SETTINGS} />
+    );
+
+    const pageInput = await waitFor<HTMLInputElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLInputElement;
+      if (!input || input.disabled) {
+        throw new Error("page input not ready yet");
+      }
+      return input;
+    });
+
+    expect(pageInput.value).toBe("1");
+
+    const nextButton = screen.getByLabelText("下一页");
+    const prevButton = screen.getByLabelText("上一页");
+
+    fireEvent.click(nextButton);
+    await waitFor(() => {
+      expect(pageInput.value).toBe("2");
+    });
+
+    const canvasContainer = container.querySelector(
+      ".pdf-canvas-container.continuous"
+    );
+    expect(canvasContainer).not.toBeNull();
+    expect(canvasContainer!.scrollTop).toBe(expectedScrollTopForPage(2));
+
+    fireEvent.click(prevButton);
+    await waitFor(() => {
+      expect(pageInput.value).toBe("1");
+    });
+    expect(canvasContainer!.scrollTop).toBe(expectedScrollTopForPage(1));
+  });
+
+  it("keeps page number stable while rapidly scrolling back and forth", async () => {
+    const CONTAINER_PADDING_TOP = 24;
+    const CONTAINER_HEIGHT = 300;
+
+    const { container } = render(
+      <PdfViewer filePath="/fake/test.pdf" settings={DEFAULT_SETTINGS} />
+    );
+
+    const pageInput = await waitFor<HTMLInputElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLInputElement;
+      if (!input || input.disabled) {
+        throw new Error("page input not ready yet");
+      }
+      return input;
+    });
+
+    const canvasContainer = container.querySelector(
+      ".pdf-canvas-container.continuous"
+    ) as HTMLDivElement;
+    expect(canvasContainer).not.toBeNull();
+
+    const wrappers = Array.from(
+      container.querySelectorAll(".pdf-page-wrapper")
+    ) as HTMLDivElement[];
+    expect(wrappers.length).toBe(NUM_PAGES);
+
+    // Execute RAF callbacks synchronously so we can fire many scroll events
+    // in sequence without waiting for real animation frames.
+    const originalRAF = globalThis.requestAnimationFrame;
+    const rafCallbacks: FrameRequestCallback[] = [];
+    globalThis.requestAnimationFrame = (cb: FrameRequestCallback) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    };
+    const flushRaf = () => {
+      const pending = rafCallbacks.splice(0, rafCallbacks.length);
+      pending.forEach((cb) => cb(performance.now()));
+    };
+
+    vi.useFakeTimers();
+
+    // Mock container geometry once.
+    vi.spyOn(canvasContainer, "getBoundingClientRect").mockReturnValue({
+      top: 0,
+      left: 0,
+      right: 400,
+      bottom: CONTAINER_HEIGHT,
+      width: 400,
+      height: CONTAINER_HEIGHT,
+      x: 0,
+      y: 0,
+      toJSON: () => "",
+    } as DOMRect);
+
+    // Helper to update wrapper geometry for a given scrollTop.
+    const applyScrollTop = (scrollTop: number) => {
+      canvasContainer.scrollTop = scrollTop;
+      wrappers.forEach((wrapper) => {
+        const page = parseInt(wrapper.getAttribute("data-page")!, 10);
+        const height = PAGE_HEIGHTS[page - 1] * SCALE;
+        const top =
+          CONTAINER_PADDING_TOP - scrollTop + expectedScrollTopForPage(page);
+        vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue({
+          top,
+          left: 0,
+          right: 200 * SCALE,
+          bottom: top + height,
+          width: 200 * SCALE,
+          height,
+          x: 0,
+          y: top,
+          toJSON: () => "",
+        } as DOMRect);
+      });
+    };
+
+    // Rapidly scroll past page 5, then back to page 3, simulating a user
+    // dragging the scrollbar back and forth. The debounced handler should
+    // only sync the page after scrolling pauses, using the latest position.
+    applyScrollTop(expectedScrollTopForPage(5));
+    fireEvent.scroll(canvasContainer);
+
+    applyScrollTop(expectedScrollTopForPage(4));
+    fireEvent.scroll(canvasContainer);
+
+    applyScrollTop(expectedScrollTopForPage(6));
+    fireEvent.scroll(canvasContainer);
+
+    applyScrollTop(expectedScrollTopForPage(3));
+    fireEvent.scroll(canvasContainer);
+
+    await act(async () => {
+      vi.advanceTimersByTime(150);
+    });
+    act(flushRaf);
+
+    expect(pageInput.value).toBe("3");
+
+    vi.useRealTimers();
+    globalThis.requestAnimationFrame = originalRAF;
   });
 });

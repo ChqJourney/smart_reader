@@ -22,6 +22,8 @@
     "fitToWidth": "适合宽度",
     "zoomOut": "缩小",
     "zoomIn": "放大",
+    "scale": "缩放比例",
+    "scaleHint": "输入百分比（如 150）或比例值（如 1.5）后按回车",
     "loading": "加载中...",
     "loadingPdf": "正在加载 PDF...",
     "selectPdfToView": "选择 PDF 文件以查看",

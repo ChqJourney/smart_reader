@@ -320,7 +320,14 @@ describe("PdfViewer continuous mode page jump", () => {
       return input;
     });
 
-    expect(screen.getByText("150%")).toBeInTheDocument();
+    const scaleInput = await waitFor<HTMLInputElement>(() => {
+      const input = screen.getByLabelText("缩放比例") as HTMLInputElement;
+      if (!input || input.disabled) {
+        throw new Error("scale input not ready yet");
+      }
+      return input;
+    });
+    expect(scaleInput.value).toBe("150%");
 
     // Provide a stable container width for the fit calculation.
     const canvasContainer = container.querySelector(
@@ -340,7 +347,7 @@ describe("PdfViewer continuous mode page jump", () => {
 
     // newScale = (400 - 24 * 2) / (200 * 1.5 / 1.5) = 352 / 200 = 1.76
     await waitFor(() => {
-      expect(screen.getByText("176%")).toBeInTheDocument();
+      expect(scaleInput.value).toBe("176%");
     });
   });
 

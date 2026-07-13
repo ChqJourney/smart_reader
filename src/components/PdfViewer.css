@@ -48,12 +48,30 @@
 }
 
 .pdf-controls .page-info,
-.pdf-controls .scale-info {
+.pdf-controls .scale-input {
   font-size: 0.85rem;
   color: #616161;
   min-width: 80px;
   text-align: center;
   font-variant-numeric: tabular-nums;
+}
+
+.pdf-controls .scale-input {
+  width: 52px;
+  height: 26px;
+  min-width: auto;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  line-height: 24px;
+  background: transparent;
+  outline: none;
+}
+
+.pdf-controls .scale-input:hover,
+.pdf-controls .scale-input:focus {
+  border-color: #d1d1d1;
+  background: #fff;
 }
 
 .pdf-controls .page-info {

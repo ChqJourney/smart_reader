@@ -169,6 +169,9 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     >(new Map());
     const [pageInput, setPageInput] = useState(String(pageNum));
     const [viewportsReady, setViewportsReady] = useState(false);
+    const [scaleInput, setScaleInput] = useState(
+      `${Math.round((initialState?.scale ?? 1.5) * 100)}%`
+    );
     const [outlineOpen, setOutlineOpen] = useState(false);
     const [outline, setOutline] = useState<OutlineItem[]>([]);
     const [searchOpen, setSearchOpen] = useState(false);
@@ -183,8 +186,11 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     const pageVisibilityRatios = useRef<Map<number, number>>(new Map());
     const pageInputRef = useRef<HTMLInputElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
+    const scaleInputRef = useRef<HTMLInputElement>(null);
     const isJumpingRef = useRef(false);
     const jumpScrollCleanupRef = useRef<(() => void) | null>(null);
+    const wheelDeltaRef = useRef(0);
+    const lastWheelDirectionRef = useRef(0);
     const lastStateRef = useRef<PdfViewerState>({
       pageNum: initialState?.pageNum ?? 1,
       scale: initialState?.scale ?? 1.5,
@@ -217,6 +223,13 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         setPageInput(String(pageNum));
       }
     }, [pageNum]);
+
+    // Update scale input from state, but not while the user is editing.
+    useEffect(() => {
+      if (document.activeElement !== scaleInputRef.current) {
+        setScaleInput(`${Math.round(scale * 100)}%`);
+      }
+    }, [scale]);
 
     // Sync state when switching tabs
     useEffect(() => {
@@ -416,6 +429,77 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
     }, [pdf, numPages, viewMode, searchOpen, searchMatches]);
+
+    const MIN_SCALE = 0.1;
+    const MAX_SCALE = 5.0;
+    const ZOOM_STEP_RATIO = 0.1; // 10% per wheel step
+
+    const zoomTo = useCallback((target: number) => {
+      setScale(Math.max(MIN_SCALE, Math.min(MAX_SCALE, target)));
+    }, []);
+
+    const zoomOut = useCallback(() => {
+      setScale((s) => Math.max(MIN_SCALE, s * (1 - ZOOM_STEP_RATIO)));
+    }, []);
+
+    const zoomIn = useCallback(() => {
+      setScale((s) => Math.min(MAX_SCALE, s * (1 + ZOOM_STEP_RATIO)));
+    }, []);
+
+    // Ctrl + wheel zoom, scoped to the PDF canvas container.
+    // Accumulates wheel delta and only fires one zoom step per threshold to
+    // handle high-sensitivity wheels and rapid back-and-forth scrolling.
+    useEffect(() => {
+      const container =
+        viewMode === "single"
+          ? singleContainerRef.current
+          : continuousContainerRef.current;
+      if (!container) return;
+
+      let resetTimeout: ReturnType<typeof setTimeout> | null = null;
+
+      const handleWheel = (e: WheelEvent) => {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+
+        const direction = e.deltaY > 0 ? 1 : -1;
+        if (
+          lastWheelDirectionRef.current !== 0 &&
+          lastWheelDirectionRef.current !== direction
+        ) {
+          // Direction reversed: reset accumulator so rapid back-and-forth
+          // scrolling does not fight the current scale.
+          wheelDeltaRef.current = 0;
+        }
+        lastWheelDirectionRef.current = direction;
+        wheelDeltaRef.current += e.deltaY;
+
+        const threshold = 100;
+        if (Math.abs(wheelDeltaRef.current) >= threshold) {
+          const steps = Math.floor(Math.abs(wheelDeltaRef.current) / threshold);
+          for (let i = 0; i < steps; i++) {
+            if (direction > 0) {
+              zoomOut();
+            } else {
+              zoomIn();
+            }
+          }
+          wheelDeltaRef.current = wheelDeltaRef.current % threshold;
+        }
+
+        if (resetTimeout) clearTimeout(resetTimeout);
+        resetTimeout = setTimeout(() => {
+          wheelDeltaRef.current = 0;
+          lastWheelDirectionRef.current = 0;
+        }, 150);
+      };
+
+      container.addEventListener("wheel", handleWheel, { passive: false });
+      return () => {
+        container.removeEventListener("wheel", handleWheel);
+        if (resetTimeout) clearTimeout(resetTimeout);
+      };
+    }, [viewMode, zoomIn, zoomOut]);
 
     const handleVisibilityChange = useCallback(
       (page: number, ratio: number) => {
@@ -662,6 +746,48 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       setPageInput(String(pageNum));
     };
 
+    const parseScaleInput = (value: string): number | null => {
+      const trimmed = value.trim();
+      const hasPercent = trimmed.endsWith("%");
+      const numericPart = trimmed.replace(/%$/, "");
+      if (numericPart === "") return null;
+      const num = parseFloat(numericPart);
+      if (Number.isNaN(num)) return null;
+      if (hasPercent) return num / 100;
+      // Without an explicit percent sign, treat values >= 10 as percentages
+      // (e.g. 150 => 1.5) and smaller values as raw scale.
+      return num >= 10 ? num / 100 : num;
+    };
+
+    const applyScaleInput = useCallback(() => {
+      const parsed = parseScaleInput(scaleInput);
+      if (parsed !== null) {
+        zoomTo(parsed);
+      } else {
+        setScaleInput(`${Math.round(scale * 100)}%`);
+      }
+    }, [scaleInput, scale, zoomTo]);
+
+    const handleScaleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      setScaleInput(e.target.value);
+    };
+
+    const handleScaleInputKeyDown = (
+      e: React.KeyboardEvent<HTMLInputElement>
+    ) => {
+      if (e.key === "Enter") {
+        applyScaleInput();
+        e.currentTarget.blur();
+      } else if (e.key === "Escape") {
+        setScaleInput(`${Math.round(scale * 100)}%`);
+        e.currentTarget.blur();
+      }
+    };
+
+    const handleScaleInputBlur = () => {
+      applyScaleInput();
+    };
+
     // Keep pageNum in sync with the visible page while scrolling in continuous mode.
     // We compute directly from DOM geometry instead of relying on the asynchronous
     // IntersectionObserver state, which can be stale right after a jump.
@@ -732,8 +858,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
     const goToPrevPage = () => setPageNum((p) => Math.max(1, p - 1));
     const goToNextPage = () => setPageNum((p) => Math.min(numPages, p + 1));
-    const zoomOut = () => setScale((s) => Math.max(0.5, s - 0.05));
-    const zoomIn = () => setScale((s) => s + 0.05);
 
     const fitToWidth = useCallback(() => {
       if (!pdf || numPages === 0) return;
@@ -750,8 +874,8 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         10
       );
       const newScale = (container.clientWidth - padding * 2) / originalWidth;
-      setScale(Math.max(0.1, Math.min(5, newScale)));
-    }, [pdf, numPages, viewMode, pageNum, pageViewports, scale]);
+      zoomTo(newScale);
+    }, [pdf, numPages, viewMode, pageNum, pageViewports, scale, zoomTo]);
 
     // Stable ref callback for continuous-mode page wrappers
     const pageWrapperRefCallbacks = useRef<
@@ -983,7 +1107,19 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
             >
               <Icon name="zoom-in" size={16} />
             </button>
-            <span className="scale-info">{Math.round(scale * 100)}%</span>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="scale-input"
+              ref={scaleInputRef}
+              value={scaleInput}
+              onChange={handleScaleInputChange}
+              onKeyDown={handleScaleInputKeyDown}
+              onBlur={handleScaleInputBlur}
+              disabled={numPages === 0 || isLoading}
+              aria-label={t("pdf.scale")}
+              title={t("pdf.scaleHint")}
+            />
           </div>
         </div>
 

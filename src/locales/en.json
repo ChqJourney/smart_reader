@@ -22,6 +22,8 @@
     "fitToWidth": "Fit to Width",
     "zoomOut": "Zoom Out",
     "zoomIn": "Zoom In",
+    "scale": "Zoom",
+    "scaleHint": "Enter a percentage (e.g. 150) or scale (e.g. 1.5) and press Enter",
     "loading": "Loading...",
     "loadingPdf": "Loading PDF...",
     "selectPdfToView": "Select a PDF to view",

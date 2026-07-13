@@ -33,7 +33,8 @@ export type IconName =
   | "panel-expand-right"
   | "fit-to-width"
   | "search"
-  | "bookmark";
+  | "bookmark"
+  | "table-of-contents";
 
 interface IconProps {
   name: IconName;
@@ -572,6 +573,20 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
+    </>
+  ),
+  "table-of-contents": (
+    <>
+      <path
+        d="M7 6h9M7 10h9M7 14h9"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <circle cx="4.5" cy="6" r="1.2" fill="currentColor" />
+      <circle cx="4.5" cy="10" r="1.2" fill="currentColor" />
+      <circle cx="4.5" cy="14" r="1.2" fill="currentColor" />
     </>
   ),
 };

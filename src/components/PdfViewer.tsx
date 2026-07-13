@@ -196,6 +196,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       scale: initialState?.scale ?? 1.5,
       viewMode: initialState?.viewMode ?? "continuous",
     });
+    const pendingFitCenterRef = useRef(false);
     // Keep a live ref of the current page number so the scroll-driven page
     // detection can read the latest value without re-creating its listener.
     const pageNumRef = useRef(pageNum);
@@ -230,6 +231,22 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         setScaleInput(`${Math.round(scale * 100)}%`);
       }
     }, [scale]);
+
+    // After fit-to-width updates the scale, center the page horizontally so
+    // residual scroll position does not leave it shifted to one side.
+    useEffect(() => {
+      if (!pendingFitCenterRef.current || !viewportsReady) return;
+      pendingFitCenterRef.current = false;
+      const container =
+        viewMode === "single"
+          ? singleContainerRef.current
+          : continuousContainerRef.current;
+      if (!container) return;
+      requestAnimationFrame(() => {
+        const maxScrollLeft = container.scrollWidth - container.clientWidth;
+        container.scrollLeft = maxScrollLeft > 0 ? maxScrollLeft / 2 : 0;
+      });
+    }, [viewportsReady, viewMode]);
 
     // Sync state when switching tabs
     useEffect(() => {
@@ -874,6 +891,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         10
       );
       const newScale = (container.clientWidth - padding * 2) / originalWidth;
+      pendingFitCenterRef.current = true;
       zoomTo(newScale);
     }, [pdf, numPages, viewMode, pageNum, pageViewports, scale, zoomTo]);
 
@@ -937,7 +955,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
               aria-label={t("pdf.toggleOutline")}
               title={t("pdf.toggleOutline")}
             >
-              <Icon name="bookmark" size={16} />
+              <Icon name="table-of-contents" size={16} />
             </button>
             <button
               onClick={() => {

@@ -24,7 +24,18 @@
     "zoomIn": "放大",
     "loading": "加载中...",
     "loadingPdf": "正在加载 PDF...",
-    "selectPdfToView": "选择 PDF 文件以查看"
+    "selectPdfToView": "选择 PDF 文件以查看",
+    "toggleOutline": "目录",
+    "toggleSearch": "搜索",
+    "outlineTitle": "目录",
+    "closeOutline": "关闭目录",
+    "searchPlaceholder": "搜索 PDF 内容",
+    "searchLoading": "搜索中...",
+    "searchCount": "第 {{current}} / 共 {{total}} 个",
+    "noSearchResults": "无匹配结果",
+    "previousSearchMatch": "上一个匹配",
+    "nextSearchMatch": "下一个匹配",
+    "closeSearch": "关闭搜索"
   },
   "panel": {
     "hide": "隐藏面板"

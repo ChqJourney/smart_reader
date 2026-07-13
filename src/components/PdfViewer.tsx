@@ -15,7 +15,7 @@ import { Annotation } from "../services/annotations";
 import { AppSettings } from "../services/settings";
 import { error as logError } from "../services/logs";
 import Icon from "./Icon";
-import PdfPage from "./PdfPage";
+import PdfPage, { SearchHighlight } from "./PdfPage";
 import "./PdfViewer.css";
 
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -25,6 +25,23 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 export interface PageViewportInfo {
   width: number;
   height: number;
+}
+
+export interface OutlineItem {
+  title: string;
+  dest?: string | unknown[] | null;
+  url?: string | null;
+  items: OutlineItem[];
+}
+
+interface SearchMatch {
+  id: string;
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  text: string;
 }
 
 export interface PdfViewerState {
@@ -152,12 +169,20 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     >(new Map());
     const [pageInput, setPageInput] = useState(String(pageNum));
     const [viewportsReady, setViewportsReady] = useState(false);
+    const [outlineOpen, setOutlineOpen] = useState(false);
+    const [outline, setOutline] = useState<OutlineItem[]>([]);
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [searchMatches, setSearchMatches] = useState<SearchMatch[]>([]);
+    const [searchActiveIndex, setSearchActiveIndex] = useState(-1);
+    const [searchLoading, setSearchLoading] = useState(false);
 
     const singleContainerRef = useRef<HTMLDivElement>(null);
     const continuousContainerRef = useRef<HTMLDivElement>(null);
     const pageWrapperRefs = useRef<(HTMLDivElement | null)[]>([]);
     const pageVisibilityRatios = useRef<Map<number, number>>(new Map());
     const pageInputRef = useRef<HTMLInputElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
     const isJumpingRef = useRef(false);
     const jumpScrollCleanupRef = useRef<(() => void) | null>(null);
     const lastStateRef = useRef<PdfViewerState>({
@@ -277,10 +302,65 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       };
     }, [filePath]);
 
+    // Load PDF outline (bookmarks) when the PDF changes.
+    useEffect(() => {
+      if (!pdf) {
+        setOutline([]);
+        return;
+      }
+      let cancelled = false;
+      const loadOutline = async () => {
+        try {
+          const outlineData = (await pdf.getOutline()) || [];
+          if (!cancelled) setOutline(outlineData as OutlineItem[]);
+        } catch (err) {
+          logError(`Failed to load PDF outline: ${err}`);
+        }
+      };
+      loadOutline();
+      return () => {
+        cancelled = true;
+      };
+    }, [pdf]);
+
     // Keyboard navigation
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
         if (!pdf || numPages === 0) return;
+
+        const isModifier = e.ctrlKey || e.metaKey;
+        if (isModifier && e.key.toLowerCase() === "f") {
+          e.preventDefault();
+          setSearchOpen(true);
+          setTimeout(() => searchInputRef.current?.focus(), 0);
+          return;
+        }
+
+        if (e.key === "Escape" && searchOpen) {
+          e.preventDefault();
+          setSearchOpen(false);
+          return;
+        }
+
+        const activeTag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        const isTyping = activeTag === "input" || activeTag === "textarea";
+
+        if (
+          searchOpen &&
+          searchInputRef.current === document.activeElement &&
+          e.key === "Enter"
+        ) {
+          e.preventDefault();
+          setSearchActiveIndex((i) => {
+            if (searchMatches.length === 0) return i;
+            return e.shiftKey
+              ? (i - 1 + searchMatches.length) % searchMatches.length
+              : (i + 1) % searchMatches.length;
+          });
+          return;
+        }
+
+        if (isTyping) return;
 
         if (viewMode === "single") {
           if (
@@ -335,7 +415,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [pdf, numPages, viewMode]);
+    }, [pdf, numPages, viewMode, searchOpen, searchMatches]);
 
     const handleVisibilityChange = useCallback(
       (page: number, ratio: number) => {
@@ -429,6 +509,137 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       },
       [numPages, viewMode, pageViewports, viewportsReady]
     );
+
+    // Build the search index when the search panel is open and the query/scale changes.
+    useEffect(() => {
+      if (!searchOpen || !pdf || numPages === 0) {
+        setSearchMatches([]);
+        setSearchActiveIndex(-1);
+        return;
+      }
+      const trimmed = searchQuery.trim();
+      if (trimmed === "") {
+        setSearchMatches([]);
+        setSearchActiveIndex(-1);
+        return;
+      }
+
+      let cancelled = false;
+      const build = async () => {
+        setSearchLoading(true);
+        const queryLower = trimmed.toLowerCase();
+        const matches: SearchMatch[] = [];
+        for (let p = 1; p <= numPages; p++) {
+          try {
+            const page = await pdf.getPage(p);
+            if (cancelled) return;
+            const pageViewport = page.getViewport({ scale });
+            const textContent = await page.getTextContent();
+            if (cancelled) return;
+            for (const item of textContent.items) {
+              if (!("str" in item)) continue;
+              const text = item.str;
+              if (!text.trim()) continue;
+              if (text.toLowerCase().includes(queryLower)) {
+                const [x, y] = pageViewport.convertToViewportPoint(
+                  item.transform[4],
+                  item.transform[5]
+                );
+                const width = item.width * pageViewport.scale;
+                const height = (item.height || 10) * pageViewport.scale;
+                matches.push({
+                  id: `match-${p}-${matches.length}`,
+                  page: p,
+                  text,
+                  x,
+                  y: y - height,
+                  width,
+                  height,
+                });
+              }
+            }
+          } catch (err) {
+            logError(`Failed to build search index for page ${p}: ${err}`);
+          }
+        }
+        if (!cancelled) {
+          setSearchMatches(matches);
+          const startIndex = matches.findIndex(
+            (m) => m.page >= pageNumRef.current
+          );
+          setSearchActiveIndex(
+            startIndex >= 0 ? startIndex : matches.length > 0 ? 0 : -1
+          );
+        }
+        if (!cancelled) setSearchLoading(false);
+      };
+
+      build();
+      return () => {
+        cancelled = true;
+      };
+    }, [searchOpen, searchQuery, pdf, numPages, scale]);
+
+    // Scroll to the active search match whenever it changes.
+    useEffect(() => {
+      if (searchActiveIndex < 0 || searchActiveIndex >= searchMatches.length)
+        return;
+      const match = searchMatches[searchActiveIndex];
+      goToPage(match.page);
+    }, [searchActiveIndex, searchMatches, goToPage]);
+
+    const goToNextSearchMatch = () => {
+      if (searchMatches.length === 0) return;
+      setSearchActiveIndex((i) => (i + 1) % searchMatches.length);
+    };
+
+    const goToPrevSearchMatch = () => {
+      if (searchMatches.length === 0) return;
+      setSearchActiveIndex(
+        (i) => (i - 1 + searchMatches.length) % searchMatches.length
+      );
+    };
+
+    const handleOutlineClick = async (item: OutlineItem) => {
+      if (item.url) {
+        try {
+          await invoke("open_path", { path: item.url });
+        } catch (err) {
+          logError(`Failed to open outline URL: ${err}`);
+        }
+      } else if (item.dest) {
+        try {
+          const dest =
+            typeof item.dest === "string"
+              ? await pdf!.getDestination(item.dest)
+              : item.dest;
+          if (!dest || !Array.isArray(dest)) return;
+          const ref = dest[0];
+          const pageIndex = await pdf!.getPageIndex(ref);
+          goToPage(pageIndex + 1);
+        } catch (err) {
+          logError(`Failed to navigate to outline destination: ${err}`);
+        }
+      }
+    };
+
+    const searchHighlightsByPage = useMemo(() => {
+      const map = new Map<number, SearchHighlight[]>();
+      searchMatches.forEach((match, index) => {
+        const list = map.get(match.page) || [];
+        list.push({
+          id: match.id,
+          page: match.page,
+          x: match.x,
+          y: match.y,
+          width: match.width,
+          height: match.height,
+          isActive: index === searchActiveIndex,
+        });
+        map.set(match.page, list);
+      });
+      return map;
+    }, [searchMatches, searchActiveIndex]);
 
     const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value.replace(/\D/g, "");
@@ -596,6 +807,29 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
               </button>
             )}
             <button
+              onClick={() => setOutlineOpen((v) => !v)}
+              className={`icon-btn pdf-outline-toggle ${outlineOpen ? "active" : ""}`}
+              disabled={numPages === 0 || isLoading || outline.length === 0}
+              aria-label={t("pdf.toggleOutline")}
+              title={t("pdf.toggleOutline")}
+            >
+              <Icon name="bookmark" size={16} />
+            </button>
+            <button
+              onClick={() => {
+                setSearchOpen((v) => !v);
+                if (!searchOpen) {
+                  setTimeout(() => searchInputRef.current?.focus(), 0);
+                }
+              }}
+              className={`icon-btn pdf-search-toggle ${searchOpen ? "active" : ""}`}
+              disabled={numPages === 0 || isLoading}
+              aria-label={t("pdf.toggleSearch")}
+              title={t("pdf.toggleSearch")}
+            >
+              <Icon name="search" size={16} />
+            </button>
+            <button
               onClick={() =>
                 setViewMode((m) => (m === "single" ? "continuous" : "single"))
               }
@@ -753,42 +987,52 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           </div>
         </div>
 
-        <div
-          className={`pdf-canvas-container ${viewMode === "continuous" ? "continuous" : ""}`}
-          ref={
-            viewMode === "single" ? singleContainerRef : continuousContainerRef
-          }
-          tabIndex={0}
-        >
-          {numPages > 0 ? (
-            viewMode === "single" ? (
-              <PdfPage
-                pdf={pdf!}
-                pageNum={pageNum}
-                scale={scale}
-                shouldRender={renderPages.has(pageNum)}
-                fileHash={fileHash}
-                onSelection={onSelection}
-                annotations={annotations}
-                highlightedAnnotationId={highlightedAnnotationId}
-                onAnnotationUpdate={onAnnotationUpdate}
-                onAnnotationDelete={onAnnotationDelete}
-                onExplainClick={onExplainClick}
-                hoverTranslate={hoverTranslate}
-                settings={settings}
-              />
-            ) : (
-              Array.from({ length: numPages }, (_, i) => i + 1).map((p) => (
+        <div className="pdf-viewer-body">
+          {outlineOpen && (
+            <div className="pdf-outline-sidebar">
+              <div className="pdf-outline-header">
+                <span>{t("pdf.outlineTitle")}</span>
+                <button
+                  className="icon-btn"
+                  onClick={() => setOutlineOpen(false)}
+                  aria-label={t("pdf.closeOutline")}
+                  title={t("pdf.closeOutline")}
+                >
+                  <Icon name="close" size={14} />
+                </button>
+              </div>
+              <ul className="pdf-outline-list">
+                {outline.map((item, index) => (
+                  <OutlineNode
+                    key={index}
+                    item={item}
+                    level={0}
+                    onClick={handleOutlineClick}
+                  />
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div
+            className={`pdf-canvas-container ${viewMode === "continuous" ? "continuous" : ""}`}
+            ref={
+              viewMode === "single"
+                ? singleContainerRef
+                : continuousContainerRef
+            }
+            tabIndex={0}
+          >
+            {numPages > 0 ? (
+              viewMode === "single" ? (
                 <PdfPage
-                  key={p}
                   pdf={pdf!}
-                  pageNum={p}
+                  pageNum={pageNum}
                   scale={scale}
-                  shouldRender={renderPages.has(p)}
-                  pageViewports={pageViewports}
+                  shouldRender={renderPages.has(pageNum)}
                   fileHash={fileHash}
                   onSelection={onSelection}
-                  onVisibilityChange={handleVisibilityChange}
+                  onGoToPage={goToPage}
                   annotations={annotations}
                   highlightedAnnotationId={highlightedAnnotationId}
                   onAnnotationUpdate={onAnnotationUpdate}
@@ -796,19 +1040,159 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                   onExplainClick={onExplainClick}
                   hoverTranslate={hoverTranslate}
                   settings={settings}
-                  containerRef={setPageWrapperRef(p)}
+                  searchHighlights={searchHighlightsByPage.get(pageNum)}
                 />
-              ))
-            )
-          ) : (
-            <p className="pdf-placeholder">
-              {isLoading ? t("pdf.loadingPdf") : t("pdf.selectPdfToView")}
-            </p>
+              ) : (
+                Array.from({ length: numPages }, (_, i) => i + 1).map((p) => (
+                  <PdfPage
+                    key={p}
+                    pdf={pdf!}
+                    pageNum={p}
+                    scale={scale}
+                    shouldRender={renderPages.has(p)}
+                    pageViewports={pageViewports}
+                    fileHash={fileHash}
+                    onSelection={onSelection}
+                    onGoToPage={goToPage}
+                    onVisibilityChange={handleVisibilityChange}
+                    annotations={annotations}
+                    highlightedAnnotationId={highlightedAnnotationId}
+                    onAnnotationUpdate={onAnnotationUpdate}
+                    onAnnotationDelete={onAnnotationDelete}
+                    onExplainClick={onExplainClick}
+                    hoverTranslate={hoverTranslate}
+                    settings={settings}
+                    containerRef={setPageWrapperRef(p)}
+                    searchHighlights={searchHighlightsByPage.get(p)}
+                  />
+                ))
+              )
+            ) : (
+              <p className="pdf-placeholder">
+                {isLoading ? t("pdf.loadingPdf") : t("pdf.selectPdfToView")}
+              </p>
+            )}
+          </div>
+
+          {searchOpen && (
+            <div className="pdf-search-bar">
+              <Icon name="search" size={16} />
+              <input
+                ref={searchInputRef}
+                type="text"
+                className="pdf-search-input"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    e.preventDefault();
+                    setSearchOpen(false);
+                  }
+                }}
+                placeholder={t("pdf.searchPlaceholder")}
+                aria-label={t("pdf.searchPlaceholder")}
+              />
+              <span className="pdf-search-count">
+                {searchLoading
+                  ? t("pdf.searchLoading")
+                  : searchMatches.length > 0
+                    ? t("pdf.searchCount", {
+                        current: searchActiveIndex + 1,
+                        total: searchMatches.length,
+                      })
+                    : searchQuery.trim()
+                      ? t("pdf.noSearchResults")
+                      : ""}
+              </span>
+              <button
+                className="icon-btn"
+                onClick={goToPrevSearchMatch}
+                disabled={searchMatches.length === 0}
+                aria-label={t("pdf.previousSearchMatch")}
+                title={t("pdf.previousSearchMatch")}
+              >
+                <Icon name="chevron-up" size={16} />
+              </button>
+              <button
+                className="icon-btn"
+                onClick={goToNextSearchMatch}
+                disabled={searchMatches.length === 0}
+                aria-label={t("pdf.nextSearchMatch")}
+                title={t("pdf.nextSearchMatch")}
+              >
+                <Icon name="chevron-down" size={16} />
+              </button>
+              <button
+                className="icon-btn"
+                onClick={() => {
+                  setSearchOpen(false);
+                  setSearchQuery("");
+                }}
+                aria-label={t("pdf.closeSearch")}
+                title={t("pdf.closeSearch")}
+              >
+                <Icon name="close" size={14} />
+              </button>
+            </div>
           )}
         </div>
       </div>
     );
   }
 );
+
+function OutlineNode({
+  item,
+  level,
+  onClick,
+}: {
+  item: OutlineItem;
+  level: number;
+  onClick: (item: OutlineItem) => void;
+}) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(true);
+  const hasChildren = item.items && item.items.length > 0;
+  return (
+    <li className="pdf-outline-item">
+      <div
+        className="pdf-outline-row"
+        style={{ paddingLeft: `${level * 12}px` }}
+      >
+        {hasChildren && (
+          <button
+            className="icon-btn pdf-outline-expand"
+            onClick={() => setExpanded((v) => !v)}
+            aria-label={expanded ? t("common.collapse") : t("common.expand")}
+          >
+            <Icon
+              name={expanded ? "chevron-down" : "chevron-right"}
+              size={12}
+            />
+          </button>
+        )}
+        <button
+          className="pdf-outline-title"
+          onClick={() => onClick(item)}
+          title={item.title}
+        >
+          {item.title || "(Untitled)"}
+        </button>
+      </div>
+      {expanded && hasChildren && (
+        <ul className="pdf-outline-list">
+          {item.items.map((child, index) => (
+            <OutlineNode
+              key={index}
+              item={child}
+              level={level + 1}
+              onClick={onClick}
+            />
+          ))}
+        </ul>
+      )}
+    </li>
+  );
+}
 
 export default PdfViewer;

@@ -82,6 +82,7 @@ const PAGE_SPACING = 24;
 function createMockPdf() {
   return {
     numPages: NUM_PAGES,
+    getOutline: vi.fn(() => Promise.resolve([])),
     getPage: vi.fn(async (pageNum: number) => {
       const height = PAGE_HEIGHTS[pageNum - 1] ?? 300;
       const viewport = {
@@ -97,6 +98,7 @@ function createMockPdf() {
         getViewport: () => viewport,
         render: () => ({ promise: Promise.resolve() }),
         getTextContent: () => Promise.resolve({ items: [] }),
+        getAnnotations: () => Promise.resolve([]),
       };
     }),
   };
@@ -478,5 +480,128 @@ describe("PdfViewer continuous mode page jump", () => {
 
     vi.useRealTimers();
     globalThis.requestAnimationFrame = originalRAF;
+  });
+
+  it("opens the search bar with Ctrl+F and starts from the current page", async () => {
+    const mockPdfWithText = {
+      numPages: NUM_PAGES,
+      getOutline: vi.fn(() => Promise.resolve([])),
+      getPageIndex: vi.fn(() => Promise.resolve(0)),
+      getPage: vi.fn(async (pageNum: number) => {
+        const height = PAGE_HEIGHTS[pageNum - 1] ?? 300;
+        const viewport = {
+          width: 200 * SCALE,
+          height: height * SCALE,
+          scale: SCALE,
+          convertToViewportPoint: (x: number, y: number) => [
+            x * SCALE,
+            y * SCALE,
+          ],
+        };
+        return {
+          getViewport: () => viewport,
+          render: () => ({ promise: Promise.resolve() }),
+          getTextContent: () =>
+            Promise.resolve({
+              items: [
+                {
+                  str:
+                    pageNum === 2 || pageNum === 4
+                      ? "searchable term"
+                      : "other text",
+                  dir: "ltr",
+                  width: 80,
+                  height: 12,
+                  transform: [12, 0, 0, 12, 10, 20],
+                  fontName: "g_d0_f1",
+                },
+              ],
+            }),
+          getAnnotations: () => Promise.resolve([]),
+        };
+      }),
+    };
+
+    mockGetDocument.mockReturnValue({
+      promise: Promise.resolve(mockPdfWithText),
+    });
+
+    render(<PdfViewer filePath="/fake/test.pdf" settings={DEFAULT_SETTINGS} />);
+
+    const pageInput = await waitFor<HTMLInputElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLInputElement;
+      if (!input || input.disabled) {
+        throw new Error("page input not ready yet");
+      }
+      return input;
+    });
+
+    // Navigate to page 3 first.
+    fireEvent.change(pageInput, { target: { value: "3" } });
+    fireEvent.keyDown(pageInput, { key: "Enter", code: "Enter" });
+    await waitFor(() => {
+      expect(pageInput.value).toBe("3");
+    });
+
+    fireEvent.keyDown(window, { key: "f", code: "KeyF", ctrlKey: true });
+
+    const searchInput = await waitFor(() =>
+      screen.getByLabelText("搜索 PDF 内容")
+    );
+    expect(searchInput).toBeInTheDocument();
+
+    fireEvent.change(searchInput, { target: { value: "searchable" } });
+
+    // There are matches on pages 2 and 4. Starting from page 3, the first
+    // match should be on page 4 (the second match in document order).
+    await waitFor(() => {
+      expect(screen.getByText(/第 2 \/ 共 2 个/)).toBeInTheDocument();
+    });
+  });
+
+  it("opens the outline sidebar and renders outline items", async () => {
+    const outlineItems = [
+      {
+        title: "Section 1",
+        dest: [null, { name: "XYZ" }, 0, 0, 0],
+        url: null,
+        items: [],
+      },
+      {
+        title: "Section 2",
+        dest: [null, { name: "XYZ" }, 0, 0, 0],
+        url: null,
+        items: [],
+      },
+    ];
+
+    const mockPdfWithOutline = {
+      ...createMockPdf(),
+      getOutline: vi.fn(() => Promise.resolve(outlineItems)),
+    };
+
+    mockGetDocument.mockReturnValue({
+      promise: Promise.resolve(mockPdfWithOutline),
+    });
+
+    render(<PdfViewer filePath="/fake/test.pdf" settings={DEFAULT_SETTINGS} />);
+
+    await waitFor<HTMLInputElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLInputElement;
+      if (!input || input.disabled) {
+        throw new Error("page input not ready yet");
+      }
+      return input;
+    });
+
+    const outlineButton = screen.getByLabelText("目录");
+    expect(outlineButton).not.toBeDisabled();
+
+    fireEvent.click(outlineButton);
+
+    await waitFor(() => {
+      expect(screen.getByText("Section 1")).toBeInTheDocument();
+      expect(screen.getByText("Section 2")).toBeInTheDocument();
+    });
   });
 });

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import * as pdfjsLib from "pdfjs-dist";
 import type { TextItem as PdfjsTextItem } from "pdfjs-dist/types/src/display/api";
 import type { PageViewportInfo } from "./PdfViewer";
@@ -22,6 +23,26 @@ interface TextItem {
   height: number;
 }
 
+export interface SearchHighlight {
+  id: string;
+  page: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isActive: boolean;
+}
+
+interface LinkAnnotation {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  url?: string;
+  dest?: unknown;
+}
+
 interface PdfPageProps {
   pdf: pdfjsLib.PDFDocumentProxy;
   pageNum: number;
@@ -41,6 +62,7 @@ interface PdfPageProps {
       height?: number;
     }
   ) => void;
+  onGoToPage?: (page: number) => void;
   onVisibilityChange?: (pageNum: number, ratio: number) => void;
   annotations?: Annotation[];
   highlightedAnnotationId?: string | null;
@@ -53,6 +75,7 @@ interface PdfPageProps {
   hoverTranslate?: boolean;
   settings: AppSettings;
   containerRef?: React.Ref<HTMLDivElement>;
+  searchHighlights?: SearchHighlight[];
 }
 
 function PdfPage({
@@ -63,6 +86,7 @@ function PdfPage({
   pageViewports,
   fileHash,
   onSelection,
+  onGoToPage,
   onVisibilityChange,
   annotations,
   highlightedAnnotationId,
@@ -72,11 +96,15 @@ function PdfPage({
   hoverTranslate,
   settings,
   containerRef,
+  searchHighlights,
 }: PdfPageProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const textItemsRef = useRef<TextItem[]>([]);
+  const linkAnnotationsRef = useRef<LinkAnnotation[]>([]);
+  const pendingLinkRef = useRef<LinkAnnotation | null>(null);
+  const [linkAnnotations, setLinkAnnotations] = useState<LinkAnnotation[]>([]);
   const [viewport, setViewport] = useState<PageViewportInfo | null>(
     pageViewports?.get(pageNum) ?? null
   );
@@ -203,6 +231,50 @@ function PdfPage({
 
         textItemsRef.current = items;
         hasRenderedRef.current = true;
+
+        try {
+          const annotationData = await page.getAnnotations();
+          if (isCancelled) return;
+
+          const links: LinkAnnotation[] = annotationData
+            .filter((a: unknown) => {
+              const anno = a as { subtype?: string; annotationType?: number };
+              return anno.subtype === "Link" || anno.annotationType === 2;
+            })
+            .map((a: unknown, index: number) => {
+              const anno = a as {
+                rect: number[];
+                url?: string;
+                dest?: unknown;
+                action?: string;
+              };
+              const [x1, y1, x2, y2] = anno.rect;
+              const [vx1, vy1] = pageViewport.convertToViewportPoint(x1, y1);
+              const [vx2, vy2] = pageViewport.convertToViewportPoint(x2, y2);
+              const minX = Math.min(vx1, vx2);
+              const maxX = Math.max(vx1, vx2);
+              const minY = Math.min(vy1, vy2);
+              const maxY = Math.max(vy1, vy2);
+              return {
+                id: `link-${pageNum}-${index}`,
+                x: minX,
+                y: minY,
+                width: maxX - minX,
+                height: maxY - minY,
+                url: anno.url,
+                dest: anno.dest,
+              };
+            });
+
+          linkAnnotationsRef.current = links;
+          setLinkAnnotations(links);
+        } catch (err) {
+          if (!isCancelled) {
+            error(
+              `Failed to load link annotations for page ${pageNum}: ${err}`
+            );
+          }
+        }
       } catch (err) {
         if (!isCancelled) {
           error(`Failed to render page ${pageNum}: ${err}`);
@@ -355,9 +427,46 @@ function PdfPage({
     return extractWordFromText(item.text, charIndex);
   };
 
+  const findLinkAtPoint = (x: number, y: number): LinkAnnotation | null => {
+    return (
+      linkAnnotationsRef.current.find(
+        (link) =>
+          x >= link.x &&
+          x <= link.x + link.width &&
+          y >= link.y &&
+          y <= link.y + link.height
+      ) || null
+    );
+  };
+
+  const handleLinkClick = async (link: LinkAnnotation) => {
+    if (link.url) {
+      try {
+        await invoke("open_path", { path: link.url });
+      } catch (err) {
+        error(`Failed to open link URL: ${err}`);
+      }
+    } else if (link.dest) {
+      try {
+        const dest =
+          typeof link.dest === "string"
+            ? await pdf.getDestination(link.dest)
+            : link.dest;
+        if (!dest || !Array.isArray(dest)) return;
+        const ref = dest[0];
+        const pageIndex = await pdf.getPageIndex(ref);
+        onGoToPage?.(pageIndex + 1);
+      } catch (err) {
+        error(`Failed to navigate to link destination: ${err}`);
+      }
+    }
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return;
     hideTooltip();
     const pos = getMousePosInWrapper(e);
+    pendingLinkRef.current = findLinkAtPoint(pos.x, pos.y);
     isDraggingRef.current = true;
     dragStartRef.current = pos;
     setSelectionRect(null);
@@ -367,8 +476,19 @@ function PdfPage({
   const handleMouseMove = (e: React.MouseEvent) => {
     const pos = getMousePosInWrapper(e);
 
+    if (overlayRef.current) {
+      overlayRef.current.style.cursor = findLinkAtPoint(pos.x, pos.y)
+        ? "pointer"
+        : "crosshair";
+    }
+
     if (isDraggingRef.current && dragStartRef.current) {
       const start = dragStartRef.current;
+      const dx = pos.x - start.x;
+      const dy = pos.y - start.y;
+      if (pendingLinkRef.current && Math.hypot(dx, dy) > CLICK_DRAG_THRESHOLD) {
+        pendingLinkRef.current = null;
+      }
       const x = Math.min(start.x, pos.x);
       const y = Math.min(start.y, pos.y);
       const width = Math.abs(pos.x - start.x);
@@ -396,6 +516,16 @@ function PdfPage({
     const dy = pos.y - start.y;
     const distance = Math.sqrt(dx * dx + dy * dy);
 
+    if (distance < CLICK_DRAG_THRESHOLD && pendingLinkRef.current) {
+      const link = pendingLinkRef.current;
+      pendingLinkRef.current = null;
+      isDraggingRef.current = false;
+      dragStartRef.current = null;
+      setSelectionRect(null);
+      handleLinkClick(link);
+      return;
+    }
+
     let selectedItems: TextItem[] = [];
 
     if (distance < CLICK_DRAG_THRESHOLD) {
@@ -412,6 +542,7 @@ function PdfPage({
 
     isDraggingRef.current = false;
     dragStartRef.current = null;
+    pendingLinkRef.current = null;
     setSelectionRect(null);
     setSelectedItems(selectedItems);
 
@@ -452,6 +583,32 @@ function PdfPage({
       }}
     >
       <canvas ref={canvasRef} />
+      {searchHighlights?.map((highlight) => (
+        <div
+          key={highlight.id}
+          className={`pdf-search-highlight ${highlight.isActive ? "active" : ""}`}
+          style={{
+            left: highlight.x,
+            top: highlight.y,
+            width: highlight.width,
+            height: highlight.height,
+          }}
+        />
+      ))}
+      <div className="pdf-link-layer" aria-hidden="true">
+        {linkAnnotations.map((link) => (
+          <div
+            key={link.id}
+            className="pdf-link-indicator"
+            style={{
+              left: link.x,
+              top: link.y,
+              width: link.width,
+              height: link.height,
+            }}
+          />
+        ))}
+      </div>
       <div
         ref={overlayRef}
         className="pdf-selection-overlay"
@@ -462,7 +619,11 @@ function PdfPage({
           hideTooltip();
           isDraggingRef.current = false;
           dragStartRef.current = null;
+          pendingLinkRef.current = null;
           setSelectionRect(null);
+          if (overlayRef.current) {
+            overlayRef.current.style.cursor = "crosshair";
+          }
         }}
       />
       {selectionRect && (

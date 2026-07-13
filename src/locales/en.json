@@ -24,7 +24,18 @@
     "zoomIn": "Zoom In",
     "loading": "Loading...",
     "loadingPdf": "Loading PDF...",
-    "selectPdfToView": "Select a PDF to view"
+    "selectPdfToView": "Select a PDF to view",
+    "toggleOutline": "Outline",
+    "toggleSearch": "Search",
+    "outlineTitle": "Outline",
+    "closeOutline": "Close Outline",
+    "searchPlaceholder": "Search PDF content",
+    "searchLoading": "Searching...",
+    "searchCount": "{{current}} / {{total}} matches",
+    "noSearchResults": "No matches",
+    "previousSearchMatch": "Previous Match",
+    "nextSearchMatch": "Next Match",
+    "closeSearch": "Close Search"
   },
   "panel": {
     "hide": "Hide Panel"

@@ -31,7 +31,9 @@ export type IconName =
   | "panel-expand-left"
   | "panel-collapse-right"
   | "panel-expand-right"
-  | "fit-to-width";
+  | "fit-to-width"
+  | "search"
+  | "bookmark";
 
 interface IconProps {
   name: IconName;
@@ -533,6 +535,37 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
       />
       <path
         d="M14 8l3 2-3 2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  search: (
+    <>
+      <circle
+        cx="9"
+        cy="9"
+        r="5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M13 13l4 4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </>
+  ),
+  bookmark: (
+    <>
+      <path
+        d="M5 2h10a1 1 0 0 1 1 1v15l-6-3-6 3V3a1 1 0 0 1 1-1z"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"

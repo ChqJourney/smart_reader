@@ -380,6 +380,52 @@
   color: #616161;
 }
 
+.dictionary-download-modal {
+  text-align: center;
+  padding: 28px;
+}
+
+.dictionary-download-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  background: #f0f7ff;
+  color: #0078d4;
+}
+
+.dictionary-download-modal h3 {
+  font-size: 1.1rem;
+  margin-bottom: 8px;
+}
+
+.dictionary-download-modal .modal-actions {
+  margin-top: 24px;
+}
+
+.settings-progress-bar.indeterminate {
+  background: #e5e5e5;
+  overflow: hidden;
+  position: relative;
+}
+
+.settings-progress-bar.indeterminate .settings-progress-fill {
+  width: 40%;
+  animation: settings-progress-indeterminate 1.2s ease-in-out infinite;
+}
+
+@keyframes settings-progress-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
 .settings-update-available {
   display: flex;
   align-items: center;

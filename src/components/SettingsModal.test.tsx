@@ -239,7 +239,49 @@ describe("SettingsModal", () => {
     fireEvent.click(toggle);
 
     expect(screen.getByText("下载离线词典")).toBeInTheDocument();
+    expect(screen.getByText("立即下载")).toBeInTheDocument();
+    expect(
+      document.querySelector(".dictionary-download-icon")
+    ).toBeInTheDocument();
     expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("shows byte-based progress when total size is unknown", async () => {
+    let progressCallback: ((p: unknown) => void) | null = null;
+    mockListen.mockImplementation(
+      (_event: string, cb: (p: unknown) => void) => {
+        progressCallback = cb;
+        return Promise.resolve(() => {});
+      }
+    );
+
+    const onSave = vi.fn();
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave,
+    });
+
+    switchToFeaturePage();
+    fireEvent.click(screen.getByLabelText("启用悬停取词翻译"));
+    fireEvent.click(screen.getByText("立即下载"));
+
+    await waitFor(() => {
+      expect(progressCallback).not.toBeNull();
+    });
+
+    progressCallback!({
+      payload: {
+        status: "downloading",
+        downloaded: 128 * 1024,
+        total: 0,
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/已下载\s+128\.0 KB/)).toBeInTheDocument();
+    });
   });
 
   it("calls onClose when close, cancel or save clicked, but not overlay", () => {

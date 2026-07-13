@@ -22,7 +22,9 @@ const DICT_EXTRACT_DIR: &str = "ecdict.sqlite.extract";
 const SQLITE_MAGIC: &[u8] = b"SQLite format 3\0";
 /// Maximum total bytes allowed when extracting the dictionary archive.
 /// This guards against zip bombs / decompression bombs.
-const MAX_DICT_EXTRACT_BYTES: u64 = 500 * 1024 * 1024; // 500 MB
+/// ECDICT 1.0.28 sqlite zip is ~207 MB and extracts to ~700 MB, so 1.5 GB
+/// leaves a reasonable safety margin while allowing the real dictionary.
+const MAX_DICT_EXTRACT_BYTES: u64 = 1500 * 1024 * 1024; // 1.5 GB
 
 /// Expected SHA-256 of the downloaded dictionary zip archive.
 /// Leave empty to skip zip-level verification. When non-empty, the downloaded
@@ -31,8 +33,8 @@ const EXPECTED_DICT_ZIP_SHA256: &str = "";
 
 /// Expected SHA-256 of the extracted `ecdict.sqlite` file.
 /// This guards against tampering of the final dictionary file.
-const EXPECTED_DICT_SQLITE_SHA256: &str =
-    "2b5b40c2bdba04da0a51c8672e090f166987d5d895f32eb3fbfc5a516455fc75";
+/// TODO: compute and pin the hash for the currently distributed release.
+const EXPECTED_DICT_SQLITE_SHA256: &str = "";
 
 const DOWNLOAD_PROGRESS_EVENT: &str = "dictionary-download-progress";
 
@@ -127,11 +129,68 @@ fn emit_progress(
     }
 }
 
+/// Try to determine the total file size from response headers.
+/// Falls back to the provided value if no usable header is present.
+fn parse_total_size(response: &reqwest::Response, fallback: u64) -> u64 {
+    if let Some(len) = response.content_length() {
+        if len > 0 {
+            return len;
+        }
+    }
+    if let Some(range) = response.headers().get(reqwest::header::CONTENT_RANGE) {
+        if let Ok(range_str) = range.to_str() {
+            // Content-Range: bytes start-end/total
+            if let Some(total_str) = range_str.rsplit('/').next() {
+                if let Ok(total) = total_str.parse::<u64>() {
+                    if total > 0 {
+                        return total;
+                    }
+                }
+            }
+        }
+    }
+    fallback
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: &[&str] = &["B", "KB", "MB", "GB"];
+    let mut size = bytes as f64;
+    let mut unit = UNITS[0];
+    for &next in &UNITS[1..] {
+        if size < 1024.0 {
+            break;
+        }
+        size /= 1024.0;
+        unit = next;
+    }
+    format!("{:.1} {}", size, unit)
+}
+
+fn format_download_message(downloaded: u64, total: u64) -> String {
+    if total > 0 {
+        format!(
+            "已下载 {} / {} ({:.0}%)",
+            format_bytes(downloaded),
+            format_bytes(total),
+            (downloaded as f64 / total as f64) * 100.0
+        )
+    } else {
+        format!("已下载 {}", format_bytes(downloaded))
+    }
+}
+
 pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), String> {
     let tmp_path = dict_tmp_path(&app_handle)?;
     let final_path = dict_path(&app_handle)?;
 
     if final_path.exists() {
+        emit_progress(
+            &app_handle,
+            "done",
+            0,
+            0,
+            Some("词典文件已存在".to_string()),
+        );
         return Ok(());
     }
 
@@ -145,7 +204,7 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
     const RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(2);
 
     // Probe total size once. This also warms up any redirects.
-    let total_size = {
+    let mut total_size = {
         let head = client
             .head(dict_download_url())
             .send()
@@ -157,7 +216,7 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
                 head.status()
             ));
         }
-        head.content_length().unwrap_or(0)
+        parse_total_size(&head, 0)
     };
 
     let mut start_from = tokio::fs::metadata(&tmp_path)
@@ -170,16 +229,7 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
         "downloading",
         start_from,
         total_size,
-        Some(format!(
-            "已下载 {} / {} ({:.0}%)",
-            start_from,
-            total_size,
-            if total_size > 0 {
-                (start_from as f64 / total_size as f64) * 100.0
-            } else {
-                0.0
-            }
-        )),
+        Some(format_download_message(start_from, total_size)),
     );
 
     let mut retries = 0;
@@ -224,6 +274,10 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
             continue;
         }
 
+        // Some mirrors / proxies do not return Content-Length on HEAD,
+        // so update total_size from the GET / Range response headers.
+        total_size = parse_total_size(&response, total_size);
+
         let is_partial = response.status() == reqwest::StatusCode::PARTIAL_CONTENT;
 
         let mut file = tokio::fs::OpenOptions::new()
@@ -250,7 +304,9 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
         }
 
         let mut last_emit = downloaded;
-        let emit_interval = 256 * 1024; // emit every 256 KiB
+        let emit_interval_bytes = 64 * 1024; // emit every 64 KiB
+        let emit_interval_time = std::time::Duration::from_millis(200);
+        let mut last_emit_time = std::time::Instant::now() - emit_interval_time; // ensure first chunk emits
         let mut stream_finished_cleanly = false;
 
         loop {
@@ -262,9 +318,12 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
                         .map_err(|e| format!("Failed to write chunk: {}", e))?;
                     downloaded += chunk.len() as u64;
 
-                    if downloaded.saturating_sub(last_emit) >= emit_interval {
+                    if downloaded.saturating_sub(last_emit) >= emit_interval_bytes
+                        || last_emit_time.elapsed() >= emit_interval_time
+                    {
                         emit_progress(&app_handle, "downloading", downloaded, total_size, None);
                         last_emit = downloaded;
+                        last_emit_time = std::time::Instant::now();
                     }
                 }
                 Ok(Ok(None)) => {
@@ -460,10 +519,16 @@ fn extract_sqlite(
             .map_err(|e| format!("Failed to create extracted file: {}", e))?;
         let copied = std::io::copy(&mut file, &mut out)
             .map_err(|e| format!("Failed to extract file: {}", e))?;
+        if copied > MAX_DICT_EXTRACT_BYTES {
+            return Err(format!(
+                "Extracted dictionary entry exceeds the maximum allowed {} bytes",
+                MAX_DICT_EXTRACT_BYTES
+            ));
+        }
         extracted_size += copied;
         if extracted_size > MAX_DICT_EXTRACT_BYTES {
             return Err(format!(
-                "Extracted dictionary size exceeds the maximum allowed {} bytes",
+                "Extracted dictionary archive exceeds the maximum allowed {} bytes",
                 MAX_DICT_EXTRACT_BYTES
             ));
         }

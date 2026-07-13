@@ -99,6 +99,7 @@
     "enableHoverTranslate": "启用悬停取词翻译",
     "dictionaryReady": "词典已就绪",
     "downloadingProgress": "下载中 {{percent}}%",
+    "downloadingProgressUnknown": "已下载 {{size}}",
     "systemPrompts": "系统提示词",
     "systemPromptsHint": "控制 AI 在不同场景下的角色与回答风格。支持 {targetLanguage} 占位符。",
     "promptAriaLabel": "{{action}}系统提示词",
@@ -128,7 +129,7 @@
     "noUpdateForPlatform": "当前暂无适用于本系统的更新包",
     "updateError": "检查更新失败：{{error}}",
     "downloadDictionaryTitle": "下载离线词典",
-    "downloadDictionaryHint": "悬停取词翻译需要下载 ECDICT 英汉词典（约 200 MB），下载后保存在本地应用数据目录，无需再次下载。",
+    "downloadDictionaryHint": "悬停取词翻译需要下载 ECDICT 英汉词典。压缩包约 200 MB，解压后约 700 MB，下载后保存在本地应用数据目录，无需再次下载。",
     "downloadNow": "立即下载",
     "defaultTargetLanguage": "中文",
     "defaultPrompts": {

@@ -32,6 +32,18 @@ type UpdateState =
   | "noPlatformUpdate"
   | "error";
 
+function formatBytes(bytes: number): string {
+  const units = ["B", "KB", "MB", "GB"];
+  let size = bytes;
+  let unit = units[0];
+  for (let i = 1; i < units.length; i++) {
+    if (size < 1024) break;
+    size /= 1024;
+    unit = units[i];
+  }
+  return `${size.toFixed(1)} ${unit}`;
+}
+
 interface SettingsModalProps {
   open: boolean;
   initialSettings: AppSettings;
@@ -252,6 +264,24 @@ export default function SettingsModal({
         )
       : 0;
 
+  const progressTotalKnown =
+    dictionaryStatus.progress !== null && dictionaryStatus.progress.total > 0;
+
+  const progressText = (() => {
+    if (dictionaryStatus.progress?.message) {
+      return dictionaryStatus.progress.message;
+    }
+    if (progressTotalKnown) {
+      return t("settings.downloadingProgress", {
+        percent: downloadProgressPercent,
+      });
+    }
+    const downloaded = dictionaryStatus.progress?.downloaded ?? 0;
+    return t("settings.downloadingProgressUnknown", {
+      size: formatBytes(downloaded),
+    });
+  })();
+
   const promptTabLabel =
     activePromptTab === "translate"
       ? t("action.translate")
@@ -395,17 +425,18 @@ export default function SettingsModal({
                       )}
                     {dictionaryStatus.downloading && (
                       <div className="settings-download-progress">
-                        <div className="settings-progress-bar">
+                        <div
+                          className={`settings-progress-bar${
+                            progressTotalKnown ? "" : " indeterminate"
+                          }`}
+                        >
                           <div
                             className="settings-progress-fill"
                             style={{ width: `${downloadProgressPercent}%` }}
                           />
                         </div>
                         <span className="settings-progress-text">
-                          {dictionaryStatus.progress?.message ||
-                            t("settings.downloadingProgress", {
-                              percent: downloadProgressPercent,
-                            })}
+                          {progressText}
                         </span>
                       </div>
                     )}
@@ -650,18 +681,17 @@ export default function SettingsModal({
       {showDownloadConfirm && (
         <div className="modal-overlay" onClick={handleCancelDownload}>
           <div
-            className="modal-content"
+            className="modal-content dictionary-download-modal"
             onClick={(e) => e.stopPropagation()}
             role="dialog"
             aria-label={t("settings.downloadDictionaryTitle")}
           >
-            <div className="settings-modal-header">
-              <h3>{t("settings.downloadDictionaryTitle")}</h3>
-              <p className="modal-hint">
-                {t("settings.downloadDictionaryHint")}
-              </p>
+            <div className="dictionary-download-icon">
+              <Icon name="dictionary" size={40} />
             </div>
-            <div className="settings-modal-footer">
+            <h3>{t("settings.downloadDictionaryTitle")}</h3>
+            <p className="modal-hint">{t("settings.downloadDictionaryHint")}</p>
+            <div className="modal-actions">
               <button type="button" onClick={handleCancelDownload}>
                 {t("common.cancel")}
               </button>

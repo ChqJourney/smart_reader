@@ -99,6 +99,7 @@
     "enableHoverTranslate": "Enable Hover Translation",
     "dictionaryReady": "Dictionary Ready",
     "downloadingProgress": "Downloading {{percent}}%",
+    "downloadingProgressUnknown": "Downloaded {{size}}",
     "systemPrompts": "System Prompts",
     "systemPromptsHint": "Control the AI's role and style in different scenarios. Supports the {targetLanguage} placeholder.",
     "promptAriaLabel": "{{action}} System Prompt",
@@ -128,7 +129,7 @@
     "noUpdateForPlatform": "No update package is available for this system",
     "updateError": "Update check failed: {{error}}",
     "downloadDictionaryTitle": "Download Offline Dictionary",
-    "downloadDictionaryHint": "Hover translation requires downloading the ECDICT English-Chinese dictionary (about 200 MB). It will be saved to the local app data directory and only needs to be downloaded once.",
+    "downloadDictionaryHint": "Hover translation requires downloading the ECDICT English-Chinese dictionary. The archive is about 200 MB and expands to about 700 MB. It will be saved to the local app data directory and only needs to be downloaded once.",
     "downloadNow": "Download Now",
     "defaultTargetLanguage": "Chinese",
     "defaultPrompts": {

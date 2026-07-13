@@ -15,6 +15,7 @@ export type IconName =
   | "translate"
   | "explain"
   | "stash"
+  | "dictionary"
   | "minus"
   | "chat"
   | "single-page"
@@ -240,6 +241,31 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
       />
       <path
         d="M8 8h4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </>
+  ),
+  dictionary: (
+    <>
+      <path
+        d="M3 4a2 2 0 0 1 2-2h5v16H5a2 2 0 0 1-2-2V4z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M10 2h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5V2z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6 6h2M6 10h2M13 6h2M13 10h2"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"

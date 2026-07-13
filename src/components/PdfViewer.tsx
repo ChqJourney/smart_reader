@@ -87,6 +87,10 @@ interface PdfViewerProps {
 const SCROLL_STEP = 80; // px for arrow keys
 const CONTAINER_PADDING_TOP = 24; // must match .pdf-canvas-container.continuous padding-top
 const PAGE_SPACING = 24; // must match .pdf-page-wrapper margin-bottom
+// For small documents we can afford to preload every viewport and get exact
+// continuous-mode jumps. For large documents we lazily compute only the visible
+// pages plus a small window to avoid blocking the main thread.
+const VIEWPORT_PRELOAD_THRESHOLD = 50;
 
 export function computeContinuousScrollTop(
   targetPage: number,
@@ -168,7 +172,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       Map<number, PageViewportInfo>
     >(new Map());
     const [pageInput, setPageInput] = useState(String(pageNum));
-    const [viewportsReady, setViewportsReady] = useState(false);
     const [scaleInput, setScaleInput] = useState(
       `${Math.round((initialState?.scale ?? 1.5) * 100)}%`
     );
@@ -200,6 +203,9 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // Keep a live ref of the current page number so the scroll-driven page
     // detection can read the latest value without re-creating its listener.
     const pageNumRef = useRef(pageNum);
+    // Track the last scale for which viewports were computed so we can discard
+    // stale viewport sizes after zoom changes.
+    const lastScaleRef = useRef(scale);
 
     useEffect(() => {
       pageNumRef.current = pageNum;
@@ -235,7 +241,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // After fit-to-width updates the scale, center the page horizontally so
     // residual scroll position does not leave it shifted to one side.
     useEffect(() => {
-      if (!pendingFitCenterRef.current || !viewportsReady) return;
+      if (!pendingFitCenterRef.current || pageViewports.size === 0) return;
       pendingFitCenterRef.current = false;
       const container =
         viewMode === "single"
@@ -246,7 +252,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         const maxScrollLeft = container.scrollWidth - container.clientWidth;
         container.scrollLeft = maxScrollLeft > 0 ? maxScrollLeft / 2 : 0;
       });
-    }, [viewportsReady, viewMode]);
+    }, [pageViewports, viewMode]);
 
     // Sync state when switching tabs
     useEffect(() => {
@@ -285,19 +291,30 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         setError("");
         setVisiblePages(new Set());
         setPageViewports(new Map());
-        setViewportsReady(false);
         pageWrapperRefs.current = [];
         pageWrapperRefCallbacks.current = new Map();
         pageVisibilityRatios.current = new Map();
         return;
       }
 
+      // Clear the previous document immediately so we never render with a
+      // destroyed PDFDocumentProxy while the new file is loading.
+      setPdf(null);
+      setNumPages(0);
+      setPageNum(1);
+      setError("");
+      setVisiblePages(new Set());
+      setPageViewports(new Map());
+      pageWrapperRefs.current = [];
+      pageWrapperRefCallbacks.current = new Map();
+      pageVisibilityRatios.current = new Map();
+      setIsLoading(true);
+
       let isCancelled = false;
+      let loadingTask: pdfjsLib.PDFDocumentLoadingTask | null = null;
+      let loadedPdf: pdfjsLib.PDFDocumentProxy | null = null;
 
       const loadPdf = async () => {
-        setError("");
-        setIsLoading(true);
-
         try {
           const bytes = await invoke<ArrayBuffer>("read_pdf_bytes", {
             filePath,
@@ -305,10 +322,14 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           if (isCancelled) return;
 
           const uint8Array = new Uint8Array(bytes);
-          const loadingTask = pdfjsLib.getDocument({ data: uint8Array });
+          loadingTask = pdfjsLib.getDocument({ data: uint8Array });
 
-          const loadedPdf = await loadingTask.promise;
-          if (isCancelled) return;
+          loadedPdf = await loadingTask.promise;
+          if (isCancelled) {
+            loadedPdf.destroy();
+            loadedPdf = null;
+            return;
+          }
 
           setPdf(loadedPdf);
           setNumPages(loadedPdf.numPages);
@@ -329,6 +350,12 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
       return () => {
         isCancelled = true;
+        if (loadedPdf) {
+          loadedPdf.destroy();
+          loadedPdf = null;
+        } else if (loadingTask) {
+          loadingTask.destroy();
+        }
       };
     }, [filePath]);
 
@@ -534,38 +561,58 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       []
     );
 
-    // Pre-compute viewport sizes so we can scroll to an exact page in continuous mode
+    // Pre-compute viewport sizes so we can scroll to an exact page in continuous
+    // mode. For small documents we preload every page; for large documents we
+    // only compute the visible pages plus a small window, falling back to live
+    // DOM geometry for the rest. This keeps opening and jumping responsive on
+    // 100MB/200-page documents.
     useEffect(() => {
       if (!pdf || numPages === 0) return;
-      setViewportsReady(false);
+      const scaleChanged = lastScaleRef.current !== scale;
+      lastScaleRef.current = scale;
       let cancelled = false;
       const loadViewports = async () => {
-        const map = new Map<number, PageViewportInfo>();
-        for (let i = 1; i <= numPages; i++) {
+        const pages = new Set<number>();
+        if (numPages <= VIEWPORT_PRELOAD_THRESHOLD) {
+          for (let i = 1; i <= numPages; i++) pages.add(i);
+        } else {
+          visiblePages.forEach((p) => {
+            pages.add(p);
+            if (p > 1) pages.add(p - 1);
+            if (p < numPages) pages.add(p + 1);
+          });
+          pages.add(1);
+          pages.add(pageNum);
+        }
+
+        const newEntries: [number, PageViewportInfo][] = [];
+        for (const i of pages) {
           try {
             const page = await pdf.getPage(i);
             if (cancelled) return;
             const vp = page.getViewport({ scale });
-            map.set(i, { width: vp.width, height: vp.height });
+            newEntries.push([i, { width: vp.width, height: vp.height }]);
           } catch (err) {
             logError(`Failed to get viewport for page ${i}: ${err}`);
           }
         }
         if (!cancelled) {
-          setPageViewports(map);
-          setViewportsReady(true);
+          setPageViewports((prev) => {
+            const map = scaleChanged ? new Map() : new Map(prev);
+            newEntries.forEach(([i, info]) => map.set(i, info));
+            return map;
+          });
         }
       };
       loadViewports();
       return () => {
         cancelled = true;
       };
-    }, [pdf, numPages, scale]);
+    }, [pdf, numPages, scale, visiblePages, pageNum]);
 
     const goToPage = useCallback(
       (target: number) => {
         if (numPages === 0) return;
-        if (viewMode === "continuous" && !viewportsReady) return;
         const page = Math.max(1, Math.min(numPages, target));
         setPageNum(page);
         setPageInput(String(page));
@@ -608,10 +655,12 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           jumpScrollCleanupRef.current = cleanup;
         }
       },
-      [numPages, viewMode, pageViewports, viewportsReady]
+      [numPages, viewMode, pageViewports]
     );
 
-    // Build the search index when the search panel is open and the query/scale changes.
+    // Build the search index when the search panel is open and the query/scale
+    // changes. Debounce the query so rapid keystrokes on large documents do not
+    // trigger a full text scan on every character.
     useEffect(() => {
       if (!searchOpen || !pdf || numPages === 0) {
         setSearchMatches([]);
@@ -626,6 +675,8 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       }
 
       let cancelled = false;
+      let timeout: ReturnType<typeof setTimeout> | null = null;
+
       const build = async () => {
         setSearchLoading(true);
         const queryLower = trimmed.toLowerCase();
@@ -675,9 +726,11 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         if (!cancelled) setSearchLoading(false);
       };
 
-      build();
+      timeout = setTimeout(build, 250);
+
       return () => {
         cancelled = true;
+        if (timeout) clearTimeout(timeout);
       };
     }, [searchOpen, searchQuery, pdf, numPages, scale]);
 
@@ -1053,8 +1106,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                       disabled={
                         pageNum <= 1 ||
                         numPages === 0 ||
-                        isLoading ||
-                        !viewportsReady
+                        isLoading
                       }
                       aria-label={t("pdf.previousPage")}
                       title={t("pdf.previousPage")}
@@ -1070,7 +1122,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                       onChange={handlePageInputChange}
                       onKeyDown={handlePageInputKeyDown}
                       onBlur={handlePageInputBlur}
-                      disabled={!viewportsReady}
+                      disabled={isLoading}
                       aria-label={t("pdf.pageNumber")}
                       title={t("pdf.pageNumberHint")}
                     />
@@ -1081,8 +1133,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                       disabled={
                         pageNum >= numPages ||
                         numPages === 0 ||
-                        isLoading ||
-                        !viewportsReady
+                        isLoading
                       }
                       aria-label={t("pdf.nextPage")}
                       title={t("pdf.nextPage")}

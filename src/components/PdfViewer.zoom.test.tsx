@@ -49,6 +49,7 @@ function createMockPdf() {
         getAnnotations: () => Promise.resolve([]),
       };
     }),
+    destroy: vi.fn(),
   };
 }
 

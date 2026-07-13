@@ -101,6 +101,7 @@ function createMockPdf() {
         getAnnotations: () => Promise.resolve([]),
       };
     }),
+    destroy: vi.fn(),
   };
 }
 
@@ -494,6 +495,7 @@ describe("PdfViewer continuous mode page jump", () => {
       numPages: NUM_PAGES,
       getOutline: vi.fn(() => Promise.resolve([])),
       getPageIndex: vi.fn(() => Promise.resolve(0)),
+      destroy: vi.fn(),
       getPage: vi.fn(async (pageNum: number) => {
         const height = PAGE_HEIGHTS[pageNum - 1] ?? 300;
         const viewport = {

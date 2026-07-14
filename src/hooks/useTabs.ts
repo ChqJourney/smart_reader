@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { error as logError, info } from "../services/logs";
 import { PdfViewerState } from "../components/PdfViewer";
+import { SelectionState } from "../services/selection";
 import { authorizePdfPath, getPdfHash } from "../services/annotations";
 import { showMessage } from "../services/dialog";
 import { getBasename } from "../utils/path";
@@ -17,6 +18,10 @@ export interface PdfTab {
   pageNum?: number;
   scale?: number;
   viewMode?: "single" | "continuous";
+  scrollTop?: number;
+  selection?: SelectionState | null;
+  highlightedAnnotationId?: string | null;
+  pendingGotoPage?: number;
 }
 
 export interface UseTabsReturn {
@@ -33,6 +38,13 @@ export interface UseTabsReturn {
   handleTabClick: (tabId: string, onSwitch?: () => void) => void;
   handleViewerStateChange: (state: PdfViewerState, tabId?: string) => void;
   gotoTabPage: (tabId: string, page: number) => void;
+  setTabSelection: (tabId: string, selection: SelectionState | null) => void;
+  clearTabSelection: (tabId: string) => void;
+  setTabHighlightedAnnotationId: (
+    tabId: string,
+    annotationId: string | null
+  ) => void;
+  clearTabPendingGotoPage: (tabId: string) => void;
 }
 
 export function useTabs(): UseTabsReturn {
@@ -43,6 +55,19 @@ export function useTabs(): UseTabsReturn {
   const pendingOpens = useRef<Map<string, Promise<PdfTab | null>>>(new Map());
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) || null;
+
+  const activateTab = useCallback((tabId: string | null) => {
+    setActiveTabId(tabId);
+    if (tabId) {
+      // Always set pendingGotoPage when activating a tab so the viewer knows it
+      // should restore position. If no page has been saved yet, default to 1.
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === tabId ? { ...tab, pendingGotoPage: tab.pageNum ?? 1 } : tab
+        )
+      );
+    }
+  }, []);
 
   const addTab = useCallback(
     async (path: string): Promise<PdfTab | null> => {
@@ -70,7 +95,7 @@ export function useTabs(): UseTabsReturn {
             (tab) => tab.fileHash === fileHash || tab.filePath === path
           );
           if (existing) {
-            setActiveTabId(existing.id);
+            activateTab(existing.id);
             return existing;
           }
 
@@ -82,7 +107,7 @@ export function useTabs(): UseTabsReturn {
           };
 
           setTabs((prev) => [...prev, newTab]);
-          setActiveTabId(newTab.id);
+          activateTab(newTab.id);
           info(`pdfOpened: tabId=${newTab.id} fileHash=${newTab.fileHash}`);
           return newTab;
         } catch (error) {
@@ -98,7 +123,7 @@ export function useTabs(): UseTabsReturn {
         pendingOpens.current.delete(path);
       }
     },
-    [tabs]
+    [tabs, activateTab]
   );
 
   const handleOpenPdf = useCallback(async (): Promise<PdfTab | null> => {
@@ -143,20 +168,33 @@ export function useTabs(): UseTabsReturn {
       if (activeTabId === tabId) {
         const nextActive =
           nextTabs[Math.min(index, nextTabs.length - 1)] || null;
+        // Set pendingGotoPage atomically with the tab removal so the next
+        // active tab restores its previous page when its viewer mounts.
+        setTabs(
+          nextTabs.map((tab) =>
+            tab.id === nextActive?.id
+              ? { ...tab, pendingGotoPage: tab.pageNum }
+              : tab
+          )
+        );
         setActiveTabId(nextActive?.id ?? null);
+      } else {
+        setTabs(nextTabs);
       }
 
-      setTabs(nextTabs);
       info(`pdfClosed: tabId=${tabId} remainingTabs=${nextTabs.length}`);
       onClose?.();
     },
     [tabs, activeTabId]
   );
 
-  const handleTabClick = useCallback((tabId: string, onSwitch?: () => void) => {
-    setActiveTabId(tabId);
-    onSwitch?.();
-  }, []);
+  const handleTabClick = useCallback(
+    (tabId: string, onSwitch?: () => void) => {
+      activateTab(tabId);
+      onSwitch?.();
+    },
+    [activateTab]
+  );
 
   const handleViewerStateChange = useCallback(
     (state: PdfViewerState, tabId?: string) => {
@@ -167,9 +205,14 @@ export function useTabs(): UseTabsReturn {
           tab.id === targetId
             ? {
                 ...tab,
-                pageNum: state.pageNum,
-                scale: state.scale,
-                viewMode: state.viewMode,
+                ...(state.pageNum !== undefined && { pageNum: state.pageNum }),
+                ...(state.scale !== undefined && { scale: state.scale }),
+                ...(state.viewMode !== undefined && {
+                  viewMode: state.viewMode,
+                }),
+                ...(state.scrollTop !== undefined && {
+                  scrollTop: state.scrollTop,
+                }),
               }
             : tab
         )
@@ -181,7 +224,47 @@ export function useTabs(): UseTabsReturn {
   const gotoTabPage = useCallback((tabId: string, page: number) => {
     setActiveTabId(tabId);
     setTabs((prev) =>
-      prev.map((tab) => (tab.id === tabId ? { ...tab, pageNum: page } : tab))
+      prev.map((tab) =>
+        tab.id === tabId
+          ? { ...tab, pageNum: page, pendingGotoPage: page }
+          : tab
+      )
+    );
+  }, []);
+
+  const setTabSelection = useCallback(
+    (tabId: string, selection: SelectionState | null) => {
+      setTabs((prev) =>
+        prev.map((tab) => (tab.id === tabId ? { ...tab, selection } : tab))
+      );
+    },
+    []
+  );
+
+  const clearTabSelection = useCallback((tabId: string) => {
+    setTabs((prev) =>
+      prev.map((tab) => (tab.id === tabId ? { ...tab, selection: null } : tab))
+    );
+  }, []);
+
+  const setTabHighlightedAnnotationId = useCallback(
+    (tabId: string, annotationId: string | null) => {
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === tabId
+            ? { ...tab, highlightedAnnotationId: annotationId }
+            : tab
+        )
+      );
+    },
+    []
+  );
+
+  const clearTabPendingGotoPage = useCallback((tabId: string) => {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id === tabId ? { ...tab, pendingGotoPage: undefined } : tab
+      )
     );
   }, []);
 
@@ -195,5 +278,9 @@ export function useTabs(): UseTabsReturn {
     handleTabClick,
     handleViewerStateChange,
     gotoTabPage,
+    setTabSelection,
+    clearTabSelection,
+    setTabHighlightedAnnotationId,
+    clearTabPendingGotoPage,
   };
 }

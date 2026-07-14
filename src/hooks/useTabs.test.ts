@@ -62,28 +62,16 @@ describe("useTabs", () => {
   it("does not duplicate the same PDF when opened sequentially", async () => {
     const { result } = renderHook(() => useTabs());
 
-    let firstTab: Awaited<
-      ReturnType<typeof result.current.openPdfByPath>
-    > | null = null;
-    let secondTab: Awaited<
-      ReturnType<typeof result.current.openPdfByPath>
-    > | null = null;
-
     await act(async () => {
-      firstTab = await result.current.openPdfByPath(
-        "/test/file.pdf",
-        "file.pdf"
-      );
+      await result.current.openPdfByPath("/test/file.pdf", "file.pdf");
     });
     await act(async () => {
-      secondTab = await result.current.openPdfByPath(
-        "/test/file.pdf",
-        "file.pdf"
-      );
+      await result.current.openPdfByPath("/test/file.pdf", "file.pdf");
     });
 
     expect(result.current.tabs).toHaveLength(1);
-    expect(secondTab).toEqual(firstTab);
+    // Re-activating the existing tab sets pendingGotoPage for restoration.
+    expect(result.current.activeTab?.pendingGotoPage).toBe(1);
   });
 
   it("deduplicates concurrent opens for the same path", async () => {
@@ -160,5 +148,222 @@ describe("useTabs", () => {
     );
     expect(authorizeCalls).toHaveLength(1);
     expect(hashCalls).toHaveLength(1);
+  });
+
+  it("stores and clears per-tab selection", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    let tabId: string;
+    await act(async () => {
+      const tab = await result.current.openPdfByPath(
+        "/test/file.pdf",
+        "file.pdf"
+      );
+      tabId = tab!.id;
+    });
+
+    const selection = {
+      text: "selected",
+      x: 10,
+      y: 20,
+      pdfX: 5,
+      pdfY: 6,
+      page: 2,
+    };
+
+    act(() => {
+      result.current.setTabSelection(tabId!, selection);
+    });
+
+    expect(result.current.activeTab?.selection).toEqual(selection);
+
+    act(() => {
+      result.current.clearTabSelection(tabId!);
+    });
+
+    expect(result.current.activeTab?.selection).toBeNull();
+  });
+
+  it("stores and clears per-tab highlighted annotation", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    let tabId: string;
+    await act(async () => {
+      const tab = await result.current.openPdfByPath(
+        "/test/file.pdf",
+        "file.pdf"
+      );
+      tabId = tab!.id;
+    });
+
+    act(() => {
+      result.current.setTabHighlightedAnnotationId(tabId!, "anno-1");
+    });
+
+    expect(result.current.activeTab?.highlightedAnnotationId).toBe("anno-1");
+
+    act(() => {
+      result.current.setTabHighlightedAnnotationId(tabId!, null);
+    });
+
+    expect(result.current.activeTab?.highlightedAnnotationId).toBeNull();
+  });
+
+  it("persists viewer state including scrollTop and pending goto page", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    let tabId: string;
+    await act(async () => {
+      const tab = await result.current.openPdfByPath(
+        "/test/file.pdf",
+        "file.pdf"
+      );
+      tabId = tab!.id;
+    });
+
+    act(() => {
+      result.current.handleViewerStateChange(
+        {
+          pageNum: 5,
+          scale: 2,
+          viewMode: "continuous",
+          scrollTop: 1200,
+        },
+        tabId!
+      );
+    });
+
+    expect(result.current.activeTab?.pageNum).toBe(5);
+    expect(result.current.activeTab?.scale).toBe(2);
+    expect(result.current.activeTab?.viewMode).toBe("continuous");
+    expect(result.current.activeTab?.scrollTop).toBe(1200);
+
+    act(() => {
+      result.current.gotoTabPage(tabId!, 8);
+    });
+
+    expect(result.current.activeTab?.pageNum).toBe(8);
+    expect(result.current.activeTab?.pendingGotoPage).toBe(8);
+
+    act(() => {
+      result.current.clearTabPendingGotoPage(tabId!);
+    });
+
+    expect(result.current.activeTab?.pendingGotoPage).toBeUndefined();
+  });
+
+  it("sets pendingGotoPage from saved pageNum when activating a tab", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    let tabId: string;
+    await act(async () => {
+      const tab = await result.current.openPdfByPath(
+        "/test/file.pdf",
+        "file.pdf"
+      );
+      tabId = tab!.id;
+    });
+
+    act(() => {
+      result.current.handleViewerStateChange(
+        { pageNum: 7, scale: 1.5, viewMode: "continuous" },
+        tabId!
+      );
+    });
+
+    expect(result.current.activeTab?.pageNum).toBe(7);
+
+    // Open a second tab and switch back to the first one.
+    await act(async () => {
+      await result.current.openPdfByPath("/test/other.pdf", "other.pdf");
+    });
+
+    act(() => {
+      result.current.handleTabClick(tabId!);
+    });
+
+    expect(result.current.activeTab?.id).toBe(tabId!);
+    expect(result.current.activeTab?.pageNum).toBe(7);
+    expect(result.current.activeTab?.pendingGotoPage).toBe(7);
+  });
+
+  it("defaults pendingGotoPage to 1 when no pageNum has been saved", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    let tabId: string;
+    await act(async () => {
+      const tab = await result.current.openPdfByPath(
+        "/test/file.pdf",
+        "file.pdf"
+      );
+      tabId = tab!.id;
+    });
+
+    // Simulate the viewer mounting, consuming pendingGotoPage, and never
+    // reporting state (e.g. the user left the tab at the default position).
+    act(() => {
+      result.current.clearTabPendingGotoPage(tabId!);
+    });
+    expect(result.current.activeTab?.pageNum).toBeUndefined();
+    expect(result.current.activeTab?.pendingGotoPage).toBeUndefined();
+
+    // Open a second tab and switch back to the first one.
+    await act(async () => {
+      await result.current.openPdfByPath("/test/other.pdf", "other.pdf");
+    });
+
+    act(() => {
+      result.current.handleTabClick(tabId!);
+    });
+
+    expect(result.current.activeTab?.id).toBe(tabId!);
+    expect(result.current.activeTab?.pendingGotoPage).toBe(1);
+  });
+
+  it("preserves a background tab's page after selecting text in another tab", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    let tabA: string;
+    let tabB: string;
+    await act(async () => {
+      const tab = await result.current.openPdfByPath("/test/a.pdf", "a.pdf");
+      tabA = tab!.id;
+    });
+    await act(async () => {
+      const tab = await result.current.openPdfByPath("/test/b.pdf", "b.pdf");
+      tabB = tab!.id;
+    });
+
+    // Tab B is active; simulate scrolling to page 5 and clearing pendingGotoPage.
+    act(() => {
+      result.current.handleViewerStateChange(
+        { pageNum: 5, scale: 1.5, viewMode: "continuous", scrollTop: 1200 },
+        tabB!
+      );
+      result.current.clearTabPendingGotoPage(tabB!);
+    });
+    expect(result.current.tabs.find((t) => t.id === tabB!)?.pageNum).toBe(5);
+
+    // Switch to tab A, simulate a text selection, then switch back to tab B.
+    act(() => {
+      result.current.handleTabClick(tabA!);
+    });
+    act(() => {
+      result.current.setTabSelection(tabA!, {
+        text: "selected",
+        x: 10,
+        y: 20,
+        pdfX: 5,
+        pdfY: 6,
+        page: 2,
+      });
+    });
+    act(() => {
+      result.current.handleTabClick(tabB!);
+    });
+
+    const restoredTab = result.current.tabs.find((t) => t.id === tabB!);
+    expect(restoredTab?.pageNum).toBe(5);
+    expect(restoredTab?.pendingGotoPage).toBe(5);
   });
 });

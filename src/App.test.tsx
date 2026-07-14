@@ -47,20 +47,21 @@ vi.mock("./services/llm", async () => {
   };
 });
 
-const triggerSelection = vi.fn();
-
 const lastAnnotations = vi.fn();
 
 vi.mock("./components/PdfViewer", () => ({
   default: React.forwardRef(
     (
       {
+        tabId,
         onSelection,
         onToggleVisibility,
         annotations,
         onAnnotationDelete,
       }: {
+        tabId?: string;
         onSelection?: (
+          tabId: string,
           text: string,
           page: number,
           position: { x: number; y: number; pdfX: number; pdfY: number }
@@ -76,21 +77,21 @@ vi.mock("./components/PdfViewer", () => ({
       },
       ref: React.Ref<HTMLDivElement>
     ) => {
-      triggerSelection.mockImplementation(() => {
-        onSelection?.("selected text", 3, {
-          x: 100,
-          y: 200,
-          pdfX: 50,
-          pdfY: 60,
-        });
-      });
       lastAnnotations.mockImplementation(() => annotations ?? []);
       return (
         <div data-testid="pdf-viewer" ref={ref}>
           PdfViewer
           <button
             data-testid="trigger-selection"
-            onClick={() => triggerSelection()}
+            onClick={() => {
+              if (!tabId) return;
+              onSelection?.(tabId, "selected text", 3, {
+                x: 100,
+                y: 200,
+                pdfX: 50,
+                pdfY: 60,
+              });
+            }}
           >
             Select
           </button>
@@ -589,6 +590,41 @@ describe("App", () => {
     });
   });
 
+  it("keeps other tabs' data when closing the active tab", async () => {
+    (open as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("/test/file-a.pdf")
+      .mockResolvedValueOnce("/test/file-b.pdf");
+
+    renderApp();
+
+    await openPdf("/test/file-a.pdf");
+    triggerPdfSelection();
+    fireEvent.click(screen.getByRole("button", { name: /加入暂存/i }));
+
+    await openPdf("/test/file-b.pdf");
+    triggerPdfSelection();
+    fireEvent.click(screen.getByRole("button", { name: /加入暂存/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("tab", { name: /暂存区 \(1\)/i })
+      ).toBeInTheDocument();
+    });
+
+    // Close the active tab (file-b).
+    fireEvent.click(
+      screen.getByRole("button", { name: /关闭 file-b.pdf/i })
+    );
+
+    // The remaining active tab (file-a) should still have its stash.
+    await waitFor(() => {
+      expect(
+        screen.getByRole("tab", { name: /暂存区 \(1\)/i })
+      ).toBeInTheDocument();
+      expect(screen.getByText(/selected text/i)).toBeInTheDocument();
+    });
+  });
+
   it("enters split view when dragging an inactive tab into the main area", async () => {
     (open as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce("/test/file-a.pdf")
@@ -688,6 +724,69 @@ describe("App", () => {
     });
 
     main.getBoundingClientRect = originalGetBoundingClientRect;
+  });
+
+  it("switches right panel focus when clicking a viewer in split view", async () => {
+    (open as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("/test/file-a.pdf")
+      .mockResolvedValueOnce("/test/file-b.pdf");
+
+    renderApp();
+
+    await openPdf("/test/file-a.pdf");
+    fireEvent.click(screen.getByTestId("open-pdf-btn"));
+    await waitFor(() => {
+      expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
+    });
+
+    const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i })
+      .parentElement as HTMLElement;
+    let draggedTabId = "";
+    const dataTransfer = {
+      setData: vi.fn((_format: string, value: string) => {
+        draggedTabId = value;
+      }),
+      effectAllowed: "",
+      getData: vi.fn(() => draggedTabId),
+      dropEffect: "",
+    };
+
+    const main = document.querySelector("main") as HTMLElement;
+    fireEvent.dragStart(inactiveTab, { dataTransfer });
+    fireEvent.dragOver(main, { dataTransfer });
+    fireEvent.drop(main, { dataTransfer });
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);
+    });
+
+    // Create a stash in the primary (active) viewer.
+    fireEvent.click(screen.getAllByTestId("trigger-selection")[0]);
+    fireEvent.click(screen.getByRole("button", { name: /加入暂存/i }));
+    await waitFor(() => {
+      expect(
+        screen.getByRole("tab", { name: /暂存区 \(1\)/i })
+      ).toBeInTheDocument();
+    });
+
+    // Click the secondary panel; the right panel should now show the other tab.
+    const panels = document.querySelectorAll(".pdf-panel");
+    expect(panels).toHaveLength(2);
+    fireEvent.click(panels[1]);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("tab", { name: /暂存区 \(0\)/i })
+      ).toBeInTheDocument();
+    });
+
+    // Click back to the primary panel; the stash should reappear.
+    fireEvent.click(panels[0]);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("tab", { name: /暂存区 \(1\)/i })
+      ).toBeInTheDocument();
+    });
   });
 
   it("opens only one tab when the open-pdf event is emitted multiple times", async () => {

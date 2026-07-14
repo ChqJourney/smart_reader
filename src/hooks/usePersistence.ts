@@ -3,13 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Annotation,
   createAnnotation,
-  deleteAnnotation,
   loadPdfData,
   savePdfData,
-  updateAnnotation,
 } from "../services/annotations";
 import { showConfirm } from "../services/dialog";
 import { error, info } from "../services/logs";
+import { SelectionState } from "../services/selection";
 import {
   InterpretationSession,
   SessionAction,
@@ -41,28 +40,21 @@ import { AppSettings } from "../services/settings";
 import { PdfTab } from "./useTabs";
 import { useStreaming } from "./useStreaming";
 
-export interface SelectionState {
-  text: string;
-  x: number;
-  y: number;
-  pdfX: number;
-  pdfY: number;
-  page: number;
-  width?: number;
-  height?: number;
-}
+export type { SelectionState } from "../services/selection";
 
 export interface UsePersistenceProps {
   activeTab: PdfTab | null;
   activeTabId: string | null;
   secondaryTab: PdfTab | null;
   isSplitView: boolean;
+  focusedTab: PdfTab | null;
   openRightPanel: () => void;
   settings: AppSettings;
 }
 
 export interface UsePersistenceReturn {
   annotations: Annotation[];
+  visibleTabAnnotations: Annotation[];
   setAnnotations: React.Dispatch<React.SetStateAction<Annotation[]>>;
   stashes: StashItem[];
   setStashes: React.Dispatch<React.SetStateAction<StashItem[]>>;
@@ -70,6 +62,8 @@ export interface UsePersistenceReturn {
   setSessions: React.Dispatch<React.SetStateAction<InterpretationSession[]>>;
   visibleTabStashes: StashItem[];
   visibleTabSessions: InterpretationSession[];
+  focusedTabStashes: StashItem[];
+  focusedTabSessions: InterpretationSession[];
   handleAddToStash: (selection: SelectionState, text: string) => void;
   handleRemoveStash: (id: string) => void;
   handleClearStashes: () => void;
@@ -101,12 +95,44 @@ export function usePersistence({
   activeTabId,
   secondaryTab,
   isSplitView,
+  focusedTab,
   openRightPanel,
   settings,
 }: UsePersistenceProps): UsePersistenceReturn {
-  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  // Annotations are stored per fileHash so that switching tabs never leaks
+  // one PDF's markers into another.
+  const [annotationsByHash, setAnnotationsByHash] = useState<
+    Record<string, Annotation[]>
+  >({});
   const [stashes, setStashes] = useState<StashItem[]>([]);
   const [sessions, setSessions] = useState<InterpretationSession[]>([]);
+
+  // Backwards-compatible setter that re-buckets annotations by fileHash.
+  // Primarily exposed for tests; prefer the bucket-aware helpers in production.
+  const setAnnotations = useCallback(
+    (value: React.SetStateAction<Annotation[]>) => {
+      const bucket = (annotations: Annotation[]) => {
+        const next: Record<string, Annotation[]> = {};
+        for (const a of annotations) {
+          const hash = a.fileHash || "";
+          if (!next[hash]) next[hash] = [];
+          next[hash].push(a);
+        }
+        return next;
+      };
+
+      if (typeof value === "function") {
+        setAnnotationsByHash((prev) => {
+          const all = Object.values(prev).flat();
+          return bucket(value(all));
+        });
+      } else {
+        setAnnotationsByHash(bucket(value));
+      }
+    },
+    []
+  );
+
   const sessionsRef = useRef<InterpretationSession[]>(sessions);
   useEffect(() => {
     sessionsRef.current = sessions;
@@ -153,29 +179,51 @@ export function usePersistence({
     [sessions, visibleFileHashes]
   );
 
+  // The right panel follows the focused viewer in split view. When not split,
+  // the focused tab is always the active tab.
+  const focusedTabStashes = useMemo(
+    () => stashes.filter((s) => s.source.tabId === focusedTab?.id),
+    [stashes, focusedTab?.id]
+  );
+
+  const focusedTabSessions = useMemo(
+    () =>
+      sessions.filter((s) =>
+        s.sources.some((item) => item.source.fileHash === focusedTab?.fileHash)
+      ),
+    [sessions, focusedTab?.fileHash]
+  );
+
+  // Flattened view of all annotations, kept for internal lookups.
+  const annotations = useMemo(() => {
+    return Object.values(annotationsByHash).flat();
+  }, [annotationsByHash]);
+
+  const visibleTabAnnotations = useMemo(() => {
+    const result: Annotation[] = [];
+    for (const hash of visibleFileHashes) {
+      result.push(...(annotationsByHash[hash] || []));
+    }
+    return result;
+  }, [annotationsByHash, visibleFileHashes]);
+
   const loadedFileHashesRef = useRef<Set<string>>(new Set());
 
-  // Maintain the set of file hashes considered "loaded". When all annotations
-  // for a hash are removed (e.g. tab closed), drop the hash so reopening the
-  // same file later triggers a fresh load.
+  // Maintain the set of file hashes considered "loaded". When a bucket is
+  // removed (e.g. tab closed and hash no longer referenced), drop the hash so
+  // reopening the same file later triggers a fresh load.
   useEffect(() => {
-    const currentHashes = new Set(
-      annotations.map((a) => a.fileHash).filter(Boolean)
-    );
     for (const hash of loadedFileHashesRef.current) {
-      if (!currentHashes.has(hash)) {
+      if (!annotationsByHash[hash] || annotationsByHash[hash].length === 0) {
         loadedFileHashesRef.current.delete(hash);
       }
     }
-  }, [annotations]);
+  }, [annotationsByHash]);
 
   // Load annotations and sessions when active file changes.
   // Skip if the current fileHash has already been loaded successfully.
   useEffect(() => {
-    if (!activeTab?.filePath || !activeTab.fileHash) {
-      setAnnotations([]);
-      return;
-    }
+    if (!activeTab?.filePath || !activeTab.fileHash) return;
     const fileHash = activeTab.fileHash;
     if (loadedFileHashesRef.current.has(fileHash)) return;
 
@@ -184,16 +232,14 @@ export function usePersistence({
       if (cancelled) return;
       // Mark as loaded before merging so concurrent StrictMode runs see it.
       loadedFileHashesRef.current.add(fileHash);
-      // Merge loaded annotations, replacing any previous annotations for the
-      // same fileHash. Backfill fileHash for legacy data that lacks it.
-      setAnnotations((prev) => {
-        const kept = prev.filter((a) => a.fileHash !== fileHash);
+      // Replace the bucket for this fileHash. Backfill fileHash for legacy data.
+      setAnnotationsByHash((prev) => {
         const loaded = data.annotations
           .filter(
             (a) => a.type !== "stash" || a.interpretedGroupSize !== undefined
           )
           .map((a) => ({ ...a, fileHash: a.fileHash || fileHash }));
-        return [...kept, ...loaded];
+        return { ...prev, [fileHash]: loaded };
       });
 
       const sessionIds = data.sessionIds || [];
@@ -226,14 +272,13 @@ export function usePersistence({
     loadPdfData(secondaryTab.filePath).then(async (data) => {
       if (cancelled) return;
       loadedFileHashesRef.current.add(fileHash);
-      setAnnotations((prev) => {
-        const kept = prev.filter((a) => a.fileHash !== fileHash);
+      setAnnotationsByHash((prev) => {
         const loaded = data.annotations
           .filter(
             (a) => a.type !== "stash" || a.interpretedGroupSize !== undefined
           )
           .map((a) => ({ ...a, fileHash: a.fileHash || fileHash }));
-        return [...kept, ...loaded];
+        return { ...prev, [fileHash]: loaded };
       });
 
       const sessionIds = data.sessionIds || [];
@@ -264,55 +309,40 @@ export function usePersistence({
         (a.type !== "stash" || a.interpretedGroupSize !== undefined) &&
         a.fileHash;
 
-      // Active PDF: save current annotations + session refs
-      const activeFileHash = activeTab.fileHash;
-      const activeAnnotations = annotations.filter(
-        (a) => shouldSaveAnnotation(a) && a.fileHash === activeFileHash
-      );
-      const activeSessionIds = sessions
-        .filter((s) =>
-          s.sources.some((item) => item.source.fileHash === activeFileHash)
-        )
-        .map((s) => s.id);
-      try {
-        await savePdfData(activeTab.filePath, {
-          annotations: activeAnnotations,
-          sessionIds: activeSessionIds,
-        });
-        info(
-          `savePdfData succeeded: fileHash=${activeFileHash} annotations=${activeAnnotations.length} sessions=${activeSessionIds.length}`
-        );
-      } catch (err) {
-        error(`savePdfData failed: ${err}`);
-      }
-
-      // Secondary PDF in split view: annotations now live in state with fileHash,
-      // so we can save them directly without loading from disk first.
+      const hashesToSave = new Set<string>();
+      if (activeTab.fileHash) hashesToSave.add(activeTab.fileHash);
       if (
         isSplitView &&
-        secondaryTab?.filePath &&
-        secondaryTab.fileHash &&
-        secondaryTab.filePath !== activeTab.filePath
+        secondaryTab?.fileHash &&
+        secondaryTab.fileHash !== activeTab.fileHash
       ) {
-        const secondaryFileHash = secondaryTab.fileHash;
-        const secondaryAnnotations = annotations.filter(
-          (a) => shouldSaveAnnotation(a) && a.fileHash === secondaryFileHash
-        );
-        const secondarySessionIds = sessions
+        hashesToSave.add(secondaryTab.fileHash);
+      }
+
+      for (const fileHash of hashesToSave) {
+        const filePath =
+          activeTab.fileHash === fileHash
+            ? activeTab.filePath
+            : secondaryTab?.filePath;
+        if (!filePath) continue;
+
+        const fileAnnotations = annotationsByHash[fileHash] || [];
+        const fileSessionIds = sessions
           .filter((s) =>
-            s.sources.some((item) => item.source.fileHash === secondaryFileHash)
+            s.sources.some((item) => item.source.fileHash === fileHash)
           )
           .map((s) => s.id);
+
         try {
-          await savePdfData(secondaryTab.filePath, {
-            annotations: secondaryAnnotations,
-            sessionIds: secondarySessionIds,
+          await savePdfData(filePath, {
+            annotations: fileAnnotations.filter(shouldSaveAnnotation),
+            sessionIds: fileSessionIds,
           });
           info(
-            `savePdfData secondary succeeded: fileHash=${secondaryFileHash} annotations=${secondaryAnnotations.length} sessions=${secondarySessionIds.length}`
+            `savePdfData succeeded: fileHash=${fileHash} annotations=${fileAnnotations.length} sessions=${fileSessionIds.length}`
           );
         } catch (err) {
-          error(`savePdfData secondary failed: ${err}`);
+          error(`savePdfData failed: ${err}`);
         }
       }
     }, 500);
@@ -320,7 +350,7 @@ export function usePersistence({
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [
-    annotations,
+    annotationsByHash,
     sessions,
     activeTab?.filePath,
     activeTab?.fileHash,
@@ -388,10 +418,13 @@ export function usePersistence({
 
   const findSessionIdByAnnotationId = useCallback(
     (id: string) => {
-      const annotation = annotations.find((a) => a.id === id);
-      return annotation?.sessionId;
+      for (const list of Object.values(annotationsByHash)) {
+        const annotation = list.find((a) => a.id === id);
+        if (annotation) return annotation.sessionId;
+      }
+      return undefined;
     },
-    [annotations]
+    [annotationsByHash]
   );
 
   const runSessionStream = useCallback(
@@ -480,8 +513,12 @@ export function usePersistence({
       // Mark each source stash annotation as interpreted, with group size and self index,
       // and link it to the session so the marker can be deleted together with the session.
       const stashIds = new Set(sources.map((s) => s.id));
-      setAnnotations((prev) =>
-        prev.map((a) =>
+      const fileHash = sources[0]?.source.fileHash;
+      if (!fileHash) return { sessionId, session: streamingSession };
+
+      setAnnotationsByHash((prev) => {
+        const list = prev[fileHash] || [];
+        const updated = list.map((a) =>
           a.type === "stash" && a.stashId && stashIds.has(a.stashId)
             ? {
                 ...a,
@@ -490,8 +527,9 @@ export function usePersistence({
                 sessionId,
               }
             : a
-        )
-      );
+        );
+        return { ...prev, [fileHash]: updated };
+      });
 
       runSessionStream(streamingSession, messageId);
 
@@ -531,7 +569,11 @@ export function usePersistence({
           fileHash: activeTab.fileHash,
         }
       );
-      setAnnotations((prev) => [...prev, stashAnnotation]);
+      setAnnotationsByHash((prev) => {
+        const fileHash = activeTab.fileHash;
+        const list = prev[fileHash] || [];
+        return { ...prev, [fileHash]: [...list, stashAnnotation] };
+      });
       openRightPanel();
     },
     [activeTab, openRightPanel]
@@ -539,15 +581,45 @@ export function usePersistence({
 
   const handleRemoveStash = useCallback((id: string) => {
     setStashes((prev) => removeStash(prev, id));
-    setAnnotations((prev) => prev.filter((a) => a.stashId !== id));
+    setAnnotationsByHash((prev) => {
+      const next: Record<string, Annotation[]> = {};
+      for (const [hash, list] of Object.entries(prev)) {
+        next[hash] = list.filter((a) => a.stashId !== id);
+      }
+      return next;
+    });
   }, []);
 
   const handleClearStashes = useCallback(() => {
-    setStashes((prev) =>
-      prev.filter((s) => !visibleTabIds.has(s.source.tabId))
+    const tabIdsToClear = new Set(visibleTabIds);
+    const hashesToClear = new Set(
+      stashes
+        .filter((s) => tabIdsToClear.has(s.source.tabId))
+        .map((s) => s.source.fileHash)
     );
-    setAnnotations((prev) => prev.filter((a) => a.type !== "stash"));
-  }, [visibleTabIds]);
+
+    setStashes((prev) =>
+      prev.filter((s) => !tabIdsToClear.has(s.source.tabId))
+    );
+    setAnnotationsByHash((prev) => {
+      const next: Record<string, Annotation[]> = {};
+      for (const [hash, list] of Object.entries(prev)) {
+        if (hashesToClear.has(hash)) {
+          next[hash] = list.filter(
+            (a) =>
+              a.type !== "stash" ||
+              a.interpretedGroupSize !== undefined ||
+              !tabIdsToClear.has(
+                stashes.find((s) => s.id === a.stashId)?.source.tabId ?? ""
+              )
+          );
+        } else {
+          next[hash] = list;
+        }
+      }
+      return next;
+    });
+  }, [visibleTabIds, stashes]);
 
   const handleCustomInterpret = useCallback(
     (prompt: string, visibleStashes: StashItem[]) => {
@@ -565,17 +637,30 @@ export function usePersistence({
 
       // Persistence of the session and its PDF references is handled by the
       // debounced effects; avoid manual writes here to prevent clobbering.
-      setStashes((prev) =>
-        prev.filter((s) => !visibleTabIds.has(s.source.tabId))
+      const stashIdsToRemove = new Set(visibleStashes.map((s) => s.id));
+      const hashesToClear = new Set(
+        visibleStashes.map((s) => s.source.fileHash)
       );
-      // Keep interpreted stash annotations; remove only uninterpreted stash markers.
-      setAnnotations((prev) =>
-        prev.filter(
-          (a) => a.type !== "stash" || a.interpretedGroupSize !== undefined
-        )
-      );
+
+      setStashes((prev) => prev.filter((s) => !stashIdsToRemove.has(s.id)));
+      setAnnotationsByHash((prev) => {
+        const next: Record<string, Annotation[]> = {};
+        for (const [hash, list] of Object.entries(prev)) {
+          if (hashesToClear.has(hash)) {
+            next[hash] = list.filter(
+              (a) =>
+                a.type !== "stash" ||
+                a.interpretedGroupSize !== undefined ||
+                !stashIdsToRemove.has(a.stashId ?? "")
+            );
+          } else {
+            next[hash] = list;
+          }
+        }
+        return next;
+      });
     },
-    [activeTab, visibleTabIds, startSessionFromStashes]
+    [activeTab, startSessionFromStashes]
   );
 
   const handleSelectionAction = useCallback(
@@ -592,7 +677,11 @@ export function usePersistence({
           fileHash: activeTab.fileHash,
         }
       );
-      setAnnotations((prev) => [...prev, newAnnotation]);
+      setAnnotationsByHash((prev) => {
+        const fileHash = activeTab.fileHash;
+        const list = prev[fileHash] || [];
+        return { ...prev, [fileHash]: [...list, newAnnotation] };
+      });
 
       if (action === "explain") {
         const prompt = buildSelectionPrompt(
@@ -619,13 +708,18 @@ export function usePersistence({
         );
 
         // Link the annotation to the session; persistence is handled by debounced effects.
-        setAnnotations((prev) =>
-          prev.map((a) =>
-            a.id === newAnnotation.id
-              ? { ...a, stashId: sourceStash.id, sessionId }
-              : a
-          )
-        );
+        setAnnotationsByHash((prev) => {
+          const fileHash = activeTab.fileHash;
+          const list = prev[fileHash] || [];
+          return {
+            ...prev,
+            [fileHash]: list.map((a) =>
+              a.id === newAnnotation.id
+                ? { ...a, stashId: sourceStash.id, sessionId }
+                : a
+            ),
+          };
+        });
       }
     },
     [activeTab, startSessionFromStashes]
@@ -682,19 +776,29 @@ export function usePersistence({
 
   const handleAnnotationUpdate = useCallback(
     (id: string, patch: Partial<Omit<Annotation, "id">>) => {
-      setAnnotations((prev) => updateAnnotation(prev, id, patch));
+      setAnnotationsByHash((prev) => {
+        const next: Record<string, Annotation[]> = {};
+        for (const [hash, list] of Object.entries(prev)) {
+          next[hash] = list.map((a) => (a.id === id ? { ...a, ...patch } : a));
+        }
+        return next;
+      });
     },
     []
   );
 
   const handleAnnotationDelete = useCallback(
     async (id: string) => {
-      const annotation = annotations.find((a) => a.id === id);
+      let annotation: Annotation | undefined;
+      for (const list of Object.values(annotationsByHash)) {
+        annotation = list.find((a) => a.id === id);
+        if (annotation) break;
+      }
       const isInterpretedStash =
         annotation?.type === "stash" &&
         typeof annotation.interpretedGroupSize === "number";
 
-      if (annotation?.type === "explain" || isInterpretedStash) {
+      if (annotation && (annotation.type === "explain" || isInterpretedStash)) {
         const confirmed = await showConfirm(
           i18n.t("confirm.deleteTitle"),
           i18n.t("confirm.deleteExplainBody")
@@ -708,9 +812,15 @@ export function usePersistence({
           setSessions((prev) => deleteSession(prev, sessionId));
         }
       }
-      setAnnotations((prev) => deleteAnnotation(prev, id));
+      setAnnotationsByHash((prev) => {
+        const next: Record<string, Annotation[]> = {};
+        for (const [hash, list] of Object.entries(prev)) {
+          next[hash] = list.filter((a) => a.id !== id);
+        }
+        return next;
+      });
     },
-    [annotations]
+    [annotationsByHash]
   );
 
   // H-6: when a tab is closed, abort its streaming sessions and remove any
@@ -744,26 +854,33 @@ export function usePersistence({
           prev.filter((s) => !sessionIdsToRemove.includes(s.id))
         );
       }
-      setAnnotations((prev) =>
-        prev.filter(
-          (a) =>
-            a.fileHash !== fileHash &&
-            !sessionIdsToRemove.includes(a.sessionId ?? "")
-        )
-      );
+      setAnnotationsByHash((prev) => {
+        const list = prev[fileHash] || [];
+        return {
+          ...prev,
+          [fileHash]: list.filter(
+            (a) => !sessionIdsToRemove.includes(a.sessionId ?? "")
+          ),
+        };
+      });
     },
     [sessions, handleInterruptSession]
   );
 
   const handleUpdateStash = useCallback((id: string, text: string) => {
     setStashes((prev) => updateStash(prev, id, text));
-    setAnnotations((prev) =>
-      prev.map((a) => (a.stashId === id ? { ...a, text } : a))
-    );
+    setAnnotationsByHash((prev) => {
+      const next: Record<string, Annotation[]> = {};
+      for (const [hash, list] of Object.entries(prev)) {
+        next[hash] = list.map((a) => (a.stashId === id ? { ...a, text } : a));
+      }
+      return next;
+    });
   }, []);
 
   return {
     annotations,
+    visibleTabAnnotations,
     setAnnotations,
     stashes,
     setStashes,
@@ -771,6 +888,8 @@ export function usePersistence({
     setSessions,
     visibleTabStashes,
     visibleTabSessions,
+    focusedTabStashes,
+    focusedTabSessions,
     handleAddToStash,
     handleRemoveStash,
     handleClearStashes,

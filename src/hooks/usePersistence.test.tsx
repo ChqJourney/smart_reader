@@ -10,6 +10,7 @@ import {
 import { DEFAULT_SETTINGS } from "../services/settings";
 import { InterpretationSession } from "../services/sessions";
 import { Annotation } from "../services/annotations";
+import type { PdfTab } from "./useTabs";
 
 // Mock Tauri core invoke for all persistence-related commands.
 vi.mock("@tauri-apps/api/core", () => ({
@@ -68,6 +69,7 @@ function TestHarness({
     activeTabId: null,
     secondaryTab: null,
     isSplitView: false,
+    focusedTab: null,
     openRightPanel: vi.fn(),
     settings: DEFAULT_SETTINGS,
   });
@@ -366,6 +368,7 @@ describe("usePersistence", () => {
           activeTabId: "tab-a",
           secondaryTab: null,
           isSplitView: false,
+          focusedTab: null,
           openRightPanel: vi.fn(),
           settings: DEFAULT_SETTINGS,
         }}
@@ -387,6 +390,7 @@ describe("usePersistence", () => {
           activeTabId: "tab-a",
           secondaryTab,
           isSplitView: true,
+          focusedTab: secondaryTab,
           openRightPanel: vi.fn(),
           settings: DEFAULT_SETTINGS,
         }}
@@ -426,6 +430,7 @@ describe("usePersistence", () => {
           activeTabId: null,
           secondaryTab: null,
           isSplitView: false,
+          focusedTab: null,
           openRightPanel: vi.fn(),
           settings: DEFAULT_SETTINGS,
         }}
@@ -494,5 +499,465 @@ describe("usePersistence", () => {
     expect(capturedSignal!.aborted).toBe(true);
     expect(hookRef!.sessions).toHaveLength(0);
     expect(hookRef!.annotations).toHaveLength(0);
+  });
+
+  it("exposes only visible tab annotations", () => {
+    let hookRef: UsePersistenceReturn;
+    const baseProps: UsePersistenceProps = {
+      activeTab: null,
+      activeTabId: null,
+      secondaryTab: null,
+      isSplitView: false,
+      focusedTab: null,
+      openRightPanel: vi.fn(),
+      settings: DEFAULT_SETTINGS,
+    };
+
+    const { rerender } = render(
+      <StrictMode>
+        <ConfigurableHarness
+          props={baseProps}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    act(() => {
+      hookRef!.setAnnotations([
+        {
+          id: "a1",
+          type: "translate",
+          text: "a",
+          position: { page: 1, x: 0, y: 0 },
+          content: "",
+          isStreaming: false,
+          createdAt: 1,
+          fileHash: "hash-a",
+        },
+        {
+          id: "b1",
+          type: "translate",
+          text: "b",
+          position: { page: 1, x: 0, y: 0 },
+          content: "",
+          isStreaming: false,
+          createdAt: 1,
+          fileHash: "hash-b",
+        },
+      ]);
+    });
+
+    expect(hookRef!.annotations).toHaveLength(2);
+    expect(hookRef!.visibleTabAnnotations).toHaveLength(0);
+
+    const activeTab: PdfTab = {
+      id: "tab-a",
+      filePath: "/a.pdf",
+      fileName: "a.pdf",
+      fileHash: "hash-a",
+    };
+
+    rerender(
+      <StrictMode>
+        <ConfigurableHarness
+          props={{
+            ...baseProps,
+            activeTab,
+            activeTabId: "tab-a",
+          }}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    expect(hookRef!.visibleTabAnnotations).toHaveLength(1);
+    expect(hookRef!.visibleTabAnnotations[0].fileHash).toBe("hash-a");
+  });
+
+  it("does not remove stash annotations from other tabs when clearing stashes", () => {
+    let hookRef: UsePersistenceReturn;
+    const baseProps: UsePersistenceProps = {
+      activeTab: null,
+      activeTabId: null,
+      secondaryTab: null,
+      isSplitView: false,
+      focusedTab: null,
+      openRightPanel: vi.fn(),
+      settings: DEFAULT_SETTINGS,
+    };
+
+    const { rerender } = render(
+      <StrictMode>
+        <ConfigurableHarness
+          props={baseProps}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    act(() => {
+      hookRef!.setStashes([
+        {
+          id: "stash-a",
+          source: {
+            tabId: "tab-a",
+            fileName: "a.pdf",
+            filePath: "/a.pdf",
+            fileHash: "hash-a",
+            page: 1,
+            pdfX: 0,
+            pdfY: 0,
+          },
+          text: "a",
+          createdAt: 1,
+        },
+        {
+          id: "stash-b",
+          source: {
+            tabId: "tab-b",
+            fileName: "b.pdf",
+            filePath: "/b.pdf",
+            fileHash: "hash-b",
+            page: 1,
+            pdfX: 0,
+            pdfY: 0,
+          },
+          text: "b",
+          createdAt: 1,
+        },
+      ]);
+      hookRef!.setAnnotations([
+        {
+          id: "anno-a",
+          type: "stash",
+          text: "a",
+          position: { page: 1, x: 0, y: 0 },
+          content: "",
+          isStreaming: false,
+          createdAt: 1,
+          fileHash: "hash-a",
+          stashId: "stash-a",
+        },
+        {
+          id: "anno-b",
+          type: "stash",
+          text: "b",
+          position: { page: 1, x: 0, y: 0 },
+          content: "",
+          isStreaming: false,
+          createdAt: 1,
+          fileHash: "hash-b",
+          stashId: "stash-b",
+        },
+      ]);
+    });
+
+    const activeTab: PdfTab = {
+      id: "tab-a",
+      filePath: "/a.pdf",
+      fileName: "a.pdf",
+      fileHash: "hash-a",
+    };
+
+    rerender(
+      <StrictMode>
+        <ConfigurableHarness
+          props={{
+            ...baseProps,
+            activeTab,
+            activeTabId: "tab-a",
+          }}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    act(() => {
+      hookRef!.handleClearStashes();
+    });
+
+    expect(hookRef!.stashes).toHaveLength(1);
+    expect(hookRef!.stashes[0].id).toBe("stash-b");
+    expect(hookRef!.annotations).toHaveLength(1);
+    expect(hookRef!.annotations[0].fileHash).toBe("hash-b");
+  });
+
+  it("buckets annotations by fileHash via setAnnotations", () => {
+    let hookRef: UsePersistenceReturn;
+    const baseProps: UsePersistenceProps = {
+      activeTab: null,
+      activeTabId: null,
+      secondaryTab: null,
+      isSplitView: false,
+      focusedTab: null,
+      openRightPanel: vi.fn(),
+      settings: DEFAULT_SETTINGS,
+    };
+
+    const { rerender } = render(
+      <StrictMode>
+        <ConfigurableHarness
+          props={baseProps}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    act(() => {
+      hookRef!.setAnnotations([
+        {
+          id: "a1",
+          type: "translate",
+          text: "a",
+          position: { page: 1, x: 0, y: 0 },
+          content: "",
+          isStreaming: false,
+          createdAt: 1,
+          fileHash: "hash-a",
+        },
+        {
+          id: "b1",
+          type: "translate",
+          text: "b",
+          position: { page: 1, x: 0, y: 0 },
+          content: "",
+          isStreaming: false,
+          createdAt: 1,
+          fileHash: "hash-b",
+        },
+      ]);
+    });
+
+    const activeTab: PdfTab = {
+      id: "tab-a",
+      filePath: "/a.pdf",
+      fileName: "a.pdf",
+      fileHash: "hash-a",
+    };
+
+    rerender(
+      <StrictMode>
+        <ConfigurableHarness
+          props={{
+            ...baseProps,
+            activeTab,
+            activeTabId: "tab-a",
+          }}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    expect(hookRef!.visibleTabAnnotations).toHaveLength(1);
+    expect(hookRef!.visibleTabAnnotations[0].id).toBe("a1");
+  });
+
+  it("focuses right-panel stashes on the selected tab", () => {
+    let hookRef: UsePersistenceReturn;
+    const baseProps: UsePersistenceProps = {
+      activeTab: null,
+      activeTabId: null,
+      secondaryTab: null,
+      isSplitView: false,
+      focusedTab: null,
+      openRightPanel: vi.fn(),
+      settings: DEFAULT_SETTINGS,
+    };
+
+    const { rerender } = render(
+      <StrictMode>
+        <ConfigurableHarness
+          props={baseProps}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    act(() => {
+      hookRef!.setStashes([
+        {
+          id: "stash-a",
+          source: {
+            tabId: "tab-a",
+            fileName: "a.pdf",
+            filePath: "/a.pdf",
+            fileHash: "hash-a",
+            page: 1,
+            pdfX: 0,
+            pdfY: 0,
+          },
+          text: "a",
+          createdAt: 1,
+        },
+        {
+          id: "stash-b",
+          source: {
+            tabId: "tab-b",
+            fileName: "b.pdf",
+            filePath: "/b.pdf",
+            fileHash: "hash-b",
+            page: 1,
+            pdfX: 0,
+            pdfY: 0,
+          },
+          text: "b",
+          createdAt: 1,
+        },
+      ]);
+    });
+
+    const focusedTab: PdfTab = {
+      id: "tab-b",
+      filePath: "/b.pdf",
+      fileName: "b.pdf",
+      fileHash: "hash-b",
+    };
+
+    rerender(
+      <StrictMode>
+        <ConfigurableHarness
+          props={{ ...baseProps, focusedTab }}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    expect(hookRef!.focusedTabStashes).toHaveLength(1);
+    expect(hookRef!.focusedTabStashes[0].id).toBe("stash-b");
+
+    rerender(
+      <StrictMode>
+        <ConfigurableHarness
+          props={{
+            ...baseProps,
+            focusedTab: {
+              id: "tab-a",
+              filePath: "/a.pdf",
+              fileName: "a.pdf",
+              fileHash: "hash-a",
+            },
+          }}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    expect(hookRef!.focusedTabStashes).toHaveLength(1);
+    expect(hookRef!.focusedTabStashes[0].id).toBe("stash-a");
+  });
+
+  it("focuses right-panel sessions by the focused tab's fileHash", () => {
+    let hookRef: UsePersistenceReturn;
+    const baseProps: UsePersistenceProps = {
+      activeTab: null,
+      activeTabId: null,
+      secondaryTab: null,
+      isSplitView: false,
+      focusedTab: null,
+      openRightPanel: vi.fn(),
+      settings: DEFAULT_SETTINGS,
+    };
+
+    const { rerender } = render(
+      <StrictMode>
+        <ConfigurableHarness
+          props={baseProps}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    const sessionA: InterpretationSession = {
+      id: "session-a",
+      sources: [
+        {
+          id: "stash-a",
+          source: {
+            tabId: "old-tab-a",
+            fileName: "a.pdf",
+            filePath: "/a.pdf",
+            fileHash: "hash-a",
+            page: 1,
+            pdfX: 0,
+            pdfY: 0,
+          },
+          text: "a",
+          createdAt: 1,
+        },
+      ],
+      messages: [],
+      isStreaming: false,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    const sessionB: InterpretationSession = {
+      id: "session-b",
+      sources: [
+        {
+          id: "stash-b",
+          source: {
+            tabId: "tab-b",
+            fileName: "b.pdf",
+            filePath: "/b.pdf",
+            fileHash: "hash-b",
+            page: 1,
+            pdfX: 0,
+            pdfY: 0,
+          },
+          text: "b",
+          createdAt: 1,
+        },
+      ],
+      messages: [],
+      isStreaming: false,
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    act(() => {
+      hookRef!.setSessions([sessionA, sessionB]);
+    });
+
+    const focusedTab: PdfTab = {
+      id: "tab-a",
+      filePath: "/a.pdf",
+      fileName: "a.pdf",
+      fileHash: "hash-a",
+    };
+
+    rerender(
+      <StrictMode>
+        <ConfigurableHarness
+          props={{ ...baseProps, focusedTab }}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    expect(hookRef!.focusedTabSessions).toHaveLength(1);
+    expect(hookRef!.focusedTabSessions[0].id).toBe("session-a");
   });
 });

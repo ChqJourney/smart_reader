@@ -48,6 +48,7 @@ export interface PdfViewerState {
   pageNum: number;
   scale: number;
   viewMode: "single" | "continuous";
+  scrollTop?: number;
 }
 
 export interface PdfViewerHandle {
@@ -55,9 +56,13 @@ export interface PdfViewerHandle {
 }
 
 interface PdfViewerProps {
+  tabId?: string;
   filePath: string;
   fileHash?: string;
+  cachedBytes?: Uint8Array;
+  onPdfLoaded?: (filePath: string, bytes: Uint8Array) => void;
   onSelection?: (
+    tabId: string,
     text: string,
     page: number,
     position: {
@@ -70,8 +75,9 @@ interface PdfViewerProps {
     }
   ) => void;
   onToggleVisibility?: () => void;
-  initialState?: Partial<PdfViewerState>;
+  initialState?: Partial<PdfViewerState & { pendingGotoPage?: number }>;
   onStateChange?: (state: PdfViewerState) => void;
+  onClearPendingGotoPage?: (tabId: string) => void;
   annotations?: Annotation[];
   highlightedAnnotationId?: string | null;
   onAnnotationUpdate?: (
@@ -79,7 +85,7 @@ interface PdfViewerProps {
     patch: Partial<Omit<Annotation, "id">>
   ) => void;
   onAnnotationDelete?: (id: string) => void;
-  onExplainClick?: (id: string) => void;
+  onExplainClick?: (tabId: string, id: string) => void;
   hoverTranslate?: boolean;
   settings: AppSettings;
 }
@@ -141,12 +147,16 @@ export function computeContinuousScrollTop(
 const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
   function PdfViewer(
     {
+      tabId,
       filePath,
       fileHash,
+      cachedBytes,
+      onPdfLoaded,
       onSelection,
       onToggleVisibility,
       initialState,
       onStateChange,
+      onClearPendingGotoPage,
       annotations,
       highlightedAnnotationId,
       onAnnotationUpdate,
@@ -159,6 +169,32 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
   ) {
     const { t } = useTranslation();
     const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+
+    const handleSelection = useCallback(
+      (
+        text: string,
+        page: number,
+        position: {
+          x: number;
+          y: number;
+          pdfX: number;
+          pdfY: number;
+          width?: number;
+          height?: number;
+        }
+      ) => {
+        if (tabId) onSelection?.(tabId, text, page, position);
+      },
+      [tabId, onSelection]
+    );
+
+    const handleExplainClick = useCallback(
+      (id: string) => {
+        if (tabId) onExplainClick?.(tabId, id);
+      },
+      [tabId, onExplainClick]
+    );
+
     const [pageNum, setPageNum] = useState(initialState?.pageNum ?? 1);
     const [numPages, setNumPages] = useState(0);
     const [scale, setScale] = useState(initialState?.scale ?? 1.5);
@@ -200,6 +236,23 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       viewMode: initialState?.viewMode ?? "continuous",
     });
     const pendingFitCenterRef = useRef(false);
+    const pendingGotoPageRef = useRef(initialState?.pendingGotoPage);
+    const pendingScrollTopRef = useRef(initialState?.scrollTop);
+    // Restoration of page/scroll position must run at most once per mount.
+    // PdfViewer is remounted on tab switch via key={tab.id}, so each fresh
+    // instance restores its tab's position exactly once. Without this guard
+    // the effect re-runs whenever pageViewports/pageNum change, and a stale
+    // scrollTop (e.g. 0 produced by the initial goToPage(1)) would overwrite
+    // a user's own jump and snap the container back to the top.
+    const hasRestoredRef = useRef(false);
+    // Live ref to onStateChange so the goToPage jump-lock release can report
+    // the final scrollTop to the parent without capturing a stale callback
+    // and without dispatching a synthetic scroll event (which would also
+    // re-run computeAndSyncPage and could drift the page number).
+    const onStateChangeRef = useRef(onStateChange);
+    useEffect(() => {
+      onStateChangeRef.current = onStateChange;
+    }, [onStateChange]);
     // Keep a live ref of the current page number so the scroll-driven page
     // detection can read the latest value without re-creating its listener.
     const pageNumRef = useRef(pageNum);
@@ -260,11 +313,25 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       if (initialState?.scale !== undefined) setScale(initialState.scale);
       if (initialState?.viewMode !== undefined)
         setViewMode(initialState.viewMode);
-    }, [initialState?.pageNum, initialState?.scale, initialState?.viewMode]);
+      pendingGotoPageRef.current = initialState?.pendingGotoPage;
+      pendingScrollTopRef.current = initialState?.scrollTop;
+    }, [
+      initialState?.pageNum,
+      initialState?.scale,
+      initialState?.viewMode,
+      initialState?.pendingGotoPage,
+      initialState?.scrollTop,
+    ]);
 
-    // Notify parent of state changes
+    // Notify parent of page/scale/viewMode changes. ScrollTop is intentionally
+    // omitted: the continuous scroll listener reports it on user scrolls, and
+    // reporting it here races with tab-switch restoration.
     useEffect(() => {
-      const newState = { pageNum, scale, viewMode };
+      const newState: PdfViewerState = {
+        pageNum,
+        scale,
+        viewMode,
+      };
       if (
         lastStateRef.current.pageNum !== newState.pageNum ||
         lastStateRef.current.scale !== newState.scale ||
@@ -282,7 +349,9 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       }
     }, [numPages, pageNum]);
 
-    // Load PDF when filePath changes
+    // Load PDF when filePath changes. Reuse cached bytes when available so
+    // switching tabs does not re-read large files from disk. Each viewer keeps
+    // its own PDFDocumentProxy to avoid sharing PDF.js transport state.
     useEffect(() => {
       if (!filePath) {
         setPdf(null);
@@ -316,14 +385,26 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
       const loadPdf = async () => {
         try {
-          const bytes = await invoke<ArrayBuffer>("read_pdf_bytes", {
-            filePath,
-          });
-          if (isCancelled) return;
+          let data: Uint8Array;
+          if (cachedBytes) {
+            // Make a copy before handing the bytes to PDF.js so its worker does
+            // not detach the shared cached buffer.
+            data = cachedBytes.slice();
+          } else {
+            const bytes = await invoke<ArrayBuffer>("read_pdf_bytes", {
+              filePath,
+            });
+            if (isCancelled) return;
+            const view = new Uint8Array(bytes);
+            // PDF.js may transfer/detach the underlying ArrayBuffer while
+            // loading. Cache a detached-buffer-safe copy and pass a separate
+            // view to PDF.js so reopening the same file never reuses a
+            // detached buffer.
+            onPdfLoaded?.(filePath, view.slice());
+            data = view;
+          }
 
-          const uint8Array = new Uint8Array(bytes);
-          loadingTask = pdfjsLib.getDocument({ data: uint8Array });
-
+          loadingTask = pdfjsLib.getDocument({ data });
           loadedPdf = await loadingTask.promise;
           if (isCancelled) {
             loadedPdf.destroy();
@@ -333,7 +414,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
           setPdf(loadedPdf);
           setNumPages(loadedPdf.numPages);
-          setPageNum(1);
+          setPageNum(initialState?.pageNum ?? 1);
         } catch (err) {
           if (!isCancelled) {
             logError(`Error loading PDF: ${err}`);
@@ -357,7 +438,56 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           loadingTask.destroy();
         }
       };
-    }, [filePath]);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filePath, onPdfLoaded]);
+
+    // Execute any pending page navigation once the PDF is loaded and the target
+    // page viewport is known. This is used to restore the correct page when
+    // switching tabs without racing against incomplete DOM geometry.
+    useEffect(() => {
+      if (!pdf || numPages === 0 || isLoading || hasRestoredRef.current) return;
+
+      const pending = pendingGotoPageRef.current;
+      if (pending !== undefined && tabId) {
+        if (viewMode === "single" || pageViewports.has(pending)) {
+          goToPage(pending);
+          onClearPendingGotoPage?.(tabId);
+          pendingGotoPageRef.current = undefined;
+          // In continuous mode, also restore the exact scroll offset saved
+          // for this tab so switching back lands on the same reading spot,
+          // not just the page top. Viewports are fully preloaded for small
+          // docs by this point, so scrollHeight is correct and scrollTop
+          // won't be clamped.
+          const savedScrollTop = pendingScrollTopRef.current;
+          if (
+            viewMode === "continuous" &&
+            savedScrollTop !== undefined &&
+            continuousContainerRef.current
+          ) {
+            continuousContainerRef.current.scrollTop = savedScrollTop;
+          }
+          pendingScrollTopRef.current = undefined;
+          hasRestoredRef.current = true;
+        }
+        // Target page viewport not ready yet; wait for the next run without
+        // marking as restored.
+        return;
+      }
+
+      // No pending page jump: restore the exact continuous-scroll position
+      // stored for this tab.
+      const scrollTop = pendingScrollTopRef.current;
+      if (
+        scrollTop !== undefined &&
+        viewMode === "continuous" &&
+        continuousContainerRef.current
+      ) {
+        continuousContainerRef.current.scrollTop = scrollTop;
+      }
+      pendingScrollTopRef.current = undefined;
+      hasRestoredRef.current = true;
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pdf, numPages, isLoading, viewMode, pageViewports, tabId]);
 
     // Load PDF outline (bookmarks) when the PDF changes.
     useEffect(() => {
@@ -624,7 +754,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
             (p) => pageWrapperRefs.current[p - 1],
             pageViewports
           );
-
           // Set the jump lock synchronously so any scroll events fired by the
           // following scrollTo() are ignored. React state would not be committed
           // in time, so a ref is required.
@@ -645,11 +774,27 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
             timeout = setTimeout(() => {
               isJumpingRef.current = false;
               cleanup();
+              // Report the final scroll position to the parent so the tab
+              // state stays accurate after a programmatic jump. Without this
+              // the post-jump scrollTop is never reported until the user
+              // scrolls again, so switching tabs restores a stale position.
+              onStateChangeRef.current?.({
+                pageNum: page,
+                scale,
+                viewMode,
+                scrollTop: container.scrollTop,
+              });
             }, 150);
           };
           timeout = setTimeout(() => {
             isJumpingRef.current = false;
             cleanup();
+            onStateChangeRef.current?.({
+              pageNum: page,
+              scale,
+              viewMode,
+              scrollTop: container.scrollTop,
+            });
           }, 300);
           container.addEventListener("scroll", handleScroll);
           jumpScrollCleanupRef.current = cleanup;
@@ -873,10 +1018,10 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       let cancelled = false;
       let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
 
-      const computeAndSyncPage = () => {
+      const computeAndSyncPage = (): number => {
         const container = continuousContainerRef.current;
-        if (!container) return;
-        if (cancelled || isJumpingRef.current) return;
+        if (!container) return pageNumRef.current;
+        if (cancelled || isJumpingRef.current) return pageNumRef.current;
 
         const containerRect = container.getBoundingClientRect();
 
@@ -903,13 +1048,25 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         });
 
         setPageNum((current) => (current === bestPage ? current : bestPage));
+        return bestPage;
       };
 
       const updateVisiblePage = () => {
         if (cancelled || isJumpingRef.current) return;
         if (debounceTimeout) clearTimeout(debounceTimeout);
         debounceTimeout = setTimeout(() => {
-          requestAnimationFrame(computeAndSyncPage);
+          requestAnimationFrame(() => {
+            const bestPage = computeAndSyncPage();
+            const container = continuousContainerRef.current;
+            if (container) {
+              onStateChange?.({
+                pageNum: bestPage,
+                scale,
+                viewMode,
+                scrollTop: container.scrollTop,
+              });
+            }
+          });
         }, 100);
       };
 
@@ -924,7 +1081,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         container.removeEventListener("scroll", updateVisiblePage);
         resizeObserver.disconnect();
       };
-    }, [viewMode]);
+    }, [viewMode, scale, onStateChange]);
 
     const goToPrevPage = () => setPageNum((p) => Math.max(1, p - 1));
     const goToNextPage = () => setPageNum((p) => Math.min(numPages, p + 1));
@@ -1103,11 +1260,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                     <button
                       className="icon-btn"
                       onClick={() => goToPage(pageNum - 1)}
-                      disabled={
-                        pageNum <= 1 ||
-                        numPages === 0 ||
-                        isLoading
-                      }
+                      disabled={pageNum <= 1 || numPages === 0 || isLoading}
                       aria-label={t("pdf.previousPage")}
                       title={t("pdf.previousPage")}
                     >
@@ -1131,9 +1284,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                       className="icon-btn"
                       onClick={() => goToPage(pageNum + 1)}
                       disabled={
-                        pageNum >= numPages ||
-                        numPages === 0 ||
-                        isLoading
+                        pageNum >= numPages || numPages === 0 || isLoading
                       }
                       aria-label={t("pdf.nextPage")}
                       title={t("pdf.nextPage")}
@@ -1236,13 +1387,13 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                   scale={scale}
                   shouldRender={renderPages.has(pageNum)}
                   fileHash={fileHash}
-                  onSelection={onSelection}
+                  onSelection={handleSelection}
                   onGoToPage={goToPage}
                   annotations={annotations}
                   highlightedAnnotationId={highlightedAnnotationId}
                   onAnnotationUpdate={onAnnotationUpdate}
                   onAnnotationDelete={onAnnotationDelete}
-                  onExplainClick={onExplainClick}
+                  onExplainClick={handleExplainClick}
                   hoverTranslate={hoverTranslate}
                   settings={settings}
                   searchHighlights={searchHighlightsByPage.get(pageNum)}
@@ -1257,14 +1408,14 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                     shouldRender={renderPages.has(p)}
                     pageViewports={pageViewports}
                     fileHash={fileHash}
-                    onSelection={onSelection}
+                    onSelection={handleSelection}
                     onGoToPage={goToPage}
                     onVisibilityChange={handleVisibilityChange}
                     annotations={annotations}
                     highlightedAnnotationId={highlightedAnnotationId}
                     onAnnotationUpdate={onAnnotationUpdate}
                     onAnnotationDelete={onAnnotationDelete}
-                    onExplainClick={onExplainClick}
+                    onExplainClick={handleExplainClick}
                     hoverTranslate={hoverTranslate}
                     settings={settings}
                     containerRef={setPageWrapperRef(p)}

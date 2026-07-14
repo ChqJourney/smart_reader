@@ -1,5 +1,5 @@
 # 自动部署 SpecReader AI 宣传落地页到 GitHub Pages
-# 触发条件：main 分支 landing/ 目录变更，或手动触发
+# 触发条件：master 分支 landing/ 目录变更，或手动触发
 #
 # 使用前提：
 # 1. 仓库 Settings > Pages > Source 选择 "GitHub Actions"。
@@ -10,9 +10,10 @@ name: Deploy Landing Page to GitHub Pages
 on:
   push:
     branches:
-      - main
+      - master
     paths:
       - "landing/**"
+      - ".github/workflows/landing.yml"
   workflow_dispatch:
 
 permissions:

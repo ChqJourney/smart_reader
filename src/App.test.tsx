@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import React from "react";
 import App from "./App";
 import { open, confirm } from "@tauri-apps/plugin-dialog";
@@ -682,5 +688,38 @@ describe("App", () => {
     });
 
     main.getBoundingClientRect = originalGetBoundingClientRect;
+  });
+
+  it("opens only one tab when the open-pdf event is emitted multiple times", async () => {
+    const listeners = new Map<string, (event: { payload: string }) => void>();
+    mockListen.mockImplementation(
+      (event: string, cb: (event: { payload: string }) => void) => {
+        listeners.set(event, cb);
+        return Promise.resolve(() => {});
+      }
+    );
+
+    renderApp();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("open-pdf-btn")).toBeInTheDocument();
+    });
+
+    const handler = listeners.get("open-pdf");
+    expect(handler).toBeDefined();
+
+    act(() => {
+      handler!({ payload: "/test/file.pdf" });
+      handler!({ payload: "/test/file.pdf" });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("file.pdf")).toBeInTheDocument();
+    });
+
+    // Count tabs by their close buttons, ignoring the same filename in the recent-files bar.
+    expect(
+      screen.getAllByRole("button", { name: /关闭 file.pdf/i })
+    ).toHaveLength(1);
   });
 });

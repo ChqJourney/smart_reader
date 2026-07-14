@@ -213,14 +213,22 @@ function App() {
     [tabs, splitView]
   );
 
+  // Keep stable refs to the dynamically changing tab/recent-file callbacks so
+  // the system "open-pdf" listener is registered only once. This prevents
+  // duplicate listeners (and duplicate tabs) when App re-renders.
+  const openPdfByPathRef = useRef(tabs.openPdfByPath);
+  openPdfByPathRef.current = tabs.openPdfByPath;
+  const addRecentFileRef = useRef(recentFiles.addRecentFile);
+  addRecentFileRef.current = recentFiles.addRecentFile;
+
   // Listen for system-driven PDF open requests (single-instance file association).
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     listen<string>("open-pdf", (event) => {
       const path = event.payload;
       const fileName = getBasename(path);
-      tabs.openPdfByPath(path, fileName).then((tab) => {
-        if (tab) recentFiles.addRecentFile(tab.filePath, tab.fileName);
+      openPdfByPathRef.current(path, fileName).then((tab) => {
+        if (tab) addRecentFileRef.current(tab.filePath, tab.fileName);
       });
     })
       .then((unsub) => {
@@ -230,7 +238,7 @@ function App() {
         // ignore: in non-Tauri test environments the event bridge is not available
       });
     return () => unsubscribe?.();
-  }, [tabs, recentFiles]);
+  }, []);
 
   const handleSaveSettings = useCallback(async (newSettings: AppSettings) => {
     await saveSettings(newSettings);

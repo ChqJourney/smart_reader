@@ -1,5 +1,5 @@
 import i18n from "i18next";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { error as logError, info } from "../services/logs";
 import { PdfViewerState } from "../components/PdfViewer";
@@ -38,47 +38,64 @@ export interface UseTabsReturn {
 export function useTabs(): UseTabsReturn {
   const [tabs, setTabs] = useState<PdfTab[]>([]);
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  // In-flight open requests by path. Prevents duplicate tabs when the same PDF
+  // is opened concurrently (e.g. rapid double-clicks or multiple listeners).
+  const pendingOpens = useRef<Map<string, Promise<PdfTab | null>>>(new Map());
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) || null;
 
   const addTab = useCallback(
     async (path: string): Promise<PdfTab | null> => {
-      try {
-        if (tabs.length >= MAX_TABS) {
-          await showMessage(
-            i18n.t("common.notice"),
-            i18n.t("tabs.maxTabsHint", { maxTabs: MAX_TABS })
+      const inFlight = pendingOpens.current.get(path);
+      if (inFlight) {
+        return inFlight;
+      }
+
+      const promise = (async (): Promise<PdfTab | null> => {
+        try {
+          if (tabs.length >= MAX_TABS) {
+            await showMessage(
+              i18n.t("common.notice"),
+              i18n.t("tabs.maxTabsHint", { maxTabs: MAX_TABS })
+            );
+            return null;
+          }
+
+          // Authorize the path before reading it. The backend maintains a whitelist
+          // of paths selected by the user to prevent arbitrary file access.
+          await authorizePdfPath(path);
+
+          const fileHash = await getPdfHash(path);
+          const existing = tabs.find(
+            (tab) => tab.fileHash === fileHash || tab.filePath === path
           );
+          if (existing) {
+            setActiveTabId(existing.id);
+            return existing;
+          }
+
+          const newTab: PdfTab = {
+            id: crypto.randomUUID(),
+            filePath: path,
+            fileName: getBasename(path),
+            fileHash,
+          };
+
+          setTabs((prev) => [...prev, newTab]);
+          setActiveTabId(newTab.id);
+          info(`pdfOpened: tabId=${newTab.id} fileHash=${newTab.fileHash}`);
+          return newTab;
+        } catch (error) {
+          logError(`Failed to open PDF: ${error}`);
           return null;
         }
+      })();
 
-        // Authorize the path before reading it. The backend maintains a whitelist
-        // of paths selected by the user to prevent arbitrary file access.
-        await authorizePdfPath(path);
-
-        const fileHash = await getPdfHash(path);
-        const existing = tabs.find(
-          (tab) => tab.fileHash === fileHash || tab.filePath === path
-        );
-        if (existing) {
-          setActiveTabId(existing.id);
-          return existing;
-        }
-
-        const newTab: PdfTab = {
-          id: crypto.randomUUID(),
-          filePath: path,
-          fileName: getBasename(path),
-          fileHash,
-        };
-
-        setTabs((prev) => [...prev, newTab]);
-        setActiveTabId(newTab.id);
-        info(`pdfOpened: tabId=${newTab.id} fileHash=${newTab.fileHash}`);
-        return newTab;
-      } catch (error) {
-        logError(`Failed to open PDF: ${error}`);
-        return null;
+      pendingOpens.current.set(path, promise);
+      try {
+        return await promise;
+      } finally {
+        pendingOpens.current.delete(path);
       }
     },
     [tabs]

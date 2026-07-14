@@ -2,6 +2,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
+#[allow(unused_imports)]
+use tauri::Manager;
 use tauri::Emitter;
 
 const LOG_FILE_NAME: &str = "app";
@@ -117,17 +119,26 @@ fn emit_open_pdf(app_handle: &tauri::AppHandle, args: &[String]) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default()
+    let builder = tauri::Builder::default();
+
+    // Register the single-instance plugin first so that file-association launches
+    // are reliably forwarded to the already-running instance before other plugins
+    // can spin up their own state.
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+        if let Some(window) = app.get_webview_window("main") {
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+        }
+        emit_open_pdf(app, &args);
+    }));
+
+    let builder = builder
         .manage(AppState::new())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init());
-
-    #[cfg(any(target_os = "windows", target_os = "linux"))]
-    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-        emit_open_pdf(app, &args);
-    }));
 
     let app = builder
         .setup(|app| {

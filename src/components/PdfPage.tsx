@@ -154,13 +154,10 @@ function PdfPage({
         const page = await pdf.getPage(pageNum);
         if (isCancelled) return;
         const vp = page.getViewport({ scale });
-        const info = { width: vp.width, height: vp.height };
-        setViewport(info);
-        if (wrapperRef.current) {
-          wrapperRef.current.style.width = `${info.width}px`;
-          wrapperRef.current.style.height = `${info.height}px`;
-          wrapperRef.current.style.minHeight = "";
-        }
+        // Drive wrapper size purely through React state + the controlled style
+        // prop below. Direct imperative style writes used to race React's
+        // controlled `style` and caused size flicker while `viewport` was null.
+        setViewport({ width: vp.width, height: vp.height });
       } catch (err) {
         error(`Failed to get viewport for page ${pageNum}: ${err}`);
       }

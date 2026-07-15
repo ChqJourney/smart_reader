@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
+import { useRef } from "react";
 import { Annotation } from "../services/annotations";
 import Icon from "./Icon";
+import { useClampedPopupPosition } from "../hooks/useClampedPopupPosition";
 import "./ExplainPopup.css";
 
 interface StashInterpretedPopupProps {
@@ -19,13 +21,16 @@ export default function StashInterpretedPopup({
   onClose,
 }: StashInterpretedPopupProps) {
   const { t } = useTranslation();
+  const popupRef = useRef<HTMLDivElement>(null);
   const left = annotation.position.x * scale;
   const top = annotation.position.y * scale;
+  const pos = useClampedPopupPosition(popupRef, left, top);
 
   return (
     <div
+      ref={popupRef}
       className="explain-popup stash-interpreted-popup"
-      style={{ left, top }}
+      style={{ left: pos.x, top: pos.y }}
       onClick={(e) => e.stopPropagation()}
       role="dialog"
       aria-label={t("marker.interpretedStash")}

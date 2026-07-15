@@ -1,6 +1,8 @@
 import { useTranslation } from "react-i18next";
+import { useRef } from "react";
 import { Annotation } from "../services/annotations";
 import Icon from "./Icon";
+import { useClampedPopupPosition } from "../hooks/useClampedPopupPosition";
 import "./ExplainPopup.css";
 
 interface ExplainPopupProps {
@@ -19,13 +21,18 @@ export default function ExplainPopup({
   onClose,
 }: ExplainPopupProps) {
   const { t } = useTranslation();
+  const popupRef = useRef<HTMLDivElement>(null);
   const left = annotation.position.x * scale;
   const top = annotation.position.y * scale;
+  // Clamp inside the page wrapper; re-clamp on wrapper resize (tab activation
+  // / async viewport load / zoom). translate(-50%, 12px).
+  const pos = useClampedPopupPosition(popupRef, left, top);
 
   return (
     <div
+      ref={popupRef}
       className="explain-popup"
-      style={{ left, top }}
+      style={{ left: pos.x, top: pos.y }}
       onClick={(e) => e.stopPropagation()}
       role="dialog"
       aria-label={t("explain.popupLabel")}

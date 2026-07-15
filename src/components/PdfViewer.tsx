@@ -16,6 +16,14 @@ import { AppSettings } from "../services/settings";
 import { error as logError } from "../services/logs";
 import Icon from "./Icon";
 import PdfPage, { SearchHighlight } from "./PdfPage";
+import {
+  findTopVisiblePage,
+  findPageAtY,
+  toPdfOffset,
+  computeRestoredScrollTop,
+  PageRect,
+} from "../utils/zoomAnchor";
+import { computeFitToWidthScale } from "../utils/fitToWidth";
 import "./PdfViewer.css";
 
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -236,6 +244,22 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       viewMode: initialState?.viewMode ?? "continuous",
     });
     const pendingFitCenterRef = useRef(false);
+    // Zoom scroll-anchor: captured in PDF-space before a scale change so the
+    // same document point can be restored under the viewport top (button zoom)
+    // or under the cursor (Ctrl+wheel) once the new layout settles.
+    const pendingZoomAnchorRef = useRef<{
+      page: number;
+      pdfOffset: number;
+      anchorViewportOffsetPx: number;
+    } | null>(null);
+    // Suppress scroll-driven page detection while a zoom reflow is in progress
+    // so `pageNum` does not drift to a different page before the scroll
+    // position is restored.
+    const isZoomingRef = useRef(false);
+    // Scale for which `pageViewports` currently holds entries. The zoom restore
+    // effect waits until this matches the current `scale` before reading the
+    // newly-laid-out DOM, so it never restores against stale (old-scale) sizes.
+    const [viewportsForScale, setViewportsForScale] = useState(scale);
     const pendingGotoPageRef = useRef(initialState?.pendingGotoPage);
     const pendingScrollTopRef = useRef(initialState?.scrollTop);
     // Restoration of page/scroll position must run at most once per mount.
@@ -608,17 +632,67 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     const MAX_SCALE = 5.0;
     const ZOOM_STEP_RATIO = 0.1; // 10% per wheel step
 
-    const zoomTo = useCallback((target: number) => {
-      setScale(Math.max(MIN_SCALE, Math.min(MAX_SCALE, target)));
+    // Collect page rectangles (page number + viewport-relative top/bottom) for
+    // every rendered page wrapper. Used to locate the anchor page spanning the
+    // viewport top (button zoom) or the page under the cursor (Ctrl+wheel).
+    const collectPageRects = useCallback((): PageRect[] => {
+      const container = continuousContainerRef.current;
+      if (!container) return [];
+      const containerRect = container.getBoundingClientRect();
+      const rects: PageRect[] = [];
+      pageWrapperRefs.current.forEach((wrapper, i) => {
+        if (!wrapper) return;
+        const rect = wrapper.getBoundingClientRect();
+        rects.push({
+          page: i + 1,
+          top: rect.top - containerRect.top,
+          bottom: rect.bottom - containerRect.top,
+        });
+      });
+      return rects;
     }, []);
+
+    // Capture the document point currently under the viewport top (or under the
+    // cursor) in PDF-space so it can be restored after the scale changes. Runs
+    // synchronously *before* setScale, while the old layout is still present.
+    const captureZoomAnchor = useCallback(
+      (anchorViewportOffsetPx: number) => {
+        if (viewMode !== "continuous") return;
+        const container = continuousContainerRef.current;
+        if (!container) return;
+        const rects = collectPageRects();
+        if (rects.length === 0) return;
+        // Page rects are in container-viewport-relative coords (0 = the
+        // container's visible top edge), so the viewport top is at offset 0.
+        const anchor = findTopVisiblePage(rects, 0);
+        if (!anchor) return;
+        pendingZoomAnchorRef.current = {
+          page: anchor.page,
+          pdfOffset: toPdfOffset(anchor.offsetPx, scale),
+          anchorViewportOffsetPx,
+        };
+      },
+      [viewMode, scale, collectPageRects]
+    );
+
+    const zoomTo = useCallback(
+      (target: number, anchorViewportOffsetPx = 0) => {
+        if (viewMode === "continuous" && scale !== target) {
+          captureZoomAnchor(anchorViewportOffsetPx);
+          isZoomingRef.current = true;
+        }
+        setScale(Math.max(MIN_SCALE, Math.min(MAX_SCALE, target)));
+      },
+      [viewMode, scale, captureZoomAnchor]
+    );
 
     const zoomOut = useCallback(() => {
-      setScale((s) => Math.max(MIN_SCALE, s * (1 - ZOOM_STEP_RATIO)));
-    }, []);
+      zoomTo(scale * (1 - ZOOM_STEP_RATIO));
+    }, [scale, zoomTo]);
 
     const zoomIn = useCallback(() => {
-      setScale((s) => Math.min(MAX_SCALE, s * (1 + ZOOM_STEP_RATIO)));
-    }, []);
+      zoomTo(scale * (1 + ZOOM_STEP_RATIO));
+    }, [scale, zoomTo]);
 
     // Ctrl + wheel zoom, scoped to the PDF canvas container.
     // Accumulates wheel delta and only fires one zoom step per threshold to
@@ -631,6 +705,40 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       if (!container) return;
 
       let resetTimeout: ReturnType<typeof setTimeout> | null = null;
+
+      const captureCursorAnchor = (clientY: number) => {
+        if (viewMode !== "continuous") return;
+        const containerRect = container.getBoundingClientRect();
+        const rects: PageRect[] = [];
+        pageWrapperRefs.current.forEach((wrapper, i) => {
+          if (!wrapper) return;
+          const rect = wrapper.getBoundingClientRect();
+          rects.push({
+            page: i + 1,
+            top: rect.top - containerRect.top,
+            bottom: rect.bottom - containerRect.top,
+          });
+        });
+        const anchor = findPageAtY(rects, clientY - containerRect.top);
+        if (!anchor) {
+          // Cursor not over a page (e.g. in a margin): fall back to viewport-top.
+          captureZoomAnchor(0);
+          return;
+        }
+        pendingZoomAnchorRef.current = {
+          page: anchor.page,
+          pdfOffset: toPdfOffset(anchor.offsetPx, scale),
+          anchorViewportOffsetPx: clientY - containerRect.top,
+        };
+      };
+
+      const applyStep = (direction: number) => {
+        if (direction > 0) {
+          setScale((s) => Math.max(MIN_SCALE, s * (1 - ZOOM_STEP_RATIO)));
+        } else {
+          setScale((s) => Math.min(MAX_SCALE, s * (1 + ZOOM_STEP_RATIO)));
+        }
+      };
 
       const handleWheel = (e: WheelEvent) => {
         if (!e.ctrlKey) return;
@@ -651,12 +759,14 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         const threshold = 100;
         if (Math.abs(wheelDeltaRef.current) >= threshold) {
           const steps = Math.floor(Math.abs(wheelDeltaRef.current) / threshold);
+          // Capture the cursor anchor once per zoom burst so the document
+          // point under the cursor stays under the cursor across all steps.
+          if (viewMode === "continuous") {
+            captureCursorAnchor(e.clientY);
+            isZoomingRef.current = true;
+          }
           for (let i = 0; i < steps; i++) {
-            if (direction > 0) {
-              zoomOut();
-            } else {
-              zoomIn();
-            }
+            applyStep(direction);
           }
           wheelDeltaRef.current = wheelDeltaRef.current % threshold;
         }
@@ -673,7 +783,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         container.removeEventListener("wheel", handleWheel);
         if (resetTimeout) clearTimeout(resetTimeout);
       };
-    }, [viewMode, zoomIn, zoomOut]);
+    }, [viewMode, scale, captureZoomAnchor]);
 
     const handleVisibilityChange = useCallback(
       (page: number, ratio: number) => {
@@ -698,7 +808,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // 100MB/200-page documents.
     useEffect(() => {
       if (!pdf || numPages === 0) return;
-      const scaleChanged = lastScaleRef.current !== scale;
       lastScaleRef.current = scale;
       let cancelled = false;
       const loadViewports = async () => {
@@ -727,11 +836,18 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           }
         }
         if (!cancelled) {
+          // Keep the previous entries as a placeholder instead of clearing the
+          // map on zoom. Clearing collapsed every page wrapper to a 400px
+          // placeholder during the async recompute, which made the scroll
+          // position meaningless and caused the page to jump. The new entries
+          // overwrite the stale ones; consumers that need fresh sizes gate on
+          // `viewportsForScale === scale`.
           setPageViewports((prev) => {
-            const map = scaleChanged ? new Map() : new Map(prev);
+            const map = new Map(prev);
             newEntries.forEach(([i, info]) => map.set(i, info));
             return map;
           });
+          setViewportsForScale(scale);
         }
       };
       loadViewports();
@@ -1021,7 +1137,8 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       const computeAndSyncPage = (): number => {
         const container = continuousContainerRef.current;
         if (!container) return pageNumRef.current;
-        if (cancelled || isJumpingRef.current) return pageNumRef.current;
+        if (cancelled || isJumpingRef.current || isZoomingRef.current)
+          return pageNumRef.current;
 
         const containerRect = container.getBoundingClientRect();
 
@@ -1052,7 +1169,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       };
 
       const updateVisiblePage = () => {
-        if (cancelled || isJumpingRef.current) return;
+        if (cancelled || isJumpingRef.current || isZoomingRef.current) return;
         if (debounceTimeout) clearTimeout(debounceTimeout);
         debounceTimeout = setTimeout(() => {
           requestAnimationFrame(() => {
@@ -1083,6 +1200,50 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       };
     }, [viewMode, scale, onStateChange]);
 
+    // Restore the scroll position captured by `captureZoomAnchor` once the new
+    // scale's page viewports have been committed and the page wrappers have
+    // been laid out at their new sizes. Reads the anchor page's true scroll
+    // position from live DOM (which forces a synchronous reflow) so the math
+    // works for any document size and needs no padding constants.
+    useEffect(() => {
+      if (!pendingZoomAnchorRef.current) return;
+      // Wait until pageViewports reflects the current scale; before that the
+      // page wrappers still use the old (or placeholder) sizes.
+      if (viewportsForScale !== scale) return;
+      const { page, pdfOffset, anchorViewportOffsetPx } =
+        pendingZoomAnchorRef.current;
+      const container = continuousContainerRef.current;
+      const wrapper = pageWrapperRefs.current[page - 1];
+      if (!container || !wrapper) {
+        pendingZoomAnchorRef.current = null;
+        isZoomingRef.current = false;
+        return;
+      }
+      const containerRect = container.getBoundingClientRect();
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const newPageTopScroll =
+        wrapperRect.top - containerRect.top + container.scrollTop;
+      const newScrollTop = computeRestoredScrollTop(
+        newPageTopScroll,
+        pdfOffset,
+        scale,
+        anchorViewportOffsetPx
+      );
+      container.scrollTop = Math.max(0, newScrollTop);
+      pendingZoomAnchorRef.current = null;
+      // Release the zoom lock on the next frame so the ResizeObserver-driven
+      // page sync does not race the restoration.
+      requestAnimationFrame(() => {
+        isZoomingRef.current = false;
+        onStateChangeRef.current?.({
+          pageNum: page,
+          scale,
+          viewMode,
+          scrollTop: container.scrollTop,
+        });
+      });
+    }, [pageViewports, viewportsForScale, scale, viewMode]);
+
     const goToPrevPage = () => setPageNum((p) => Math.max(1, p - 1));
     const goToNextPage = () => setPageNum((p) => Math.min(numPages, p + 1));
 
@@ -1095,15 +1256,33 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       if (!container) return;
       const currentViewport = pageViewports.get(pageNum);
       if (!currentViewport) return;
-      const originalWidth = currentViewport.width / scale;
       const padding = parseInt(
         window.getComputedStyle(container).paddingLeft || "24",
         10
       );
-      const newScale = (container.clientWidth - padding * 2) / originalWidth;
+      // Derive the true page width from the viewport entry using the scale it
+      // was actually computed for (`viewportsForScale`), NOT the live `scale`
+      // state. During a zoom transition the map still holds old-scale entries,
+      // so dividing by `scale` would yield a wrong width, an oversized fit
+      // scale, and a page that ends up wider than the container (visible as a
+      // left-shift after horizontal centering).
+      const newScale = computeFitToWidthScale({
+        viewportWidth: currentViewport.width,
+        entryScale: viewportsForScale,
+        containerClientWidth: container.clientWidth,
+        sidePaddingPx: padding,
+      });
       pendingFitCenterRef.current = true;
       zoomTo(newScale);
-    }, [pdf, numPages, viewMode, pageNum, pageViewports, scale, zoomTo]);
+    }, [
+      pdf,
+      numPages,
+      viewMode,
+      pageNum,
+      pageViewports,
+      viewportsForScale,
+      zoomTo,
+    ]);
 
     // Stable ref callback for continuous-mode page wrappers
     const pageWrapperRefCallbacks = useRef<

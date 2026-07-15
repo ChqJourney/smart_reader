@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Annotation } from "../services/annotations";
 import Icon from "./Icon";
 import MarkdownRenderer from "./MarkdownRenderer";
@@ -10,6 +10,7 @@ import {
 } from "../services/llm";
 import { AppSettings } from "../services/settings";
 import { useStreaming } from "../hooks/useStreaming";
+import { useClampedPopupPosition } from "../hooks/useClampedPopupPosition";
 import "./TranslatePopup.css";
 
 interface TranslatePopupProps {
@@ -46,27 +47,15 @@ export default function TranslatePopup({
 
   const [isDragging, setIsDragging] = useState(false);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-  const [adjustedPosition, setAdjustedPosition] = useState({ x: left, y: top });
-
-  // Keep the popup fully inside the PDF page wrapper so it never overflows
-  // the page boundary after initial placement, content changes, or dragging.
-  useLayoutEffect(() => {
-    if (!popupRef.current) return;
-    const wrapper = popupRef.current.closest(
-      ".pdf-page-wrapper"
-    ) as HTMLElement | null;
-    if (!wrapper) return;
-
-    const popupWidth = popupRef.current.offsetWidth;
-    const popupHeight = popupRef.current.offsetHeight;
-    const maxX = wrapper.offsetWidth - popupWidth;
-    const maxY = wrapper.offsetHeight - popupHeight;
-
-    setAdjustedPosition({
-      x: Math.max(0, Math.min(left, maxX)),
-      y: Math.max(0, Math.min(top, maxY)),
-    });
-  }, [left, top, localContent, isStreaming]);
+  // Clamp the popup inside the page wrapper and re-clamp on wrapper resize
+  // (tab activation / async viewport load / zoom). translate(-50%, 12px).
+  const adjustedPosition = useClampedPopupPosition(
+    popupRef,
+    left,
+    top,
+    undefined,
+    [localContent, isStreaming]
+  );
 
   const { run: runStream, abort: abortStream } = useStreaming();
 

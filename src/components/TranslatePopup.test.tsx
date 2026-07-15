@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, act } from "@testing-library/react";
 import TranslatePopup from "../components/TranslatePopup";
 import { Annotation } from "../services/annotations";
 import { DEFAULT_SETTINGS } from "../services/settings";
@@ -138,5 +138,81 @@ describe("TranslatePopup", () => {
     expect(popup.offsetTop + popup.offsetHeight).toBeLessThanOrEqual(
       wrapper.offsetHeight
     );
+  });
+
+  it("re-clamps position when the wrapper resizes to its real size (tab activation)", () => {
+    // jsdom does not fire real layout, so use a controllable ResizeObserver
+    // that lets the test trigger the callback on demand.
+    let roFire: (() => void) | null = null;
+    class ControllableRO {
+      cb: ResizeObserverCallback;
+      constructor(cb: ResizeObserverCallback) {
+        this.cb = cb;
+        roFire = () => cb([], this as unknown as ResizeObserver);
+      }
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+    vi.stubGlobal("ResizeObserver", ControllableRO);
+
+    const { container } = render(
+      <div
+        className="pdf-page-wrapper"
+        style={{ width: 300, height: 300, position: "relative" }}
+      >
+        <TranslatePopup
+          annotation={makeAnnotation({
+            position: { page: 1, x: 280, y: 290 },
+            content: "translation result",
+            isStreaming: false,
+          })}
+          scale={1}
+          settings={DEFAULT_SETTINGS}
+          onUpdate={vi.fn()}
+          onHide={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </div>
+    );
+
+    const popup = container.querySelector(".translate-popup") as HTMLElement;
+    const wrapper = popup.closest(".pdf-page-wrapper") as HTMLElement;
+
+    // Simulate the wrapper/popup having their real layout dimensions after the
+    // page viewport finishes loading asynchronously.
+    Object.defineProperty(popup, "offsetWidth", {
+      get: () => 100,
+      configurable: true,
+    });
+    Object.defineProperty(popup, "offsetHeight", {
+      get: () => 80,
+      configurable: true,
+    });
+    Object.defineProperty(wrapper, "offsetWidth", {
+      get: () => 300,
+      configurable: true,
+    });
+    Object.defineProperty(wrapper, "offsetHeight", {
+      get: () => 300,
+      configurable: true,
+    });
+
+    // Before the wrapper is measured, position is unclamped (raw left/top).
+    expect(popup.style.left).toBe("280px");
+    expect(popup.style.top).toBe("290px");
+
+    // Fire the ResizeObserver callback to simulate the wrapper reaching its
+    // real size after async viewport load.
+    act(() => {
+      roFire?.();
+    });
+
+    // transform translate(-50%, 12px):
+    //   x range [50, 250], y range [-12, 208]
+    expect(popup.style.left).toBe("250px");
+    expect(popup.style.top).toBe("208px");
+
+    vi.unstubAllGlobals();
   });
 });

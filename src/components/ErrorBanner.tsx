@@ -21,7 +21,11 @@ export default function ErrorBanner({
     error.kind
   );
   const showNewSession = error.kind === "contextLengthExceeded";
-  const showRetry = !showSettings || error.kind === "rateLimit" || error.kind === "serverError" || error.kind === "network";
+  const showRetry =
+    !showSettings ||
+    error.kind === "rateLimit" ||
+    error.kind === "serverError" ||
+    error.kind === "network";
 
   return (
     <div className="error-banner">
@@ -84,7 +88,9 @@ function getErrorMessage(
         defaultValue: error.detail,
       });
     case "streamInterrupted":
-      return t("error.streamInterrupted", { defaultValue: "响应中断，已保留部分内容" });
+      return t("error.streamInterrupted", {
+        defaultValue: "响应中断，已保留部分内容",
+      });
     case "invalidConfig":
       return t("error.invalidConfig", {
         field: error.field,

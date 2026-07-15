@@ -23,7 +23,9 @@
 .context-widget-fill {
   height: 100%;
   border-radius: 2px;
-  transition: width 0.3s ease, background-color 0.3s ease;
+  transition:
+    width 0.3s ease,
+    background-color 0.3s ease;
 }
 
 /* Default / low usage: subtle blue matching app accent */
@@ -101,8 +103,12 @@
 }
 
 @keyframes thinking-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .thinking-indicator-details {

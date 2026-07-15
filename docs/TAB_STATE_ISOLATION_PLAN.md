@@ -166,8 +166,9 @@ export interface PdfTab {
 将单一数组改为按 `fileHash` 分桶：
 
 ```ts
-const [annotationsByHash, setAnnotationsByHash] =
-  useState<Record<string, Annotation[]>>({});
+const [annotationsByHash, setAnnotationsByHash] = useState<
+  Record<string, Annotation[]>
+>({});
 ```
 
 `sessions` 和 `stashes` 维持数组，但提供按 fileHash / tabId 过滤的导出。
@@ -370,15 +371,15 @@ const pdfCacheRef = useRef<Map<string, Uint8Array>>(new Map());
 
 ## 6. 影响面评估
 
-| 范围                                                      | 影响     | 说明                                                                                      |
-| --------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------- |
-| 磁盘数据格式                                              | 无影响   | 继续按 `fileHash` 保存 `{hash}.json` 和 sessions 文件。                                   |
-| `Annotation` / `StashItem` / `InterpretationSession` 类型 | 无影响   | 不改数据结构。                                                                            |
-| `PdfViewer` API                                           | 中影响   | 增加 `tabId` prop，`initialState/onStateChange` 增加 `scrollTop/pendingGotoPage`，`cachedBytes` 替代 `cachedPdf`。 |
-| `useTabs` API                                             | 中影响   | 新增 selection/highlight/pendingGotoPage 相关方法。                                       |
+| 范围                                                      | 影响     | 说明                                                                                                                |
+| --------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| 磁盘数据格式                                              | 无影响   | 继续按 `fileHash` 保存 `{hash}.json` 和 sessions 文件。                                                             |
+| `Annotation` / `StashItem` / `InterpretationSession` 类型 | 无影响   | 不改数据结构。                                                                                                      |
+| `PdfViewer` API                                           | 中影响   | 增加 `tabId` prop，`initialState/onStateChange` 增加 `scrollTop/pendingGotoPage`，`cachedBytes` 替代 `cachedPdf`。  |
+| `useTabs` API                                             | 中影响   | 新增 selection/highlight/pendingGotoPage 相关方法。                                                                 |
 | `usePersistence` API                                      | 中影响   | 内部改为分桶，对外暴露 `visibleTabAnnotations`、`focusedTabStashes`、`focusedTabSessions`；新增 `focusedTab` prop。 |
-| UI 行为                                                   | 明显改善 | 切换 tab 不再闪现、串状态；关闭 tab 不再丢数据；分屏右侧面板焦点清晰。                    |
-| 性能                                                      | 基本中性 | `key={tab.id}` 会重新挂载 `PdfViewer`，但 PDF bytes cache 避免重复读取磁盘；大文件仍需重新 `getDocument` 解析。 |
+| UI 行为                                                   | 明显改善 | 切换 tab 不再闪现、串状态；关闭 tab 不再丢数据；分屏右侧面板焦点清晰。                                              |
+| 性能                                                      | 基本中性 | `key={tab.id}` 会重新挂载 `PdfViewer`，但 PDF bytes cache 避免重复读取磁盘；大文件仍需重新 `getDocument` 解析。     |
 
 ---
 

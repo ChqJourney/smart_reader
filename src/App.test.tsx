@@ -612,9 +612,7 @@ describe("App", () => {
     });
 
     // Close the active tab (file-b).
-    fireEvent.click(
-      screen.getByRole("button", { name: /关闭 file-b.pdf/i })
-    );
+    fireEvent.click(screen.getByRole("button", { name: /关闭 file-b.pdf/i }));
 
     // The remaining active tab (file-a) should still have its stash.
     await waitFor(() => {

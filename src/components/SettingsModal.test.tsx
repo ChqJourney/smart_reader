@@ -140,7 +140,11 @@ describe("SettingsModal", () => {
     fireEvent.click(screen.getByText("保存"));
 
     expect(onSave).toHaveBeenCalledWith({
-      llm: { baseUrl: "https://api.deepseek.com/v1", apiKey: "", model: "deepseek-v4-pro" },
+      llm: {
+        baseUrl: "https://api.deepseek.com/v1",
+        apiKey: "",
+        model: "deepseek-v4-pro",
+      },
       platformId: "deepseek",
       thinking: "auto",
       maxToolRounds: 5,

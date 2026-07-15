@@ -80,19 +80,24 @@ export default function TranslatePopup({
       { role: "user", content: prompt },
     ];
 
-    runStream("translate", messages, {
-      onChunk: (_chunk, accumulated) => {
-        accumulatedRef.current = accumulated;
-        setLocalContent(accumulated);
+    runStream(
+      "translate",
+      messages,
+      {
+        onChunk: (_chunk, accumulated) => {
+          accumulatedRef.current = accumulated;
+          setLocalContent(accumulated);
+        },
+        onError: (message) => {
+          setError(message);
+          setIsStreaming(false);
+        },
+        onDone: () => {
+          setIsStreaming(false);
+        },
       },
-      onError: (message) => {
-        setError(message);
-        setIsStreaming(false);
-      },
-      onDone: () => {
-        setIsStreaming(false);
-      },
-    }, { thinking: "disabled" as const });
+      { thinking: "disabled" as const }
+    );
 
     return () => {
       abortStream("translate");

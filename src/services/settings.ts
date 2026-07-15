@@ -76,7 +76,8 @@ function isValidSettings(value: unknown): value is Partial<AppSettings> {
 }
 
 function normalizeSettings(value: Partial<AppSettings>): AppSettings {
-  const platformId = (value.platformId ?? DEFAULT_SETTINGS.platformId) as PlatformId;
+  const platformId = (value.platformId ??
+    DEFAULT_SETTINGS.platformId) as PlatformId;
   return {
     llm: {
       baseUrl: value.llm?.baseUrl ?? DEFAULT_SETTINGS.llm.baseUrl,

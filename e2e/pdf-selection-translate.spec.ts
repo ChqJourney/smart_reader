@@ -8,8 +8,6 @@ const SAMPLE_PDF_PATH = path.join(
   "sample.pdf"
 );
 
-const MOCK_LLM_BASE_URL = "http://localhost:9876/v1";
-
 async function setupTauriMock(
   page: import("@playwright/test").Page,
   pdfPath: string = SAMPLE_PDF_PATH
@@ -17,8 +15,16 @@ async function setupTauriMock(
   const pdfBytes = Array.from(fs.readFileSync(pdfPath));
 
   await page.addInitScript(
-    ({ bytes, baseUrl }) => {
+    ({ bytes }) => {
       const arrayBuffer = new Uint8Array(bytes).buffer;
+
+      // Tauri Channel callback registry — Channel.__construct__ calls
+      // transformCallback to register its onmessage handler, and the backend
+      // later invokes that callback id to deliver stream events. In tests we
+      // drive the channel directly from the mocked invoke handler below.
+      let nextCallbackId = 1;
+      const callbacks = new Map<number, (raw: unknown) => void>();
+
       (window as any).__TAURI_INTERNALS__ = {
         invoke: async (cmd: string, args?: Record<string, unknown>) => {
           if (cmd === "plugin:dialog|open") {
@@ -36,7 +42,7 @@ async function setupTauriMock(
           if (cmd === "load_settings") {
             return {
               llm: {
-                baseUrl: baseUrl,
+                baseUrl: "http://localhost:9876/v1",
                 apiKey: "test-api-key",
                 model: "gpt-4o-mini",
               },
@@ -52,17 +58,35 @@ async function setupTauriMock(
           if (cmd === "check_dictionary") {
             return { exists: false, path: "", size: null };
           }
+          if (cmd === "chat_completions_stream") {
+            // LLM streaming is now proxied through the Rust backend via a
+            // Tauri Channel. args.onEvent is the Channel instance; calling
+            // its onmessage handler delivers stream events to the frontend.
+            const channel = args?.onEvent as {
+              onmessage: (msg: unknown) => void;
+            };
+            setTimeout(() => {
+              channel.onmessage({ type: "chunk", content: "翻译结果：" });
+              channel.onmessage({ type: "chunk", content: "第1页" });
+              channel.onmessage({ type: "done" });
+            }, 0);
+            return undefined;
+          }
           console.warn("Unhandled Tauri invoke command:", cmd, args);
           return undefined;
         },
+        transformCallback: (callback: (raw: unknown) => void) => {
+          const id = nextCallbackId++;
+          callbacks.set(id, callback);
+          return id;
+        },
+        unregisterCallback: (id: number) => {
+          callbacks.delete(id);
+        },
       };
     },
-    { bytes: pdfBytes, baseUrl: MOCK_LLM_BASE_URL }
+    { bytes: pdfBytes }
   );
-}
-
-function buildSseResponse(chunks: string[]) {
-  return chunks.join("");
 }
 
 test.describe("PDF text selection → translate", () => {
@@ -72,23 +96,6 @@ test.describe("PDF text selection → translate", () => {
   });
 
   test("selects text and creates a translation popup", async ({ page }) => {
-    await page.route(`${MOCK_LLM_BASE_URL}/chat/completions`, async (route) => {
-      const chunks = [
-        `data: ${JSON.stringify({
-          choices: [{ delta: { content: "翻译结果：" } }],
-        })}\n\n`,
-        `data: ${JSON.stringify({
-          choices: [{ delta: { content: "第1页" } }],
-        })}\n\n`,
-        "data: [DONE]\n\n",
-      ];
-      await route.fulfill({
-        status: 200,
-        headers: { "Content-Type": "text/event-stream" },
-        body: buildSseResponse(chunks),
-      });
-    });
-
     await page.getByTestId("open-pdf-btn").click();
 
     // Wait for the PDF page to render and its text layer to be ready.

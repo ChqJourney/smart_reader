@@ -1,7 +1,10 @@
 import { useTranslation } from "react-i18next";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import PdfViewer, { PdfViewerHandle, PdfViewerState } from "./components/PdfViewer";
+import PdfViewer, {
+  PdfViewerHandle,
+  PdfViewerState,
+} from "./components/PdfViewer";
 import SelectionToolbar from "./components/SelectionToolbar";
 import AiChatPanel from "./components/AiChatPanel";
 import SettingsModal from "./components/SettingsModal";
@@ -435,14 +438,11 @@ function App() {
     [layout, tabs]
   );
 
-  const handlePdfLoaded = useCallback(
-    (filePath: string, bytes: Uint8Array) => {
-      if (!pdfCacheRef.current.has(filePath)) {
-        pdfCacheRef.current.set(filePath, bytes);
-      }
-    },
-    []
-  );
+  const handlePdfLoaded = useCallback((filePath: string, bytes: Uint8Array) => {
+    if (!pdfCacheRef.current.has(filePath)) {
+      pdfCacheRef.current.set(filePath, bytes);
+    }
+  }, []);
 
   const showBoth = layout.leftVisible && layout.rightVisible;
   const showOnlyLeft = layout.leftVisible && !layout.rightVisible;

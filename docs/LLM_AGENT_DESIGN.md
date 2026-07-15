@@ -11,13 +11,13 @@
 
 本文档是方案 B 的增强设计，覆盖以下 5 个方面：
 
-| # | 能力 | 优先级 | 依赖 |
-|---|---|---|---|
-| 1 | Thinking 模式切换 | P1 | 方案 B |
-| 2 | 每轮请求 token 计数 | P0 | 方案 B |
-| 3 | Context 占用比例 widget + session 冻结 | P1 | #2 |
-| 4 | 完善的错误处理和显示 | P0 | 方案 B |
-| 5 | 内置 tools 支持（PDF 读取/查找） | P0 | 方案 B（基础底座） |
+| #   | 能力                                   | 优先级 | 依赖               |
+| --- | -------------------------------------- | ------ | ------------------ |
+| 1   | Thinking 模式切换                      | P1     | 方案 B             |
+| 2   | 每轮请求 token 计数                    | P0     | 方案 B             |
+| 3   | Context 占用比例 widget + session 冻结 | P1     | #2                 |
+| 4   | 完善的错误处理和显示                   | P0     | 方案 B             |
+| 5   | 内置 tools 支持（PDF 读取/查找）       | P0     | 方案 B（基础底座） |
 
 ---
 
@@ -25,16 +25,17 @@
 
 ### 1.1 各平台差异（实测 + 文档）
 
-| 平台 | 触发方式 | 思考内容字段 | 兼容 OpenAI 标准？ |
-|---|---|---|---|
-| DeepSeek | `thinking: {type:"enabled"\|"disabled"}` 顶层参数 + `reasoning_effort: "high"\|"max"`<br>（OpenAI SDK 需放入 `extra_body`） | `delta.reasoning_content` | ⚠️ 扩展参数，但参数格式统一 |
-| 阿里云百炼 Qwen3 | `extra_body: {enable_thinking: true}` 或 `thinking: {type:"enabled"}` | `delta.reasoning_content` | ⚠️ 部分兼容 |
-| 智谱 GLM | `thinking: {type:"enabled"}` 顶层参数 | `delta.reasoning_content` | ⚠️ 扩展参数 |
-| Kimi | `thinking: {type:"enabled"}`（裸 HTTP 即顶层） | `delta.reasoning_content` | ⚠️ 扩展参数 |
-| 火山引擎方舟 | `thinking: {type:"enabled"}` | `delta.reasoning_content` | ⚠️ 扩展参数 |
-| OpenAI o 系列 | `reasoning_effort: "low"/"medium"/"high"` | （OpenAI 不返回 reasoning_content，内部消耗） | ✅ 标准 |
+| 平台             | 触发方式                                                                                                                    | 思考内容字段                                  | 兼容 OpenAI 标准？          |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- | --------------------------- |
+| DeepSeek         | `thinking: {type:"enabled"\|"disabled"}` 顶层参数 + `reasoning_effort: "high"\|"max"`<br>（OpenAI SDK 需放入 `extra_body`） | `delta.reasoning_content`                     | ⚠️ 扩展参数，但参数格式统一 |
+| 阿里云百炼 Qwen3 | `extra_body: {enable_thinking: true}` 或 `thinking: {type:"enabled"}`                                                       | `delta.reasoning_content`                     | ⚠️ 部分兼容                 |
+| 智谱 GLM         | `thinking: {type:"enabled"}` 顶层参数                                                                                       | `delta.reasoning_content`                     | ⚠️ 扩展参数                 |
+| Kimi             | `thinking: {type:"enabled"}`（裸 HTTP 即顶层）                                                                              | `delta.reasoning_content`                     | ⚠️ 扩展参数                 |
+| 火山引擎方舟     | `thinking: {type:"enabled"}`                                                                                                | `delta.reasoning_content`                     | ⚠️ 扩展参数                 |
+| OpenAI o 系列    | `reasoning_effort: "low"/"medium"/"high"`                                                                                   | （OpenAI 不返回 reasoning_content，内部消耗） | ✅ 标准                     |
 
 **关键发现（已根据 DeepSeek 官方文档修订）**：
+
 - DeepSeek 新模型（`deepseek-v4-flash` / `deepseek-v4-pro`）**不再通过 model 名切换 thinking**，而是统一用 `thinking: {type:"enabled"|"disabled"}` 顶层参数控制，默认 enabled。
 - 老模型 `deepseek-chat` / `deepseek-reasoner` **将于 2026/07/24 弃用**，新模型 v4-flash/v4-pro 替代。
 - DeepSeek 思考强度用 `reasoning_effort: "high"|"max"`（low/medium 会映射为 high，xhigh 映射为 max）。
@@ -154,14 +155,15 @@ OpenAI 协议：流式默认不返回 token 用量，需设置 `stream_options: 
 
 #### 阈值与行为
 
-| 占用比例 | 颜色 | 提示 | 行为 |
-|---|---|---|---|
-| 0–70% | 绿色 | 无 | 正常 |
-| 70–90% | 黄色 | 「上下文即将满，建议新建会话」 | 允许继续，但警告 |
-| 90–100% | 橙色 | 「上下文已接近上限，新内容可能被截断」 | 强烈建议新建会话 |
-| >100% | 红色 | 「上下文已溢出，本次请求可能失败」 | **自动冻结 session** |
+| 占用比例 | 颜色 | 提示                                   | 行为                 |
+| -------- | ---- | -------------------------------------- | -------------------- |
+| 0–70%    | 绿色 | 无                                     | 正常                 |
+| 70–90%   | 黄色 | 「上下文即将满，建议新建会话」         | 允许继续，但警告     |
+| 90–100%  | 橙色 | 「上下文已接近上限，新内容可能被截断」 | 强烈建议新建会话     |
+| >100%    | 红色 | 「上下文已溢出，本次请求可能失败」     | **自动冻结 session** |
 
 **Session 冻结**的含义：
+
 - 不再向该 session 追加新的解读/翻译请求（按钮变灰，提示「此会话已满，请新建会话」）
 - 仍可查看历史记录、复制内容
 - 点击「新建会话」按钮创建新 session，自动继承关联的 PDF fileHash
@@ -187,9 +189,9 @@ OpenAI 协议：流式默认不返回 token 用量，需设置 `stream_options: 
   ```typescript
   interface InterpretationSession {
     // ... 现有字段
-    lastPromptTokens?: number;      // 最近一次请求的 prompt_tokens
-    lastUsage?: TokenUsage;         // 最近一次完整 usage
-    frozen?: boolean;               // 是否已冻结
+    lastPromptTokens?: number; // 最近一次请求的 prompt_tokens
+    lastUsage?: TokenUsage; // 最近一次完整 usage
+    frozen?: boolean; // 是否已冻结
     frozenReason?: "context_overflow" | "manual";
   }
   ```
@@ -223,6 +225,7 @@ enum LlmError {
 ```
 
 解析逻辑（伪代码）：
+
 - `401` → `Auth`
 - `404` 且 body 含 "model" → `ModelNotFound`
 - `429` → `RateLimit`（解析 Retry-After header）
@@ -235,18 +238,18 @@ enum LlmError {
 
 根据 `LlmError.kind` 显示不同的用户友好提示和操作引导：
 
-| 错误类型 | 用户友好提示 | 操作引导 |
-|---|---|---|
-| `network` | 「网络连接失败，请检查网络或代理设置」 | 「重试」按钮 |
-| `auth` | 「API Key 不正确或已失效」 | 「打开设置」按钮 |
-| `modelNotFound` | 「模型名错误，请从下拉框选择或检查控制台」 | 「打开设置」按钮 |
-| `rateLimit` | 「请求过于频繁，请稍后重试（X 秒后）」 | 自动倒计时 + 「重试」按钮 |
-| `contextLengthExceeded` | 「上下文超长，请清理暂存或新建会话」 | 「新建会话」按钮 |
-| `serverError` | 「服务端暂时不可用（HTTP 5xx），请稍后重试」 | 「重试」按钮 |
-| `streamInterrupted` | 「响应中断，已保留部分内容」 | 「重试」按钮（保留已有内容） |
-| `invalidConfig` | 「配置错误：{field}」 | 「打开设置」按钮 |
-| `toolError` | 「工具调用失败：{tool_name}」 | 显示具体工具错误详情 |
-| `unknown` | 「请求失败（HTTP {status}）」+ 原始错误 body | 「重试」+ 「查看详情」 |
+| 错误类型                | 用户友好提示                                 | 操作引导                     |
+| ----------------------- | -------------------------------------------- | ---------------------------- |
+| `network`               | 「网络连接失败，请检查网络或代理设置」       | 「重试」按钮                 |
+| `auth`                  | 「API Key 不正确或已失效」                   | 「打开设置」按钮             |
+| `modelNotFound`         | 「模型名错误，请从下拉框选择或检查控制台」   | 「打开设置」按钮             |
+| `rateLimit`             | 「请求过于频繁，请稍后重试（X 秒后）」       | 自动倒计时 + 「重试」按钮    |
+| `contextLengthExceeded` | 「上下文超长，请清理暂存或新建会话」         | 「新建会话」按钮             |
+| `serverError`           | 「服务端暂时不可用（HTTP 5xx），请稍后重试」 | 「重试」按钮                 |
+| `streamInterrupted`     | 「响应中断，已保留部分内容」                 | 「重试」按钮（保留已有内容） |
+| `invalidConfig`         | 「配置错误：{field}」                        | 「打开设置」按钮             |
+| `toolError`             | 「工具调用失败：{tool_name}」                | 显示具体工具错误详情         |
+| `unknown`               | 「请求失败（HTTP {status}）」+ 原始错误 body | 「重试」+ 「查看详情」       |
 
 #### UI 设计
 
@@ -264,6 +267,7 @@ enum LlmError {
 ### 5.1 设计目标
 
 让 LLM 能主动读取已打开 PDF 的内容，而不是只能看用户手动选中的片段。例如：
+
 - 用户：「这本书第 50 页讲了什么？」→ LLM 调用 `read_pdf_page(fileHash, 50)` 读取后回答
 - 用户：「'terminology' 这个词在哪些页出现？」→ LLM 调用 `search_in_pdf(fileHash, "terminology")`
 - 用户：「对比第 3 页和第 7 页的要求」→ LLM 调用两次 `read_pdf_page`
@@ -342,13 +346,13 @@ const BUILTIN_TOOLS: &[serde_json::Value] = &[
 
 ### 5.4 安全约束（关键）
 
-| 约束 | 说明 |
-|---|---|
-| **只支持已打开 tab 的 PDF** | 前端发起解读时，传入当前打开的 tab 对应的 fileHash 列表。后端只允许工具访问这些 fileHash。 |
-| **file_hash 白名单校验** | 后端维护「当前会话授权的 fileHash 列表」，工具调用时校验。防止 LLM 被 prompt injection 后读取任意文件。 |
-| **工具调用次数限制** | 单次解读最多 5 次工具调用（防死循环）。超限后后端强制结束，返回已收集内容。 |
-| **单页文本截断** | 单页文本超过 N tokens（如 8000）时截断，防止超大页吃光 context。 |
-| **工具调用过程可见** | 前端通过 `StreamEvent::ToolCall` 显示「正在读取 PDF 第 5 页...」「正在搜索 "terminology"...」状态，用户可观察。 |
+| 约束                        | 说明                                                                                                            |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **只支持已打开 tab 的 PDF** | 前端发起解读时，传入当前打开的 tab 对应的 fileHash 列表。后端只允许工具访问这些 fileHash。                      |
+| **file_hash 白名单校验**    | 后端维护「当前会话授权的 fileHash 列表」，工具调用时校验。防止 LLM 被 prompt injection 后读取任意文件。         |
+| **工具调用次数限制**        | 单次解读最多 5 次工具调用（防死循环）。超限后后端强制结束，返回已收集内容。                                     |
+| **单页文本截断**            | 单页文本超过 N tokens（如 8000）时截断，防止超大页吃光 context。                                                |
+| **工具调用过程可见**        | 前端通过 `StreamEvent::ToolCall` 显示「正在读取 PDF 第 5 页...」「正在搜索 "terminology"...」状态，用户可观察。 |
 
 ### 5.5 架构影响
 
@@ -400,6 +404,7 @@ async fn chat_completions_stream(
 pdfjs-dist 在前端渲染时已经提取了每页文本（用于选区）。需要把这些文本缓存到后端，供工具调用读取。
 
 两个方案：
+
 - **方案 A（推荐）**：前端 pdfjs 提取后，通过 `invoke('cache_pdf_text', { fileHash, pages: [{pageNum, text}] })` 同步到后端内存缓存。保证与前端选区文本一致。
 - 方案 B：后端用 pdf-extract crate 直接读 PDF。但与前端 pdfjs 文本可能不一致（排版差异），且需新增依赖。
 
@@ -407,10 +412,10 @@ pdfjs-dist 在前端渲染时已经提取了每页文本（用于选区）。需
 
 ### 5.6 与现有功能的关系
 
-| 现有功能 | 工具支持后的增强 |
-|---|---|
-| 选中文本解读 | 不变（仍走单轮，不带 tools） |
-| 自定义解读（多片段暂存） | 不变（多片段拼到 user message，不带 tools） |
+| 现有功能                     | 工具支持后的增强                                                   |
+| ---------------------------- | ------------------------------------------------------------------ |
+| 选中文本解读                 | 不变（仍走单轮，不带 tools）                                       |
+| 自定义解读（多片段暂存）     | 不变（多片段拼到 user message，不带 tools）                        |
 | 全新「智能问答」模式（新增） | 带 tools，LLM 可主动读 PDF。这是后续 Clause 索引、引用追踪的入口。 |
 
 **建议**：工具调用默认只在「智能问答」场景启用，选中文本解读/翻译/自定义解读仍走无 tools 的单轮流式（性能更好，避免误触发工具）。
@@ -458,31 +463,31 @@ struct TokenUsage {
 
 ### 7.1 后端（Rust）
 
-| 模块 | 工作量 | 依赖 |
-|---|---|---|
-| `llm_proxy.rs` 基础流式转发（方案 B 核心） | 中 | 无 |
-| thinking 参数适配（平台差异） | 小 | llm_proxy |
-| usage 解析 + StreamEvent::Usage | 小 | llm_proxy |
-| LlmError 结构化错误分类 | 中 | llm_proxy |
-| 工具调用循环 + 内置工具实现 | 大 | llm_proxy |
-| PDF 文本缓存命令（cache_pdf_text） | 小 | 无 |
-| 单元测试（mock SSE + 工具调用） | 大 | 全部 |
+| 模块                                       | 工作量 | 依赖      |
+| ------------------------------------------ | ------ | --------- |
+| `llm_proxy.rs` 基础流式转发（方案 B 核心） | 中     | 无        |
+| thinking 参数适配（平台差异）              | 小     | llm_proxy |
+| usage 解析 + StreamEvent::Usage            | 小     | llm_proxy |
+| LlmError 结构化错误分类                    | 中     | llm_proxy |
+| 工具调用循环 + 内置工具实现                | 大     | llm_proxy |
+| PDF 文本缓存命令（cache_pdf_text）         | 小     | 无        |
+| 单元测试（mock SSE + 工具调用）            | 大     | 全部      |
 
 ### 7.2 前端（React/TS）
 
-| 模块 | 工作量 | 依赖 |
-|---|---|---|
-| `streamChatCompletion` 改 invoke + Channel | 中 | 后端 llm_proxy |
-| SettingsModal 平台预设 + 思考开关 | 中 | 无 |
-| 测试连接按钮 + 错误分类显示 | 中 | 后端 LlmError |
-| Context widget 组件 | 中 | StreamEvent::Usage |
-| Session 冻结逻辑 | 小 | Context widget |
-| Thinking 状态指示器（折叠面板） | 小 | StreamEvent::ReasoningChunk |
-| 工具调用状态显示 | 中 | StreamEvent::ToolCall |
-| PDF 文本同步到后端（cache_pdf_text 调用） | 小 | 后端命令 |
-| Token 用量显示（解读卡片底部） | 小 | StreamEvent::Usage |
-| 错误 banner 组件（重试/打开设置/新建会话） | 中 | LlmError |
-| 单测调整（mock invoke + Channel） | 中 | 全部 |
+| 模块                                       | 工作量 | 依赖                        |
+| ------------------------------------------ | ------ | --------------------------- |
+| `streamChatCompletion` 改 invoke + Channel | 中     | 后端 llm_proxy              |
+| SettingsModal 平台预设 + 思考开关          | 中     | 无                          |
+| 测试连接按钮 + 错误分类显示                | 中     | 后端 LlmError               |
+| Context widget 组件                        | 中     | StreamEvent::Usage          |
+| Session 冻结逻辑                           | 小     | Context widget              |
+| Thinking 状态指示器（折叠面板）            | 小     | StreamEvent::ReasoningChunk |
+| 工具调用状态显示                           | 中     | StreamEvent::ToolCall       |
+| PDF 文本同步到后端（cache_pdf_text 调用）  | 小     | 后端命令                    |
+| Token 用量显示（解读卡片底部）             | 小     | StreamEvent::Usage          |
+| 错误 banner 组件（重试/打开设置/新建会话） | 中     | LlmError                    |
+| 单测调整（mock invoke + Channel）          | 中     | 全部                        |
 
 ### 7.3 实施顺序（修订版）
 

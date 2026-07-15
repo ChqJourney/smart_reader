@@ -40,7 +40,11 @@ export default function ThinkingIndicator({
       >
         {done ? "✓" : "🌀"}
       </span>
-      <span onClick={() => done && setExpanded(!expanded)} role="button" tabIndex={0}>
+      <span
+        onClick={() => done && setExpanded(!expanded)}
+        role="button"
+        tabIndex={0}
+      >
         {label}
         {done && (
           <span style={{ marginLeft: 4, fontSize: "0.7rem", opacity: 0.7 }}>
@@ -51,9 +55,7 @@ export default function ThinkingIndicator({
         )}
       </span>
       {expanded && done && reasoningContent && (
-        <div className="thinking-indicator-details">
-          {reasoningContent}
-        </div>
+        <div className="thinking-indicator-details">{reasoningContent}</div>
       )}
     </div>
   );

@@ -101,7 +101,9 @@ export default function SettingsModal({
   /** Per-platform API key cache (in-memory, not persisted). Keyed by platformId. */
   const apiKeysCacheRef = useRef<Record<string, string>>({});
   /** Tracks which platforms have an API key configured in keyring. */
-  const [platformsWithKey, setPlatformsWithKey] = useState<Set<string>>(new Set());
+  const [platformsWithKey, setPlatformsWithKey] = useState<Set<string>>(
+    new Set()
+  );
 
   useEffect(() => {
     setSettings(initialSettings);
@@ -322,13 +324,12 @@ export default function SettingsModal({
     }));
   };
 
-
   /** Test the LLM connection with current (saved) settings. */
   const handleTestConnection = async () => {
     // Save settings directly to backend (without closing the modal)
     try {
       await saveSettings(settings);
-    } catch (e) {
+    } catch {
       // ignore save errors — test will still use whatever is on disk
     }
     setTestState("testing");
@@ -348,9 +349,11 @@ export default function SettingsModal({
         setTestResult(formatLlmError(result.error));
       } else {
         setTestState("error");
-        setTestResult(t("settings.testConnectionUnknown", {
-          defaultValue: "连接失败，未知错误",
-        }));
+        setTestResult(
+          t("settings.testConnectionUnknown", {
+            defaultValue: "连接失败，未知错误",
+          })
+        );
       }
     } catch (err) {
       setTestState("error");
@@ -524,7 +527,8 @@ export default function SettingsModal({
                   <label className="settings-field">
                     {t("settings.model")}
                     {settings.platformId === "custom" ||
-                    PLATFORM_PRESETS[settings.platformId].models.length === 0 ? (
+                    PLATFORM_PRESETS[settings.platformId].models.length ===
+                      0 ? (
                       <input
                         type="text"
                         value={settings.llm.model}
@@ -573,7 +577,9 @@ export default function SettingsModal({
                     {t("settings.apiKey")}
                     {settings.llm.apiKey && (
                       <span className="settings-apikey-configured">
-                        {t("settings.apiKeyConfigured", { defaultValue: "已配置" })}
+                        {t("settings.apiKeyConfigured", {
+                          defaultValue: "已配置",
+                        })}
                       </span>
                     )}
                     <input

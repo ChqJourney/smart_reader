@@ -1,5 +1,9 @@
 import { useCallback, useRef } from "react";
-import { ChatMessage, streamChatCompletion, StreamOptions } from "../services/llm";
+import {
+  ChatMessage,
+  streamChatCompletion,
+  StreamOptions,
+} from "../services/llm";
 import type { LlmError, TokenUsage } from "../types/llm";
 
 export interface StreamingHandlers {
@@ -45,7 +49,10 @@ export function useStreaming() {
           signal: controller.signal,
         };
 
-        for await (const event of streamChatCompletion(messages, streamOptions)) {
+        for await (const event of streamChatCompletion(
+          messages,
+          streamOptions
+        )) {
           if (controller.signal.aborted) return;
           switch (event.type) {
             case "chunk":

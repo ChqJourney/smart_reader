@@ -183,7 +183,9 @@ function errorToMessage(error: LlmError): string {
         defaultValue: error.detail,
       });
     case "streamInterrupted":
-      return i18n.t("llm.error.streamInterrupted", { defaultValue: "流式响应中断" });
+      return i18n.t("llm.error.streamInterrupted", {
+        defaultValue: "流式响应中断",
+      });
     case "invalidConfig":
       return i18n.t("llm.error.invalidConfig", {
         field: error.field,

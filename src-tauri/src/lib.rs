@@ -768,7 +768,7 @@ fn delete_session_from_disk(base_dir: &std::path::Path, session_id: &str) -> Res
     Ok(())
 }
 
-pub fn load_settings_from_disk(base_dir: &std::path::Path) -> Result<AppSettings, String> {
+pub(crate) fn load_settings_from_disk(base_dir: &std::path::Path) -> Result<AppSettings, String> {
     let path = settings_path(base_dir);
     if !path.exists() {
         return Ok(AppSettings::default());

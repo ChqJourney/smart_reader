@@ -107,6 +107,7 @@ pub struct StreamParams {
     #[serde(default)]
     pub enable_tools: bool,
     #[serde(default)]
+    #[allow(dead_code)] // reserved for future tool-call file_hash whitelist (Phase 6)
     pub authorized_file_hashes: Vec<String>,
     pub request_id: String,
 }

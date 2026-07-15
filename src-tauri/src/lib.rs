@@ -10,6 +10,7 @@ const LOG_FILE_NAME: &str = "app";
 const MAX_LOG_FILE_SIZE: u128 = 10 * 1024 * 1024; // 10 MB
 
 mod dictionary;
+mod llm_proxy;
 mod paths;
 mod secure_storage;
 
@@ -39,6 +40,8 @@ struct AppState {
     api_key_storage: Arc<dyn secure_storage::ApiKeyStorage>,
     pdf_hash_cache: Arc<Mutex<HashMap<PathBuf, CachedHash>>>,
     dict_connection: Arc<Mutex<Option<rusqlite::Connection>>>,
+    /// Cancellation flags for in-flight LLM streaming requests, keyed by request_id.
+    cancel_tokens: llm_proxy::CancelMap,
 }
 
 impl AppState {
@@ -48,6 +51,7 @@ impl AppState {
             api_key_storage: Arc::new(secure_storage::KeyringStorage),
             pdf_hash_cache: Arc::new(Mutex::new(HashMap::new())),
             dict_connection: Arc::new(Mutex::new(None)),
+            cancel_tokens: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -199,11 +203,15 @@ pub fn run() {
             delete_session,
             load_settings,
             save_settings,
+            get_api_key,
             load_recent_files,
             save_recent_files,
             check_dictionary,
             download_dictionary,
-            lookup_word
+            lookup_word,
+            llm_proxy::chat_completions_stream,
+            llm_proxy::cancel_chat_completions,
+            llm_proxy::test_connection
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -445,6 +453,15 @@ struct InterpretationMessage {
     role: String,
     content: String,
     created_at: u64,
+    /// Reasoning/thinking content (for ThinkingIndicator). Stored as opaque JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    reasoning_content: Option<String>,
+    /// Structured error if the message failed. Stored as opaque JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    error: Option<serde_json::Value>,
+    /// Token usage for this message. Stored as opaque JSON.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    usage: Option<serde_json::Value>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -461,6 +478,14 @@ struct InterpretationSession {
     action: Option<String>,
     created_at: u64,
     updated_at: u64,
+    /// Last prompt_tokens from the most recent LLM call (for ContextWidget).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_prompt_tokens: Option<u32>,
+    /// Whether this session is frozen due to context overflow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    frozen: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    frozen_reason: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -491,6 +516,15 @@ struct LlmConfig {
 #[serde(rename_all = "camelCase")]
 struct AppSettings {
     llm: LlmConfig,
+    /// Platform preset ID (deepseek/kimi/bailian/glm/volcengine/openrouter/openai/custom)
+    #[serde(default = "default_platform_id")]
+    platform_id: String,
+    /// Thinking mode: "enabled" | "disabled" | "auto"
+    #[serde(default = "default_thinking")]
+    thinking: String,
+    /// Max tool call rounds (0 = use global default of 5)
+    #[serde(default = "default_max_tool_rounds")]
+    max_tool_rounds: u32,
     #[serde(default = "default_target_language")]
     target_language: String,
     #[serde(default)]
@@ -499,6 +533,18 @@ struct AppSettings {
     hover_translate: bool,
     #[serde(default = "default_log_level")]
     log_level: String,
+}
+
+fn default_platform_id() -> String {
+    "deepseek".to_string()
+}
+
+fn default_thinking() -> String {
+    "auto".to_string()
+}
+
+fn default_max_tool_rounds() -> u32 {
+    5
 }
 
 fn default_target_language() -> String {
@@ -513,10 +559,13 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             llm: LlmConfig {
-                base_url: "https://api.openai.com/v1".to_string(),
+                base_url: "https://api.deepseek.com/v1".to_string(),
                 api_key: "".to_string(),
-                model: "gpt-4o-mini".to_string(),
+                model: "deepseek-v4-flash".to_string(),
             },
+            platform_id: default_platform_id(),
+            thinking: default_thinking(),
+            max_tool_rounds: default_max_tool_rounds(),
             target_language: default_target_language(),
             system_prompts: SystemPrompts::default(),
             hover_translate: false,
@@ -719,7 +768,7 @@ fn delete_session_from_disk(base_dir: &std::path::Path, session_id: &str) -> Res
     Ok(())
 }
 
-fn load_settings_from_disk(base_dir: &std::path::Path) -> Result<AppSettings, String> {
+pub fn load_settings_from_disk(base_dir: &std::path::Path) -> Result<AppSettings, String> {
     let path = settings_path(base_dir);
     if !path.exists() {
         return Ok(AppSettings::default());
@@ -751,14 +800,14 @@ fn load_settings_with_storage(
     storage: &dyn secure_storage::ApiKeyStorage,
 ) -> Result<AppSettings, String> {
     let mut settings = load_settings_from_disk(base_dir)?;
-    match storage.retrieve()? {
+    match storage.retrieve(&settings.platform_id)? {
         Some(key) => {
             settings.llm.api_key = key;
         }
         None => {
             // Migrate a plaintext API key from older versions into the keyring.
             if !settings.llm.api_key.is_empty() {
-                storage.store(&settings.llm.api_key)?;
+                storage.store(&settings.platform_id, &settings.llm.api_key)?;
                 // Clear the plaintext key from disk so it is no longer exposed.
                 let mut cleared = settings.clone();
                 cleared.llm.api_key = String::new();
@@ -777,7 +826,7 @@ fn save_settings_with_storage(
     mut settings: AppSettings,
     storage: &dyn secure_storage::ApiKeyStorage,
 ) -> Result<(), String> {
-    storage.store(&settings.llm.api_key)?;
+    storage.store(&settings.platform_id, &settings.llm.api_key)?;
     settings.llm.api_key = String::new();
     save_settings_to_disk(base_dir, settings)
 }
@@ -899,6 +948,21 @@ async fn save_settings(
     .map_err(|e| format!("Task failed: {}", e))?
 }
 
+/// Retrieve the API key for a specific platform from keyring.
+/// Used by the frontend when switching platforms in settings.
+#[tauri::command]
+async fn get_api_key(
+    state: tauri::State<'_, AppState>,
+    platform_id: String,
+) -> Result<Option<String>, String> {
+    let storage = state.api_key_storage.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        storage.retrieve(&platform_id)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
 #[tauri::command]
 async fn load_recent_files(app: tauri::AppHandle) -> Result<Vec<RecentFile>, String> {
     tauri::async_runtime::spawn_blocking(move || {
@@ -1007,12 +1071,18 @@ mod tests {
                 role: "user".to_string(),
                 content: "prompt".to_string(),
                 created_at: 1,
+                reasoning_content: None,
+                error: None,
+                usage: None,
             }],
             is_streaming: false,
             streaming_message_id: None,
             action: Some("explain".to_string()),
             created_at: 1,
             updated_at: 2,
+            last_prompt_tokens: None,
+            frozen: None,
+            frozen_reason: None,
         }
     }
 
@@ -1021,8 +1091,11 @@ mod tests {
             llm: LlmConfig {
                 base_url: "https://api.example.com/v1".to_string(),
                 api_key: "sk-test".to_string(),
-                model: "gpt-4o-mini".to_string(),
+                model: "deepseek-v4-flash".to_string(),
             },
+            platform_id: "deepseek".to_string(),
+            thinking: "auto".to_string(),
+            max_tool_rounds: 5,
             target_language: "中文".to_string(),
             system_prompts: SystemPrompts::default(),
             hover_translate: false,
@@ -1389,7 +1462,7 @@ mod tests {
         let loaded = load_settings_from_disk(base.path()).unwrap();
         assert_eq!(loaded, AppSettings::default());
         assert_eq!(loaded.target_language, "中文");
-        assert_eq!(loaded.llm.model, "gpt-4o-mini");
+        assert_eq!(loaded.llm.model, "deepseek-v4-flash");
         assert!(!loaded.system_prompts.translate.is_empty());
         assert!(!loaded.system_prompts.explain.is_empty());
     }
@@ -1433,15 +1506,15 @@ mod tests {
     struct FailingStorage;
 
     impl secure_storage::ApiKeyStorage for FailingStorage {
-        fn store(&self, _api_key: &str) -> Result<(), String> {
+        fn store(&self, _platform_id: &str, _api_key: &str) -> Result<(), String> {
             Err("keyring unavailable".to_string())
         }
 
-        fn retrieve(&self) -> Result<Option<String>, String> {
+        fn retrieve(&self, _platform_id: &str) -> Result<Option<String>, String> {
             Err("keyring unavailable".to_string())
         }
 
-        fn delete(&self) -> Result<(), String> {
+        fn delete(&self, _platform_id: &str) -> Result<(), String> {
             Err("keyring unavailable".to_string())
         }
     }
@@ -1455,7 +1528,7 @@ mod tests {
 
         save_settings_with_storage(base.path(), settings.clone(), storage.as_ref()).unwrap();
 
-        assert_eq!(storage.retrieve().unwrap(), Some("sk-test".to_string()));
+        assert_eq!(storage.retrieve("deepseek").unwrap(), Some("sk-test".to_string()));
         let raw = std::fs::read_to_string(settings_path(base.path())).unwrap();
         assert!(
             raw.contains("\"apiKey\": \"\"") || raw.contains("\"apiKey\":\"\""),

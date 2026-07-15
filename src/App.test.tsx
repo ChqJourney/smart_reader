@@ -273,7 +273,7 @@ describe("App", () => {
       expect(streamChatCompletion).toHaveBeenCalled();
     });
 
-    const [, messages] = (streamChatCompletion as ReturnType<typeof vi.fn>).mock
+    const [messages] = (streamChatCompletion as ReturnType<typeof vi.fn>).mock
       .calls[0];
     const userMessage = messages.find(
       (m: { role: string; content: string }) => m.role === "user"

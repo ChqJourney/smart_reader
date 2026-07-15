@@ -1,8 +1,12 @@
 import i18n from "i18next";
-import { info, warn, redactSensitiveInfo } from "./logs";
+import { Channel, invoke } from "@tauri-apps/api/core";
+import { info, warn } from "./logs";
 import { LlmConfig, SystemPrompts } from "./settings";
+import type { ThinkingMode, TokenUsage } from "../types/llm";
+import type { LlmError } from "../types/llm";
 
 export type { LlmConfig, SystemPrompts };
+export type { ThinkingMode, TokenUsage, LlmError };
 
 export type SelectionAction = "explain" | "translate";
 
@@ -11,131 +15,203 @@ export interface ChatMessage {
   content: string;
 }
 
+/** Events yielded by streamChatCompletion. */
+export type StreamEvent =
+  | { type: "chunk"; content: string }
+  | { type: "reasoningChunk"; content: string }
+  | { type: "usage"; usage: TokenUsage }
+  | { type: "error"; message: string; error?: LlmError }
+  | { type: "done" };
+
+/** Options for streamChatCompletion. */
+export interface StreamOptions {
+  thinking?: ThinkingMode;
+  enableTools?: boolean;
+  authorizedFileHashes?: string[];
+  signal?: AbortSignal;
+}
+
+/**
+ * Stream a chat completion through the Rust backend (bypasses webview CORS,
+ * keeps API key in backend memory only).
+ *
+ * The backend reads baseUrl/model from settings and apiKey from keyring —
+ * the frontend never needs to pass the API key.
+ */
 export async function* streamChatCompletion(
-  config: LlmConfig,
   messages: ChatMessage[],
-  signal?: AbortSignal
-): AsyncGenerator<
-  { type: "chunk"; content: string } | { type: "error"; message: string },
-  void
-> {
-  if (!config.apiKey) {
-    yield {
-      type: "error",
-      message: i18n.t("llm.error.apiKeyMissing"),
-    };
+  options?: StreamOptions
+): AsyncGenerator<StreamEvent, void> {
+  if (options?.signal?.aborted) {
     return;
   }
 
-  if (signal?.aborted) {
-    return;
-  }
+  const requestId =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random()}`;
 
-  info(`llmRequestStarted: model=${config.model}`);
+  info(`llmRequestStarted: requestId=${requestId}`);
   const start = performance.now();
 
+  // Queue-based bridge from Channel callbacks to AsyncGenerator
+  const queue: StreamEvent[] = [];
+  let resolveWait: (() => void) | null = null;
+  let finished = false;
+
+  const enqueue = (event: StreamEvent) => {
+    queue.push(event);
+    if (resolveWait) {
+      resolveWait();
+      resolveWait = null;
+    }
+  };
+
+  // Set up the Tauri Channel to receive backend StreamEvents
+  const channel = new Channel<{
+    type: string;
+    content?: string;
+    usage?: TokenUsage;
+    error?: LlmError;
+  }>();
+
+  channel.onmessage = (msg) => {
+    switch (msg.type) {
+      case "chunk":
+        if (msg.content) enqueue({ type: "chunk", content: msg.content });
+        break;
+      case "reasoningChunk":
+        if (msg.content)
+          enqueue({ type: "reasoningChunk", content: msg.content });
+        break;
+      case "usage":
+        if (msg.usage) enqueue({ type: "usage", usage: msg.usage });
+        break;
+      case "error":
+        if (msg.error) {
+          enqueue({
+            type: "error",
+            message: errorToMessage(msg.error),
+            error: msg.error,
+          });
+        }
+        finished = true;
+        break;
+      case "done":
+        enqueue({ type: "done" });
+        finished = true;
+        break;
+    }
+    if (finished && resolveWait) {
+      resolveWait();
+      resolveWait = null;
+    }
+  };
+
+  // Handle abort: tell the backend to cancel
+  const onAbort = () => {
+    invoke("cancel_chat_completions", { requestId }).catch(() => {
+      // ignore cancel errors
+    });
+  };
+  options?.signal?.addEventListener("abort", onAbort);
+
   try {
-    const response = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${config.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model,
+    // Start the backend stream (non-blocking, communicates via channel)
+    const streamPromise = invoke("chat_completions_stream", {
+      params: {
         messages,
-        stream: true,
-      }),
-      signal,
+        thinking: options?.thinking ?? "auto",
+        enableTools: options?.enableTools ?? false,
+        authorizedFileHashes: options?.authorizedFileHashes ?? [],
+        requestId,
+      },
+      onEvent: channel,
     });
 
-    if (!response.ok) {
-      const errorText = redactSensitiveInfo(await response.text());
-      const duration = Math.round(performance.now() - start);
-      warn(
-        `llmRequestFailed: status=${response.status} model=${config.model} durationMs=${duration}`
-      );
-      yield {
-        type: "error",
-        message: i18n.t("llm.error.apiError", {
-          status: response.status,
-          detail: errorText,
-        }),
-      };
-      return;
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) {
-      const duration = Math.round(performance.now() - start);
-      warn(
-        `llmRequestFailed: empty response body model=${config.model} durationMs=${duration}`
-      );
-      yield { type: "error", message: i18n.t("llm.error.streamReadError") };
-      return;
-    }
-
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      if (signal?.aborted) {
-        await reader.cancel();
-        return;
-      }
-
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed === "data: [DONE]") continue;
-        if (!trimmed.startsWith("data: ")) continue;
-
-        try {
-          const data = JSON.parse(trimmed.slice(6));
-          if (data.error) {
-            const duration = Math.round(performance.now() - start);
-            warn(
-              `llmRequestFailed: apiError model=${config.model} durationMs=${duration}`
-            );
-            yield {
-              type: "error",
-              message: i18n.t("llm.error.llmApiError", {
-                detail: JSON.stringify(data.error),
-              }),
-            };
-            return;
-          }
-          const delta = data.choices?.[0]?.delta?.content;
-          if (delta) {
-            yield { type: "chunk", content: delta };
-          }
-        } catch {
-          // ignore malformed SSE data
-        }
+    // Yield events as they arrive
+    while (!finished || queue.length > 0) {
+      if (queue.length > 0) {
+        yield queue.shift()!;
+      } else if (!finished) {
+        await new Promise<void>((resolve) => {
+          resolveWait = resolve;
+        });
       }
     }
+
+    // Wait for the invoke to fully complete
+    await streamPromise;
 
     const duration = Math.round(performance.now() - start);
-    info(`llmRequestCompleted: model=${config.model} durationMs=${duration}`);
+    info(`llmRequestCompleted: requestId=${requestId} durationMs=${duration}`);
   } catch (err) {
-    if ((err as Error).name === "AbortError") {
-      return;
-    }
     const duration = Math.round(performance.now() - start);
     warn(
-      `llmRequestFailed: error=${err} model=${config.model} durationMs=${duration}`
+      `llmRequestFailed: error=${err} requestId=${requestId} durationMs=${duration}`
     );
     yield {
       type: "error",
       message: i18n.t("llm.error.requestFailed", { message: String(err) }),
     };
+  } finally {
+    options?.signal?.removeEventListener("abort", onAbort);
   }
+}
+
+/** Convert a structured LlmError to a human-readable message. */
+function errorToMessage(error: LlmError): string {
+  switch (error.kind) {
+    case "network":
+      return i18n.t("llm.error.network", { defaultValue: error.detail });
+    case "auth":
+      return i18n.t("llm.error.auth", { defaultValue: error.detail });
+    case "modelNotFound":
+      return i18n.t("llm.error.modelNotFound", {
+        model: error.model,
+        defaultValue: error.detail,
+      });
+    case "rateLimit":
+      return i18n.t("llm.error.rateLimit", { defaultValue: error.detail });
+    case "contextLengthExceeded":
+      return i18n.t("llm.error.contextLengthExceeded", {
+        defaultValue: error.detail,
+      });
+    case "serverError":
+      return i18n.t("llm.error.serverError", {
+        status: error.status,
+        defaultValue: error.detail,
+      });
+    case "streamInterrupted":
+      return i18n.t("llm.error.streamInterrupted", { defaultValue: "流式响应中断" });
+    case "invalidConfig":
+      return i18n.t("llm.error.invalidConfig", {
+        field: error.field,
+        defaultValue: error.detail,
+      });
+    case "toolError":
+      return i18n.t("llm.error.toolError", {
+        toolName: error.toolName,
+        defaultValue: error.detail,
+      });
+    case "unknown":
+      return i18n.t("llm.error.apiError", {
+        status: error.status,
+        detail: error.body,
+      });
+  }
+}
+
+/**
+ * Test the LLM connection with current settings.
+ * Returns success or a structured error.
+ */
+export async function testConnection(): Promise<{
+  success: boolean;
+  model: string;
+  error?: LlmError;
+}> {
+  return invoke("test_connection");
 }
 
 export function buildSystemPrompt(

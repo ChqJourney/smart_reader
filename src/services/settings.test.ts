@@ -4,10 +4,13 @@ import { AppSettings } from "../services/settings";
 
 const DEFAULT_SETTINGS = {
   llm: {
-    baseUrl: "https://api.openai.com/v1",
+    baseUrl: "https://api.deepseek.com/v1",
     apiKey: "",
-    model: "gpt-4o-mini",
+    model: "deepseek-v4-flash",
   },
+  platformId: "deepseek",
+  thinking: "auto",
+  maxToolRounds: 5,
   targetLanguage: "中文",
   systemPrompts: {
     translate:
@@ -129,7 +132,7 @@ describe("settings service", () => {
     const { loadSettings } = await import("../services/settings");
     const settings = await loadSettings();
     expect(settings.llm.apiKey).toBe("legacy-key");
-    expect(settings.llm.model).toBe("gpt-4o-mini");
+    expect(settings.llm.model).toBe("deepseek-v4-flash");
     expect(settings.targetLanguage).toBe("中文");
   });
 
@@ -144,6 +147,9 @@ describe("settings service", () => {
     const { saveSettings } = await import("../services/settings");
     const settings: AppSettings = {
       llm: { baseUrl: "x", apiKey: "y", model: "z" },
+      platformId: "custom",
+      thinking: "auto",
+      maxToolRounds: 5,
       targetLanguage: "中文",
       systemPrompts: {
         translate: "translate prompt",

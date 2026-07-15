@@ -5,6 +5,8 @@ import { InterpretationSession } from "../services/sessions";
 import Icon from "./Icon";
 import CustomInterpretModal from "./CustomInterpretModal";
 import MarkdownRenderer from "./MarkdownRenderer";
+import ThinkingIndicator from "./ThinkingIndicator";
+import ContextWidget from "./ContextWidget";
 import "./AiChatPanel.css";
 
 interface AiChatPanelProps {
@@ -19,6 +21,8 @@ interface AiChatPanelProps {
   onFollowUp: (sessionId: string, prompt: string) => void;
   onInterrupt?: (sessionId: string) => void;
   onToggleVisibility?: () => void;
+  /** Context window size in tokens (for ContextWidget) */
+  contextWindow?: number;
 }
 
 type Tab = "stash" | "sessions";
@@ -35,6 +39,7 @@ export default function AiChatPanel({
   onFollowUp,
   onInterrupt,
   onToggleVisibility,
+  contextWindow = 128000,
 }: AiChatPanelProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>(
@@ -177,30 +182,56 @@ export default function AiChatPanel({
               </span>
             </>
           )}
+          {activeSession.lastPromptTokens != null &&
+            activeSession.lastPromptTokens > 0 && (
+              <ContextWidget
+                currentTokens={activeSession.lastPromptTokens}
+                contextWindow={contextWindow}
+                frozen={!!activeSession.frozen}
+              />
+            )}
           <div className="ai-chat-messages" role="log" aria-live="polite">
-            {activeSession.messages.map((message) => (
-              <div
-                key={message.id}
-                className={`ai-chat-message ${message.role} ${
-                  message.role === "assistant" && !message.content
-                    ? "streaming"
-                    : ""
-                }`}
-              >
-                <div className="ai-chat-role">
-                  {message.role === "user"
-                    ? t("chat.userLabel")
-                    : t("chat.aiLabel")}
+            {activeSession.messages.map((message) => {
+              const isCurrentStreaming =
+                activeSession.isStreaming &&
+                activeSession.streamingMessageId === message.id;
+              const hasReasoning = !!message.reasoningContent;
+              const isThinking =
+                isCurrentStreaming && hasReasoning && !message.content;
+              const thinkingDone = hasReasoning && !!message.content;
+              return (
+                <div
+                  key={message.id}
+                  className={`ai-chat-message ${message.role} ${
+                    message.role === "assistant" && !message.content
+                      ? "streaming"
+                      : ""
+                  }`}
+                >
+                  <div className="ai-chat-role">
+                    {message.role === "user"
+                      ? t("chat.userLabel")
+                      : t("chat.aiLabel")}
+                  </div>
+                  <div className="ai-chat-content">
+                    {(hasReasoning || isThinking) && (
+                      <ThinkingIndicator
+                        isThinking={isThinking}
+                        reasoningContent={message.reasoningContent || ""}
+                        done={thinkingDone || !isCurrentStreaming}
+                      />
+                    )}
+                    {message.role === "assistant" && !message.content ? (
+                      !isThinking ? (
+                        <span className="streaming-cursor">▍</span>
+                      ) : null
+                    ) : (
+                      <MarkdownRenderer content={message.content} />
+                    )}
+                  </div>
                 </div>
-                <div className="ai-chat-content">
-                  {message.role === "assistant" && !message.content ? (
-                    <span className="streaming-cursor">▍</span>
-                  ) : (
-                    <MarkdownRenderer content={message.content} />
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           <div className="ai-chat-input-area">
             <FollowUpInput

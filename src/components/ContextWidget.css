@@ -1,0 +1,177 @@
+/* Context Widget - shows context window usage as a progress bar with percentage */
+
+.context-widget {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  background: #fafafa;
+  border-bottom: 1px solid #e5e5e5;
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+.context-widget-bar {
+  flex: 1;
+  height: 4px;
+  background: #e0e0e0;
+  border-radius: 2px;
+  overflow: hidden;
+  min-width: 40px;
+}
+
+.context-widget-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+/* Default / low usage: subtle blue matching app accent */
+.context-widget-green .context-widget-fill {
+  background: #0078d4;
+}
+
+.context-widget-yellow .context-widget-fill {
+  background: #f0a020;
+}
+
+.context-widget-orange .context-widget-fill {
+  background: #e8590c;
+}
+
+.context-widget-red .context-widget-fill {
+  background: #c42b1c;
+}
+
+.context-widget-label {
+  white-space: nowrap;
+  font-weight: 500;
+  color: #888;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Only color the label when usage is notable */
+.context-widget-yellow .context-widget-label {
+  color: #f0a020;
+}
+
+.context-widget-orange .context-widget-label {
+  color: #e8590c;
+}
+
+.context-widget-red .context-widget-label {
+  color: #c42b1c;
+}
+
+.context-widget-new-session {
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.65rem;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.85;
+}
+
+.context-widget-new-session:hover {
+  opacity: 1;
+}
+
+/* Thinking indicator */
+
+.thinking-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #666);
+  cursor: pointer;
+  user-select: none;
+}
+
+.thinking-indicator-icon {
+  display: inline-block;
+  animation: thinking-spin 1.2s linear infinite;
+}
+
+.thinking-indicator.done .thinking-indicator-icon {
+  animation: none;
+}
+
+@keyframes thinking-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.thinking-indicator-details {
+  margin-top: 6px;
+  padding: 8px 10px;
+  background: var(--bg-secondary, #f5f5f5);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: var(--text-secondary, #888);
+  white-space: pre-wrap;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* Error banner */
+
+.error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-top: 8px;
+  background: rgba(196, 43, 28, 0.08);
+  border: 1px solid rgba(196, 43, 28, 0.2);
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.error-banner-icon {
+  color: #c42b1c;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.error-banner-content {
+  flex: 1;
+  color: var(--text-primary, #333);
+}
+
+.error-banner-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.error-banner-action {
+  background: none;
+  border: 1px solid rgba(196, 43, 28, 0.3);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: #c42b1c;
+}
+
+.error-banner-action:hover {
+  background: rgba(196, 43, 28, 0.08);
+}
+
+/* Token usage display */
+
+.token-usage {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 0.7rem;
+  color: var(--text-tertiary, #999);
+}
+
+.token-usage-item {
+  white-space: nowrap;
+}

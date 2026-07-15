@@ -41,10 +41,13 @@ vi.mock("@tauri-apps/plugin-process", () => ({
 
 const defaultSettings = {
   llm: {
-    baseUrl: "https://api.openai.com/v1",
+    baseUrl: "https://api.deepseek.com/v1",
     apiKey: "",
-    model: "gpt-4o-mini",
+    model: "deepseek-v4-flash",
   },
+  platformId: "deepseek" as const,
+  thinking: "auto" as const,
+  maxToolRounds: 5,
   targetLanguage: "中文",
   systemPrompts: {
     translate: "翻译提示词 {targetLanguage}",
@@ -109,11 +112,11 @@ describe("SettingsModal", () => {
       onClose: vi.fn(),
       onSave: vi.fn(),
     });
-    expect(screen.getByLabelText("API Base URL")).toHaveValue(
-      "https://api.openai.com/v1"
+    expect(screen.getByLabelText(/API Base URL/i)).toHaveValue(
+      "https://api.deepseek.com/v1"
     );
     expect(screen.getByLabelText(/API Key/i)).toHaveValue("");
-    expect(screen.getByLabelText("Model")).toHaveValue("gpt-4o-mini");
+    expect(screen.getByLabelText("Model")).toHaveValue("deepseek-v4-flash");
   });
 
   it("saves updated settings", () => {
@@ -126,7 +129,7 @@ describe("SettingsModal", () => {
     });
 
     fireEvent.change(screen.getByLabelText("Model"), {
-      target: { value: "gpt-4" },
+      target: { value: "deepseek-v4-pro" },
     });
 
     switchToFeaturePage();
@@ -137,7 +140,10 @@ describe("SettingsModal", () => {
     fireEvent.click(screen.getByText("保存"));
 
     expect(onSave).toHaveBeenCalledWith({
-      llm: { baseUrl: "https://api.openai.com/v1", apiKey: "", model: "gpt-4" },
+      llm: { baseUrl: "https://api.deepseek.com/v1", apiKey: "", model: "deepseek-v4-pro" },
+      platformId: "deepseek",
+      thinking: "auto",
+      maxToolRounds: 5,
       targetLanguage: "English",
       systemPrompts: defaultSettings.systemPrompts,
       hoverTranslate: false,
@@ -195,14 +201,14 @@ describe("SettingsModal", () => {
     });
 
     fireEvent.change(screen.getByLabelText("Model"), {
-      target: { value: "custom" },
+      target: { value: "deepseek-v4-pro" },
     });
     fireEvent.click(screen.getByText("恢复全部默认"));
     fireEvent.click(screen.getByText("保存"));
 
     expect(onSave).toHaveBeenCalled();
     const saved = onSave.mock.calls[0][0];
-    expect(saved.llm.model).toBe("gpt-4o-mini");
+    expect(saved.llm.model).toBe("deepseek-v4-flash");
     expect(saved.systemPrompts.translate).toContain("翻译助手");
   });
 

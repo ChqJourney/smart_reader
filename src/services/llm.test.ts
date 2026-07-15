@@ -1,12 +1,10 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   buildCustomInterpretPrompt,
   buildSelectionPrompt,
   buildSystemPrompt,
-  streamChatCompletion,
-  LlmConfig,
-  SystemPrompts,
 } from "../services/llm";
+import type { SystemPrompts } from "../services/llm";
 
 const sampleSystemPrompts: SystemPrompts = {
   translate: "Translate to {targetLanguage}.",
@@ -89,79 +87,8 @@ describe("llm service", () => {
     });
   });
 
-  describe("streamChatCompletion", () => {
-    const baseConfig: LlmConfig = {
-      baseUrl: "https://api.example.com",
-      apiKey: "sk-test",
-      model: "gpt-4",
-    };
-
-    it("yields error when apiKey is missing", async () => {
-      const gen = streamChatCompletion({ ...baseConfig, apiKey: "" }, []);
-      const events = [];
-      for await (const event of gen) {
-        events.push(event);
-      }
-
-      expect(events).toEqual([
-        {
-          type: "error",
-          message: "API Key 未配置，请先在设置中配置 LLM API。",
-        },
-      ]);
-    });
-
-    it("yields error when response is not ok", async () => {
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-        status: 401,
-        text: async () => "Unauthorized",
-      });
-
-      const events = [];
-      for await (const event of streamChatCompletion(baseConfig, [])) {
-        events.push(event);
-      }
-
-      expect(events).toEqual([
-        { type: "error", message: "LLM API 错误 (401): Unauthorized" },
-      ]);
-    });
-
-    it("streams chunks from SSE response", async () => {
-      const encoder = new TextEncoder();
-      const chunks = [
-        'data: {"choices":[{"delta":{"content":"Hello"}}]}\n',
-        'data: {"choices":[{"delta":{"content":" world"}}]}\n',
-        "data: [DONE]\n",
-      ];
-
-      globalThis.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        body: {
-          getReader: () => {
-            let i = 0;
-            return {
-              read: async () => {
-                if (i < chunks.length) {
-                  return { done: false, value: encoder.encode(chunks[i++]) };
-                }
-                return { done: true, value: undefined };
-              },
-            };
-          },
-        },
-      });
-
-      const events = [];
-      for await (const event of streamChatCompletion(baseConfig, [])) {
-        events.push(event);
-      }
-
-      expect(events).toEqual([
-        { type: "chunk", content: "Hello" },
-        { type: "chunk", content: " world" },
-      ]);
-    });
-  });
+  // Note: streamChatCompletion now uses Tauri invoke + Channel (bypasses webview
+  // fetch entirely). Unit testing it requires mocking the Tauri runtime, which
+  // is better covered by E2E tests with the real backend. The prompt-building
+  // functions above remain unit-tested.
 });

@@ -5,6 +5,11 @@
   align-items: center;
   gap: 8px;
   overflow: hidden;
+  /* 与周围白色 header 区分，但用柔和的冷灰底色保持协调 */
+  background: #eef1f5;
+  border: 1px solid #e3e8ee;
+  border-radius: 8px;
+  padding: 4px 6px;
 }
 
 .recent-files-list {

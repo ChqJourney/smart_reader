@@ -170,8 +170,8 @@ describe("usePersistence", () => {
     let capturedSignal: AbortSignal | undefined;
 
     vi.mocked(streamChatCompletion).mockImplementation(
-      async function* (_config, _messages, signal) {
-        capturedSignal = signal;
+      async function* (_messages, options) {
+        capturedSignal = options?.signal;
         yield { type: "chunk" as const, content: "first" };
         // Simulate an ongoing stream; advancing timers is required to reach the next chunk.
         await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -414,8 +414,8 @@ describe("usePersistence", () => {
     let capturedSignal: AbortSignal | undefined;
 
     vi.mocked(streamChatCompletion).mockImplementation(
-      async function* (_config, _messages, signal) {
-        capturedSignal = signal;
+      async function* (_messages, options) {
+        capturedSignal = options?.signal;
         yield { type: "chunk" as const, content: "first" };
         await new Promise((resolve) => setTimeout(resolve, 1000));
         yield { type: "chunk" as const, content: "second" };
@@ -497,8 +497,9 @@ describe("usePersistence", () => {
     });
 
     expect(capturedSignal!.aborted).toBe(true);
-    expect(hookRef!.sessions).toHaveLength(0);
-    expect(hookRef!.annotations).toHaveLength(0);
+    // Sessions and annotations are KEPT (not removed) so they can be restored
+    // when the PDF is reopened. Only streaming is interrupted.
+    expect(hookRef!.sessions).toHaveLength(1);
   });
 
   it("exposes only visible tab annotations", () => {

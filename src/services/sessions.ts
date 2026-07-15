@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { error } from "./logs";
 import { StashItem } from "./stash";
 import { SelectionAction } from "./llm";
+import type { LlmError, TokenUsage } from "../types/llm";
 
 export type SessionAction = SelectionAction | "custom";
 
@@ -10,6 +11,12 @@ export interface InterpretationMessage {
   role: "user" | "assistant";
   content: string;
   createdAt: number;
+  /** Accumulated reasoning/thinking content (for ThinkingIndicator) */
+  reasoningContent?: string;
+  /** Structured error if the message failed (for ErrorBanner) */
+  error?: LlmError;
+  /** Token usage for this message's LLM call */
+  usage?: TokenUsage;
 }
 
 export interface InterpretationSession {
@@ -21,6 +28,11 @@ export interface InterpretationSession {
   action?: SessionAction;
   createdAt: number;
   updatedAt: number;
+  /** Last prompt_tokens from the most recent LLM call (for ContextWidget) */
+  lastPromptTokens?: number;
+  /** Whether this session is frozen due to context overflow */
+  frozen?: boolean;
+  frozenReason?: "context_overflow" | "manual";
 }
 
 const LEGACY_STORAGE_KEY = "standardread-interpretation-sessions";

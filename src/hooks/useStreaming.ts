@@ -1,19 +1,27 @@
 import { useCallback, useRef } from "react";
-import { ChatMessage, LlmConfig, streamChatCompletion } from "../services/llm";
+import { ChatMessage, streamChatCompletion, StreamOptions } from "../services/llm";
+import type { LlmError, TokenUsage } from "../types/llm";
 
 export interface StreamingHandlers {
   onChunk: (chunk: string, accumulated: string) => void;
-  onError: (message: string) => void;
+  onError: (message: string, error?: LlmError) => void;
   onDone: () => void;
+  /** Called when reasoning/thinking content arrives (optional). */
+  onReasoningChunk?: (chunk: string, accumulated: string) => void;
+  /** Called when token usage info arrives (optional). */
+  onUsage?: (usage: TokenUsage) => void;
 }
 
 /**
- * Generic SSE streaming hook. Handles abort signalling, chunk accumulation,
+ * Generic streaming hook. Handles abort signalling, chunk accumulation,
  * error propagation and completion notification so callers only need to react
  * to streaming events.
  *
  * A `key` identifies each stream, allowing multiple concurrent streams and
  * targeted aborts.
+ *
+ * Note: LLM config (baseUrl/model/apiKey) is read by the Rust backend from
+ * settings + keyring. The frontend no longer needs to pass it.
  */
 export function useStreaming() {
   const controllersRef = useRef<Map<string, AbortController>>(new Map());
@@ -21,28 +29,41 @@ export function useStreaming() {
   const run = useCallback(
     async (
       key: string,
-      llmConfig: LlmConfig,
       messages: ChatMessage[],
-      handlers: StreamingHandlers
+      handlers: StreamingHandlers,
+      options?: StreamOptions
     ) => {
       controllersRef.current.get(key)?.abort();
       const controller = new AbortController();
       controllersRef.current.set(key, controller);
 
       let accumulated = "";
+      let reasoningAccumulated = "";
       try {
-        for await (const event of streamChatCompletion(
-          llmConfig,
-          messages,
-          controller.signal
-        )) {
+        const streamOptions: StreamOptions = {
+          ...options,
+          signal: controller.signal,
+        };
+
+        for await (const event of streamChatCompletion(messages, streamOptions)) {
           if (controller.signal.aborted) return;
-          if (event.type === "chunk") {
-            accumulated += event.content;
-            handlers.onChunk(event.content, accumulated);
-          } else if (event.type === "error") {
-            handlers.onError(event.message);
-            return;
+          switch (event.type) {
+            case "chunk":
+              accumulated += event.content;
+              handlers.onChunk(event.content, accumulated);
+              break;
+            case "reasoningChunk":
+              reasoningAccumulated += event.content;
+              handlers.onReasoningChunk?.(event.content, reasoningAccumulated);
+              break;
+            case "usage":
+              handlers.onUsage?.(event.usage);
+              break;
+            case "error":
+              handlers.onError(event.message, event.error);
+              return;
+            case "done":
+              break;
           }
         }
         if (!controller.signal.aborted) {

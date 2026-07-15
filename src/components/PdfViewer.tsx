@@ -1694,7 +1694,7 @@ function OutlineNode({
         className="pdf-outline-row"
         style={{ paddingLeft: `${level * 12}px` }}
       >
-        {hasChildren && (
+        {hasChildren ? (
           <button
             className="icon-btn pdf-outline-expand"
             onClick={() => setExpanded((v) => !v)}
@@ -1705,6 +1705,8 @@ function OutlineNode({
               size={12}
             />
           </button>
+        ) : (
+          <span className="pdf-outline-expand-placeholder" aria-hidden="true" />
         )}
         <button
           className="pdf-outline-title"

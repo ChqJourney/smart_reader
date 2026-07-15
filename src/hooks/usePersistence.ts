@@ -16,7 +16,6 @@ import {
   createSession,
   deleteSession,
   deleteSessionOnDisk,
-  finishStreaming,
   loadSession,
   saveSession,
   startAssistantResponse,
@@ -365,27 +364,10 @@ export function usePersistence({
     if (sessionSaveTimeoutRef.current)
       clearTimeout(sessionSaveTimeoutRef.current);
     sessionSaveTimeoutRef.current = setTimeout(async () => {
-      // Delete any previously saved sessions that no longer exist in state.
-      const deletedSessionIds: string[] = [];
-      for (const sessionId of Object.keys(savedSessionsRef.current)) {
-        if (!sessions.some((s) => s.id === sessionId)) {
-          try {
-            await deleteSessionOnDisk(sessionId);
-            deletedSessionIds.push(sessionId);
-          } catch (err) {
-            error(`deleteSessionOnDisk failed: ${err}`);
-          }
-        }
-      }
-      if (deletedSessionIds.length > 0) {
-        info(
-          `deleteSessionOnDisk succeeded: count=${deletedSessionIds.length}`
-        );
-      }
-      deletedSessionIds.forEach((sessionId) => {
-        delete savedSessionsRef.current[sessionId];
-      });
-
+      // Save all sessions that have changed since last save.
+      // Note: we intentionally do NOT delete sessions from disk when they
+      // disappear from state — sessions removed due to tab close should
+      // persist on disk so they can be restored when the PDF is reopened.
       let savedSessionCount = 0;
       for (const session of sessions) {
         const saved = savedSessionsRef.current[session.id];
@@ -432,7 +414,6 @@ export function usePersistence({
       const sessionRef = { current: session };
 
       const currentSettings = settingsRef.current;
-      const config = currentSettings.llm;
       const messagesForApi: ChatMessage[] = [
         {
           role: "system",
@@ -447,52 +428,110 @@ export function usePersistence({
           .map((m) => ({ role: m.role, content: m.content }) as ChatMessage),
       ];
 
-      streaming.run(messageId, config, messagesForApi, {
-        onChunk: (_chunk, accumulated) => {
-          const updated = updateMessageContent(
-            sessionRef.current,
-            messageId,
-            accumulated
-          );
-          sessionRef.current = updated;
-          setSessions((prev) =>
-            prev.map((s) => (s.id === updated.id ? updated : s))
-          );
+      streaming.run(
+        messageId,
+        messagesForApi,
+        {
+          onChunk: (_chunk, accumulated) => {
+            const updated = updateMessageContent(
+              sessionRef.current,
+              messageId,
+              accumulated
+            );
+            sessionRef.current = updated;
+            setSessions((prev) =>
+              prev.map((s) => (s.id === updated.id ? updated : s))
+            );
+          },
+          onReasoningChunk: (_chunk, accumulated) => {
+            setSessions((prev) =>
+              prev.map((s) => {
+                if (s.id !== sessionRef.current.id) return s;
+                return {
+                  ...s,
+                  messages: s.messages.map((m) =>
+                    m.id === messageId
+                      ? { ...m, reasoningContent: accumulated }
+                      : m
+                  ),
+                };
+              })
+            );
+          },
+          onUsage: (usage) => {
+            setSessions((prev) =>
+              prev.map((s) => {
+                if (s.id !== sessionRef.current.id) return s;
+                const updated = {
+                  ...s,
+                  lastPromptTokens: usage.promptTokens,
+                  messages: s.messages.map((m) =>
+                    m.id === messageId ? { ...m, usage } : m
+                  ),
+                };
+                // Keep sessionRef in sync so onDone/onError don't clobber
+                // lastPromptTokens with a stale snapshot.
+                sessionRef.current = updated;
+                return updated;
+              })
+            );
+          },
+          onError: (message, error) => {
+            const currentContent =
+              sessionRef.current.messages.find((m) => m.id === messageId)
+                ?.content ?? "";
+            const accumulated = `${currentContent}\n\n${i18n.t(
+              "common.errorPrefix"
+            )} ${message}`;
+            const updated = updateMessageContent(
+              sessionRef.current,
+              messageId,
+              accumulated
+            );
+            // Store structured error on the message for ErrorBanner
+            const withError = {
+              ...updated,
+              messages: updated.messages.map((m) =>
+                m.id === messageId ? { ...m, error } : m
+              ),
+            };
+            sessionRef.current = withError;
+            setSessions((prev) =>
+              prev.map((s) => (s.id === withError.id ? withError : s))
+            );
+            // Finish streaming based on prev state to preserve lastPromptTokens
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === sessionRef.current.id
+                  ? {
+                      ...s,
+                      isStreaming: false,
+                      streamingMessageId: undefined,
+                      updatedAt: Date.now(),
+                    }
+                  : s
+              )
+            );
+          },
+          onDone: () => {
+            // Use prev-based update to preserve fields (e.g. lastPromptTokens)
+            // that onUsage set in React state but not in sessionRef.
+            setSessions((prev) =>
+              prev.map((s) =>
+                s.id === sessionRef.current.id
+                  ? {
+                      ...s,
+                      isStreaming: false,
+                      streamingMessageId: undefined,
+                      updatedAt: Date.now(),
+                    }
+                  : s
+              )
+            );
+          },
         },
-        onError: (message) => {
-          const currentContent =
-            sessionRef.current.messages.find((m) => m.id === messageId)
-              ?.content ?? "";
-          const accumulated = `${currentContent}\n\n${i18n.t(
-            "common.errorPrefix"
-          )} ${message}`;
-          const updated = updateMessageContent(
-            sessionRef.current,
-            messageId,
-            accumulated
-          );
-          sessionRef.current = updated;
-          setSessions((prev) =>
-            prev.map((s) => (s.id === updated.id ? updated : s))
-          );
-          setSessions((prev) =>
-            prev.map((s) =>
-              s.id === sessionRef.current.id
-                ? finishStreaming(sessionRef.current)
-                : s
-            )
-          );
-        },
-        onDone: () => {
-          setSessions((prev) =>
-            prev.map((s) =>
-              s.id === sessionRef.current.id
-                ? finishStreaming(sessionRef.current)
-                : s
-            )
-          );
-        },
-      });
+        { thinking: currentSettings.thinking }
+      );
     },
     [streaming]
   );
@@ -806,10 +845,13 @@ export function usePersistence({
         if (!confirmed) return;
         if (annotation.sessionId) {
           const sessionId = annotation.sessionId;
-          // Removing the session from state is enough; the debounced session effect
-          // will delete the session file and the PDF data effect will remove its
-          // references from the currently open PDFs.
           setSessions((prev) => deleteSession(prev, sessionId));
+          // Explicitly delete the session file from disk (user-initiated delete)
+          try {
+            await deleteSessionOnDisk(sessionId);
+          } catch (err) {
+            error(`deleteSessionOnDisk failed: ${err}`);
+          }
         }
       }
       setAnnotationsByHash((prev) => {
@@ -823,12 +865,11 @@ export function usePersistence({
     [annotationsByHash]
   );
 
-  // H-6: when a tab is closed, abort its streaming sessions and remove any
-  // sessions/annotations that are not shared with another open tab.
+  // When a tab is closed, abort its streaming sessions but KEEP the sessions
+  // and annotations in state (and on disk) so they can be restored when the
+  // PDF is reopened. Only streaming is interrupted; no data is deleted.
   const abortSessionsForTab = useCallback(
-    (tabId: string, fileHash: string, openTabIds: string[]) => {
-      const sessionIdsToRemove: string[] = [];
-
+    (tabId: string, _fileHash: string, _openTabIds: string[]) => {
       sessions.forEach((session) => {
         const associated = session.sources.some(
           (item) => item.source.tabId === tabId
@@ -838,30 +879,6 @@ export function usePersistence({
         if (session.streamingMessageId) {
           handleInterruptSession(session.id);
         }
-
-        const isShared = session.sources.some(
-          (item) =>
-            item.source.tabId !== tabId &&
-            openTabIds.includes(item.source.tabId)
-        );
-        if (!isShared) {
-          sessionIdsToRemove.push(session.id);
-        }
-      });
-
-      if (sessionIdsToRemove.length > 0) {
-        setSessions((prev) =>
-          prev.filter((s) => !sessionIdsToRemove.includes(s.id))
-        );
-      }
-      setAnnotationsByHash((prev) => {
-        const list = prev[fileHash] || [];
-        return {
-          ...prev,
-          [fileHash]: list.filter(
-            (a) => !sessionIdsToRemove.includes(a.sessionId ?? "")
-          ),
-        };
       });
     },
     [sessions, handleInterruptSession]

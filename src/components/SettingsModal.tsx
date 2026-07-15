@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import Icon from "./Icon";
 import {
@@ -8,8 +8,19 @@ import {
   DEFAULT_SYSTEM_PROMPTS,
   LogLevel,
   SystemPrompts,
+  ThinkingMode,
+  PlatformId,
   openDefaultAppsSettings,
+  saveSettings,
+  getApiKey,
 } from "../services/settings";
+import {
+  PLATFORM_LIST,
+  PLATFORM_PRESETS,
+  findModel,
+} from "../data/platformPresets";
+import { testConnection } from "../services/llm";
+import type { LlmError } from "../types/llm";
 import { useDictionaryStatus } from "../hooks/useDictionaryStatus";
 import { useModal } from "../hooks/useModal";
 import { error, openLogsDir } from "../services/logs";
@@ -83,6 +94,14 @@ export default function SettingsModal({
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [pendingUpdate, setPendingUpdate] = useState<UpdateInfo | null>(null);
   const dictionaryStatus = useDictionaryStatus();
+  const [testState, setTestState] = useState<
+    "idle" | "testing" | "success" | "error"
+  >("idle");
+  const [testResult, setTestResult] = useState<string | null>(null);
+  /** Per-platform API key cache (in-memory, not persisted). Keyed by platformId. */
+  const apiKeysCacheRef = useRef<Record<string, string>>({});
+  /** Tracks which platforms have an API key configured in keyring. */
+  const [platformsWithKey, setPlatformsWithKey] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setSettings(initialSettings);
@@ -94,7 +113,42 @@ export default function SettingsModal({
     setUpdateVersion(null);
     setUpdateError(null);
     setPendingUpdate(null);
+    setTestState("idle");
+    setTestResult(null);
+    // Initialize API key cache with the current platform's key
+    apiKeysCacheRef.current = {
+      [initialSettings.platformId]: initialSettings.llm.apiKey,
+    };
   }, [initialSettings, open]);
+
+  // Check which platforms have an API key configured in keyring
+  useEffect(() => {
+    if (!open) return;
+    const platformIds = PLATFORM_LIST.filter((p) => p.id !== "custom").map(
+      (p) => p.id
+    );
+    let cancelled = false;
+    Promise.all(
+      platformIds.map(async (id) => {
+        const key = await getApiKey(id);
+        return { id, hasKey: !!key };
+      })
+    ).then((results) => {
+      if (cancelled) return;
+      const set = new Set<string>();
+      // Always include the current platform if it has a key in settings
+      if (settings.llm.apiKey) {
+        set.add(settings.platformId);
+      }
+      results.forEach(({ id, hasKey }) => {
+        if (hasKey) set.add(id);
+      });
+      setPlatformsWithKey(set);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -217,7 +271,12 @@ export default function SettingsModal({
     }
   }, [pendingUpdate]);
 
-  const { contentRef } = useModal({ open, onClose });
+  // Stabilize onClose so useModal's useEffect doesn't re-run on every render
+  // (which would steal focus from <select> dropdowns).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const stableOnClose = useCallback(() => onCloseRef.current(), []);
+  const { contentRef } = useModal({ open, onClose: stableOnClose });
 
   if (!open) return null;
 
@@ -228,6 +287,104 @@ export default function SettingsModal({
 
   const updateLlm = (patch: Partial<AppSettings["llm"]>) => {
     setSettings((s) => ({ ...s, llm: { ...s.llm, ...patch } }));
+  };
+
+  /** When platform changes, auto-fill baseUrl/model and load that platform's API key. */
+  const handlePlatformChange = async (platformId: PlatformId) => {
+    // Cache the current platform's API key before switching
+    apiKeysCacheRef.current[settings.platformId] = settings.llm.apiKey;
+
+    const preset = PLATFORM_PRESETS[platformId];
+    // Try in-memory cache first, then fall back to keyring
+    let cachedKey = apiKeysCacheRef.current[platformId];
+    if (cachedKey === undefined) {
+      cachedKey = (await getApiKey(platformId)) ?? "";
+      apiKeysCacheRef.current[platformId] = cachedKey;
+    }
+
+    if (platformId === "custom") {
+      setSettings((s) => ({
+        ...s,
+        platformId,
+        llm: { ...s.llm, apiKey: cachedKey ?? "" },
+      }));
+      return;
+    }
+    setSettings((s) => ({
+      ...s,
+      platformId,
+      llm: {
+        ...s.llm,
+        baseUrl: preset.baseUrl,
+        model: preset.defaultModelId,
+        apiKey: cachedKey ?? "",
+      },
+    }));
+  };
+
+
+  /** Test the LLM connection with current (saved) settings. */
+  const handleTestConnection = async () => {
+    // Save settings directly to backend (without closing the modal)
+    try {
+      await saveSettings(settings);
+    } catch (e) {
+      // ignore save errors — test will still use whatever is on disk
+    }
+    setTestState("testing");
+    setTestResult(null);
+    try {
+      const result = await testConnection();
+      if (result.success) {
+        setTestState("success");
+        setTestResult(
+          t("settings.testConnectionSuccess", {
+            model: result.model,
+            defaultValue: `连接成功，模型：${result.model}`,
+          })
+        );
+      } else if (result.error) {
+        setTestState("error");
+        setTestResult(formatLlmError(result.error));
+      } else {
+        setTestState("error");
+        setTestResult(t("settings.testConnectionUnknown", {
+          defaultValue: "连接失败，未知错误",
+        }));
+      }
+    } catch (err) {
+      setTestState("error");
+      setTestResult(String(err));
+    }
+  };
+
+  const formatLlmError = (err: LlmError): string => {
+    switch (err.kind) {
+      case "network":
+        return t("settings.errorNetwork", { defaultValue: err.detail });
+      case "auth":
+        return t("settings.errorAuth", { defaultValue: err.detail });
+      case "modelNotFound":
+        return t("settings.errorModelNotFound", {
+          model: err.model,
+          defaultValue: err.detail,
+        });
+      case "rateLimit":
+        return t("settings.errorRateLimit", { defaultValue: err.detail });
+      case "contextLengthExceeded":
+        return t("settings.errorContextLength", { defaultValue: err.detail });
+      case "serverError":
+        return t("settings.errorServer", {
+          status: err.status,
+          defaultValue: err.detail,
+        });
+      default:
+        return "detail" in err
+          ? (err as { detail: string }).detail
+          : "body" in err
+            ? (err as { body: string }).body
+            : JSON.stringify(err);
+    }
   };
 
   const updateSystemPrompt = (key: keyof SystemPrompts, value: string) => {
@@ -340,34 +497,206 @@ export default function SettingsModal({
                   <div className="settings-section-hint">
                     {t("settings.llmApiHint")}
                   </div>
-                  <div className="settings-form-row">
-                    <label className="settings-field">
-                      {t("settings.apiBaseUrl")}
-                      <input
-                        type="text"
-                        value={settings.llm.baseUrl}
-                        onChange={(e) => updateLlm({ baseUrl: e.target.value })}
-                        placeholder="https://api.openai.com/v1"
-                      />
-                    </label>
-                    <label className="settings-field">
-                      {t("settings.model")}
+
+                  {/* Platform selector */}
+                  <label className="settings-field">
+                    {t("settings.platform", { defaultValue: "平台" })}
+                    <select
+                      value={settings.platformId}
+                      onChange={(e) =>
+                        handlePlatformChange(e.target.value as PlatformId)
+                      }
+                    >
+                      {PLATFORM_LIST.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.label}
+                          {platformsWithKey.has(p.id)
+                            ? t("settings.apiKeyConfigured", {
+                                defaultValue: "（已配置）",
+                              })
+                            : ""}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {/* Model dropdown (from platform preset) or free text (custom) */}
+                  <label className="settings-field">
+                    {t("settings.model")}
+                    {settings.platformId === "custom" ||
+                    PLATFORM_PRESETS[settings.platformId].models.length === 0 ? (
                       <input
                         type="text"
                         value={settings.llm.model}
                         onChange={(e) => updateLlm({ model: e.target.value })}
-                        placeholder="gpt-4o-mini"
+                        placeholder="model-name"
                       />
-                    </label>
-                  </div>
+                    ) : (
+                      <select
+                        value={settings.llm.model}
+                        onChange={(e) => updateLlm({ model: e.target.value })}
+                      >
+                        {PLATFORM_PRESETS[settings.platformId].models.map(
+                          (m) => (
+                            <option key={m.id} value={m.id}>
+                              {m.label}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    )}
+                  </label>
+
+                  {/* Base URL (read-only for known platforms, editable for custom) */}
+                  <label className="settings-field">
+                    {t("settings.apiBaseUrl")}
+                    {settings.platformId === "custom" ? (
+                      <input
+                        type="text"
+                        value={settings.llm.baseUrl}
+                        onChange={(e) => updateLlm({ baseUrl: e.target.value })}
+                        placeholder="https://api.example.com/v1"
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={settings.llm.baseUrl}
+                        onChange={(e) => updateLlm({ baseUrl: e.target.value })}
+                        readOnly
+                        className="settings-readonly-input"
+                      />
+                    )}
+                  </label>
+
+                  {/* API Key */}
                   <label className="settings-field">
                     {t("settings.apiKey")}
+                    {settings.llm.apiKey && (
+                      <span className="settings-apikey-configured">
+                        {t("settings.apiKeyConfigured", { defaultValue: "已配置" })}
+                      </span>
+                    )}
                     <input
                       type="password"
                       value={settings.llm.apiKey}
                       onChange={(e) => updateLlm({ apiKey: e.target.value })}
                       placeholder="sk-..."
                     />
+                    {PLATFORM_PRESETS[settings.platformId].apiKeyHelpUrl && (
+                      <a
+                        href={
+                          PLATFORM_PRESETS[settings.platformId].apiKeyHelpUrl
+                        }
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="settings-help-link"
+                      >
+                        {t("settings.howToGetApiKey", {
+                          defaultValue: "如何获取 API Key?",
+                        })}
+                      </a>
+                    )}
+                    {PLATFORM_PRESETS[settings.platformId].apiKeyHint && (
+                      <p className="settings-field-hint">
+                        {PLATFORM_PRESETS[settings.platformId].apiKeyHint}
+                      </p>
+                    )}
+                  </label>
+
+                  {/* Test connection button */}
+                  <div className="settings-form-row">
+                    <button
+                      type="button"
+                      className="icon-btn primary"
+                      onClick={handleTestConnection}
+                      disabled={testState === "testing"}
+                    >
+                      {testState === "testing"
+                        ? t("settings.testing", { defaultValue: "测试中..." })
+                        : t("settings.testConnection", {
+                            defaultValue: "测试连接",
+                          })}
+                    </button>
+                    {testState === "success" && (
+                      <span className="settings-status-ok">{testResult}</span>
+                    )}
+                    {testState === "error" && (
+                      <span className="settings-status-error">
+                        {testResult}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Thinking mode toggle */}
+                  {(() => {
+                    const model = findModel(
+                      settings.platformId,
+                      settings.llm.model
+                    );
+                    const supportsThinking = model?.supportsThinking ?? false;
+                    if (!supportsThinking && settings.platformId !== "custom") {
+                      return null;
+                    }
+                    return (
+                      <label className="settings-field">
+                        {t("settings.thinkingMode", {
+                          defaultValue: "思考模式",
+                        })}
+                        <select
+                          value={settings.thinking}
+                          onChange={(e) =>
+                            setSettings((s) => ({
+                              ...s,
+                              thinking: e.target.value as ThinkingMode,
+                            }))
+                          }
+                        >
+                          <option value="auto">
+                            {t("settings.thinkingAuto", {
+                              defaultValue: "自动（模型默认）",
+                            })}
+                          </option>
+                          <option value="enabled">
+                            {t("settings.thinkingEnabled", {
+                              defaultValue: "开启（推理更深入，更慢）",
+                            })}
+                          </option>
+                          <option value="disabled">
+                            {t("settings.thinkingDisabled", {
+                              defaultValue: "关闭（快速响应）",
+                            })}
+                          </option>
+                        </select>
+                      </label>
+                    );
+                  })()}
+
+                  {/* Max tool rounds */}
+                  <label className="settings-field">
+                    {t("settings.maxToolRounds", {
+                      defaultValue: "最大工具调用次数",
+                    })}
+                    <input
+                      type="number"
+                      min={0}
+                      max={20}
+                      value={settings.maxToolRounds}
+                      onChange={(e) =>
+                        setSettings((s) => ({
+                          ...s,
+                          maxToolRounds: Math.max(
+                            0,
+                            Math.min(20, parseInt(e.target.value) || 0)
+                          ),
+                        }))
+                      }
+                    />
+                    <p className="settings-field-hint">
+                      {t("settings.maxToolRoundsHint", {
+                        defaultValue:
+                          "0 表示使用默认值 5。AI 读取 PDF 内容时的最大调用轮次。",
+                      })}
+                    </p>
                   </label>
                 </section>
               )}

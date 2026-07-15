@@ -23,6 +23,7 @@ import {
   loadSettings,
   saveSettings,
 } from "./services/settings";
+import { getContextWindow } from "./data/platformPresets";
 import { useDictionaryStatus } from "./hooks/useDictionaryStatus";
 import { checkForUpdate } from "./services/updater";
 import { error } from "./services/logs";
@@ -118,6 +119,7 @@ function App() {
   );
   const pdfViewerRef = useRef<PdfViewerHandle>(null);
   const secondaryPdfViewerRef = useRef<PdfViewerHandle>(null);
+  const tabBarRef = useRef<HTMLDivElement>(null);
 
   const [splitPct, setSplitPct] = useState(50);
   const primaryPanelRef = useRef<HTMLDivElement>(null);
@@ -235,6 +237,15 @@ function App() {
     },
     [tabs, splitView]
   );
+
+  // 把 tab 栏上的纵向滚轮转换为横向滚动，方便用鼠标滚轮浏览溢出的 tab。
+  const handleTabBarWheel = useCallback((e: React.WheelEvent) => {
+    const el = tabBarRef.current;
+    if (!el) return;
+    if (e.deltaY !== 0) {
+      el.scrollLeft += e.deltaY;
+    }
+  }, []);
 
   // Keep stable refs to the dynamically changing tab/recent-file callbacks so
   // the system "open-pdf" listener is registered only once. This prevents
@@ -491,7 +502,7 @@ function App() {
       </header>
 
       {tabs.tabs.length > 0 && (
-        <div className="tab-bar">
+        <div className="tab-bar" ref={tabBarRef} onWheel={handleTabBarWheel}>
           {tabs.tabs.map((tab) => (
             <div
               key={tab.id}
@@ -641,6 +652,10 @@ function App() {
                     onFollowUp={persistence.handleFollowUp}
                     onInterrupt={persistence.handleInterruptSession}
                     onToggleVisibility={layout.toggleRight}
+                    contextWindow={getContextWindow(
+                      settings.platformId,
+                      settings.llm.model
+                    )}
                   />
                 </div>
               </>

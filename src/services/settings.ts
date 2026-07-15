@@ -14,8 +14,26 @@ export interface SystemPrompts {
 
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
 
+export type ThinkingMode = "enabled" | "disabled" | "auto";
+
+export type PlatformId =
+  | "deepseek"
+  | "kimi"
+  | "bailian"
+  | "glm"
+  | "volcengine"
+  | "openrouter"
+  | "openai"
+  | "custom";
+
 export interface AppSettings {
   llm: LlmConfig;
+  /** Platform preset ID for model dropdown population */
+  platformId: PlatformId;
+  /** Thinking mode preference */
+  thinking: ThinkingMode;
+  /** Max tool call rounds (0 = use default 5) */
+  maxToolRounds: number;
   targetLanguage: string;
   systemPrompts: SystemPrompts;
   hoverTranslate: boolean;
@@ -33,10 +51,13 @@ const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
 
 const DEFAULT_SETTINGS: AppSettings = {
   llm: {
-    baseUrl: "https://api.openai.com/v1",
+    baseUrl: "https://api.deepseek.com/v1",
     apiKey: "",
-    model: "gpt-4o-mini",
+    model: "deepseek-v4-flash",
   },
+  platformId: "deepseek",
+  thinking: "auto",
+  maxToolRounds: 5,
   targetLanguage: "中文",
   systemPrompts: DEFAULT_SYSTEM_PROMPTS,
   hoverTranslate: false,
@@ -55,12 +76,16 @@ function isValidSettings(value: unknown): value is Partial<AppSettings> {
 }
 
 function normalizeSettings(value: Partial<AppSettings>): AppSettings {
+  const platformId = (value.platformId ?? DEFAULT_SETTINGS.platformId) as PlatformId;
   return {
     llm: {
       baseUrl: value.llm?.baseUrl ?? DEFAULT_SETTINGS.llm.baseUrl,
       apiKey: value.llm?.apiKey ?? DEFAULT_SETTINGS.llm.apiKey,
       model: value.llm?.model ?? DEFAULT_SETTINGS.llm.model,
     },
+    platformId,
+    thinking: (value.thinking ?? DEFAULT_SETTINGS.thinking) as ThinkingMode,
+    maxToolRounds: value.maxToolRounds ?? DEFAULT_SETTINGS.maxToolRounds,
     targetLanguage: value.targetLanguage ?? DEFAULT_SETTINGS.targetLanguage,
     systemPrompts: {
       translate:
@@ -126,6 +151,19 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
     await invoke("save_settings", { settings });
   } catch (err) {
     error(`Failed to save settings: ${err}`);
+  }
+}
+
+/**
+ * Retrieve the API key for a specific platform from the system keyring.
+ * Used when switching platforms in settings to show the correct key.
+ */
+export async function getApiKey(platformId: string): Promise<string | null> {
+  try {
+    return await invoke<string | null>("get_api_key", { platformId });
+  } catch (err) {
+    error(`Failed to get API key for ${platformId}: ${err}`);
+    return null;
   }
 }
 

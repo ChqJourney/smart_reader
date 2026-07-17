@@ -303,11 +303,32 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
+.stash-item.selected {
+  border-color: #0078d4;
+  background: #f5f9ff;
+}
+
 .stash-item-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 6px;
+}
+
+.stash-item-header-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.stash-item-checkbox {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #0078d4;
+  cursor: pointer;
 }
 
 .stash-item-source {
@@ -326,6 +347,11 @@
 
 .stash-item-text:hover {
   color: #0078d4;
+}
+
+/* 选择模式下点击文本是切换选中而非跳转，hover 不高亮 */
+.stash-item.selecting .stash-item-text:hover {
+  color: inherit;
 }
 
 .stash-actions {

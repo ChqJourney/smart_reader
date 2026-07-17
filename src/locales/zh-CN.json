@@ -56,7 +56,10 @@
     "emptyHint": "暂无暂存片段，在 PDF 中选中内容后点击「加入暂存」。",
     "clear": "清空暂存",
     "expand": "展开",
-    "collapse": "收起"
+    "collapse": "收起",
+    "select": "选择",
+    "done": "完成",
+    "selectItem": "选择该片段"
   },
   "session": {
     "tabLabel": "解读记录 ({{count}})",
@@ -67,6 +70,7 @@
   },
   "customInterpret": {
     "title": "自定义解读",
+    "titleWithCount": "自定义解读 ({{count}})",
     "hint": "基于 {{count}} 个选中片段进行解读",
     "placeholder": "输入你的解读要求..."
   },

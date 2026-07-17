@@ -179,11 +179,12 @@ describe("AiChatPanel", () => {
     expect(screen.getByPlaceholderText(/输入你的解读要求/)).toBeInTheDocument();
   });
 
-  it("calls onCustomInterpret when modal submitted", () => {
+  it("calls onCustomInterpret with all stashes when not in selection mode", () => {
     const onCustomInterpret = vi.fn();
+    const stashes = [makeStash("stash-1", "text")];
 
     renderPanel({
-      stashes: [makeStash("stash-1", "text")],
+      stashes,
       onCustomInterpret,
     });
 
@@ -193,7 +194,83 @@ describe("AiChatPanel", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /发送/i }));
 
-    expect(onCustomInterpret).toHaveBeenCalledWith("请分析关系");
+    expect(onCustomInterpret).toHaveBeenCalledWith("请分析关系", stashes);
+  });
+
+  it("sends only selected stashes in selection mode", () => {
+    const onCustomInterpret = vi.fn();
+    const stashes = [
+      makeStash("stash-1", "first excerpt"),
+      makeStash("stash-2", "second excerpt"),
+    ];
+
+    renderPanel({ stashes, onCustomInterpret });
+
+    fireEvent.click(screen.getByRole("button", { name: "选择" }));
+    fireEvent.click(screen.getByText("first excerpt"));
+
+    fireEvent.click(screen.getByRole("button", { name: "自定义解读 (1)" }));
+    expect(screen.getByText(/基于 1 个选中片段/)).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/输入你的解读要求/), {
+      target: { value: "请分析关系" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /发送/i }));
+
+    expect(onCustomInterpret).toHaveBeenCalledWith("请分析关系", [stashes[0]]);
+  });
+
+  it("disables custom interpret button when selection mode has nothing selected", () => {
+    renderPanel({ stashes: [makeStash("stash-1", "text")] });
+
+    fireEvent.click(screen.getByRole("button", { name: "选择" }));
+
+    expect(
+      screen.getByRole("button", { name: "自定义解读 (0)" })
+    ).toBeDisabled();
+  });
+
+  it("toggles stash selection via checkbox", () => {
+    renderPanel({ stashes: [makeStash("stash-1", "text")] });
+
+    fireEvent.click(screen.getByRole("button", { name: "选择" }));
+    const checkbox = screen.getByRole("checkbox", { name: "选择该片段" });
+    expect(checkbox).not.toBeChecked();
+
+    fireEvent.click(checkbox);
+    expect(checkbox).toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "自定义解读 (1)" })
+    ).toBeEnabled();
+
+    fireEvent.click(checkbox);
+    expect(checkbox).not.toBeChecked();
+    expect(
+      screen.getByRole("button", { name: "自定义解读 (0)" })
+    ).toBeDisabled();
+  });
+
+  it("exits selection mode and restores select-all behavior", () => {
+    const onCustomInterpret = vi.fn();
+    const stashes = [
+      makeStash("stash-1", "first excerpt"),
+      makeStash("stash-2", "second excerpt"),
+    ];
+
+    renderPanel({ stashes, onCustomInterpret });
+
+    fireEvent.click(screen.getByRole("button", { name: "选择" }));
+    fireEvent.click(screen.getByText("first excerpt"));
+    fireEvent.click(screen.getByRole("button", { name: "完成" }));
+
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "自定义解读" }));
+    fireEvent.change(screen.getByPlaceholderText(/输入你的解读要求/), {
+      target: { value: "请分析" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /发送/i }));
+
+    expect(onCustomInterpret).toHaveBeenCalledWith("请分析", stashes);
   });
 
   it("renders sessions in interpretation tab", () => {

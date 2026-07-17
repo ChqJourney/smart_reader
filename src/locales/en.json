@@ -56,7 +56,10 @@
     "emptyHint": "No stashed snippets yet. Select content in the PDF and click Add to Stash.",
     "clear": "Clear Stash",
     "expand": "Expand",
-    "collapse": "Collapse"
+    "collapse": "Collapse",
+    "select": "Select",
+    "done": "Done",
+    "selectItem": "Select this snippet"
   },
   "session": {
     "tabLabel": "Interpretations ({{count}})",
@@ -67,6 +70,7 @@
   },
   "customInterpret": {
     "title": "Custom Interpret",
+    "titleWithCount": "Custom Interpret ({{count}})",
     "hint": "Interpret based on {{count}} selected snippets",
     "placeholder": "Enter your interpretation request..."
   },

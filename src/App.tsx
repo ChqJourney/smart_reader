@@ -665,11 +665,8 @@ function App() {
                     onRemoveStash={persistence.handleRemoveStash}
                     onUpdateStash={persistence.handleUpdateStash}
                     onClearStashes={persistence.handleClearStashes}
-                    onCustomInterpret={(prompt) =>
-                      persistence.handleCustomInterpret(
-                        prompt,
-                        persistence.focusedTabStashes
-                      )
+                    onCustomInterpret={(prompt, selectedStashes) =>
+                      persistence.handleCustomInterpret(prompt, selectedStashes)
                     }
                     onGotoStash={handleGotoStash}
                     onGotoSession={handleGotoSession}
@@ -759,11 +756,8 @@ function App() {
                   onRemoveStash={persistence.handleRemoveStash}
                   onUpdateStash={persistence.handleUpdateStash}
                   onClearStashes={persistence.handleClearStashes}
-                  onCustomInterpret={(prompt) =>
-                    persistence.handleCustomInterpret(
-                      prompt,
-                      persistence.focusedTabStashes
-                    )
+                  onCustomInterpret={(prompt, selectedStashes) =>
+                    persistence.handleCustomInterpret(prompt, selectedStashes)
                   }
                   onGotoStash={handleGotoStash}
                   onGotoSession={handleGotoSession}
@@ -804,11 +798,8 @@ function App() {
                   onRemoveStash={persistence.handleRemoveStash}
                   onUpdateStash={persistence.handleUpdateStash}
                   onClearStashes={persistence.handleClearStashes}
-                  onCustomInterpret={(prompt) =>
-                    persistence.handleCustomInterpret(
-                      prompt,
-                      persistence.focusedTabStashes
-                    )
+                  onCustomInterpret={(prompt, selectedStashes) =>
+                    persistence.handleCustomInterpret(prompt, selectedStashes)
                   }
                   onGotoStash={handleGotoStash}
                   onGotoSession={handleGotoSession}

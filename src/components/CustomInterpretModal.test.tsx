@@ -66,6 +66,36 @@ describe("CustomInterpretModal", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("does not close when clicking the overlay", () => {
+    const onClose = vi.fn();
+    const { container } = render(
+      <CustomInterpretModal
+        stashCount={1}
+        onSubmit={vi.fn()}
+        onClose={onClose}
+      />
+    );
+
+    fireEvent.click(container.querySelector(".modal-overlay")!);
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("does not close on Escape key", () => {
+    const onClose = vi.fn();
+    render(
+      <CustomInterpretModal
+        stashCount={1}
+        onSubmit={vi.fn()}
+        onClose={onClose}
+      />
+    );
+
+    fireEvent.keyDown(document, { key: "Escape" });
+
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it("submits on Enter key", () => {
     const onSubmit = vi.fn();
     render(

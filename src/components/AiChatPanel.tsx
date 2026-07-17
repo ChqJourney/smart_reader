@@ -16,7 +16,8 @@ interface AiChatPanelProps {
   onRemoveStash: (id: string) => void;
   onUpdateStash?: (id: string, text: string) => void;
   onClearStashes: () => void;
-  onCustomInterpret: (prompt: string) => void;
+  /** 自定义解读：stashes 为实际参与解读的片段（选择模式下为选中子集，否则为全部） */
+  onCustomInterpret: (prompt: string, stashes: StashItem[]) => void;
   onGotoStash?: (stash: StashItem) => void;
   onGotoSession?: (session: InterpretationSession) => void;
   onFollowUp: (sessionId: string, prompt: string) => void;
@@ -56,6 +57,11 @@ export default function AiChatPanel({
   const [editingStashId, setEditingStashId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
   const [showModal, setShowModal] = useState(false);
+  // 暂存选择模式：进入后点击片段勾选/取消，未进入时自定义解读默认全选
+  const [selectingStashes, setSelectingStashes] = useState(false);
+  const [selectedStashIds, setSelectedStashIds] = useState<Set<string>>(
+    new Set()
+  );
 
   const activeSession = useMemo(
     () => sessions.find((s) => s.id === activeSessionId) ?? null,
@@ -94,6 +100,24 @@ export default function AiChatPanel({
     setActiveTab(stashes.length > 0 ? "stash" : "sessions");
   }, [stashes.length]);
 
+  // stash 被删除或清空时同步剔除失效的选中项；stash 清空时退出选择模式
+  useEffect(() => {
+    setSelectedStashIds((prev) => {
+      if (prev.size === 0) return prev;
+      const validIds = new Set(stashes.map((s) => s.id));
+      const next = new Set([...prev].filter((id) => validIds.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+    if (stashes.length === 0) setSelectingStashes(false);
+  }, [stashes]);
+
+  const selectedStashes = useMemo(
+    () => stashes.filter((s) => selectedStashIds.has(s.id)),
+    [stashes, selectedStashIds]
+  );
+  // 未进入选择模式时，自定义解读默认全选
+  const interpretTargets = selectingStashes ? selectedStashes : stashes;
+
   const enterSessionChatbox = (session: InterpretationSession) => {
     setActiveSessionId(session.id);
   };
@@ -114,6 +138,21 @@ export default function AiChatPanel({
   const truncate = (text: string, max: number) =>
     text.length > max ? text.slice(0, max) + "…" : text;
   const STASH_TRUNCATE_LEN = 120;
+
+  const toggleSelectingStashes = () => {
+    // 退出选择模式时清空选中项
+    if (selectingStashes) setSelectedStashIds(new Set());
+    setSelectingStashes(!selectingStashes);
+  };
+
+  const toggleStashSelected = (id: string) => {
+    setSelectedStashIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
 
   const toggleExpandStash = (id: string) => {
     setExpandedStashIds((prev) => {
@@ -286,20 +325,32 @@ export default function AiChatPanel({
               {stashes.map((stash) => {
                 const isExpanded = expandedStashIds.has(stash.id);
                 const isEditing = editingStashId === stash.id;
+                const isSelected = selectedStashIds.has(stash.id);
                 const needsTruncate = stash.text.length > STASH_TRUNCATE_LEN;
                 return (
                   <div
                     key={stash.id}
-                    className="stash-item"
+                    className={`stash-item${selectingStashes ? " selecting" : ""}${isSelected ? " selected" : ""}`}
                     data-stash-id={stash.id}
                   >
                     <div className="stash-item-header">
-                      <span className="stash-item-source">
-                        {t("stash.source", {
-                          fileName: stash.source.fileName,
-                          page: stash.source.page,
-                        })}
-                      </span>
+                      <div className="stash-item-header-main">
+                        {selectingStashes && (
+                          <input
+                            type="checkbox"
+                            className="stash-item-checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleStashSelected(stash.id)}
+                            aria-label={t("stash.selectItem")}
+                          />
+                        )}
+                        <span className="stash-item-source">
+                          {t("stash.source", {
+                            fileName: stash.source.fileName,
+                            page: stash.source.page,
+                          })}
+                        </span>
+                      </div>
                       <div className="stash-item-actions">
                         {!isEditing && (
                           <button
@@ -345,7 +396,11 @@ export default function AiChatPanel({
                     ) : (
                       <div
                         className={`stash-item-text ${needsTruncate ? "truncated" : ""}`}
-                        onClick={() => handleGotoStash(stash)}
+                        onClick={() =>
+                          selectingStashes
+                            ? toggleStashSelected(stash.id)
+                            : handleGotoStash(stash)
+                        }
                       >
                         {isExpanded
                           ? stash.text
@@ -381,12 +436,19 @@ export default function AiChatPanel({
               {stashes.length > 0 && (
                 <div className="stash-actions">
                   <button onClick={onClearStashes}>{t("stash.clear")}</button>
+                  <button onClick={toggleSelectingStashes}>
+                    {selectingStashes ? t("stash.done") : t("stash.select")}
+                  </button>
                   <button
                     className="primary"
                     onClick={() => setShowModal(true)}
-                    disabled={stashes.length === 0}
+                    disabled={interpretTargets.length === 0}
                   >
-                    {t("customInterpret.title")}
+                    {selectingStashes
+                      ? t("customInterpret.titleWithCount", {
+                          count: selectedStashIds.size,
+                        })
+                      : t("customInterpret.title")}
                   </button>
                 </div>
               )}
@@ -436,10 +498,12 @@ export default function AiChatPanel({
 
       {showModal && (
         <CustomInterpretModal
-          stashCount={stashes.length}
+          stashCount={interpretTargets.length}
           onSubmit={(prompt) => {
-            onCustomInterpret(prompt);
+            onCustomInterpret(prompt, interpretTargets);
             setShowModal(false);
+            setSelectingStashes(false);
+            setSelectedStashIds(new Set());
             setActiveTab("sessions");
           }}
           onClose={() => setShowModal(false)}

@@ -16,7 +16,12 @@ export default function CustomInterpretModal({
 }: CustomInterpretModalProps) {
   const { t } = useTranslation();
   const [prompt, setPrompt] = useState("");
-  const { contentRef } = useModal({ open: true, onClose });
+  // 仅允许通过「取消」/「发送」关闭：禁用 Escape，遮罩点击不关闭。
+  const { contentRef } = useModal({
+    open: true,
+    onClose,
+    closeOnEscape: false,
+  });
 
   const handleSubmit = () => {
     const trimmed = prompt.trim();
@@ -33,12 +38,8 @@ export default function CustomInterpretModal({
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        ref={contentRef}
-        className="modal-content"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="modal-overlay">
+      <div ref={contentRef} className="modal-content">
         <h3>{t("customInterpret.title")}</h3>
         <p className="modal-hint">
           {t("customInterpret.hint", { count: stashCount })}

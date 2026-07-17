@@ -3,13 +3,20 @@ import { useEffect, useRef } from "react";
 interface UseModalOptions {
   open: boolean;
   onClose: () => void;
+  /** When false, pressing Escape does not close the modal. Defaults to true. */
+  closeOnEscape?: boolean;
 }
 
 /**
- * Shared modal behavior: close on Escape, trap focus while open, and restore
- * focus to the previously focused element when the modal closes.
+ * Shared modal behavior: close on Escape (unless disabled), trap focus while
+ * open, and restore focus to the previously focused element when the modal
+ * closes.
  */
-export function useModal({ open, onClose }: UseModalOptions) {
+export function useModal({
+  open,
+  onClose,
+  closeOnEscape = true,
+}: UseModalOptions) {
   const contentRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<Element | null>(null);
 
@@ -21,6 +28,7 @@ export function useModal({ open, onClose }: UseModalOptions) {
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (!closeOnEscape) return;
         e.preventDefault();
         onClose();
         return;
@@ -76,7 +84,7 @@ export function useModal({ open, onClose }: UseModalOptions) {
         prev.focus();
       }
     };
-  }, [open, onClose]);
+  }, [open, onClose, closeOnEscape]);
 
   return { contentRef };
 }

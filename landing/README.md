@@ -24,17 +24,19 @@ landing/
 ├── css/
 │   └── style.css       # 样式
 ├── js/
-│   └── main.js         # 打字机、滚动动画
+│   └── main.js         # 打字机、滚动动画、演示媒体自动加载
 ├── assets/
 │   ├── logo.svg        # 产品 Logo
-│   └── demos/          # 操作演示 GIF
-│       ├── README.md   # GIF 替换说明
-│       ├── open-pdf.gif
-│       ├── translate.gif
-│       ├── explain.gif
-│       ├── stash-interpret.gif
-│       ├── hover-word.gif
-│       └── layout.gif
+│   └── demos/          # 操作演示视频/截图（放入即自动生效）
+│       ├── README.md   # 命名规则与录制规范
+│       ├── hero.mp4 / hero-poster.jpg
+│       ├── split-view.mp4
+│       ├── search-outline.mp4
+│       ├── hover-word.jpg（或 hover-word.mp4）
+│       ├── translate.mp4
+│       ├── explain.mp4
+│       ├── stash-interpret.mp4
+│       └── persist.jpg（或 persist.mp4）
 └── README.md           # 本文件
 ```
 

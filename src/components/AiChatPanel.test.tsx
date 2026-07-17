@@ -231,6 +231,28 @@ describe("AiChatPanel", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("calls onGotoSession and still enters chatbox when clicking a session", () => {
+    const sessions = [
+      makeSession({
+        id: "session-1",
+        messages: [
+          makeMessage({ id: "msg-1", role: "user", content: "问题" }),
+          makeMessage({ id: "msg-2", role: "assistant", content: "回答" }),
+        ],
+      }),
+    ];
+    const onGotoSession = vi.fn();
+
+    renderPanel({ sessions, onGotoSession });
+
+    fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
+    fireEvent.click(screen.getByText(/问题/));
+
+    expect(onGotoSession).toHaveBeenCalledTimes(1);
+    expect(onGotoSession).toHaveBeenCalledWith(sessions[0]);
+    expect(screen.getByText(/回答/)).toBeInTheDocument();
+  });
+
   it("returns to session list when back button is clicked", () => {
     const sessions = [
       makeSession({

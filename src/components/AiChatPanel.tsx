@@ -18,6 +18,7 @@ interface AiChatPanelProps {
   onClearStashes: () => void;
   onCustomInterpret: (prompt: string) => void;
   onGotoStash?: (stash: StashItem) => void;
+  onGotoSession?: (session: InterpretationSession) => void;
   onFollowUp: (sessionId: string, prompt: string) => void;
   onInterrupt?: (sessionId: string) => void;
   onToggleVisibility?: () => void;
@@ -36,6 +37,7 @@ export default function AiChatPanel({
   onClearStashes,
   onCustomInterpret,
   onGotoStash,
+  onGotoSession,
   onFollowUp,
   onInterrupt,
   onToggleVisibility,
@@ -404,7 +406,10 @@ export default function AiChatPanel({
                   <div
                     key={session.id}
                     className={`session-item ${session.isStreaming ? "streaming" : ""}`}
-                    onClick={() => enterSessionChatbox(session)}
+                    onClick={() => {
+                      onGotoSession?.(session);
+                      enterSessionChatbox(session);
+                    }}
                   >
                     <div className="session-item-header">
                       <div className="session-item-meta">

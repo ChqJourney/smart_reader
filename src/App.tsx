@@ -10,6 +10,7 @@ import AiChatPanel from "./components/AiChatPanel";
 import SettingsModal from "./components/SettingsModal";
 import Icon from "./components/Icon";
 import { StashItem } from "./services/stash";
+import { InterpretationSession } from "./services/sessions";
 import { SelectionAction } from "./services/llm";
 import { useTabs } from "./hooks/useTabs";
 import { usePersistence } from "./hooks/usePersistence";
@@ -425,6 +426,28 @@ function App() {
     [tabs, splitView.isSplitView, splitView.secondaryTabId]
   );
 
+  const handleGotoSession = useCallback(
+    (session: InterpretationSession) => {
+      // source.tabId 可能是持久化前的旧 id（tab 重开/重启后失效），
+      // 按 fileHash 匹配当前打开的 tab 来确定跳转目标。
+      const source = session.sources
+        .map((s) => s.source)
+        .find((src) => tabs.tabs.some((t) => t.fileHash === src.fileHash));
+      if (!source) return;
+      const targetTab = tabs.tabs.find((t) => t.fileHash === source.fileHash);
+      if (!targetTab) return;
+      tabs.gotoTabPage(targetTab.id, source.page);
+      if (splitView.isSplitView) {
+        if (targetTab.id === tabs.activeTabId) {
+          setFocusedViewer("primary");
+        } else if (targetTab.id === splitView.secondaryTabId) {
+          setFocusedViewer("secondary");
+        }
+      }
+    },
+    [tabs, splitView.isSplitView, splitView.secondaryTabId]
+  );
+
   const handleExplainClick = useCallback(
     (tabId: string, id: string) => {
       layout.openRightPanel();
@@ -649,6 +672,7 @@ function App() {
                       )
                     }
                     onGotoStash={handleGotoStash}
+                    onGotoSession={handleGotoSession}
                     onFollowUp={persistence.handleFollowUp}
                     onInterrupt={persistence.handleInterruptSession}
                     onToggleVisibility={layout.toggleRight}
@@ -742,6 +766,7 @@ function App() {
                     )
                   }
                   onGotoStash={handleGotoStash}
+                  onGotoSession={handleGotoSession}
                   onFollowUp={persistence.handleFollowUp}
                   onInterrupt={persistence.handleInterruptSession}
                   onToggleVisibility={layout.toggleRight}
@@ -786,6 +811,7 @@ function App() {
                     )
                   }
                   onGotoStash={handleGotoStash}
+                  onGotoSession={handleGotoSession}
                   onFollowUp={persistence.handleFollowUp}
                   onInterrupt={persistence.handleInterruptSession}
                   onToggleVisibility={layout.toggleRight}

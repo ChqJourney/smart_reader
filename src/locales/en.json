@@ -169,8 +169,8 @@
       "requestFailed": "Request failed: {{message}}"
     },
     "prompts": {
-      "explain": "Explain the following standard clause/paragraph in accessible {{targetLanguage}}, describing its requirements, significance, relationship to testing work, and any potentially related clauses:\n\n{{text}}",
-      "translate": "Translate the following standard document content into {{targetLanguage}}, keep professional terminology accurate, and retain the original text when key terms first appear:\n\n{{text}}"
+      "explain": "The following excerpt comes from the standards document \"{{fileName}}\", page {{page}}. Explain this standard clause/paragraph in accessible {{targetLanguage}}, describing its requirements, significance, relationship to testing work, and any potentially related clauses:\n\n{{text}}",
+      "translate": "Translate the following content from the standards document \"{{fileName}}\", page {{page}}, into {{targetLanguage}}, keep professional terminology accurate, and retain the original text when key terms first appear:\n\n{{text}}"
     },
     "customInterpretPrompt": "Please answer the following question in {{targetLanguage}}:\n\n{{prompt}}\n\n{{sources}}",
     "customInterpretSource": "Excerpt {{index}} ({{fileName}} page {{page}}):\n{{text}}"

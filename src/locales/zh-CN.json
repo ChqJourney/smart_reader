@@ -169,8 +169,8 @@
       "requestFailed": "请求失败: {{message}}"
     },
     "prompts": {
-      "explain": "请用通俗易懂的{{targetLanguage}}解读以下标准条款/段落，说明其要求、意义、与测试工作的关系，并指出可能相关的其他条款：\n\n{{text}}",
-      "translate": "请将以下标准文档内容翻译成{{targetLanguage}}，保持专业术语准确，并在首次出现关键术语时保留原文：\n\n{{text}}"
+      "explain": "以下片段摘自标准文档《{{fileName}}》第 {{page}} 页。请用通俗易懂的{{targetLanguage}}解读该标准条款/段落，说明其要求、意义、与测试工作的关系，并指出可能相关的其他条款：\n\n{{text}}",
+      "translate": "请将以下摘自标准文档《{{fileName}}》第 {{page}} 页的内容翻译成{{targetLanguage}}，保持专业术语准确，并在首次出现关键术语时保留原文：\n\n{{text}}"
     },
     "customInterpretPrompt": "请用{{targetLanguage}}回答以下问题：\n\n{{prompt}}\n\n{{sources}}",
     "customInterpretSource": "片段 {{index}}（{{fileName}} 第 {{page}} 页）：\n{{text}}"

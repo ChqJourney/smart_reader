@@ -74,6 +74,8 @@ interface PdfPageProps {
     forScale: number
   ) => void;
   fileHash?: string;
+  /** Source document name, forwarded to annotation popups for LLM prompts. */
+  fileName?: string;
   onSelection?: (
     text: string,
     page: number,
@@ -110,6 +112,7 @@ function PdfPage({
   pageViewport,
   onViewportLoaded,
   fileHash,
+  fileName,
   onSelection,
   onGoToPage,
   onVisibilityChange,
@@ -703,6 +706,7 @@ function PdfPage({
         pageNum={pageNum}
         scale={scale}
         fileHash={fileHash || ""}
+        fileName={fileName}
         highlightedId={highlightedAnnotationId}
         onUpdate={onAnnotationUpdate || (() => {})}
         onDelete={onAnnotationDelete || (() => {})}

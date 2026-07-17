@@ -21,6 +21,7 @@ import {
   computeCenteredScrollLeft,
 } from "../utils/fitToWidth";
 import { useSearchDomain } from "../hooks/useSearchDomain";
+import { getBasename } from "../utils/path";
 import { usePdfDocument, type OutlineItem } from "../hooks/usePdfDocument";
 import { useZoomAnchor } from "../hooks/useZoomAnchor";
 import { useViewportManager, type PageViewportInfo } from "../hooks/useViewportManager";
@@ -164,6 +165,9 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     ref
   ) {
     const { t } = useTranslation();
+    // Basename of the PDF, forwarded to annotation popups so LLM prompts can
+    // name the source document.
+    const fileName = getBasename(filePath);
     const { pdf, numPages, isLoading, error, outline } = usePdfDocument({
       filePath,
       cachedBytes,
@@ -1148,6 +1152,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                   scale={scale}
                   shouldRender={renderPages.has(pageNum)}
                   fileHash={fileHash}
+                  fileName={fileName}
                   onSelection={handleSelection}
                   onGoToPage={goToPage}
                   onViewportLoaded={reportViewportLoaded}
@@ -1170,6 +1175,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                     shouldRender={renderPages.has(p)}
                     pageViewport={pageViewports.get(p) ?? null}
                     fileHash={fileHash}
+                    fileName={fileName}
                     onSelection={handleSelection}
                     onGoToPage={goToPage}
                     onVisibilityChange={setPageVisible}

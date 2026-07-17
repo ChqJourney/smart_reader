@@ -11,6 +11,8 @@ interface PdfAnnotationsProps {
   pageNum: number;
   scale: number;
   fileHash: string;
+  /** Source document name, forwarded to popups that build LLM prompts. */
+  fileName?: string;
   highlightedId?: string | null;
   onUpdate: (id: string, patch: Partial<Omit<Annotation, "id">>) => void;
   onDelete: (id: string) => void;
@@ -23,6 +25,7 @@ export default function PdfAnnotations({
   pageNum,
   scale,
   fileHash,
+  fileName,
   highlightedId,
   onUpdate,
   onDelete,
@@ -82,6 +85,7 @@ export default function PdfAnnotations({
                 annotation={annotation}
                 scale={scale}
                 settings={settings}
+                fileName={fileName}
                 onUpdate={(patch) => onUpdate(annotation.id, patch)}
                 onHide={() => onUpdate(annotation.id, { hidden: true })}
                 onClose={() => onDelete(annotation.id)}

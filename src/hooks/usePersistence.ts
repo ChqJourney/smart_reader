@@ -726,7 +726,8 @@ export function usePersistence({
         const prompt = buildSelectionPrompt(
           "explain",
           text,
-          settingsRef.current.targetLanguage
+          settingsRef.current.targetLanguage,
+          { fileName: activeTab.fileName, page: selection.page }
         );
         const sourceStash = createStashItem(
           {

@@ -18,6 +18,8 @@ interface TranslatePopupProps {
   annotation: Annotation;
   scale: number;
   settings: AppSettings;
+  /** Source document name, included in the LLM prompt for context. */
+  fileName?: string;
   onUpdate: (patch: Partial<Omit<Annotation, "id">>) => void;
   onHide: () => void;
   onClose: () => void;
@@ -27,6 +29,7 @@ export default function TranslatePopup({
   annotation,
   scale,
   settings,
+  fileName,
   onUpdate,
   onHide,
   onClose,
@@ -76,7 +79,8 @@ export default function TranslatePopup({
     const prompt = buildSelectionPrompt(
       "translate",
       annotation.text,
-      settings.targetLanguage
+      settings.targetLanguage,
+      { fileName: fileName ?? "", page: annotation.position.page }
     );
     const messages: ChatMessage[] = [
       {

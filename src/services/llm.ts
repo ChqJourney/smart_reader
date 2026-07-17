@@ -251,13 +251,24 @@ export function buildCustomInterpretPrompt(
 export function buildSelectionPrompt(
   action: "explain" | "translate",
   text: string,
-  targetLanguage: string
+  targetLanguage: string,
+  context: { fileName: string; page: number }
 ): string {
   switch (action) {
     case "explain":
-      return i18n.t("llm.prompts.explain", { targetLanguage, text });
+      return i18n.t("llm.prompts.explain", {
+        targetLanguage,
+        text,
+        fileName: context.fileName,
+        page: context.page,
+      });
     case "translate":
-      return i18n.t("llm.prompts.translate", { targetLanguage, text });
+      return i18n.t("llm.prompts.translate", {
+        targetLanguage,
+        text,
+        fileName: context.fileName,
+        page: context.page,
+      });
     default:
       return text;
   }

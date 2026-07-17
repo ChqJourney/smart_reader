@@ -43,28 +43,37 @@ describe("llm service", () => {
   });
 
   describe("buildSelectionPrompt", () => {
-    it("builds explain prompt in target language", () => {
-      const prompt = buildSelectionPrompt("explain", "Sample text", "中文");
+    it("builds explain prompt with document context and target language", () => {
+      const prompt = buildSelectionPrompt("explain", "Sample text", "中文", {
+        fileName: "IEC 60601-1.pdf",
+        page: 42,
+      });
       expect(prompt).toContain("Sample text");
       expect(prompt).toContain("解读");
       expect(prompt).toContain("中文");
+      expect(prompt).toContain("IEC 60601-1.pdf");
+      expect(prompt).toContain("42");
     });
 
-    it("builds translate prompt in target language", () => {
+    it("builds translate prompt with document context and target language", () => {
       const prompt = buildSelectionPrompt(
         "translate",
         "Sample text",
-        "English"
+        "English",
+        { fileName: "IEC 60601-1.pdf", page: 42 }
       );
       expect(prompt).toContain("Sample text");
       expect(prompt).toContain("English");
+      expect(prompt).toContain("IEC 60601-1.pdf");
+      expect(prompt).toContain("42");
     });
 
     it("returns text for unknown action", () => {
       const prompt = buildSelectionPrompt(
         "unknown" as any,
         "Sample text",
-        "中文"
+        "中文",
+        { fileName: "a.pdf", page: 1 }
       );
       expect(prompt).toBe("Sample text");
     });

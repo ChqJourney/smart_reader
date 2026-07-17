@@ -96,7 +96,8 @@
     "pages": {
       "model": "模型设置",
       "feature": "功能设置",
-      "system": "系统设置"
+      "system": "系统设置",
+      "about": "关于"
     },
     "llmApi": "LLM API",
     "llmApiHint": "用于翻译、解读与自定义问答的模型接入信息。",

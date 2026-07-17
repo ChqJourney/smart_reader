@@ -96,7 +96,8 @@
     "pages": {
       "model": "Model Settings",
       "feature": "Feature Settings",
-      "system": "System Settings"
+      "system": "System Settings",
+      "about": "About"
     },
     "llmApi": "LLM API",
     "llmApiHint": "Model access information used for translation, interpretation, and custom Q&A.",

@@ -80,7 +80,7 @@ npm install
 │   │   ├── ExplainPopup.tsx           # 解读详情浮层
 │   │   ├── StashInterpretedPopup.tsx  # 已解读暂存浮层
 │   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录、流式中止）
-│   │   ├── SettingsModal.tsx          # 全局设置 Modal（左侧分页：模型设置 / 功能设置 / 系统设置）
+│   │   ├── SettingsModal.tsx          # 全局设置 Modal（左侧分页：模型设置 / 功能设置 / 系统设置 / 关于）
 │   │   ├── RecentFilesBar.tsx         # 顶部最近文件栏
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
@@ -313,7 +313,7 @@ AiChatPanel.tsx
 └── 检测到 isStreaming 会话时启动 SSE 流
 
 SettingsModal.tsx
-└── 左侧分页设置弹窗：模型设置（LLM）、功能设置（语言/悬停翻译/系统提示词）、系统设置（版本/License/日志）
+└── 左侧分页设置弹窗：模型设置（LLM）、功能设置（语言/悬停翻译/系统提示词）、系统设置（日志/默认打开方式）、关于（版本/软件更新/License）
 ```
 
 ## 7. 代码组织约定

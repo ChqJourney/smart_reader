@@ -61,8 +61,8 @@ function switchToFeaturePage() {
   fireEvent.click(screen.getByRole("button", { name: /功能设置/i }));
 }
 
-function switchToSystemPage() {
-  fireEvent.click(screen.getByRole("button", { name: /系统设置/i }));
+function switchToAboutPage() {
+  fireEvent.click(screen.getByRole("button", { name: /关于/i }));
 }
 
 describe("SettingsModal", () => {
@@ -318,7 +318,7 @@ describe("SettingsModal", () => {
     expect(onClose).toHaveBeenCalledTimes(2);
   });
 
-  it("displays app info and license on system page", async () => {
+  it("displays app info and license on about page", async () => {
     renderModal({
       open: true,
       initialSettings: defaultSettings,
@@ -326,7 +326,7 @@ describe("SettingsModal", () => {
       onSave: vi.fn(),
     });
 
-    switchToSystemPage();
+    switchToAboutPage();
 
     expect(screen.getByText("应用信息")).toBeInTheDocument();
     expect(screen.getByText("0.1.0")).toBeInTheDocument();
@@ -336,7 +336,7 @@ describe("SettingsModal", () => {
     await screen.findByText("SpecReader AI Proprietary License");
   });
 
-  it("renders check for updates button on system page", () => {
+  it("renders check for updates button on about page", () => {
     renderModal({
       open: true,
       initialSettings: defaultSettings,
@@ -344,7 +344,7 @@ describe("SettingsModal", () => {
       onSave: vi.fn(),
     });
 
-    switchToSystemPage();
+    switchToAboutPage();
 
     expect(screen.getByText("软件更新")).toBeInTheDocument();
     expect(
@@ -362,7 +362,7 @@ describe("SettingsModal", () => {
       onSave: vi.fn(),
     });
 
-    switchToSystemPage();
+    switchToAboutPage();
 
     fireEvent.click(screen.getByRole("button", { name: /检查更新/i }));
 
@@ -386,7 +386,7 @@ describe("SettingsModal", () => {
       onSave: vi.fn(),
     });
 
-    switchToSystemPage();
+    switchToAboutPage();
 
     fireEvent.click(screen.getByRole("button", { name: /检查更新/i }));
 
@@ -411,7 +411,7 @@ describe("SettingsModal", () => {
       onSave: vi.fn(),
     });
 
-    switchToSystemPage();
+    switchToAboutPage();
 
     fireEvent.click(screen.getByRole("button", { name: /检查更新/i }));
     await screen.findByText(/发现新版本 0\.2\.0/i);
@@ -438,7 +438,7 @@ describe("SettingsModal", () => {
       onSave: vi.fn(),
     });
 
-    switchToSystemPage();
+    switchToAboutPage();
 
     fireEvent.click(screen.getByRole("button", { name: /检查更新/i }));
 
@@ -456,7 +456,7 @@ describe("SettingsModal", () => {
       onSave: vi.fn(),
     });
 
-    switchToSystemPage();
+    switchToAboutPage();
 
     fireEvent.click(screen.getByRole("button", { name: /检查更新/i }));
 

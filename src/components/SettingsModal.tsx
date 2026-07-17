@@ -33,7 +33,7 @@ import "./CustomInterpretModal.css";
 import "./SettingsModal.css";
 
 type PromptTab = "translate" | "explain";
-type SettingsPage = "model" | "feature" | "system";
+type SettingsPage = "model" | "feature" | "system" | "about";
 type UpdateState =
   | "idle"
   | "checking"
@@ -62,7 +62,7 @@ interface SettingsModalProps {
   onSave: (settings: AppSettings) => void;
 }
 
-const PAGE_LIST: SettingsPage[] = ["model", "feature", "system"];
+const PAGE_LIST: SettingsPage[] = ["model", "feature", "system", "about"];
 
 function isNoPlatformUpdateError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
@@ -842,26 +842,6 @@ export default function SettingsModal({
                 <>
                   <section className="settings-section">
                     <div className="settings-section-title">
-                      {t("settings.appInfo")}
-                    </div>
-                    <dl className="settings-info-list">
-                      <div>
-                        <dt>{t("settings.productName")}</dt>
-                        <dd>SpecReader AI</dd>
-                      </div>
-                      <div>
-                        <dt>{t("settings.version")}</dt>
-                        <dd>{version}</dd>
-                      </div>
-                      <div>
-                        <dt>{t("settings.identifier")}</dt>
-                        <dd>com.photonee.specreader</dd>
-                      </div>
-                    </dl>
-                  </section>
-
-                  <section className="settings-section">
-                    <div className="settings-section-title">
                       {t("settings.logLevel")}
                     </div>
                     <div className="settings-section-hint">
@@ -890,6 +870,61 @@ export default function SettingsModal({
                         ))}
                       </select>
                     </div>
+                  </section>
+
+                  <section className="settings-section">
+                    <div className="settings-section-title">
+                      {t("settings.openLogs")}
+                    </div>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      onClick={handleOpenLogs}
+                    >
+                      {t("settings.openLogs")}
+                    </button>
+                  </section>
+
+                  {currentPlatform?.startsWith("Win") && (
+                    <section className="settings-section">
+                      <div className="settings-section-title">
+                        {t("settings.defaultPdfReader")}
+                      </div>
+                      <div className="settings-section-hint">
+                        {t("settings.defaultPdfReaderHint")}
+                      </div>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={handleOpenDefaultApps}
+                      >
+                        {t("settings.setAsDefaultPdfReader")}
+                      </button>
+                    </section>
+                  )}
+                </>
+              )}
+
+              {activePage === "about" && (
+                <>
+                  <section className="settings-section">
+                    <div className="settings-section-title">
+                      {t("settings.appInfo")}
+                    </div>
+                    <dl className="settings-info-list">
+                      <div>
+                        <dt>{t("settings.productName")}</dt>
+                        <dd>SpecReader AI</dd>
+                      </div>
+                      <div>
+                        <dt>{t("settings.version")}</dt>
+                        <dd>{version}</dd>
+                      </div>
+                      <div>
+                        <dt>{t("settings.identifier")}</dt>
+                        <dd>com.photonee.specreader</dd>
+                      </div>
+                    </dl>
                   </section>
 
                   <section className="settings-section">
@@ -959,37 +994,6 @@ export default function SettingsModal({
                       {licenseText ?? t("settings.licenseLoading")}
                     </pre>
                   </section>
-
-                  <section className="settings-section">
-                    <div className="settings-section-title">
-                      {t("settings.openLogs")}
-                    </div>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      onClick={handleOpenLogs}
-                    >
-                      {t("settings.openLogs")}
-                    </button>
-                  </section>
-
-                  {currentPlatform?.startsWith("Win") && (
-                    <section className="settings-section">
-                      <div className="settings-section-title">
-                        {t("settings.defaultPdfReader")}
-                      </div>
-                      <div className="settings-section-hint">
-                        {t("settings.defaultPdfReaderHint")}
-                      </div>
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        onClick={handleOpenDefaultApps}
-                      >
-                        {t("settings.setAsDefaultPdfReader")}
-                      </button>
-                    </section>
-                  )}
                 </>
               )}
             </div>

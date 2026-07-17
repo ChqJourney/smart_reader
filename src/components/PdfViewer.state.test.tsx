@@ -339,16 +339,25 @@ describe("PdfViewer tab state isolation", () => {
       } as DOMRect);
     });
 
-    fireEvent.scroll(canvasContainer);
-
-    await waitFor(() => {
-      expect(onStateChange).toHaveBeenCalledWith(
-        expect.objectContaining({
-          pageNum: 3,
-          scrollTop: targetScrollTop,
-        })
-      );
-    });
+    // The mount restore holds the shared jump lock until ALL page viewports
+    // are known (useTabRestore), and the scroll page-sync is suppressed while
+    // it is held — a scroll fired inside that window is swallowed and never
+    // reported. There is no DOM signal for the window closing, so probe with
+    // repeated scrolls until the sync actually reports. The poll interval
+    // must exceed the 100ms scrollTop debounce (useScrollPageSync) so each
+    // probe's report can land before the next probe resets it.
+    await waitFor(
+      () => {
+        fireEvent.scroll(canvasContainer);
+        expect(onStateChange).toHaveBeenCalledWith(
+          expect.objectContaining({
+            pageNum: 3,
+            scrollTop: targetScrollTop,
+          })
+        );
+      },
+      { interval: 200, timeout: 3000 }
+    );
   });
 
   it("suppresses the scroll page-sync until the mount restore completes (tab-switch page-1 reset regression)", async () => {

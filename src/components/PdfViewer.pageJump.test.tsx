@@ -126,7 +126,8 @@ describe("computeContinuousScrollTop", () => {
       3,
       container,
       () => target,
-      new Map<number, PageViewportInfo>()
+      new Map<number, PageViewportInfo>(),
+      SCALE
     );
 
     expect(top).toBe(600);
@@ -135,15 +136,30 @@ describe("computeContinuousScrollTop", () => {
   it("falls back to viewport accumulation when the wrapper is not yet available", () => {
     const container = makeContainer({ top: 0 }, 0);
     const viewports = new Map<number, PageViewportInfo>([
-      [1, { width: 100, height: 200 }],
-      [2, { width: 100, height: 250 }],
+      [1, { width: 100, height: 200, scale: 1 }],
+      [2, { width: 100, height: 250, scale: 1 }],
     ]);
 
     // Page 3 top = (page1 height + spacing) + (page2 height + spacing)
     //            = (200 + 24) + (250 + 24) = 498
-    const top = computeContinuousScrollTop(3, container, () => null, viewports);
+    const top = computeContinuousScrollTop(3, container, () => null, viewports, 1);
 
     expect(top).toBe(498);
+  });
+
+  it("rescales stale-scale entries to the live scale when accumulating", () => {
+    const container = makeContainer({ top: 0 }, 0);
+    // Entries were computed at scale 1; the live scale is now 2, and the DOM
+    // renders pages rescaled to 2x — the accumulation must match.
+    const viewports = new Map<number, PageViewportInfo>([
+      [1, { width: 100, height: 200, scale: 1 }],
+      [2, { width: 100, height: 250, scale: 1 }],
+    ]);
+
+    // Page 3 top = (200*2 + 24) + (250*2 + 24) = 424 + 524 = 948
+    const top = computeContinuousScrollTop(3, container, () => null, viewports, 2);
+
+    expect(top).toBe(948);
   });
 
   it("returns 0 for the first page", () => {
@@ -154,7 +170,8 @@ describe("computeContinuousScrollTop", () => {
       1,
       container,
       () => first,
-      new Map<number, PageViewportInfo>()
+      new Map<number, PageViewportInfo>(),
+      SCALE
     );
 
     expect(top).toBe(0);
@@ -174,7 +191,8 @@ describe("computeContinuousScrollTop", () => {
       2,
       container,
       () => target,
-      new Map<number, PageViewportInfo>()
+      new Map<number, PageViewportInfo>(),
+      SCALE
     );
 
     expect(top).toBe(0);
@@ -185,9 +203,9 @@ describe("computeContinuousScrollTop", () => {
     // the target wrapper exists in the DOM, but earlier pages have not finished
     // sizing themselves, so getBoundingClientRect reports an inaccurate position.
     const viewports = new Map<number, PageViewportInfo>([
-      [1, { width: 100, height: 200 }],
-      [2, { width: 100, height: 250 }],
-      [3, { width: 100, height: 300 }],
+      [1, { width: 100, height: 200, scale: 1 }],
+      [2, { width: 100, height: 250, scale: 1 }],
+      [3, { width: 100, height: 300, scale: 1 }],
     ]);
 
     const container = makeContainer({ top: 100 }, 0);
@@ -200,7 +218,8 @@ describe("computeContinuousScrollTop", () => {
       3,
       container,
       () => target,
-      viewports
+      viewports,
+      1
     );
 
     // scrollTop should align page 3 at the top: (200+24) + (250+24) = 498

@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+  memo,
+} from "react";
 import { invoke } from "@tauri-apps/api/core";
 import * as pdfjsLib from "pdfjs-dist";
 import type { TextItem as PdfjsTextItem } from "pdfjs-dist/types/src/display/api";
@@ -48,7 +55,24 @@ interface PdfPageProps {
   pageNum: number;
   scale: number;
   shouldRender: boolean;
-  pageViewports?: Map<number, PageViewportInfo>;
+  /**
+   * This page's pre-computed viewport entry (from useViewportManager), or
+   * null when not yet loaded. Passed as a SINGLE entry (not the whole map)
+   * so React.memo can skip re-rendering this page when other pages' entries
+   * update (docs/REFACTOR_REVIEW_2026-07-17.md P2).
+   */
+  pageViewport?: PageViewportInfo | null;
+  /**
+   * Called after this page self-loads its viewport (only happens when
+   * `pageViewport` is null). The manager merges the result into
+   * `pageViewports` so continuous-jump math and tab restore get exact sizes
+   * for every page, not just the preloaded window.
+   */
+  onViewportLoaded?: (
+    pageNum: number,
+    info: PageViewportInfo,
+    forScale: number
+  ) => void;
   fileHash?: string;
   onSelection?: (
     text: string,
@@ -83,7 +107,8 @@ function PdfPage({
   pageNum,
   scale,
   shouldRender,
-  pageViewports,
+  pageViewport,
+  onViewportLoaded,
   fileHash,
   onSelection,
   onGoToPage,
@@ -105,8 +130,8 @@ function PdfPage({
   const linkAnnotationsRef = useRef<LinkAnnotation[]>([]);
   const pendingLinkRef = useRef<LinkAnnotation | null>(null);
   const [linkAnnotations, setLinkAnnotations] = useState<LinkAnnotation[]>([]);
-  const [viewport, setViewport] = useState<PageViewportInfo | null>(
-    pageViewports?.get(pageNum) ?? null
+  const [selfViewport, setSelfViewport] = useState<PageViewportInfo | null>(
+    pageViewport ?? null
   );
   const [selectionRect, setSelectionRect] = useState<{
     x: number;
@@ -138,15 +163,11 @@ function PdfPage({
     [containerRef]
   );
 
-  // Get viewport size for placeholder and set wrapper dimensions early.
-  // Prefer the parent's pre-computed pageViewports so the DOM layout is stable
-  // before every child finishes its own async viewport lookup.
+  // Self-load the viewport ONLY when the manager has no entry for this page
+  // (e.g. off-window pages of a large document). The result is reported back
+  // to the manager so its map converges to exact sizes for every page.
   useEffect(() => {
-    const parentViewport = pageViewports?.get(pageNum);
-    if (parentViewport) {
-      setViewport(parentViewport);
-      return;
-    }
+    if (pageViewport) return;
 
     let isCancelled = false;
     const getViewport = async () => {
@@ -157,7 +178,9 @@ function PdfPage({
         // Drive wrapper size purely through React state + the controlled style
         // prop below. Direct imperative style writes used to race React's
         // controlled `style` and caused size flicker while `viewport` was null.
-        setViewport({ width: vp.width, height: vp.height });
+        const info = { width: vp.width, height: vp.height, scale };
+        setSelfViewport(info);
+        onViewportLoaded?.(pageNum, info, scale);
       } catch (err) {
         error(`Failed to get viewport for page ${pageNum}: ${err}`);
       }
@@ -166,7 +189,24 @@ function PdfPage({
     return () => {
       isCancelled = true;
     };
-  }, [pdf, pageNum, scale, pageViewports]);
+  }, [pdf, pageNum, scale, pageViewport, onViewportLoaded]);
+
+  // Wrapper sizing is derived AT RENDER TIME (no prop→state sync effect):
+  // - A manager entry is preferred over the self-loaded fallback.
+  // - Entries carry the scale they were computed for; viewport sizes are
+  //   exactly linear in scale, so a stale-scale entry is rescaled to the live
+  //   scale instead of awaiting a reload. This keeps every wrapper's size
+  //   exact in the SAME commit that lands a scale/viewport change — reading
+  //   wrapper geometry in an effect (zoom restore, fit-center) then never
+  //   sees one-commit-old sizes, which was the root cause of the "page jumps
+  //   after zoom" regression.
+  const viewport = useMemo<PageViewportInfo | null>(() => {
+    const src = pageViewport ?? selfViewport;
+    if (!src) return null;
+    if (src.scale === scale) return src;
+    const factor = scale / src.scale;
+    return { width: src.width * factor, height: src.height * factor, scale };
+  }, [pageViewport, selfViewport, scale]);
 
   // Render page when it should be rendered
   useEffect(() => {
@@ -181,11 +221,12 @@ function PdfPage({
         if (isCancelled) return;
 
         const canvas = canvasRef.current!;
-        const wrapper = wrapperRef.current!;
         const pageViewport = page.getViewport({ scale });
 
-        wrapper.style.width = `${viewport.width}px`;
-        wrapper.style.height = `${viewport.height}px`;
+        // Wrapper dimensions are driven purely by the controlled `style` prop
+        // (viewport state) below. Do NOT imperatively write wrapper.style
+        // here — it races React's controlled style and violates the "no
+        // imperative wrapper writes" convention (issue 9.3).
 
         const dpr = window.devicePixelRatio || 1;
         canvas.width = Math.floor(pageViewport.width * dpr);
@@ -681,4 +722,8 @@ function PdfPage({
   );
 }
 
-export default PdfPage;
+// Memoized: in continuous mode the viewer re-renders on every scroll-driven
+// pageNum/visiblePages change; with stable props (single pageViewport entry,
+// stable goToPage/setPageVisible callbacks) only pages whose inputs actually
+// changed re-render (docs/REFACTOR_REVIEW_2026-07-17.md P2).
+export default memo(PdfPage);

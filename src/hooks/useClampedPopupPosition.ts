@@ -4,18 +4,31 @@ import { clampPopupPosition, TransformPx } from "../utils/popupPosition";
 /**
  * CSS transform spec for absolutely-positioned popups inside a page wrapper.
  * Most popups use `translate(-50%, 12px)` so the marker sits at the popup's
- * top-center.
+ * top-center. WordTooltip uses `translate(-50%, -100%)` so it floats above the
+ * word — that requires `yPercent` (a percentage of the popup height) instead
+ * of a fixed `yPx`.
  */
 export interface PopupTransformSpec {
-  /** Horizontal translation as a percentage of the popup width (e.g. -50). */
-  xPercent: number;
-  /** Vertical translation in pixels (e.g. 12). */
-  yPx: number;
+  /** Horizontal translation as a percentage of the popup width. Defaults to -50. */
+  xPercent?: number;
+  /** Vertical translation as a percentage of the popup height (e.g. -100). Takes precedence over yPx. */
+  yPercent?: number;
+  /** Vertical translation in pixels (e.g. 12). Used when yPercent is not set. Defaults to 12. */
+  yPx?: number;
 }
 
 export const DEFAULT_POPUP_TRANSFORM: PopupTransformSpec = {
   xPercent: -50,
   yPx: 12,
+};
+
+/**
+ * Transform used by popups that float above their anchor (e.g. WordTooltip
+ * with `translate(-50%, -100%)`).
+ */
+export const ABOVE_ANCHOR_TRANSFORM: PopupTransformSpec = {
+  xPercent: -50,
+  yPercent: -100,
 };
 
 /**
@@ -59,9 +72,13 @@ export function useClampedPopupPosition(
     if (!el) return;
     const popupW = el.offsetWidth;
     const popupH = el.offsetHeight;
+    const xPercent = transform.xPercent ?? -50;
     const transformPx: TransformPx = {
-      x: (transform.xPercent / 100) * popupW,
-      y: transform.yPx,
+      x: (xPercent / 100) * popupW,
+      y:
+        transform.yPercent !== undefined
+          ? (transform.yPercent / 100) * popupH
+          : (transform.yPx ?? 12),
     };
     setPos(
       clampPopupPosition(
@@ -75,7 +92,15 @@ export function useClampedPopupPosition(
       )
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [left, top, wrapperSize, transform.xPercent, transform.yPx, ...extraDeps]);
+  }, [
+    left,
+    top,
+    wrapperSize,
+    transform.xPercent,
+    transform.yPercent,
+    transform.yPx,
+    ...extraDeps,
+  ]);
 
   return pos;
 }

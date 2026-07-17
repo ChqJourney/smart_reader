@@ -1,7 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Annotation } from "../services/annotations";
 import Icon from "./Icon";
+import { useDrag } from "../hooks/useDrag";
 import "./AnnotationMarker.css";
 
 interface InterpretedStashIconProps {
@@ -53,9 +54,7 @@ export default function AnnotationMarker({
   onMove,
 }: AnnotationMarkerProps) {
   const { t } = useTranslation();
-  const [isDragging, setIsDragging] = useState(false);
   const hasMovedRef = useRef(false);
-  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
 
   const left = annotation.position.x * scale;
   const top = annotation.position.y * scale;
@@ -67,37 +66,14 @@ export default function AnnotationMarker({
   const isDraggable = !isStash || isInterpretedStash;
   const isClickable = annotation.type !== "stash" || isInterpretedStash;
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!isDraggable) return;
-    e.stopPropagation();
-    e.preventDefault();
-    setIsDragging(true);
-    hasMovedRef.current = false;
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !dragStartRef.current) return;
-    e.preventDefault();
-
-    const start = dragStartRef.current;
-    const dx = e.clientX - start.x;
-    const dy = e.clientY - start.y;
-
-    if (Math.hypot(dx, dy) > 2) {
+  const { isDragging, handlers: dragHandlers } = useDrag({
+    onMove: (dx, dy) => {
       hasMovedRef.current = true;
-    }
-
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
-    onMove(dx, dy);
-  };
-
-  const handleMouseUp = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    e.preventDefault();
-    setIsDragging(false);
-    dragStartRef.current = null;
-  };
+      onMove(dx, dy);
+    },
+    threshold: 2,
+    enabled: isDraggable,
+  });
 
   const handleClick = (e: React.MouseEvent) => {
     if (!isClickable) return;
@@ -129,10 +105,7 @@ export default function AnnotationMarker({
     <div
       className={className}
       style={{ left, top }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
+      onMouseDown={dragHandlers.onMouseDown}
       onClick={handleClick}
       aria-label={label}
       title={label}

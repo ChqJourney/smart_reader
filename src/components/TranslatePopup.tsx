@@ -11,6 +11,7 @@ import {
 import { AppSettings } from "../services/settings";
 import { useStreaming } from "../hooks/useStreaming";
 import { useClampedPopupPosition } from "../hooks/useClampedPopupPosition";
+import { useDrag } from "../hooks/useDrag";
 import "./TranslatePopup.css";
 
 interface TranslatePopupProps {
@@ -45,8 +46,17 @@ export default function TranslatePopup({
   const left = annotation.position.x * scale;
   const top = annotation.position.y * scale;
 
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef<{ x: number; y: number } | null>(null);
+  const { isDragging, handlers: dragHandlers } = useDrag({
+    onMove: (dx, dy) =>
+      onUpdate({
+        position: {
+          ...annotation.position,
+          x: annotation.position.x + dx / scale,
+          y: annotation.position.y + dy / scale,
+        },
+      }),
+    threshold: 2,
+  });
   // Clamp the popup inside the page wrapper and re-clamp on wrapper resize
   // (tab activation / async viewport load / zoom). translate(-50%, 12px).
   const adjustedPosition = useClampedPopupPosition(
@@ -124,47 +134,13 @@ export default function TranslatePopup({
     return () => clearTimeout(timeout);
   }, [localContent, isStreaming, onUpdate]);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    e.preventDefault();
-    setIsDragging(true);
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging || !dragStartRef.current) return;
-    e.preventDefault();
-
-    const start = dragStartRef.current;
-    const dx = e.clientX - start.x;
-    const dy = e.clientY - start.y;
-
-    dragStartRef.current = { x: e.clientX, y: e.clientY };
-
-    // Convert viewport delta to PDF original coordinate delta
-    onUpdate({
-      position: {
-        ...annotation.position,
-        x: annotation.position.x + dx / scale,
-        y: annotation.position.y + dy / scale,
-      },
-    });
-  };
-
-  const handleMouseUp = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    e.preventDefault();
-    setIsDragging(false);
-    dragStartRef.current = null;
-  };
-
   return (
     <div
       ref={popupRef}
       className={`translate-popup ${isDragging ? "dragging" : ""}`}
       style={{ left: adjustedPosition.x, top: adjustedPosition.y }}
     >
-      <div className="translate-popup-header" onMouseDown={handleMouseDown}>
+      <div className="translate-popup-header" onMouseDown={dragHandlers.onMouseDown}>
         <span className="translate-popup-title">
           <Icon name="translate" size={14} />
           {t("translate.title")}
@@ -188,12 +164,7 @@ export default function TranslatePopup({
           </button>
         </div>
       </div>
-      <div
-        className="translate-popup-body"
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-      >
+      <div className="translate-popup-body">
         {error ? (
           <p className="translate-popup-error">{error}</p>
         ) : (

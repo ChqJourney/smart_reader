@@ -226,7 +226,11 @@ export function useTabs(): UseTabsReturn {
     setTabs((prev) =>
       prev.map((tab) =>
         tab.id === tabId
-          ? { ...tab, pageNum: page, pendingGotoPage: page }
+          ? // Clear scrollTop: this is intentional navigation to a page, and a
+            // stale saved offset would otherwise be re-applied after the jump
+            // by the mount-restore path, snapping the viewer back to the tab's
+            // previous reading spot (docs/REFACTOR_REVIEW_2026-07-17.md #4b).
+            { ...tab, pageNum: page, pendingGotoPage: page, scrollTop: undefined }
           : tab
       )
     );

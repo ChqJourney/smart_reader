@@ -1,5 +1,10 @@
 import { useTranslation } from "react-i18next";
+import { useRef } from "react";
 import { DictEntry } from "../services/dictionary";
+import {
+  ABOVE_ANCHOR_TRANSFORM,
+  useClampedPopupPosition,
+} from "../hooks/useClampedPopupPosition";
 import "./WordTooltip.css";
 
 interface WordTooltipProps {
@@ -18,6 +23,8 @@ export default function WordTooltip({
   y,
 }: WordTooltipProps) {
   const { t } = useTranslation();
+  const popupRef = useRef<HTMLDivElement>(null);
+  const pos = useClampedPopupPosition(popupRef, x, y, ABOVE_ANCHOR_TRANSFORM);
 
   if (!loading && !entry) return null;
 
@@ -35,10 +42,11 @@ export default function WordTooltip({
 
   return (
     <div
+      ref={popupRef}
       className="word-tooltip"
       style={{
-        left: x,
-        top: y,
+        left: pos.x,
+        top: pos.y,
       }}
       data-testid="word-tooltip"
     >

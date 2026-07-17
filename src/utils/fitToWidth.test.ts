@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { computeFitToWidthScale } from "./fitToWidth";
+import {
+  computeFitToWidthScale,
+  computeCenteredScrollLeft,
+} from "./fitToWidth";
 
 describe("computeFitToWidthScale", () => {
   it("computes the scale that fits the page width to the container", () => {
@@ -61,5 +64,75 @@ describe("computeFitToWidthScale", () => {
         sidePaddingPx: 24,
       })
     ).toBe(0);
+  });
+});
+
+describe("computeCenteredScrollLeft", () => {
+  const baseInput = {
+    scrollLeft: 0,
+    wrapperLeft: 0,
+    wrapperWidth: 800,
+    containerLeft: 0,
+    containerWidth: 800,
+    maxScrollLeft: 0,
+  };
+
+  it("returns 0 when the content does not overflow horizontally", () => {
+    expect(computeCenteredScrollLeft(baseInput)).toBe(0);
+  });
+
+  it("keeps an exactly-fitting page at scrollLeft 0 even when other pages overflow (fit-to-width left-shift regression)", () => {
+    // The reported bug: after fit-to-width, off-screen pages still rendered
+    // WIDER than the container (stale-scale sizes / mixed page sizes), so
+    // scrollWidth > clientWidth and centering the CONTENT pushed the fitted
+    // page left by (scrollWidth - clientWidth) / 2. The current page fills
+    // the container exactly (wrapperLeft === containerLeft, widths equal), so
+    // its center already matches the container center → scrollLeft stays 0.
+    expect(
+      computeCenteredScrollLeft({
+        scrollLeft: 130,
+        wrapperLeft: -130, // page's left edge is flush with the container's
+        wrapperWidth: 800,
+        containerLeft: 0,
+        containerWidth: 800,
+        maxScrollLeft: 260, // some off-screen page is 260px wider
+      })
+    ).toBe(0);
+  });
+
+  it("scrolls right to center a page that sits right of the container center", () => {
+    expect(
+      computeCenteredScrollLeft({
+        scrollLeft: 0,
+        wrapperLeft: 200, // wrapper center = 200 + 300 = 500 vs container 400
+        wrapperWidth: 600,
+        containerLeft: 0,
+        containerWidth: 800,
+        maxScrollLeft: 400,
+      })
+    ).toBe(100);
+  });
+
+  it("clamps the result to [0, maxScrollLeft]", () => {
+    expect(
+      computeCenteredScrollLeft({
+        scrollLeft: 0,
+        wrapperLeft: -500,
+        wrapperWidth: 600,
+        containerLeft: 0,
+        containerWidth: 800,
+        maxScrollLeft: 400,
+      })
+    ).toBe(0);
+    expect(
+      computeCenteredScrollLeft({
+        scrollLeft: 390,
+        wrapperLeft: -390 + 500, // far right
+        wrapperWidth: 600,
+        containerLeft: 0,
+        containerWidth: 800,
+        maxScrollLeft: 400,
+      })
+    ).toBe(400);
   });
 });

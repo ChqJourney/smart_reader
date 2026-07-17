@@ -244,6 +244,10 @@ describe("useTabs", () => {
 
     expect(result.current.activeTab?.pageNum).toBe(8);
     expect(result.current.activeTab?.pendingGotoPage).toBe(8);
+    // Intentional navigation clears the saved scrollTop: the mount-restore
+    // path would otherwise re-apply the stale offset after the jump and snap
+    // the viewer back to the previous reading spot (fix #4b).
+    expect(result.current.activeTab?.scrollTop).toBeUndefined();
 
     act(() => {
       result.current.clearTabPendingGotoPage(tabId!);

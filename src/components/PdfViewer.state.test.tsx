@@ -169,7 +169,12 @@ describe("PdfViewer tab state isolation", () => {
       ".pdf-canvas-container.continuous"
     );
     expect(canvasContainer).not.toBeNull();
-    expect(canvasContainer!.scrollTop).toBe(targetScrollTop);
+    // The scrollTop restore (useTabRestore) waits until ALL page viewports
+    // are known, which can settle after the page input is enabled — assert
+    // asynchronously so slower environments (CI) don't race the preload.
+    await waitFor(() => {
+      expect(canvasContainer!.scrollTop).toBe(targetScrollTop);
+    });
   });
 
   it("executes pendingGotoPage after loading and clears it", async () => {

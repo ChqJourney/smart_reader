@@ -23,6 +23,7 @@
 - 解读生成蓝色标记，并在右侧面板展示可点击跳转的解读记录，支持多轮追问。
 - 自定义解读：把多个暂存片段一次性发给 LLM。暂存区支持选择模式勾选部分片段（未进入选择模式时默认全选）；解读要求弹窗仅能通过「取消」/「发送」关闭。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
+- 最近文件下拉面板：置顶常用标准、按文件名/路径搜索、显示目录/相对时间/上次读到的页码、失效文件置灰、单条移除与两段式清空、从列表直接在分屏打开对照（快捷键 Ctrl/Cmd+Shift+O 开合面板）。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
 - LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 单独存放于系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不再落入 `settings.json`。
 
@@ -83,7 +84,7 @@ npm install
 │   │   ├── StashInterpretedPopup.tsx  # 已解读暂存浮层
 │   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录、流式中止）
 │   │   ├── SettingsModal.tsx          # 全局设置 Modal（左侧分页：模型设置 / 功能设置 / 系统设置 / 关于）
-│   │   ├── RecentFilesBar.tsx         # 顶部最近文件栏
+│   │   ├── RecentFilesBar.tsx         # 最近文件：顶栏触发按钮 + 下拉面板（置顶/搜索/分屏打开）
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
 │   │   └── Icon.tsx                   # SVG 图标组件
@@ -91,7 +92,7 @@ npm install
 │   │   ├── useTabs.ts                 # Tab 管理
 │   │   ├── usePersistence.ts          # 批注/会话/暂存状态与持久化
 │   │   ├── useRightPanelLayout.ts     # 右侧面板布局
-│   │   ├── useRecentFiles.ts          # 最近文件列表
+│   │   ├── useRecentFiles.ts          # 最近文件列表（置顶/单条移除/lastPage 回写/配额）
 │   │   ├── useSplitView.ts            # 双排视图状态
 │   │   ├── useDictionaryStatus.tsx    # 本地词典下载状态与进度
 │   │   ├── useWordLookup.ts           # 悬停取词查词逻辑
@@ -110,12 +111,14 @@ npm install
 │   │   ├── zoomAnchor.ts              # 缩放锚点几何计算
 │   │   ├── fitToWidth.ts              # 适合宽度 scale 计算
 │   │   ├── popupPosition.ts           # 浮层定位 clamp 计算
-│   │   └── path.ts                    # 路径工具
+│   │   ├── time.ts                    # 相对时间格式化（最近文件列表）
+│   │   └── path.ts                    # 路径工具（basename/dirname/中间省略）
 │   ├── services/                      # 业务逻辑与 Tauri 命令封装
 │   │   ├── annotations.ts             # Annotation 类型 + CRUD + 持久化调用
 │   │   ├── settings.ts                # 应用设置（LLM + 目标语言 + 悬停翻译开关）CRUD
 │   │   ├── dictionary.ts              # ECDICT 本地词典查询与下载进度监听
 │   │   ├── llm.ts                     # LLM 配置读取、SSE 流式请求、Prompt 模板
+│   │   ├── recentFiles.ts             # 最近文件 CRUD + 文件存在性检查
 │   │   ├── sessions.ts                # 解读会话数据结构与管理
 │   │   └── stash.ts                   # 暂存片段数据结构与管理
 │   └── test/                          # 测试工具
@@ -123,7 +126,7 @@ npm install
 │       └── mocks/tauri.ts             # mockTauriInvoke 辅助函数
 ├── src-tauri/                         # Tauri Rust 后端
 │   ├── src/
-│   │   ├── lib.rs                     # Tauri 命令：read_pdf_bytes / get_pdf_hash / load_pdf_data / save_pdf_data / load_session / save_session / delete_session / check_dictionary / download_dictionary / lookup_word
+│   │   ├── lib.rs                     # Tauri 命令：read_pdf_bytes / get_pdf_hash / load_pdf_data / save_pdf_data / load_session / save_session / delete_session / load_recent_files / save_recent_files / check_files_exist / check_dictionary / download_dictionary / lookup_word
 │   │   ├── dictionary.rs              # ECDICT 本地词典下载（断点续传）、解压、查询
 │   │   └── main.rs                    # 后端入口
 │   ├── capabilities/                  # Tauri 权限配置
@@ -245,7 +248,8 @@ cd src-tauri && cargo test
 - `delete_session(sessionId: string)`：删除会话文件。
 - `authorize_pdf_path(filePath: string)`：将用户通过对话框选择的 PDF 路径加入后端授权白名单，`read_pdf_bytes` / `get_pdf_hash` 会校验该白名单。
 - `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM + 目标语言 + 悬停翻译开关 + 日志级别）；API Key 通过系统钥匙串读写。
-- `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表。
+- `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表（`RecentFile` 含 `pinned` 置顶与 `lastPage` 阅读页码字段，旧数据通过 `#[serde(default)]` 兼容）。
+- `check_files_exist(paths: string[])`：批量检查文件是否仍存在于磁盘，最近文件面板用它置灰已移动/删除的条目。
 - `open_path(path: string)`：仅允许打开 `http://` / `https://` URL，禁止本地文件路径与目录。
 - `open_logs_dir()`：打开应用日志目录，供用户导出排查。
 - `check_dictionary()`：检查本地 ECDICT 词典是否存在及大小。
@@ -367,14 +371,14 @@ SettingsModal.tsx
   - `services/sessions.test.ts`：会话消息更新、流状态。
   - `services/stash.test.ts`：暂存片段管理。
   - `hooks/usePersistence.test.tsx`：StrictMode 下 `handleFollowUp` 不双发、流式中断、annotation 删除、分屏 annotation 隔离、关闭 Tab 资源清理。
-  - `hooks/useRecentFiles.test.ts`：最近文件增删与上限。
+  - `hooks/useRecentFiles.test.ts`：最近文件增删、置顶/超额降级、单条移除、lastPage 回写、分组配额。
   - `hooks/useSplitView.test.ts`：双排视图进入/退出。
   - `components/SelectionToolbar.test.tsx`：工具条渲染、点击外部关闭。
   - `components/AnnotationMarker.test.tsx`：拖拽后不误触发点击。
   - `components/PdfAnnotations.test.tsx`：按页与 `fileHash` 过滤、交互回调。
   - `components/AiChatPanel.test.tsx`：流式更新、中止按钮。
   - `components/SettingsModal.test.tsx`：设置表单与保存回调。
-  - `components/RecentFilesBar.test.tsx`：文件点击与清空。
+  - `components/RecentFilesBar.test.tsx`：面板开合、置顶分组、元信息行、搜索过滤、键盘导航、失效文件置灰、两段式清空。
   - `components/PdfViewer.pageJump.test.tsx`：连续滚动页码跳转、过期 scale 条目按 live scale 重算的滚动位置累加。
   - `components/PdfViewer.state.test.tsx`：tab 状态恢复、恢复窗口页码同步抑制、记录回灌防 stomp。
   - `components/PdfPage.test.tsx`：wrapper 尺寸渲染期直驱（无 prop→state 滞后）、过期 scale 条目重算、自加载上报。
@@ -398,7 +402,7 @@ SettingsModal.tsx
 ### 8.2 E2E 测试
 
 - Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`。
-- `app.spec.ts`：主布局、顶部最近文件栏、设置 Modal、面板显隐。
+- `app.spec.ts`：主布局、顶部最近文件入口、设置 Modal、面板显隐。
 - `pdf-page-jump.spec.ts`：连续滚动模式下页码跳转正确性，使用 mock 的 Tauri `invoke` 返回 PDF 字节。
 - `multi-tab-state.spec.ts`：多 tab 页码/批注隔离、关闭 tab 后状态保持。
 - `pdf-large-doc.spec.ts`：>50 页大文档回归——适合宽度不横向偏移、深度缩放页码不抖动、快速切换 tab 恢复页码（fixtures 含 `gen-sample-long-pdf.mjs` 生成的 60 页 PDF）。
@@ -407,7 +411,7 @@ SettingsModal.tsx
 ### 8.3 后端测试
 
 - `src-tauri/src/lib.rs` 包含 `#[cfg(test)]` 模块。
-- 覆盖：hash 计算、annotation 路径确定性、批注持久化往返、旧格式兼容、会话 CRUD、session id 路径穿越防护、PDF 路径授权、原子文件写入、`check_dictionary` / `lookup_word` 非阻塞 I/O。
+- 覆盖：hash 计算、annotation 路径确定性、批注持久化往返、旧格式兼容、会话 CRUD、session id 路径穿越防护、PDF 路径授权、原子文件写入、最近文件 pinned/lastPage 字段兼容、`check_files_exist` 存在性判断、`check_dictionary` / `lookup_word` 非阻塞 I/O。
 - `src-tauri/src/secure_storage.rs` 包含 `MemoryStorage` 测试实现，覆盖 API Key 钥匙串存取、失败降级。
 - 纯逻辑与 `tauri::AppHandle` 解耦，便于测试。
 
@@ -430,7 +434,7 @@ SettingsModal.tsx
 
 ### 10.2 修改数据模型
 
-- Rust 与 TypeScript 的 `Annotation`、`InterpretationSession`、`StashSource`、`AppSettings` 等类型需要**保持同步**。
+- Rust 与 TypeScript 的 `Annotation`、`InterpretationSession`、`StashSource`、`AppSettings`、`RecentFile` 等类型需要**保持同步**。
 - 新增字段尽量使用 `#[serde(default)]` 和 `?` / `skip_serializing_if`，保持旧数据兼容。
 - 如需破坏性变更，请同时编写旧数据迁移逻辑。
 

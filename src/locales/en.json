@@ -91,8 +91,27 @@
   },
   "recentFiles": {
     "title": "Recent Files",
+    "trigger": "Recent",
     "empty": "Recently opened files will appear here",
-    "clear": "Clear Recent Files"
+    "noMatch": "No matching files",
+    "searchPlaceholder": "Search file name or path…",
+    "pinned": "Pinned",
+    "recent": "Recent",
+    "pin": "Pin to top",
+    "unpin": "Unpin",
+    "remove": "Remove from list",
+    "openInSplit": "Open in split view",
+    "opened": "Open",
+    "missing": "File moved or deleted",
+    "clear": "Clear all",
+    "clearConfirm": "Click again to confirm",
+    "lastPage": "Page {{page}}",
+    "time": {
+      "justNow": "Just now",
+      "minutesAgo": "{{count}} min ago",
+      "hoursAgo": "{{count}} h ago",
+      "daysAgo": "{{count}} d ago"
+    }
   },
   "settings": {
     "title": "Settings",

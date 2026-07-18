@@ -34,6 +34,8 @@ export type IconName =
   | "fit-to-width"
   | "search"
   | "bookmark"
+  | "clock"
+  | "pin"
   | "table-of-contents";
 
 interface IconProps {
@@ -571,6 +573,37 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  clock: (
+    <>
+      <circle
+        cx="10"
+        cy="10"
+        r="7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M10 5.5V10l3 2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  pin: (
+    <>
+      <path
+        d="M6.5 2.5h7L12.5 9l2.5 3h-4l-.8 5.5L9.4 12h-4L8 9 6.5 2.5z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
         strokeLinejoin="round"
       />
     </>

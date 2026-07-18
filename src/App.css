@@ -36,6 +36,10 @@ body {
   border-bottom: 1px solid #e5e5e5;
   backdrop-filter: blur(12px);
   flex-shrink: 0;
+  /* backdrop-filter 会让 header 形成独立层叠上下文，显式抬高层级，
+     否则 header 内的下拉面板（最近文件）会被 .app-main 的内容盖住 */
+  position: relative;
+  z-index: 10;
 }
 
 .app-brand {

@@ -50,10 +50,10 @@ describe("useTabs", () => {
     const { result } = renderHook(() => useTabs());
 
     await act(async () => {
-      await result.current.openPdfByPath("/test/a.pdf", "a.pdf");
+      await result.current.openPdfByPath("/test/a.pdf");
     });
     await act(async () => {
-      await result.current.openPdfByPath("/test/b.pdf", "b.pdf");
+      await result.current.openPdfByPath("/test/b.pdf");
     });
 
     expect(result.current.tabs).toHaveLength(2);
@@ -63,10 +63,10 @@ describe("useTabs", () => {
     const { result } = renderHook(() => useTabs());
 
     await act(async () => {
-      await result.current.openPdfByPath("/test/file.pdf", "file.pdf");
+      await result.current.openPdfByPath("/test/file.pdf");
     });
     await act(async () => {
-      await result.current.openPdfByPath("/test/file.pdf", "file.pdf");
+      await result.current.openPdfByPath("/test/file.pdf");
     });
 
     expect(result.current.tabs).toHaveLength(1);
@@ -98,8 +98,8 @@ describe("useTabs", () => {
     );
 
     const [tab1, tab2] = await act(async () => {
-      const p1 = result.current.openPdfByPath("/test/file.pdf", "file.pdf");
-      const p2 = result.current.openPdfByPath("/test/file.pdf", "file.pdf");
+      const p1 = result.current.openPdfByPath("/test/file.pdf");
+      const p2 = result.current.openPdfByPath("/test/file.pdf");
       resolveHash!("done");
       return Promise.all([p1, p2]);
     });
@@ -134,8 +134,8 @@ describe("useTabs", () => {
     );
 
     await act(async () => {
-      const p1 = result.current.openPdfByPath("/test/file.pdf", "file.pdf");
-      const p2 = result.current.openPdfByPath("/test/file.pdf", "file.pdf");
+      const p1 = result.current.openPdfByPath("/test/file.pdf");
+      const p2 = result.current.openPdfByPath("/test/file.pdf");
       resolveHash!("done");
       await Promise.all([p1, p2]);
     });
@@ -155,10 +155,7 @@ describe("useTabs", () => {
 
     let tabId: string;
     await act(async () => {
-      const tab = await result.current.openPdfByPath(
-        "/test/file.pdf",
-        "file.pdf"
-      );
+      const tab = await result.current.openPdfByPath("/test/file.pdf");
       tabId = tab!.id;
     });
 
@@ -189,10 +186,7 @@ describe("useTabs", () => {
 
     let tabId: string;
     await act(async () => {
-      const tab = await result.current.openPdfByPath(
-        "/test/file.pdf",
-        "file.pdf"
-      );
+      const tab = await result.current.openPdfByPath("/test/file.pdf");
       tabId = tab!.id;
     });
 
@@ -214,10 +208,7 @@ describe("useTabs", () => {
 
     let tabId: string;
     await act(async () => {
-      const tab = await result.current.openPdfByPath(
-        "/test/file.pdf",
-        "file.pdf"
-      );
+      const tab = await result.current.openPdfByPath("/test/file.pdf");
       tabId = tab!.id;
     });
 
@@ -261,10 +252,7 @@ describe("useTabs", () => {
 
     let tabId: string;
     await act(async () => {
-      const tab = await result.current.openPdfByPath(
-        "/test/file.pdf",
-        "file.pdf"
-      );
+      const tab = await result.current.openPdfByPath("/test/file.pdf");
       tabId = tab!.id;
     });
 
@@ -279,7 +267,7 @@ describe("useTabs", () => {
 
     // Open a second tab and switch back to the first one.
     await act(async () => {
-      await result.current.openPdfByPath("/test/other.pdf", "other.pdf");
+      await result.current.openPdfByPath("/test/other.pdf");
     });
 
     act(() => {
@@ -296,10 +284,7 @@ describe("useTabs", () => {
 
     let tabId: string;
     await act(async () => {
-      const tab = await result.current.openPdfByPath(
-        "/test/file.pdf",
-        "file.pdf"
-      );
+      const tab = await result.current.openPdfByPath("/test/file.pdf");
       tabId = tab!.id;
     });
 
@@ -313,7 +298,7 @@ describe("useTabs", () => {
 
     // Open a second tab and switch back to the first one.
     await act(async () => {
-      await result.current.openPdfByPath("/test/other.pdf", "other.pdf");
+      await result.current.openPdfByPath("/test/other.pdf");
     });
 
     act(() => {
@@ -330,11 +315,11 @@ describe("useTabs", () => {
     let tabA: string;
     let tabB: string;
     await act(async () => {
-      const tab = await result.current.openPdfByPath("/test/a.pdf", "a.pdf");
+      const tab = await result.current.openPdfByPath("/test/a.pdf");
       tabA = tab!.id;
     });
     await act(async () => {
-      const tab = await result.current.openPdfByPath("/test/b.pdf", "b.pdf");
+      const tab = await result.current.openPdfByPath("/test/b.pdf");
       tabB = tab!.id;
     });
 

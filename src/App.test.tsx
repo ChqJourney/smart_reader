@@ -48,6 +48,7 @@ vi.mock("./services/llm", async () => {
 });
 
 const lastAnnotations = vi.fn();
+const lastInitialState = vi.fn();
 
 vi.mock("./components/PdfViewer", () => ({
   default: React.forwardRef(
@@ -56,6 +57,8 @@ vi.mock("./components/PdfViewer", () => ({
         tabId,
         onSelection,
         onToggleVisibility,
+        onStateChange,
+        initialState,
         annotations,
         onAnnotationDelete,
       }: {
@@ -67,6 +70,8 @@ vi.mock("./components/PdfViewer", () => ({
           position: { x: number; y: number; pdfX: number; pdfY: number }
         ) => void;
         onToggleVisibility?: () => void;
+        onStateChange?: (state: { pageNum?: number }) => void;
+        initialState?: { pageNum?: number };
         annotations?: {
           id?: string;
           type: string;
@@ -78,6 +83,7 @@ vi.mock("./components/PdfViewer", () => ({
       ref: React.Ref<HTMLDivElement>
     ) => {
       lastAnnotations.mockImplementation(() => annotations ?? []);
+      lastInitialState(initialState);
       return (
         <div data-testid="pdf-viewer" ref={ref}>
           PdfViewer
@@ -94,6 +100,12 @@ vi.mock("./components/PdfViewer", () => ({
             }}
           >
             Select
+          </button>
+          <button
+            data-testid="trigger-state-change"
+            onClick={() => onStateChange?.({ pageNum: 5 })}
+          >
+            State
           </button>
           {annotations?.map((a) => {
             const isExplain =
@@ -149,9 +161,14 @@ async function openPdf(path = "/test/file.pdf") {
   });
 }
 
-function setupMockInvoke() {
+function setupMockInvoke(
+  overrides: Record<string, (args?: Record<string, any>) => unknown> = {}
+) {
   mockInvoke.mockImplementation(
     (command: string, args?: Record<string, any>) => {
+      if (overrides[command]) {
+        return Promise.resolve(overrides[command](args));
+      }
       switch (command) {
         case "load_pdf_data":
           return Promise.resolve({ annotations: [], sessionIds: [] });
@@ -165,6 +182,10 @@ function setupMockInvoke() {
           return Promise.resolve([]);
         case "check_dictionary":
           return Promise.resolve({ exists: false, path: "" });
+        case "check_files_exist":
+          return Promise.resolve(
+            ((args?.paths as string[]) ?? []).map(() => true)
+          );
         case "download_dictionary":
         case "authorize_pdf_path":
           return Promise.resolve(undefined);
@@ -196,6 +217,74 @@ describe("App", () => {
     renderApp();
     expect(screen.getByLabelText("最近打开的文件")).toBeInTheDocument();
     expect(screen.getByTestId("open-pdf-btn")).toBeInTheDocument();
+  });
+
+  it("opens a recent file from the panel and restores its last page", async () => {
+    setupMockInvoke({
+      load_recent_files: () => [
+        {
+          path: "/recent/old.pdf",
+          fileName: "old.pdf",
+          openedAt: 1,
+          lastPage: 7,
+        },
+      ],
+    });
+    renderApp();
+
+    fireEvent.click(screen.getByTestId("recent-files-trigger"));
+    fireEvent.click(await screen.findByText("old.pdf"));
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /关闭 old\.pdf/i })
+      ).toBeInTheDocument();
+    });
+    expect(lastInitialState).toHaveBeenCalledWith(
+      expect.objectContaining({ pageNum: 7 })
+    );
+  });
+
+  it("writes the last read page back to recent files when a tab closes", async () => {
+    renderApp();
+    await openPdf("/test/file.pdf");
+
+    fireEvent.click(screen.getByTestId("trigger-state-change"));
+    fireEvent.click(screen.getByRole("button", { name: /关闭 file\.pdf/i }));
+
+    await waitFor(() => {
+      const saves = mockInvoke.mock.calls.filter(
+        ([cmd]) => cmd === "save_recent_files"
+      );
+      expect(saves.length).toBeGreaterThan(0);
+      expect(saves[saves.length - 1]?.[1]?.files?.[0]).toMatchObject({
+        path: "/test/file.pdf",
+        lastPage: 5,
+      });
+    });
+  });
+
+  it("pins a recent file from the panel and persists it", async () => {
+    setupMockInvoke({
+      load_recent_files: () => [
+        { path: "/recent/a.pdf", fileName: "a.pdf", openedAt: 1 },
+      ],
+    });
+    renderApp();
+
+    fireEvent.click(screen.getByTestId("recent-files-trigger"));
+    fireEvent.click(await screen.findByLabelText("固定到顶部"));
+
+    await waitFor(() => {
+      const saves = mockInvoke.mock.calls.filter(
+        ([cmd]) => cmd === "save_recent_files"
+      );
+      expect(saves.length).toBeGreaterThan(0);
+      expect(saves[saves.length - 1]?.[1]?.files?.[0]).toMatchObject({
+        path: "/recent/a.pdf",
+        pinned: true,
+      });
+    });
   });
 
   it("toggles left and right panels", () => {

@@ -91,8 +91,27 @@
   },
   "recentFiles": {
     "title": "最近打开的文件",
+    "trigger": "最近文件",
     "empty": "最近打开的文件将显示在这里",
-    "clear": "清空最近文件"
+    "noMatch": "没有匹配的文件",
+    "searchPlaceholder": "搜索文件名或路径…",
+    "pinned": "已固定",
+    "recent": "最近",
+    "pin": "固定到顶部",
+    "unpin": "取消固定",
+    "remove": "从列表中移除",
+    "openInSplit": "在右侧分屏打开",
+    "opened": "已打开",
+    "missing": "文件已移动或删除",
+    "clear": "清空全部",
+    "clearConfirm": "再次点击确认清空",
+    "lastPage": "读到第 {{page}} 页",
+    "time": {
+      "justNow": "刚刚",
+      "minutesAgo": "{{count}} 分钟前",
+      "hoursAgo": "{{count}} 小时前",
+      "daysAgo": "{{count}} 天前"
+    }
   },
   "settings": {
     "title": "设置",

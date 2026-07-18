@@ -18,7 +18,7 @@ import {
   useRightPanelLayout,
   DIVIDER_WIDTH,
 } from "./hooks/useRightPanelLayout";
-import { useRecentFiles } from "./hooks/useRecentFiles";
+import { useRecentFiles, type RecentFile } from "./hooks/useRecentFiles";
 import { useSplitView } from "./hooks/useSplitView";
 import RecentFilesBar from "./components/RecentFilesBar";
 import {
@@ -31,7 +31,6 @@ import { getContextWindow } from "./data/platformPresets";
 import { useDictionaryStatus } from "./hooks/useDictionaryStatus";
 import { checkForUpdate } from "./services/updater";
 import { error } from "./services/logs";
-import { getBasename } from "./utils/path";
 import "./App.css";
 
 const RIGHT_PANEL_SPLIT_FRACTION = 0.2;
@@ -264,8 +263,7 @@ function App() {
     let unsubscribe: (() => void) | undefined;
     listen<string>("open-pdf", (event) => {
       const path = event.payload;
-      const fileName = getBasename(path);
-      openPdfByPathRef.current(path, fileName).then((tab) => {
+      openPdfByPathRef.current(path).then((tab) => {
         if (tab) addRecentFileRef.current(tab.filePath, tab.fileName);
       });
     })
@@ -302,13 +300,30 @@ function App() {
   }, [tabs, recentFiles]);
 
   const handleRecentFileClick = useCallback(
-    async (file: import("./hooks/useRecentFiles").RecentFile) => {
-      const tab = await tabs.openPdfByPath(file.path, file.fileName);
+    async (file: RecentFile) => {
+      // 带上 lastPage，viewer 挂载后自动恢复到上次读到的页码
+      const tab = await tabs.openPdfByPath(file.path, file.lastPage);
       if (tab) {
         recentFiles.addRecentFile(tab.filePath, tab.fileName);
       }
     },
     [tabs, recentFiles]
+  );
+
+  const handleOpenRecentInSplit = useCallback(
+    async (file: RecentFile) => {
+      const primaryId = tabs.activeTabId;
+      const tab = await tabs.openPdfByPath(file.path, file.lastPage);
+      if (!tab) return;
+      recentFiles.addRecentFile(tab.filePath, tab.fileName);
+      // 没有主视图，或目标就是主视图本身时无法对照，保持普通打开
+      if (!primaryId || tab.id === primaryId) return;
+      // openPdfByPath 会激活目标 tab；先把主视图切回原 tab，再将其设为副屏
+      tabs.handleTabClick(primaryId);
+      splitView.enterSplitView(tab.id);
+      setFocusedViewer("secondary");
+    },
+    [tabs, recentFiles, splitView]
   );
 
   const handleTabClick = useCallback(
@@ -345,6 +360,10 @@ function App() {
             closingTab.fileHash,
             remainingTabIds
           );
+          // 回写阅读页码，最近文件列表展示「读到第 N 页」并支持恢复
+          if (closingTab.pageNum) {
+            recentFiles.updateLastPage(closingTab.filePath, closingTab.pageNum);
+          }
         }
         // Remove the cached bytes when no other tab uses the same file path.
         const pathStillOpen = tabs.tabs.some(
@@ -361,7 +380,7 @@ function App() {
         }
       });
     },
-    [tabs, persistence, splitView]
+    [tabs, persistence, splitView, recentFiles]
   );
 
   const handleSelection = useCallback(
@@ -471,6 +490,11 @@ function App() {
   const showOnlyLeft = layout.leftVisible && !layout.rightVisible;
   const showOnlyRight = !layout.leftVisible && layout.rightVisible;
 
+  const openFilePaths = useMemo(
+    () => tabs.tabs.map((tab) => tab.filePath),
+    [tabs.tabs]
+  );
+
   const activeTabInitialState = useMemo(() => {
     if (!tabs.activeTab) return undefined;
     return {
@@ -498,8 +522,11 @@ function App() {
       <header className="app-header">
         <RecentFilesBar
           files={recentFiles.recentFiles}
-          activeFilePath={tabs.activeTab?.filePath}
+          openFilePaths={openFilePaths}
           onFileClick={handleRecentFileClick}
+          onOpenInSplit={handleOpenRecentInSplit}
+          onTogglePin={recentFiles.togglePinRecentFile}
+          onRemove={recentFiles.removeRecentFile}
           onClear={recentFiles.clearRecentFiles}
         />
         <div className="app-header-actions">

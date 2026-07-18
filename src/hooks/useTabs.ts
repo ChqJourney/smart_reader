@@ -29,7 +29,7 @@ export interface UseTabsReturn {
   activeTabId: string | null;
   activeTab: PdfTab | null;
   handleOpenPdf: () => Promise<PdfTab | null>;
-  openPdfByPath: (path: string, fileName: string) => Promise<PdfTab | null>;
+  openPdfByPath: (path: string, initialPage?: number) => Promise<PdfTab | null>;
   handleCloseTab: (
     e: React.MouseEvent,
     tabId: string,
@@ -70,7 +70,7 @@ export function useTabs(): UseTabsReturn {
   }, []);
 
   const addTab = useCallback(
-    async (path: string): Promise<PdfTab | null> => {
+    async (path: string, initialPage?: number): Promise<PdfTab | null> => {
       const inFlight = pendingOpens.current.get(path);
       if (inFlight) {
         return inFlight;
@@ -104,6 +104,11 @@ export function useTabs(): UseTabsReturn {
             filePath: path,
             fileName: getBasename(path),
             fileHash,
+            // 从最近文件入口打开时带上上次读到的页码，activateTab 会把它
+            // 转成 pendingGotoPage，viewer 挂载后自动恢复到该页。
+            ...(initialPage && initialPage > 0
+              ? { pageNum: Math.floor(initialPage) }
+              : {}),
           };
 
           setTabs((prev) => [...prev, newTab]);
@@ -150,8 +155,8 @@ export function useTabs(): UseTabsReturn {
   }, [addTab]);
 
   const openPdfByPath = useCallback(
-    async (path: string): Promise<PdfTab | null> => {
-      return addTab(path);
+    async (path: string, initialPage?: number): Promise<PdfTab | null> => {
+      return addTab(path, initialPage);
     },
     [addTab]
   );
@@ -230,7 +235,12 @@ export function useTabs(): UseTabsReturn {
             // stale saved offset would otherwise be re-applied after the jump
             // by the mount-restore path, snapping the viewer back to the tab's
             // previous reading spot (docs/REFACTOR_REVIEW_2026-07-17.md #4b).
-            { ...tab, pageNum: page, pendingGotoPage: page, scrollTop: undefined }
+            {
+              ...tab,
+              pageNum: page,
+              pendingGotoPage: page,
+              scrollTop: undefined,
+            }
           : tab
       )
     );

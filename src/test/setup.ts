@@ -65,6 +65,12 @@ Object.defineProperty(window, "matchMedia", {
   })),
 });
 
+// jsdom does not implement scrollIntoView; stub it so components that scroll
+// focused rows into view do not spam "not implemented" errors.
+if (typeof Element !== "undefined" && !Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = vi.fn();
+}
+
 // Mock IntersectionObserver
 globalThis.IntersectionObserver = class IntersectionObserver {
   readonly root: Element | Document | null = null;

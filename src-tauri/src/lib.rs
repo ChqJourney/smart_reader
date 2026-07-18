@@ -206,6 +206,7 @@ pub fn run() {
             get_api_key,
             load_recent_files,
             save_recent_files,
+            check_files_exist,
             check_dictionary,
             download_dictionary,
             lookup_word,
@@ -592,6 +593,22 @@ struct RecentFile {
     file_name: String,
     #[serde(default)]
     opened_at: u64,
+    // 固定条目不参与时间淘汰，展示在面板顶部；旧数据没有该字段，默认为 false。
+    #[serde(default)]
+    pinned: bool,
+    // 关闭 tab 时回写的阅读页码，用于「读到第 N 页」与恢复；旧数据无此字段。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    last_page: Option<u32>,
+}
+
+/// Report which of the given paths still exist on disk. Pure helper kept
+/// separate from the Tauri command so it can be unit tested without an
+/// async runtime.
+fn paths_exist(paths: &[String]) -> Vec<bool> {
+    paths
+        .iter()
+        .map(|p| std::path::Path::new(p).is_file())
+        .collect()
 }
 
 fn annotations_dir(base_dir: &std::path::Path) -> std::path::PathBuf {
@@ -984,6 +1001,13 @@ async fn save_recent_files(app: tauri::AppHandle, files: Vec<RecentFile>) -> Res
 }
 
 #[tauri::command]
+async fn check_files_exist(paths: Vec<String>) -> Result<Vec<bool>, String> {
+    tauri::async_runtime::spawn_blocking(move || Ok(paths_exist(&paths)))
+        .await
+        .map_err(|e| format!("Task failed: {}", e))?
+}
+
+#[tauri::command]
 async fn check_dictionary(app: tauri::AppHandle) -> Result<dictionary::DictionaryStatus, String> {
     tauri::async_runtime::spawn_blocking(move || -> Result<dictionary::DictionaryStatus, String> {
         dictionary::check_dictionary(&app)
@@ -1109,13 +1133,59 @@ mod tests {
                 path: "/tmp/a.pdf".to_string(),
                 file_name: "a.pdf".to_string(),
                 opened_at: 1,
+                pinned: false,
+                last_page: None,
             },
             RecentFile {
                 path: "/tmp/b.pdf".to_string(),
                 file_name: "b.pdf".to_string(),
                 opened_at: 2,
+                pinned: false,
+                last_page: None,
             },
         ]
+    }
+
+    #[test]
+    fn recent_files_old_format_without_pin_fields_deserializes() {
+        // 旧版本 recent_files.json 没有 pinned / lastPage 字段，反序列化应回退默认值。
+        let raw = r#"[{"path":"/tmp/a.pdf","fileName":"a.pdf","openedAt":1}]"#;
+        let files: Vec<RecentFile> = serde_json::from_str(raw).unwrap();
+        assert_eq!(files.len(), 1);
+        assert!(!files[0].pinned);
+        assert_eq!(files[0].last_page, None);
+    }
+
+    #[test]
+    fn recent_files_pin_fields_roundtrip() {
+        let base = tempfile::tempdir().unwrap();
+        let files = vec![RecentFile {
+            path: "/tmp/a.pdf".to_string(),
+            file_name: "a.pdf".to_string(),
+            opened_at: 1,
+            pinned: true,
+            last_page: Some(47),
+        }];
+        save_recent_files_to_disk(base.path(), files.clone()).unwrap();
+        let loaded = load_recent_files_from_disk(base.path()).unwrap();
+        assert_eq!(loaded, files);
+        // lastPage 为 None 时不写入 JSON，保持文件干净
+        let raw = std::fs::read_to_string(recent_files_path(base.path())).unwrap();
+        assert!(!raw.contains("lastPage") || raw.contains("47"));
+    }
+
+    #[test]
+    fn paths_exist_reports_existing_files_only() {
+        let dir = tempfile::tempdir().unwrap();
+        let existing = dir.path().join("exists.pdf");
+        std::fs::write(&existing, b"pdf").unwrap();
+        let missing = dir.path().join("missing.pdf");
+        let paths = vec![
+            existing.to_str().unwrap().to_string(),
+            missing.to_str().unwrap().to_string(),
+        ];
+        assert_eq!(paths_exist(&paths), vec![true, false]);
+        assert_eq!(paths_exist(&[]), Vec::<bool>::new());
     }
 
     #[test]

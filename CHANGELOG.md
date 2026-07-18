@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-07-18
+
 ### Added
 - 新增 `CHANGELOG.md`：开发时把变更记录在 `[Unreleased]` 段落下，发布时自动提取为 GitHub Release notes。
 - 新增 `scripts/prepare-release.mjs`：发布时自动固化 CHANGELOG 版本段落并提取 Release notes，段落为空则终止发布。

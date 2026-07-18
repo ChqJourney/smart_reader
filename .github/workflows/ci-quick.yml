@@ -1,0 +1,48 @@
+# 快速门禁：非 master 分支每次 push 只跑轻量检查，目标 < 5 分钟出结果。
+# master 分支的 push / PR 由 ci-full.yml 覆盖；生产构建、E2E、cargo、audit 等重活不在这里。
+
+name: CI Quick
+
+on:
+  push:
+    branches-ignore:
+      - master
+    paths-ignore:
+      - "docs/**"
+      - "landing/**"
+      - "**.md"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  quick:
+    name: Lint + type-check + unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Run frontend unit / integration tests
+        run: npm run test

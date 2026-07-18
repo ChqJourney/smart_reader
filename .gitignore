@@ -42,3 +42,6 @@ src-tauri/gen/schemas
 .env.*
 !.env.example
 .workbuddy/
+
+# Release
+release_notes.md

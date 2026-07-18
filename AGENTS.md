@@ -139,7 +139,10 @@ npm install
 ├── scripts/                           # 辅助脚本
 │   ├── gen-sample-pdf.mjs             # 生成测试 PDF
 │   ├── gen-sample-short-pdf.mjs       # 生成短页测试 PDF
-│   └── gen-sample-long-pdf.mjs        # 生成 60 页大文档测试 PDF
+│   ├── gen-sample-long-pdf.mjs        # 生成 60 页大文档测试 PDF
+│   ├── bump-version.mjs               # 同步 package.json / Cargo.toml / tauri.conf.json 版本号
+│   └── prepare-release.mjs            # 发布前固化 CHANGELOG 版本段落并提取 Release notes
+├── CHANGELOG.md                       # 版本变更记录（GitHub Release notes 来源）
 ├── package.json
 ├── vite.config.ts                     # Vite + Vitest 配置
 ├── playwright.config.ts               # Playwright 配置
@@ -177,21 +180,17 @@ npm run tauri build -- --no-bundle
 
 ### 5.3 发版流程
 
-当前仅发布 Windows 可执行文件，不生成安装包，也不进行 Windows 代码签名。
+通过 GitHub Actions 手动触发一键发布（`.github/workflows/release.yml`），当前仅发布 Windows 安装包与可执行文件，不进行 Windows 代码签名。
 
-1. 同步版本号：
-   ```bash
-   npm run bump 0.1.1
-   git add -A && git commit -m "release: v0.1.1"
-   git tag v0.1.1
-   git push origin v0.1.1
-   ```
-2. GitHub Actions `cd.yml` 自动：
-   - 用 `--no-bundle` 构建 Windows `exe`
-   - 用 `tauri bundle` 生成 NSIS 安装包（`SpecReader AI_*_x64-setup.exe`），并自动签名生成 `.sig`
-   - 用 `.sig` 内容生成 `latest.json`
-   - 上传 `SpecReader AI v{version}.exe`、`SpecReader-AI_{version}_x64-setup.exe`、`latest.json` 到 Release
-3. 客户端启动 3 秒后自动检查 `latest.json`，发现新版本提示下载并重启。
+1. 开发过程中把变更记录到 `CHANGELOG.md` 的 `## [Unreleased]` 段落下（发布时为空则流程失败，不会打 tag）。
+2. GitHub 仓库 → Actions → Release → Run workflow，输入版本号（如 `0.8.2`）。
+3. workflow 自动：
+   - 运行快速门禁（type-check / lint / 单元测试），失败即终止。
+   - 用 `scripts/bump-version.mjs` 同步 `package.json` / `Cargo.toml` / `tauri.conf.json` 版本号。
+   - 用 `scripts/prepare-release.mjs` 把 CHANGELOG 的 `[Unreleased]` 固化为 `## [x.y.z] - 日期` 段落，并提取该段落作为 Release notes。
+   - commit（`release: vx.y.z`）+ 打 tag 并 push 到 master。
+   - 在 Windows runner 用 `tauri-action` 构建 NSIS 安装包，自动生成 `.sig` 与 `latest.json`，创建 **Draft Release**（notes 取自 CHANGELOG 对应段落），并附加独立 exe `SpecReader AI v{version}.exe`。
+4. 下载 Draft Release 中的安装包人工冒烟测试，确认无误后在 Release 页面点击 Publish。发布后 `latest.json` 生效，客户端启动 3 秒后自动检查发现新版本并提示下载重启。
 
 > 注意：Tauri 更新包签名私钥保存在 `~/.tauri/specreader.key`，需配置为 GitHub Secret `TAURI_SIGNING_PRIVATE_KEY`。
 
@@ -456,7 +455,24 @@ SettingsModal.tsx
   - `RIGHT_PANEL_DEFAULT_FRACTION = 3 / 8`
 - 连续滚动相关常量（padding、spacing）同时在 `PdfViewer.tsx` 与 CSS 中定义，修改时需两边同步。
 
-## 11. 持续集成建议
+## 11. 持续集成
+
+CI 分层触发，避免每次 push 都跑全量：
+
+| Workflow | 触发 | 内容 |
+| --- | --- | --- |
+| `ci-quick.yml` | 非 master 分支 push | type-check / lint / 单元测试（目标 < 5 分钟） |
+| `ci-full.yml` | master push / PR | 上述全部 + 前端 build + cargo test / clippy / audit + 双浏览器 E2E + npm audit（三个 job 并行，Rust 依赖有缓存） |
+| `release.yml` | 手动 dispatch（输入版本号） | 一键发布，见 5.3 发版流程 |
+| `landing.yml` | master 上 `landing/**` 变更 / 手动 | 部署 GitHub Pages |
+
+约定：
+
+- `docs/**`、`landing/**`、`**.md` 的变更不触发 CI（paths-ignore）。
+- 审计类检查（npm audit / cargo audit）只在 master 集成时运行，不作为日常 push 门禁；cargo-audit 通过 `taiki-e/install-action` 安装预编译二进制。
+- 每个 workflow 都配置了 concurrency 自动取消同分支的旧 run。
+
+本地仍可单独运行各层测试以加快反馈：
 
 ```bash
 npm ci
@@ -465,8 +481,6 @@ npm run test
 npm run test:e2e
 cd src-tauri && cargo test
 ```
-
-可单独运行各层测试以加快反馈。
 
 ## 12. 参考文档
 

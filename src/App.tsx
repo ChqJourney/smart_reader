@@ -131,6 +131,7 @@ function App() {
   const isResizingSplitRef = useRef(false);
   const currentSplitPctRef = useRef(50);
   const prevRightWidthRef = useRef<number | null>(null);
+  const wasSplitRef = useRef(false);
 
   // Auto-shrink right panel when entering split view
   useEffect(() => {
@@ -146,7 +147,9 @@ function App() {
         );
         layout.setRightPanelWidth(targetWidth);
       }
-      if (!layout.rightVisible) {
+      // 仅在进入分屏的瞬间补开 AI 栏；分屏期间允许用户手动关闭，
+      // 否则依赖 rightVisible 会让关闭动作被立即撤销。
+      if (!wasSplitRef.current && !layout.rightVisible) {
         layout.openRightPanel();
       }
     } else {
@@ -155,6 +158,7 @@ function App() {
         prevRightWidthRef.current = null;
       }
     }
+    wasSplitRef.current = splitView.isSplitView;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     splitView.isSplitView,

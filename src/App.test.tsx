@@ -813,6 +813,56 @@ describe("App", () => {
     main.getBoundingClientRect = originalGetBoundingClientRect;
   });
 
+  it("keeps the AI panel closed in split view after the user hides it", async () => {
+    (open as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("/test/file-a.pdf")
+      .mockResolvedValueOnce("/test/file-b.pdf");
+
+    renderApp();
+
+    await openPdf("/test/file-a.pdf");
+    fireEvent.click(screen.getByTestId("open-pdf-btn"));
+    await waitFor(() => {
+      expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
+    });
+
+    const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i })
+      .parentElement as HTMLElement;
+    let draggedTabId = "";
+    const dataTransfer = {
+      setData: vi.fn((_format: string, value: string) => {
+        draggedTabId = value;
+      }),
+      effectAllowed: "",
+      getData: vi.fn(() => draggedTabId),
+      dropEffect: "",
+    };
+
+    const main = document.querySelector("main") as HTMLElement;
+    fireEvent.dragStart(inactiveTab, { dataTransfer });
+    fireEvent.dragOver(main, { dataTransfer });
+    fireEvent.drop(main, { dataTransfer });
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);
+    });
+
+    // AI panel is visible in split view; hide it.
+    const hideButton = screen.getByLabelText("隐藏面板");
+    fireEvent.click(hideButton);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("显示 AI 助手")).toBeInTheDocument();
+    });
+
+    // The auto-open effect must not reopen the panel after the user hid it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(screen.queryByLabelText("隐藏面板")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("显示 AI 助手")).toBeInTheDocument();
+  });
+
   it("switches right panel focus when clicking a viewer in split view", async () => {
     (open as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce("/test/file-a.pdf")

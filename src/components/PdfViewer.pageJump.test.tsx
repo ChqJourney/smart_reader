@@ -113,6 +113,29 @@ function expectedScrollTopForPage(targetPage: number): number {
   return top;
 }
 
+/**
+ * Wait until the viewport preload batch has been committed, observable via
+ * each page wrapper's controlled inline height (400px placeholder before).
+ * goToPage reads pageViewportsRef synchronously: if Enter is pressed before
+ * the batch lands, computeContinuousScrollTop falls back to DOM geometry,
+ * which is all zeros in jsdom and scrolls to top 0 (flaky on loaded CI
+ * runners). The ref-sync effect flushes in the same commit as the heights,
+ * so seeing them guarantees the jump math will use viewport accumulation.
+ */
+async function waitForViewportsReady(container: HTMLElement): Promise<void> {
+  await waitFor(() => {
+    for (let p = 1; p <= NUM_PAGES; p++) {
+      const wrapper = container.querySelector<HTMLElement>(
+        `.pdf-page-wrapper[data-page="${p}"]`
+      );
+      const expected = `${PAGE_HEIGHTS[p - 1] * SCALE}px`;
+      if (!wrapper || wrapper.style.height !== expected) {
+        throw new Error(`page ${p} viewport not ready yet`);
+      }
+    }
+  });
+}
+
 describe("computeContinuousScrollTop", () => {
   it("uses DOM geometry when the target wrapper is available and viewport data is incomplete", () => {
     // Container border-box top is at viewport y=100, content area starts at y=124 (padding-top 24).
@@ -296,6 +319,7 @@ describe("PdfViewer continuous mode page jump", () => {
       }
       return input;
     });
+    await waitForViewportsReady(container);
 
     expect(pageInput.value).toBe("1");
 
@@ -383,6 +407,9 @@ describe("PdfViewer continuous mode page jump", () => {
       }
       return input;
     });
+    // Same gate as the page-jump test: the assertions below check exact
+    // scrollTop values, which require the viewport batch to be committed.
+    await waitForViewportsReady(container);
 
     expect(pageInput.value).toBe("1");
 

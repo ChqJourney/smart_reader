@@ -134,6 +134,9 @@
     "hoverTranslate": "Hover Translation",
     "hoverTranslateHint": "Show translations from the local ECDICT dictionary when hovering over English words.",
     "enableHoverTranslate": "Enable Hover Translation",
+    "agentTools": "Smart Document Lookup",
+    "agentToolsHint": "Allow AI to automatically look up content in currently open PDFs during interpretation, to verify referenced clauses, tables, or definitions.",
+    "enableAgentTools": "Enable Smart Document Lookup",
     "dictionaryReady": "Dictionary Ready",
     "downloadingProgress": "Downloading {{percent}}%",
     "downloadingProgressUnknown": "Downloaded {{size}}",
@@ -197,7 +200,23 @@
       "translate": "Translate the following content from the standards document \"{{fileName}}\", page {{page}}, into {{targetLanguage}}, keep professional terminology accurate, and retain the original text when key terms first appear:\n\n{{text}}"
     },
     "customInterpretPrompt": "Please answer the following question in {{targetLanguage}}:\n\n{{prompt}}\n\n{{sources}}",
-    "customInterpretSource": "Excerpt {{index}} ({{fileName}} page {{page}}):\n{{text}}"
+    "customInterpretSource": "Excerpt {{index}} ({{fileName}} page {{page}}):\n{{text}}",
+    "toolsSystemAddendum": "You can use tools to look up content in currently open PDFs. When the excerpt refers to other clause numbers, tables, or definitions and accurate interpretation requires it, use search_in_pdf / read_pdf_page to check the source before answering. Cite sources as (page N) in your answer. Do not fabricate clauses that were not found."
+  },
+  "tools": {
+    "status": {
+      "listing": "Listing open documents…",
+      "searching": "Searching for \"{{query}}\"…",
+      "readingPage": "Reading page {{page}}…"
+    },
+    "callsRunning": "Looking up documents…",
+    "callsSummary": "Looked up {{count}} document locations",
+    "expandedSummary": "Expand call records",
+    "collapsedSummary": "Collapse call records",
+    "callSearch": "Search for “{{query}}”",
+    "callReadPage": "Read page {{page}}",
+    "callList": "List open documents",
+    "callUnknown": "Unknown tool {{name}}"
   },
   "tabs": {
     "maxTabsHint": "You can open up to {{maxTabs}} PDF files at the same time. Please close some tabs first."

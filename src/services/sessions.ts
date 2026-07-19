@@ -2,13 +2,19 @@ import { invoke } from "@tauri-apps/api/core";
 import { error } from "./logs";
 import { StashItem } from "./stash";
 import { SelectionAction } from "./llm";
-import type { LlmError, TokenUsage } from "../types/llm";
+import type { LlmError, TokenUsage, ToolCall } from "../types/llm";
 
 export type SessionAction = SelectionAction | "custom";
 
+export interface ToolEvent {
+  name: string;
+  summary: string;
+  status: "running" | "done";
+}
+
 export interface InterpretationMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "tool";
   content: string;
   createdAt: number;
   /** Accumulated reasoning/thinking content (for ThinkingIndicator) */
@@ -17,6 +23,14 @@ export interface InterpretationMessage {
   error?: LlmError;
   /** Token usage for this message's LLM call */
   usage?: TokenUsage;
+  /** Tool call ID when role === "tool" */
+  toolCallId?: string;
+  /** Tool name when role === "tool" (for display/audit only) */
+  name?: string;
+  /** Tool calls initiated by an assistant message */
+  toolCalls?: ToolCall[];
+  /** UI-facing summary of tool calls executed for this assistant message */
+  toolEvents?: ToolEvent[];
 }
 
 export interface InterpretationSession {

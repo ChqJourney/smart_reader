@@ -463,6 +463,18 @@ struct InterpretationMessage {
     /// Token usage for this message. Stored as opaque JSON.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     usage: Option<serde_json::Value>,
+    /// Tool call ID when role == "tool".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
+    /// Tool name when role == "tool" (for display/audit only).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    name: Option<String>,
+    /// Tool calls initiated by an assistant message.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tool_calls: Option<Vec<serde_json::Value>>,
+    /// UI-facing summary of tool calls executed for this assistant message.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tool_events: Option<Vec<serde_json::Value>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -526,6 +538,9 @@ struct AppSettings {
     /// Max tool call rounds (0 = use global default of 5)
     #[serde(default = "default_max_tool_rounds")]
     max_tool_rounds: u32,
+    /// Whether the agent can use PDF tools during interpretation.
+    #[serde(default = "default_agent_tools_enabled")]
+    agent_tools_enabled: bool,
     #[serde(default = "default_target_language")]
     target_language: String,
     #[serde(default)]
@@ -548,6 +563,10 @@ fn default_max_tool_rounds() -> u32 {
     5
 }
 
+fn default_agent_tools_enabled() -> bool {
+    true
+}
+
 fn default_target_language() -> String {
     "中文".to_string()
 }
@@ -567,6 +586,7 @@ impl Default for AppSettings {
             platform_id: default_platform_id(),
             thinking: default_thinking(),
             max_tool_rounds: default_max_tool_rounds(),
+            agent_tools_enabled: default_agent_tools_enabled(),
             target_language: default_target_language(),
             system_prompts: SystemPrompts::default(),
             hover_translate: false,
@@ -1098,6 +1118,10 @@ mod tests {
                 reasoning_content: None,
                 error: None,
                 usage: None,
+                tool_call_id: None,
+                name: None,
+                tool_calls: None,
+                tool_events: None,
             }],
             is_streaming: false,
             streaming_message_id: None,
@@ -1120,6 +1144,7 @@ mod tests {
             platform_id: "deepseek".to_string(),
             thinking: "auto".to_string(),
             max_tool_rounds: 5,
+            agent_tools_enabled: true,
             target_language: "中文".to_string(),
             system_prompts: SystemPrompts::default(),
             hover_translate: false,

@@ -43,6 +43,16 @@ pub struct ChatMessage {
     pub reasoning_content: Option<String>,
 }
 
+/// Accumulator for a single streaming tool_call so that fragments can be
+/// merged by `index` before emitting a complete `StreamEvent::ToolCall`.
+#[derive(Debug, Clone, Default)]
+struct ToolCallAcc {
+    id: String,
+    call_type: String,
+    name: String,
+    arguments: String,
+}
+
 /// Token usage info from the last SSE chunk.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -89,6 +99,7 @@ pub enum StreamEvent {
     ToolCall {
         name: String,
         args: String,
+        #[serde(rename = "callId")]
         call_id: String,
     },
     ToolResult { call_id: String, summary: String },
@@ -117,6 +128,61 @@ pub struct StreamParams {
 /// and the streaming loop exits on the next iteration.
 pub type CancelMap = Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>;
 
+/// Convert a frontend-facing `ChatMessage` (camelCase) into the wire format
+/// expected by OpenAI-compatible APIs (snake_case). Tool messages never carry
+/// `name` on the wire; assistant tool_calls messages always send empty content.
+fn chat_message_to_wire(msg: &ChatMessage) -> serde_json::Value {
+    let mut out = serde_json::json!({
+        "role": msg.role,
+        "content": msg.content,
+    });
+    if let Some(tool_call_id) = &msg.tool_call_id {
+        out["tool_call_id"] = serde_json::json!(tool_call_id);
+    }
+    if let Some(tool_calls) = &msg.tool_calls {
+        let wire_calls: Vec<serde_json::Value> = tool_calls
+            .iter()
+            .map(|call| {
+                let id = call
+                    .get("id")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let call_type = call
+                    .get("type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("function")
+                    .to_string();
+                let name = call
+                    .get("function")
+                    .and_then(|f| f.get("name"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let arguments = call
+                    .get("function")
+                    .and_then(|f| f.get("arguments"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("{}")
+                    .to_string();
+                serde_json::json!({
+                    "id": id,
+                    "type": call_type,
+                    "function": {
+                        "name": name,
+                        "arguments": arguments,
+                    }
+                })
+            })
+            .collect();
+        out["tool_calls"] = serde_json::json!(wire_calls);
+    }
+    if let Some(reasoning_content) = &msg.reasoning_content {
+        out["reasoning_content"] = serde_json::json!(reasoning_content);
+    }
+    out
+}
+
 /// Build the JSON request body for the chat completions API.
 ///
 /// Platform-specific thinking parameter handling:
@@ -131,9 +197,11 @@ fn build_request_body(
     thinking: &ThinkingMode,
     enable_tools: bool,
 ) -> serde_json::Value {
+    let wire_messages: Vec<serde_json::Value> =
+        messages.iter().map(chat_message_to_wire).collect();
     let mut body = serde_json::json!({
         "model": model,
-        "messages": messages,
+        "messages": wire_messages,
         "stream": true,
         "stream_options": { "include_usage": true },
     });
@@ -280,15 +348,40 @@ fn extract_error_message(body: &str) -> Option<String> {
     None
 }
 
+/// Flush any accumulated tool_calls as complete `StreamEvent::ToolCall`s.
+fn flush_tool_calls(
+    accumulators: &mut Vec<ToolCallAcc>,
+    on_event: &Channel<StreamEvent>,
+) {
+    for acc in accumulators.drain(..) {
+        if acc.id.is_empty() || acc.name.is_empty() {
+            continue;
+        }
+        let _ = on_event.send(StreamEvent::ToolCall {
+            name: acc.name,
+            args: acc.arguments,
+            call_id: acc.id,
+        });
+    }
+}
+
 /// Parse a single SSE `data:` line and emit appropriate StreamEvent(s).
 ///
+/// `accumulators` keeps per-index tool_call fragments across chunks; they are
+/// flushed when `finish_reason` is non-empty or `[DONE]` is received.
+///
 /// Returns true if the stream should continue, false if [DONE] was received.
-fn parse_sse_line(line: &str, on_event: &Channel<StreamEvent>) -> Result<bool, String> {
+fn parse_sse_line(
+    line: &str,
+    accumulators: &mut Vec<ToolCallAcc>,
+    on_event: &Channel<StreamEvent>,
+) -> Result<bool, String> {
     let trimmed = line.trim();
     if trimmed.is_empty() {
         return Ok(true);
     }
     if trimmed == "data: [DONE]" {
+        flush_tool_calls(accumulators, on_event);
         return Ok(false);
     }
     if !trimmed.starts_with("data: ") {
@@ -369,38 +462,48 @@ fn parse_sse_line(line: &str, on_event: &Channel<StreamEvent>) -> Result<bool, S
                 }
             }
 
-            // Check for tool_calls
+            // Accumulate tool_call fragments by index; flush on finish_reason.
             if let Some(tool_calls) = choice
                 .get("delta")
                 .and_then(|d| d.get("tool_calls"))
                 .and_then(|tc| tc.as_array())
             {
                 for tc in tool_calls {
-                    let name = tc
-                        .get("function")
-                        .and_then(|f| f.get("name"))
-                        .and_then(|n| n.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    let args = tc
-                        .get("function")
-                        .and_then(|f| f.get("arguments"))
-                        .and_then(|a| a.as_str())
-                        .unwrap_or("{}")
-                        .to_string();
-                    let call_id = tc
-                        .get("id")
-                        .and_then(|i| i.as_str())
-                        .unwrap_or("")
-                        .to_string();
-                    if !name.is_empty() {
-                        let _ = on_event.send(StreamEvent::ToolCall {
-                            name,
-                            args,
-                            call_id,
-                        });
+                    let index = tc
+                        .get("index")
+                        .and_then(|i| i.as_u64())
+                        .unwrap_or(0) as usize;
+                    if accumulators.len() <= index {
+                        accumulators.resize_with(index + 1, ToolCallAcc::default);
+                    }
+                    let acc = &mut accumulators[index];
+                    if let Some(id) = tc.get("id").and_then(|i| i.as_str()) {
+                        acc.id = id.to_string();
+                    }
+                    if let Some(call_type) = tc.get("type").and_then(|t| t.as_str()) {
+                        acc.call_type = call_type.to_string();
+                    }
+                    if let Some(function) = tc.get("function").and_then(|f| f.as_object()) {
+                        if let Some(name) = function.get("name").and_then(|n| n.as_str()) {
+                            acc.name = name.to_string();
+                        }
+                        if let Some(args) = function.get("arguments").and_then(|a| a.as_str()) {
+                            acc.arguments.push_str(args);
+                        }
                     }
                 }
+            }
+
+            // Flush accumulated tool_calls whenever finish_reason is present.
+            // We do not require finish_reason == "tool_calls"; platform behavior
+            // varies, so any non-empty finish_reason is treated as a flush signal.
+            if choice
+                .get("finish_reason")
+                .and_then(|f| f.as_str())
+                .filter(|s| !s.is_empty())
+                .is_some()
+            {
+                flush_tool_calls(accumulators, on_event);
             }
         }
     }
@@ -497,12 +600,12 @@ pub async fn chat_completions_stream(
     let url = format!("{}/chat/completions", base_url);
     let body = build_request_body(&params.messages, &model, &params.thinking, params.enable_tools);
 
+    log::info!("llmRequestStarted: model={} url={}", model, base_url);
+
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(300))
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-
-    log::info!("llmRequestStarted: model={} url={}", model, base_url);
 
     let response = match client
         .post(&url)
@@ -543,6 +646,7 @@ pub async fn chat_completions_stream(
     use futures_util::StreamExt;
     let mut stream = response.bytes_stream();
     let mut buffer = String::new();
+    let mut tool_call_accumulators: Vec<ToolCallAcc> = Vec::new();
 
     loop {
         // Check for cancellation
@@ -570,7 +674,7 @@ pub async fn chat_completions_stream(
                 }
 
                 for line in &lines {
-                    match parse_sse_line(line, &on_event) {
+                    match parse_sse_line(line, &mut tool_call_accumulators, &on_event) {
                         Ok(should_continue) => {
                             if !should_continue {
                                 cleanup();
@@ -596,7 +700,7 @@ pub async fn chat_completions_stream(
             None => {
                 // Stream ended — process any remaining buffer
                 if !buffer.is_empty() {
-                    let _ = parse_sse_line(&buffer, &on_event);
+                    let _ = parse_sse_line(&buffer, &mut tool_call_accumulators, &on_event);
                 }
                 cleanup();
                 let _ = on_event.send(StreamEvent::Done);
@@ -772,6 +876,44 @@ mod tests {
     }
 
     #[test]
+    fn build_request_body_uses_snake_case_for_tool_messages() {
+        let messages = vec![
+            ChatMessage {
+                role: "assistant".into(),
+                content: "".into(),
+                tool_call_id: None,
+                tool_calls: Some(vec![serde_json::json!({
+                    "id": "call_1",
+                    "type": "function",
+                    "function": {
+                        "name": "read_pdf_page",
+                        "arguments": "{\"page_number\":1}"
+                    }
+                })]),
+                reasoning_content: Some("reasoning".into()),
+            },
+            ChatMessage {
+                role: "tool".into(),
+                content: "result".into(),
+                tool_call_id: Some("call_1".into()),
+                tool_calls: None,
+                reasoning_content: None,
+            },
+        ];
+        let body = build_request_body(&messages, "qwen-plus", &ThinkingMode::Auto, false);
+        let wire = body["messages"].as_array().unwrap();
+        assert_eq!(wire[0]["role"], "assistant");
+        assert_eq!(wire[0]["content"], "");
+        assert!(wire[0].get("reasoning_content").is_some());
+        let tool_calls = wire[0]["tool_calls"].as_array().unwrap();
+        assert_eq!(tool_calls[0]["id"], "call_1");
+        assert_eq!(tool_calls[0]["function"]["name"], "read_pdf_page");
+        assert_eq!(wire[1]["role"], "tool");
+        assert_eq!(wire[1]["tool_call_id"], "call_1");
+        assert!(wire[1].get("name").is_none());
+    }
+
+    #[test]
     fn classify_401_as_auth_error() {
         let body = r#"{"error":{"message":"Authentication Fails, Your api key: fake is invalid","type":"authentication_error"}}"#;
         let error = classify_http_error(401, body, "deepseek-chat");
@@ -852,5 +994,89 @@ mod tests {
         assert!(names.contains(&"list_open_pdfs"));
         assert!(names.contains(&"read_pdf_page"));
         assert!(names.contains(&"search_in_pdf"));
+    }
+
+    fn test_channel() -> (Channel<StreamEvent>, Arc<Mutex<Vec<StreamEvent>>>) {
+        let events: Arc<Mutex<Vec<StreamEvent>>> = Arc::new(Mutex::new(Vec::new()));
+        let events_clone = events.clone();
+        let channel = Channel::new(move |body: tauri::ipc::InvokeResponseBody| {
+            let event: Option<StreamEvent> = match body {
+                tauri::ipc::InvokeResponseBody::Json(s) => {
+                    serde_json::from_str(&s).ok()
+                }
+                tauri::ipc::InvokeResponseBody::Raw(bytes) => {
+                    serde_json::from_slice(&bytes).ok()
+                }
+            };
+            if let Some(event) = event {
+                events_clone.lock().unwrap().push(event);
+            }
+            Ok(())
+        });
+        (channel, events)
+    }
+
+    fn send_lines(lines: &[&str]) -> Vec<StreamEvent> {
+        let (channel, events) = test_channel();
+        let mut acc: Vec<ToolCallAcc> = Vec::new();
+        for line in lines {
+            let _ = parse_sse_line(line, &mut acc, &channel);
+        }
+        let guard = events.lock().unwrap();
+        let cloned = guard.clone();
+        drop(guard);
+        cloned
+    }
+
+    #[test]
+    fn parse_sse_accumulates_tool_call_arguments() {
+        let events = send_lines(&[
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"read_pdf_page","arguments":"{"}}]}}]}"#,
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"file_hash\":\""}}]}}]}"#,
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"abc\"}"}}]}}]}"#,
+            r#"data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}"#,
+        ]);
+        let tool_calls: Vec<&StreamEvent> = events
+            .iter()
+            .filter(|e| matches!(e, StreamEvent::ToolCall { .. }))
+            .collect();
+        assert_eq!(tool_calls.len(), 1);
+        if let StreamEvent::ToolCall { name, args, call_id } = tool_calls[0] {
+            assert_eq!(name, "read_pdf_page");
+            assert_eq!(call_id, "call_1");
+            assert_eq!(args, r#"{"file_hash":"abc"}"#);
+        } else {
+            panic!("Expected ToolCall event");
+        }
+    }
+
+    #[test]
+    fn parse_sse_flushes_tool_calls_on_done() {
+        let events = send_lines(&[
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_2","function":{"name":"search_in_pdf"}}]}}]}"#,
+            r#"data: [DONE]"#,
+        ]);
+        assert!(events.iter().any(|e| matches!(
+            e,
+            StreamEvent::ToolCall {
+                name,
+                call_id,
+                ..
+            } if name == "search_in_pdf" && call_id == "call_2"
+        )));
+    }
+
+    #[test]
+    fn parse_sse_merges_parallel_tool_calls_by_index() {
+        let events = send_lines(&[
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_a","function":{"name":"read_pdf_page"}},{"index":1,"id":"call_b","function":{"name":"search_in_pdf"}}]}}]}"#,
+            r#"data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"A"}},{"index":1,"function":{"arguments":"B"}}]}}]}"#,
+            r#"data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}"#,
+        ]);
+        let tool_calls: Vec<&StreamEvent> = events
+            .iter()
+            .filter(|e| matches!(e, StreamEvent::ToolCall { .. }))
+            .collect();
+        assert_eq!(tool_calls.len(), 2);
     }
 }

@@ -94,8 +94,20 @@
 }
 
 .thinking-indicator-icon {
-  display: inline-block;
-  animation: thinking-spin 1.2s linear infinite;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.thinking-indicator-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #e0e0e0;
+  border-top-color: #0078d4;
+  border-radius: 50%;
+  animation: thinking-spin 0.8s linear infinite;
 }
 
 .thinking-indicator.done .thinking-indicator-icon {
@@ -180,4 +192,85 @@
 
 .token-usage-item {
   white-space: nowrap;
+}
+
+/* Tool calls indicator */
+
+.tool-calls-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: var(--text-secondary, #666);
+  border-radius: 6px;
+  background: var(--bg-secondary, #f5f5f5);
+  margin-bottom: 6px;
+}
+
+.tool-calls-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tool-calls-icon {
+  display: inline-block;
+}
+
+.tool-calls-expand-hint {
+  margin-left: 4px;
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.tool-calls-list {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tool-call-item,
+.tool-call-status-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-call-name {
+  font-weight: 500;
+  color: var(--text-primary, #333);
+}
+
+.tool-call-summary {
+  opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-calls-indicator.running {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-calls-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #e0e0e0;
+  border-top-color: #0078d4;
+  border-radius: 50%;
+  animation: thinking-spin 0.8s linear infinite;
+}
+
+.tool-calls-running-hint {
+  font-size: 0.7rem;
+  opacity: 0.7;
 }

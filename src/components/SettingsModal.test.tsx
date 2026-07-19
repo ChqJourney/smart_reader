@@ -48,6 +48,7 @@ const defaultSettings = {
   platformId: "deepseek" as const,
   thinking: "auto" as const,
   maxToolRounds: 5,
+  agentToolsEnabled: true,
   targetLanguage: "中文",
   systemPrompts: {
     translate: "翻译提示词 {targetLanguage}",
@@ -148,6 +149,7 @@ describe("SettingsModal", () => {
       platformId: "deepseek",
       thinking: "auto",
       maxToolRounds: 5,
+      agentToolsEnabled: true,
       targetLanguage: "English",
       systemPrompts: defaultSettings.systemPrompts,
       hoverTranslate: false,

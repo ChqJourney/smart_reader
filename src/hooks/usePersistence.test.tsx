@@ -8,7 +8,10 @@ import {
   UsePersistenceProps,
 } from "./usePersistence";
 import { DEFAULT_SETTINGS } from "../services/settings";
-import { InterpretationSession } from "../services/sessions";
+import {
+  InterpretationSession,
+  InterpretationMessage,
+} from "../services/sessions";
 import { Annotation } from "../services/annotations";
 import type { PdfTab } from "./useTabs";
 
@@ -51,12 +54,65 @@ vi.mock("../services/dialog", () => ({
   showConfirm: vi.fn(() => Promise.resolve(true)),
 }));
 
+// Mock PDF tool session for agent-loop tests.
+const toolMocks = vi.hoisted(() => ({
+  executeToolCall: vi.fn(),
+  dispose: vi.fn(),
+  beginToolSession: vi.fn(() => ({
+    executeToolCall: toolMocks.executeToolCall,
+    dispose: toolMocks.dispose,
+  })),
+}));
+
+vi.mock("../services/pdfTools", () => ({
+  beginToolSession: toolMocks.beginToolSession,
+}));
+
 function makeMockStream(chunks: string[] = ["hello"]) {
   return async function* () {
     for (const chunk of chunks) {
       yield { type: "chunk" as const, content: chunk };
     }
   };
+}
+
+function makeExplainSession(
+  messages: InterpretationMessage[] = []
+): InterpretationSession {
+  return {
+    id: "session-explain",
+    sources: [],
+    messages:
+      messages.length > 0
+        ? messages
+        : [
+            {
+              id: "msg-user",
+              role: "user",
+              content: "请解读",
+              createdAt: 1000,
+            },
+          ],
+    isStreaming: false,
+    action: "explain",
+    createdAt: 1000,
+    updatedAt: 1000,
+  };
+}
+
+async function* toolCallRoundEvents(callId = "call-1") {
+  yield {
+    type: "toolCall" as const,
+    name: "search_in_pdf",
+    args: JSON.stringify({ file_hash: "hash-a", query: "clause" }),
+    callId,
+  };
+  yield { type: "done" as const };
+}
+
+async function* finalAnswerEvents() {
+  yield { type: "chunk" as const, content: "Final answer based on PDF." };
+  yield { type: "done" as const };
 }
 
 function TestHarness({
@@ -960,5 +1016,415 @@ describe("usePersistence", () => {
 
     expect(hookRef!.focusedTabSessions).toHaveLength(1);
     expect(hookRef!.focusedTabSessions[0].id).toBe("session-a");
+  });
+
+  describe("agent loop", () => {
+    beforeEach(() => {
+      toolMocks.executeToolCall.mockReset();
+      toolMocks.dispose.mockReset();
+      toolMocks.beginToolSession.mockClear();
+      toolMocks.executeToolCall.mockResolvedValue({
+        summary: "搜索 clause",
+        result: "PDF search result",
+      });
+    });
+
+    it("executes tool call and continues to a final answer", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      let round = 0;
+      vi.mocked(streamChatCompletion).mockImplementation(async function* () {
+        if (round++ === 0) {
+          yield* toolCallRoundEvents("call-1");
+        } else {
+          yield* finalAnswerEvents();
+        }
+      });
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <TestHarness
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "follow up prompt");
+      });
+
+      await waitFor(() => {
+        const session = hookRef!.sessions.find(
+          (s) => s.id === "session-explain"
+        );
+        expect(session?.isStreaming).toBe(false);
+      });
+
+      const session = hookRef!.sessions.find(
+        (s) => s.id === "session-explain"
+      )!;
+      expect(session.messages.some((m) => m.role === "tool")).toBe(true);
+      const toolMsg = session.messages.find((m) => m.role === "tool")!;
+      expect(toolMsg.toolCallId).toBe("call-1");
+      expect(toolMsg.content).toBe("PDF search result");
+
+      const assistantToolMsg = session.messages.find(
+        (m) => m.role === "assistant" && m.toolCalls && m.toolCalls.length > 0
+      )!;
+      expect(assistantToolMsg.toolCalls?.[0].function.name).toBe(
+        "search_in_pdf"
+      );
+      expect(assistantToolMsg.toolEvents).toEqual([
+        { name: "search_in_pdf", summary: "搜索 “clause”", status: "done" },
+      ]);
+
+      const finalAssistant = session.messages.find(
+        (m) =>
+          m.role === "assistant" && m.content === "Final answer based on PDF."
+      );
+      expect(finalAssistant).toBeDefined();
+
+      expect(toolMocks.executeToolCall).toHaveBeenCalledTimes(1);
+      expect(toolMocks.dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it("replays persisted tool messages on follow-up", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      const calls: { messages: unknown[]; options: unknown }[] = [];
+      vi.mocked(streamChatCompletion).mockImplementation(
+        async function* (messages, options) {
+          calls.push({ messages: messages as unknown[], options });
+          yield { type: "chunk" as const, content: "answer" };
+          yield { type: "done" as const };
+        }
+      );
+
+      const priorToolAssistant: InterpretationMessage = {
+        id: "msg-tool-assistant",
+        role: "assistant",
+        content: "",
+        createdAt: 1000,
+        toolCalls: [
+          {
+            id: "call-prior",
+            type: "function",
+            function: {
+              name: "search_in_pdf",
+              arguments: JSON.stringify({ file_hash: "hash-a", query: "x" }),
+            },
+          },
+        ],
+        reasoningContent: "reasoning",
+      };
+      const priorToolResult: InterpretationMessage = {
+        id: "msg-tool-result",
+        role: "tool",
+        content: "prior result",
+        createdAt: 1001,
+        toolCallId: "call-prior",
+        name: "search_in_pdf",
+      };
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <TestHarness
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      act(() => {
+        hookRef!.setSessions([
+          makeExplainSession([priorToolAssistant, priorToolResult]),
+        ]);
+      });
+
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "继续追问");
+      });
+
+      await waitFor(() => {
+        expect(calls.length).toBeGreaterThan(0);
+      });
+
+      const firstCallMessages = calls[0].messages as Array<{
+        role: string;
+        content?: string;
+        toolCalls?: unknown[];
+        toolCallId?: string;
+        reasoningContent?: string;
+      }>;
+      const toolAssistantInApi = firstCallMessages.find(
+        (m) => m.role === "assistant" && m.toolCalls
+      );
+      expect(toolAssistantInApi).toBeDefined();
+      expect(toolAssistantInApi!.toolCalls).toEqual(
+        priorToolAssistant.toolCalls
+      );
+      expect(toolAssistantInApi!.reasoningContent).toBe("reasoning");
+
+      const toolResultInApi = firstCallMessages.find((m) => m.role === "tool");
+      expect(toolResultInApi).toBeDefined();
+      expect(toolResultInApi!.toolCallId).toBe("call-prior");
+    });
+
+    it("deduplicates identical tool calls within a response", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      let round = 0;
+      vi.mocked(streamChatCompletion).mockImplementation(async function* () {
+        if (round++ === 0) {
+          yield {
+            type: "toolCall" as const,
+            name: "search_in_pdf",
+            args: JSON.stringify({ file_hash: "hash-a", query: "clause" }),
+            callId: "call-a",
+          };
+          yield {
+            type: "toolCall" as const,
+            name: "search_in_pdf",
+            args: JSON.stringify({ file_hash: "hash-a", query: "clause" }),
+            callId: "call-b",
+          };
+          yield { type: "done" as const };
+        } else {
+          yield { type: "chunk" as const, content: "Final" };
+          yield { type: "done" as const };
+        }
+      });
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <TestHarness
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      await waitFor(() => {
+        const session = hookRef!.sessions.find(
+          (s) => s.id === "session-explain"
+        );
+        expect(session?.isStreaming).toBe(false);
+      });
+
+      // The tool executor should be invoked once even though two calls were emitted.
+      expect(toolMocks.executeToolCall).toHaveBeenCalledTimes(1);
+
+      const session = hookRef!.sessions.find(
+        (s) => s.id === "session-explain"
+      )!;
+      const toolResults = session.messages.filter((m) => m.role === "tool");
+      expect(toolResults).toHaveLength(2);
+      expect(toolResults[0].content).toBe("PDF search result");
+      expect(toolResults[1].content).toBe("PDF search result");
+    });
+
+    it("forces a final no-tools round when maxRounds is reached", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      const optionsList: { enableTools?: boolean }[] = [];
+      vi.mocked(streamChatCompletion).mockImplementation(
+        async function* (_messages, options) {
+          optionsList.push({ enableTools: options?.enableTools });
+          yield {
+            type: "toolCall" as const,
+            name: "search_in_pdf",
+            args: JSON.stringify({ file_hash: "hash-a", query: "clause" }),
+            callId: `call-${optionsList.length}`,
+          };
+          yield { type: "done" as const };
+        }
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <ConfigurableHarness
+            props={{
+              activeTab: null,
+              activeTabId: null,
+              secondaryTab: null,
+              isSplitView: false,
+              focusedTab: null,
+              openRightPanel: vi.fn(),
+              settings: { ...DEFAULT_SETTINGS, maxToolRounds: 1 },
+            }}
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      await waitFor(() => {
+        const session = hookRef!.sessions.find(
+          (s) => s.id === "session-explain"
+        );
+        expect(session?.isStreaming).toBe(false);
+      });
+
+      expect(optionsList.length).toBeGreaterThanOrEqual(2);
+      expect(optionsList[0].enableTools).toBe(true);
+      expect(optionsList[1].enableTools).toBe(false);
+      expect(toolMocks.dispose).toHaveBeenCalledTimes(1);
+    });
+
+    it("disables tools when agentToolsEnabled is false", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      const optionsList: { enableTools?: boolean }[] = [];
+      vi.mocked(streamChatCompletion).mockImplementation(
+        async function* (_messages, options) {
+          optionsList.push({ enableTools: options?.enableTools });
+          yield { type: "chunk" as const, content: "answer" };
+          yield { type: "done" as const };
+        }
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <ConfigurableHarness
+            props={{
+              activeTab: null,
+              activeTabId: null,
+              secondaryTab: null,
+              isSplitView: false,
+              focusedTab: null,
+              openRightPanel: vi.fn(),
+              settings: { ...DEFAULT_SETTINGS, agentToolsEnabled: false },
+            }}
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      await waitFor(() => {
+        expect(optionsList.length).toBeGreaterThan(0);
+      });
+
+      expect(optionsList[0].enableTools).toBe(false);
+      expect(toolMocks.beginToolSession).not.toHaveBeenCalled();
+    });
+
+    it("disposes the tool session when the stream errors", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      vi.mocked(streamChatCompletion).mockImplementation(async function* () {
+        yield {
+          type: "error" as const,
+          message: "boom",
+          error: { kind: "unknown" as const, status: 500, body: "boom" },
+        };
+      });
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <TestHarness
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      await waitFor(() => {
+        expect(toolMocks.dispose).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("disposes the tool session when the stream is aborted", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      let capturedSignal: AbortSignal | undefined;
+
+      vi.mocked(streamChatCompletion).mockImplementation(
+        async function* (_messages, options) {
+          capturedSignal = options?.signal;
+          yield {
+            type: "toolCall" as const,
+            name: "search_in_pdf",
+            args: JSON.stringify({ file_hash: "hash-a", query: "clause" }),
+            callId: "call-1",
+          };
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          yield { type: "done" as const };
+        }
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <TestHarness
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      await waitFor(() => {
+        expect(capturedSignal).toBeDefined();
+      });
+
+      act(() => {
+        hookRef!.handleInterruptSession("session-explain");
+      });
+
+      await waitFor(() => {
+        expect(toolMocks.dispose).toHaveBeenCalledTimes(1);
+      });
+    });
   });
 });

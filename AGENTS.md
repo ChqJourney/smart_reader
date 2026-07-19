@@ -25,6 +25,7 @@
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
 - 最近文件下拉面板：置顶常用标准、按文件名/路径搜索、显示目录/相对时间/上次读到的页码、失效文件置灰、单条移除与两段式清空、从列表直接在分屏打开对照（快捷键 Ctrl/Cmd+Shift+O 开合面板）。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
+- 解读 / 自定义解读 / 追问时启用 **Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文（`list_open_pdfs`、`read_pdf_page`、`search_in_pdf`），辅助验证条款引用与跨页内容。
 - LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 单独存放于系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不再落入 `settings.json`。
 
 明确未实现（已规划到后续版本）：
@@ -86,6 +87,7 @@ npm install
 │   │   ├── SettingsModal.tsx          # 全局设置 Modal（左侧分页：模型设置 / 功能设置 / 系统设置 / 关于）
 │   │   ├── RecentFilesBar.tsx         # 最近文件：顶栏触发按钮 + 下拉面板（置顶/搜索/分屏打开）
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗
+│   │   ├── ToolCallsIndicator.tsx     # 工具调用状态指示器（解读流中展示）
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
 │   │   └── Icon.tsx                   # SVG 图标组件
 │   ├── hooks/                         # 可复用状态逻辑
@@ -118,6 +120,8 @@ npm install
 │   │   ├── settings.ts                # 应用设置（LLM + 目标语言 + 悬停翻译开关）CRUD
 │   │   ├── dictionary.ts              # ECDICT 本地词典查询与下载进度监听
 │   │   ├── llm.ts                     # LLM 配置读取、SSE 流式请求、Prompt 模板
+│   │   ├── pdfToolsRegistry.ts        # 当前打开 PDF 的轻量元数据注册表（Agent Tools 授权数据源）
+│   │   ├── pdfTools.ts                # Agent Tools 执行层（瞬态 ToolSession）
 │   │   ├── recentFiles.ts             # 最近文件 CRUD + 文件存在性检查
 │   │   ├── sessions.ts                # 解读会话数据结构与管理
 │   │   └── stash.ts                   # 暂存片段数据结构与管理
@@ -247,7 +251,7 @@ cd src-tauri && cargo test
 - `save_session(session: InterpretationSession)`：保存会话 JSON。
 - `delete_session(sessionId: string)`：删除会话文件。
 - `authorize_pdf_path(filePath: string)`：将用户通过对话框选择的 PDF 路径加入后端授权白名单，`read_pdf_bytes` / `get_pdf_hash` 会校验该白名单。
-- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM + 目标语言 + 悬停翻译开关 + 日志级别）；API Key 通过系统钥匙串读写。
+- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM + 目标语言 + Agent Tools 总开关 + 悬停翻译开关 + 日志级别）；API Key 通过系统钥匙串读写。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表（`RecentFile` 含 `pinned` 置顶与 `lastPage` 阅读页码字段，旧数据通过 `#[serde(default)]` 兼容）。
 - `check_files_exist(paths: string[])`：批量检查文件是否仍存在于磁盘，最近文件面板用它置灰已移动/删除的条目。
 - `open_path(path: string)`：仅允许打开 `http://` / `https://` URL，禁止本地文件路径与目录。
@@ -271,7 +275,7 @@ cd src-tauri && cargo test
     │   └── ecdict.sqlite          # ECDICT 本地离线词典（首次启用悬停翻译时下载）
     ├── logs/
     │   └── app.log                # 应用运行日志（默认 Warn 级别，可在设置中调整，保留最近 3 个文件各 10 MB）
-    ├── settings.json              # LLM 配置 + 目标语言 + 悬停翻译开关 + 日志级别
+    ├── settings.json              # LLM 配置 + 目标语言 + Agent Tools 开关 + 悬停翻译开关 + 日志级别
     └── recent_files.json          # 最近打开文件列表
 ```
 
@@ -283,7 +287,8 @@ cd src-tauri && cargo test
 
 - `services/llm.ts` 中的 `streamChatCompletion` 使用标准 OpenAI 兼容 SSE 接口。
 - Prompt 模板包括 `buildSelectionPrompt`（翻译 / 解读）和 `buildCustomInterpretPrompt`（自定义解读），均接收 `targetLanguage` 参数。
-- System prompt 也通过 `buildSystemPrompt(targetLanguage)` 按目标语言生成。
+- System prompt 也通过 `buildSystemPrompt(targetLanguage)` 按目标语言生成；启用 Agent Tools 时会追加 `llm.toolsSystemAddendum` 工具使用引导段（与用户可编辑 system prompt 解耦）。
+- `StreamEvent` 包含 `toolCall` 分支，完整工具调用信息（`name` / `args` / `callId`）由后端 `llm_proxy.rs` 按 `index` 累积后一次性下发。
 - LLM 配置与目标语言通过 `services/settings.ts` 持久化到后端 AppData；首次启动时会从旧的 `localStorage` 键 `standardread-llm-config` 迁移一次。
 - 默认模型为 `gpt-4o-mini`，默认目标语言为 `中文`。
 
@@ -315,11 +320,38 @@ PdfViewer.tsx（协调层：UI + 组合 hooks，详见 docs/REFACTOR_PLAN.md）
 
 AiChatPanel.tsx
 ├── expandedId / expandedStashIds
-└── 检测到 isStreaming 会话时启动 SSE 流
+└── 检测到 isStreaming 会话时启动 SSE 流；展示最终 assistant 消息上的 `toolEvents`
+
+ToolCallsIndicator.tsx
+└── 工具调用状态指示器：running / done / 折叠明细
 
 SettingsModal.tsx
-└── 左侧分页设置弹窗：模型设置（LLM）、功能设置（语言/悬停翻译/系统提示词）、系统设置（日志/默认打开方式）、关于（版本/软件更新/License）
+└── 左侧分页设置弹窗：模型设置（LLM/轮次）、功能设置（语言/悬停翻译/Agent Tools 开关/系统提示词）、系统设置（日志/默认打开方式）、关于（版本/软件更新/License）
 ```
+
+### 6.5 Agent Tools 工作流
+
+仅作用于 **解读 / 自定义解读 / 追问**（翻译不启用）：
+
+```
+runSessionStream（usePersistence.ts）
+├── toolsEnabled = agentToolsEnabled && preset.supportsTools && action ∈ {explain, custom}
+├── 若启用：beginToolSession() 创建瞬态 ToolSession（finally 中 dispose）
+├── 每轮 streamChatCompletion 可能返回 toolCall 事件
+│   └── onToolCall 更新最终 assistant 消息的 toolEvents（running）
+├── 轮次结束有 toolCalls 且未达 maxToolRounds：
+│   ├── 插入 assistant(toolCalls + reasoningContent) 消息并落盘
+│   ├── 执行 toolSession.executeToolCall（同参去重，错误转文本）
+│   ├── 更新 toolEvents 为 done
+│   └── 插入 tool(toolCallId, content) 消息并落盘 → 进入下一轮
+└── 无 toolCalls 或达轮次上限：收尾，写入累计 usage，finishStreaming
+```
+
+- PDF 文档实例为**瞬态**：每个 agent loop 内按需懒建 `PDFDocumentProxy`，loop 结束 `dispose` 销毁；不与 viewer 共享，避免切 tab 时生命周期耦合。
+- 授权边界：`pdfToolsRegistry.ts` 只保留当前打开 tab 的轻量元数据（`fileHash` / `fileName` / `filePath` / `numPages`），工具只服务登记在册的 hash；`getPdfBytes` 优先复用 App 级 bytes 缓存，未命中时回退 `read_pdf_bytes`。
+- 工具消息（assistant-tool + tool result）会持久化到会话，追问时原样回放，并携带 `toolCalls` / `toolCallId` / `reasoningContent`。
+- 轮次上限：`settings.maxToolRounds`（0 视为默认 5），达上限后强制一轮无 tools 收尾。
+- 降级：总开关关闭或平台 `supportsTools=false` 时行为同未启用工具的旧流程。
 
 ## 7. 代码组织约定
 
@@ -370,13 +402,16 @@ SettingsModal.tsx
   - `services/llm.test.ts`：LLM 配置默认值、SSE 流解析、Prompt 构建（含目标语言）。
   - `services/sessions.test.ts`：会话消息更新、流状态。
   - `services/stash.test.ts`：暂存片段管理。
-  - `hooks/usePersistence.test.tsx`：StrictMode 下 `handleFollowUp` 不双发、流式中断、annotation 删除、分屏 annotation 隔离、关闭 Tab 资源清理。
+  - `services/pdfTools.test.ts`：Agent Tools 三工具正常路径、白名单拒绝、页码越界、截断、搜索无命中、未知工具、非法 JSON、异常转错误文本、session dispose 幂等。
+  - `services/pdfToolsRegistry.test.ts`：sync 增删、关闭 tab 后 `isAuthorized=false`、numPages 回填、`getCachedBytes` 命中与回退。
+  - `hooks/usePersistence.test.tsx`：StrictMode 下 `handleFollowUp` 不双发、流式中断、annotation 删除、分屏 annotation 隔离、关闭 Tab 资源清理；Agent Loop 工具调用→执行→收尾、消息落盘与追问回放、同参去重、达 `maxRounds` 强制无 tools 收尾、总开关关闭降级、dispose 三路径。
   - `hooks/useRecentFiles.test.ts`：最近文件增删、置顶/超额降级、单条移除、lastPage 回写、分组配额。
   - `hooks/useSplitView.test.ts`：双排视图进入/退出。
   - `components/SelectionToolbar.test.tsx`：工具条渲染、点击外部关闭。
   - `components/AnnotationMarker.test.tsx`：拖拽后不误触发点击。
   - `components/PdfAnnotations.test.tsx`：按页与 `fileHash` 过滤、交互回调。
   - `components/AiChatPanel.test.tsx`：流式更新、中止按钮。
+  - `components/ToolCallsIndicator.test.tsx`：running / done / 折叠渲染。
   - `components/SettingsModal.test.tsx`：设置表单与保存回调。
   - `components/RecentFilesBar.test.tsx`：面板开合、置顶分组、元信息行、搜索过滤、键盘导航、失效文件置灰、两段式清空。
   - `components/PdfViewer.pageJump.test.tsx`：连续滚动页码跳转、过期 scale 条目按 live scale 重算的滚动位置累加。
@@ -446,12 +481,12 @@ SettingsModal.tsx
 - 解压后的 SQLite 文件通过文件头魔数 `SQLite format 3\0` 定位，不依赖 zip 内的文件名（避免中文文件名编码问题）。
 - 替换词库时，建议同时删除旧 `ecdict.sqlite` 与 `.tmp`，并清空 `DICT_CONNECTION` 缓存。
 
-### 10.3 修改 Prompt
+### 10.4 修改 Prompt
 
 - Prompt 模板集中在 `src/services/llm.ts`。
 - 修改后检查 `services/llm.test.ts` 中相关断言是否仍然成立。
 
-### 10.4 修改 UI 布局
+### 10.5 修改 UI 布局
 
 - 双栏宽度、最小宽度、默认比例等常量在 `App.tsx` 顶部：
   - `MIN_PANEL_WIDTH = 240`
@@ -459,16 +494,25 @@ SettingsModal.tsx
   - `RIGHT_PANEL_DEFAULT_FRACTION = 3 / 8`
 - 连续滚动相关常量（padding、spacing）同时在 `PdfViewer.tsx` 与 CSS 中定义，修改时需两边同步。
 
+### 10.6 修改 Agent Tools
+
+- 工具 schema 与累积逻辑在后端 `src-tauri/src/llm_proxy.rs`；新增/修改工具名需同步更新 `builtin_tools()` 与平台命名约束（Kimi 正则最严）。
+- 前端工具实现在 `src/services/pdfTools.ts`；任何错误都应捕获并转为 result 文本，不得向 loop 抛异常。
+- 授权与元数据在 `src/services/pdfToolsRegistry.ts`；`App.tsx` 通过 `syncOpenPdfs(tabs, getCachedBytes)` 同步当前打开 tab。修改注册表接口时需同步 `App.tsx` 调用点与 `pdfToolsRegistry.test.ts`。
+- Agent loop 在 `hooks/usePersistence.ts` 的 `runSessionStream`；修改轮次、去重、收尾逻辑时需同步 `usePersistence.test.tsx`。
+- UI 状态组件为 `components/ToolCallsIndicator.tsx`；样式集中在 `src/App.css`。
+- 相关 i18n key 在 `locales/zh-CN.json` / `en.json` 的 `tools.*` 与 `llm.toolsSystemAddendum` 段，修改后需两边同步。
+
 ## 11. 持续集成
 
 CI 分层触发，避免每次 push 都跑全量：
 
-| Workflow | 触发 | 内容 |
-| --- | --- | --- |
-| `ci-quick.yml` | 非 master 分支 push | type-check / lint / 单元测试（目标 < 5 分钟） |
-| `ci-full.yml` | master push / PR | 上述全部 + 前端 build + cargo test / clippy / audit + 双浏览器 E2E + npm audit（三个 job 并行，Rust 依赖有缓存） |
-| `release.yml` | 手动 dispatch（输入版本号） | 一键发布，见 5.3 发版流程 |
-| `landing.yml` | master 上 `landing/**` 变更 / 手动 | 部署 GitHub Pages |
+| Workflow       | 触发                               | 内容                                                                                                             |
+| -------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `ci-quick.yml` | 非 master 分支 push                | type-check / lint / 单元测试（目标 < 5 分钟）                                                                    |
+| `ci-full.yml`  | master push / PR                   | 上述全部 + 前端 build + cargo test / clippy / audit + 双浏览器 E2E + npm audit（三个 job 并行，Rust 依赖有缓存） |
+| `release.yml`  | 手动 dispatch（输入版本号）        | 一键发布，见 5.3 发版流程                                                                                        |
+| `landing.yml`  | master 上 `landing/**` 变更 / 手动 | 部署 GitHub Pages                                                                                                |
 
 约定：
 
@@ -490,12 +534,13 @@ cd src-tauri && cargo test
 
 - `docs/PRD.md`：产品需求、MVP 范围、数据模型。
 - `docs/AGENT_TOOLS_DESIGN.md`：完整目标架构（Tools、Clause 索引、术语表、测试清单、表格多模态读取）。
+- `docs/AGENT_TOOLS_PHASE1_PLAN.md`：Agent Tools 第一期实施计划（解读时查阅已打开 PDF）。
 - `TESTING.md`：详细测试说明与已发现的 bug 修复记录。
 - `README.md`：快速开始与项目简介。
 
 ## 13. 版本信息
 
-- 前端版本：`0.8.1`
-- Tauri 应用版本：`0.8.1`
+- 前端版本：`0.8.3`
+- Tauri 应用版本：`0.8.3`
 - 产品名称：`SpecReader AI`
 - 应用标识：`com.photonee.specreader`

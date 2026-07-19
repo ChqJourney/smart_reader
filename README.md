@@ -133,7 +133,7 @@ cd src-tauri && cargo test
 - 翻译生成可拖动 / 隐藏 / 删除的浮层批注。
 - 解读生成蓝色标记，并在右侧面板展示可点击跳转的解读记录。
 - 自定义解读：把多个暂存片段一次性发给 LLM。
-- 解读记录支持多轮追问。
+- 解读记录支持多轮追问；**解读 / 自定义解读 / 追问时启用 Agent Tools**，LLM 可通过 Function Calling 查阅当前打开的 PDF 原文，辅助验证条款引用与跨页内容。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
 - LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 单独存放于系统钥匙串，不再落入 `settings.json` 或 `localStorage`。

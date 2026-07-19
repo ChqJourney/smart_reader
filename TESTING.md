@@ -58,14 +58,17 @@ Vitest 配置位于 `vite.config.ts`：
 ### 测试范围
 
 - **services/annotations.test.ts**：标注的 CRUD、Tauri invoke 调用。
-- **hooks/usePersistence.test.tsx**：StrictMode 下 `handleFollowUp` 不双发、流式中断、annotation 删除、分屏 annotation 隔离、关闭 Tab 资源清理。
+- **hooks/usePersistence.test.tsx**：StrictMode 下 `handleFollowUp` 不双发、流式中断、annotation 删除、分屏 annotation 隔离、关闭 Tab 资源清理；Agent Loop 工具调用→执行→收尾、消息落盘与追问回放、同参去重、达 `maxRounds` 强制无 tools 收尾、总开关关闭降级。
 - **services/llm.test.ts**：LLM 配置读写、提示词构建、SSE 流解析。
 - **services/sessions.test.ts**：会话消息更新、流状态、删除。
 - **services/stash.test.ts**：暂存片段增删改。
+- **services/pdfTools.test.ts**：Agent Tools 三工具正常路径、白名单拒绝、页码越界、截断、搜索无命中、未知工具、非法 JSON、异常转错误文本、session dispose 幂等。
+- **services/pdfToolsRegistry.test.ts**：当前打开 PDF 的轻量元数据同步、关闭 tab 后授权失效、bytes 缓存命中与 `read_pdf_bytes` 回退。
 - **components/SelectionToolbar.test.tsx**：工具栏渲染、点击外部关闭。
 - **components/AnnotationMarker.test.tsx**：标注标记渲染、拖拽、点击。
 - **components/PdfAnnotations.test.tsx**：页面标注过滤、交互回调。
 - **components/AiChatPanel.test.tsx**：设置面板、解释流更新、暂存区与追问渲染。
+- **components/ToolCallsIndicator.test.tsx**：工具调用状态 running / done / 折叠渲染。
 - **components/CustomInterpretModal.test.tsx**：自定义解读弹窗打开、提交、关闭。
 - **components/PdfViewer.pageJump.test.tsx**：连续滚动页码跳转逻辑。
 - **components/SettingsModal.test.tsx**：设置表单、保存回调、悬停翻译开关与下载确认弹窗。

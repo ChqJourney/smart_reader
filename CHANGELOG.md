@@ -8,7 +8,20 @@
 
 ## [Unreleased]
 
+### Added
+- 解读 / 自定义解读 / 追问时启用 **Agent Tools**：LLM 可通过 `list_open_pdfs`、`read_pdf_page`、`search_in_pdf` 三个 Function Calling 工具查阅当前打开的 PDF 原文，辅助验证条款引用与跨页内容。
+- 新增工具调用状态指示器 `ToolCallsIndicator`：流式解读运行时显示“正在搜索/读取”提示，完成后可折叠查看调用记录。
+- 设置「功能设置」分页新增「智能查阅文档」总开关，默认开启；「模型设置」中的最大工具轮次 `maxToolRounds` 现在真正限制 agent loop 的工具调用轮次。
+- 新增 `services/pdfTools.ts` 工具执行层（瞬态 `ToolSession`）与 `services/pdfToolsRegistry.ts` 授权注册表：工具只服务当前已打开 Tab 的白名单 PDF，loop 结束即销毁文档实例。
+- 补齐 Agent Tools 相关单元测试与 i18n 文案。
+
+### Changed
+- 优化 AI 对话等待动画：从 emoji/方块改为 CSS 动效。
+- 隐藏 `role=tool` 的工具中间消息，避免历史记录冗长。
+
 ### Fixed
+- 修复 `StreamEvent::ToolCall` 中 `call_id` 序列化/反序列化不匹配的问题。
+- 修复 tool call 完成后 spinner 与 streaming cursor 不消失的问题。
 - 修复分屏（双排）模式下 AI 栏无法关闭的问题：自动展开逻辑改为仅在进入分屏的瞬间触发，分屏期间允许手动关闭。
 
 ## [0.8.3] - 2026-07-18

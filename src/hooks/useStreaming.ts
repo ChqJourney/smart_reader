@@ -14,6 +14,10 @@ export interface StreamingHandlers {
   onReasoningChunk?: (chunk: string, accumulated: string) => void;
   /** Called when token usage info arrives (optional). */
   onUsage?: (usage: TokenUsage) => void;
+  /** Called when a complete tool_call is received (optional). */
+  onToolCall?: (name: string, args: string, callId: string) => void;
+  /** Called when the stream is aborted before completion (optional). */
+  onAbort?: () => void;
 }
 
 /**
@@ -53,7 +57,10 @@ export function useStreaming() {
           messages,
           streamOptions
         )) {
-          if (controller.signal.aborted) return;
+          if (controller.signal.aborted) {
+            handlers.onAbort?.();
+            return;
+          }
           switch (event.type) {
             case "chunk":
               accumulated += event.content;
@@ -62,6 +69,9 @@ export function useStreaming() {
             case "reasoningChunk":
               reasoningAccumulated += event.content;
               handlers.onReasoningChunk?.(event.content, reasoningAccumulated);
+              break;
+            case "toolCall":
+              handlers.onToolCall?.(event.name, event.args, event.callId);
               break;
             case "usage":
               handlers.onUsage?.(event.usage);
@@ -92,10 +102,19 @@ export function useStreaming() {
     controllersRef.current.delete(key);
   }, []);
 
+  const abortPrefix = useCallback((prefix: string) => {
+    for (const [key, controller] of controllersRef.current.entries()) {
+      if (key.startsWith(prefix)) {
+        controller.abort();
+        controllersRef.current.delete(key);
+      }
+    }
+  }, []);
+
   const abortAll = useCallback(() => {
     controllersRef.current.forEach((controller) => controller.abort());
     controllersRef.current.clear();
   }, []);
 
-  return { run, abort, abortAll };
+  return { run, abort, abortPrefix, abortAll };
 }

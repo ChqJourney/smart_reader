@@ -784,6 +784,35 @@ export default function SettingsModal({
 
                   <section className="settings-section">
                     <div className="settings-section-title">
+                      {t("settings.agentTools", {
+                        defaultValue: "智能查阅文档",
+                      })}
+                    </div>
+                    <div className="settings-section-hint">
+                      {t("settings.agentToolsHint", {
+                        defaultValue:
+                          "允许 AI 在解读时自动查阅当前打开的 PDF 原文，用于核实引用的条款、表格或定义。",
+                      })}
+                    </div>
+                    <label className="settings-toggle">
+                      <input
+                        type="checkbox"
+                        checked={settings.agentToolsEnabled}
+                        onChange={(e) =>
+                          setSettings((s) => ({
+                            ...s,
+                            agentToolsEnabled: e.target.checked,
+                          }))
+                        }
+                      />
+                      {t("settings.enableAgentTools", {
+                        defaultValue: "启用智能查阅文档",
+                      })}
+                    </label>
+                  </section>
+
+                  <section className="settings-section">
+                    <div className="settings-section-title">
                       {t("settings.systemPrompts")}
                     </div>
                     <div className="settings-section-hint">

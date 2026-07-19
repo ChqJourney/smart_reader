@@ -31,6 +31,7 @@ import { getContextWindow } from "./data/platformPresets";
 import { useDictionaryStatus } from "./hooks/useDictionaryStatus";
 import { checkForUpdate } from "./services/updater";
 import { error } from "./services/logs";
+import { syncOpenPdfs } from "./services/pdfToolsRegistry";
 import "./App.css";
 
 const RIGHT_PANEL_SPLIT_FRACTION = 0.2;
@@ -52,6 +53,18 @@ function App() {
   // Each PdfViewer keeps its own PDFDocumentProxy instance to avoid sharing
   // internal PDF.js transport state between component lifecycles.
   const pdfCacheRef = useRef<Map<string, Uint8Array>>(new Map());
+
+  // Keep the agent tool layer in sync with currently open tabs.
+  useEffect(() => {
+    syncOpenPdfs(
+      tabs.tabs.map((t) => ({
+        fileHash: t.fileHash,
+        fileName: t.fileName,
+        filePath: t.filePath,
+      })),
+      (filePath) => pdfCacheRef.current.get(filePath)
+    );
+  }, [tabs.tabs]);
 
   useEffect(() => {
     let cancelled = false;

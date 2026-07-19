@@ -11,6 +11,7 @@ const DEFAULT_SETTINGS = {
   platformId: "deepseek",
   thinking: "auto",
   maxToolRounds: 5,
+  agentToolsEnabled: true,
   targetLanguage: "中文",
   systemPrompts: {
     translate:
@@ -150,6 +151,7 @@ describe("settings service", () => {
       platformId: "custom",
       thinking: "auto",
       maxToolRounds: 5,
+      agentToolsEnabled: true,
       targetLanguage: "中文",
       systemPrompts: {
         translate: "translate prompt",

@@ -134,6 +134,9 @@
     "hoverTranslate": "悬停取词翻译",
     "hoverTranslateHint": "鼠标悬停在英文单词上时，使用本地 ECDICT 词典显示翻译。",
     "enableHoverTranslate": "启用悬停取词翻译",
+    "agentTools": "智能查阅文档",
+    "agentToolsHint": "允许 AI 在解读时自动查阅当前打开的 PDF 原文，用于核实引用的条款、表格或定义。",
+    "enableAgentTools": "启用智能查阅文档",
     "dictionaryReady": "词典已就绪",
     "downloadingProgress": "下载中 {{percent}}%",
     "downloadingProgressUnknown": "已下载 {{size}}",
@@ -197,7 +200,23 @@
       "translate": "请将以下摘自标准文档《{{fileName}}》第 {{page}} 页的内容翻译成{{targetLanguage}}，保持专业术语准确，并在首次出现关键术语时保留原文：\n\n{{text}}"
     },
     "customInterpretPrompt": "请用{{targetLanguage}}回答以下问题：\n\n{{prompt}}\n\n{{sources}}",
-    "customInterpretSource": "片段 {{index}}（{{fileName}} 第 {{page}} 页）：\n{{text}}"
+    "customInterpretSource": "片段 {{index}}（{{fileName}} 第 {{page}} 页）：\n{{text}}",
+    "toolsSystemAddendum": "你可以使用工具查阅当前打开的 PDF 原文。当片段提及其他条款号、表格或定义且对准确解读有必要时，先用 search_in_pdf / read_pdf_page 查阅再回答；回答中引用来源格式为（第 N 页）；不要编造未查阅到的条款内容。"
+  },
+  "tools": {
+    "status": {
+      "listing": "正在查看打开的文档…",
+      "searching": "正在搜索 \"{{query}}\"…",
+      "readingPage": "正在读取第 {{page}} 页…"
+    },
+    "callsRunning": "正在查阅文档…",
+    "callsSummary": "查阅了 {{count}} 处文档内容",
+    "expandedSummary": "展开调用记录",
+    "collapsedSummary": "收起调用记录",
+    "callSearch": "搜索 “{{query}}”",
+    "callReadPage": "读取第 {{page}} 页",
+    "callList": "列出打开的文档",
+    "callUnknown": "未知工具 {{name}}"
   },
   "tabs": {
     "maxTabsHint": "最多只能同时打开 {{maxTabs}} 个 PDF 文件。请先关闭部分标签。"

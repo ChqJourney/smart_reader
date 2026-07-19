@@ -2,23 +2,20 @@ import i18n from "i18next";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { info, warn } from "./logs";
 import { LlmConfig, SystemPrompts } from "./settings";
-import type { ThinkingMode, TokenUsage } from "../types/llm";
-import type { LlmError } from "../types/llm";
+import type { ThinkingMode, TokenUsage, ChatMessage, LlmError } from "../types/llm";
+import type { ToolCall } from "../types/llm";
 
 export type { LlmConfig, SystemPrompts };
 export type { ThinkingMode, TokenUsage, LlmError };
+export type { ChatMessage, ToolCall };
 
 export type SelectionAction = "explain" | "translate";
-
-export interface ChatMessage {
-  role: "system" | "user" | "assistant";
-  content: string;
-}
 
 /** Events yielded by streamChatCompletion. */
 export type StreamEvent =
   | { type: "chunk"; content: string }
   | { type: "reasoningChunk"; content: string }
+  | { type: "toolCall"; name: string; args: string; callId: string }
   | { type: "usage"; usage: TokenUsage }
   | { type: "error"; message: string; error?: LlmError }
   | { type: "done" };
@@ -73,6 +70,10 @@ export async function* streamChatCompletion(
     content?: string;
     usage?: TokenUsage;
     error?: LlmError;
+    name?: string;
+    args?: string;
+    callId?: string;
+    call_id?: string;
   }>();
 
   channel.onmessage = (msg) => {
@@ -84,6 +85,19 @@ export async function* streamChatCompletion(
         if (msg.content)
           enqueue({ type: "reasoningChunk", content: msg.content });
         break;
+      case "toolCall": {
+        // Defensive: some platforms/serde configurations serialize this as call_id.
+        const callId = msg.callId ?? msg.call_id;
+        if (msg.name && callId) {
+          enqueue({
+            type: "toolCall",
+            name: msg.name,
+            args: msg.args ?? "{}",
+            callId,
+          });
+        }
+        break;
+      }
       case "usage":
         if (msg.usage) enqueue({ type: "usage", usage: msg.usage });
         break;

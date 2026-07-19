@@ -38,7 +38,11 @@ export default function ThinkingIndicator({
         role="button"
         tabIndex={0}
       >
-        {done ? "✓" : "🌀"}
+        {done ? (
+          "✓"
+        ) : (
+          <span className="thinking-indicator-spinner" aria-hidden="true" />
+        )}
       </span>
       <span
         onClick={() => done && setExpanded(!expanded)}

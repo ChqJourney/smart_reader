@@ -6,6 +6,7 @@ import Icon from "./Icon";
 import CustomInterpretModal from "./CustomInterpretModal";
 import MarkdownRenderer from "./MarkdownRenderer";
 import ThinkingIndicator from "./ThinkingIndicator";
+import ToolCallsIndicator from "./ToolCallsIndicator";
 import ContextWidget from "./ContextWidget";
 import "./AiChatPanel.css";
 
@@ -232,7 +233,11 @@ export default function AiChatPanel({
               />
             )}
           <div className="ai-chat-messages" role="log" aria-live="polite">
-            {activeSession.messages.map((message) => {
+            {activeSession.messages
+              // 工具结果消息用于 LLM 上下文回放，UI 上只需通过 assistant
+              // 消息上的 toolEvents 摘要感知，避免历史记录过于冗长。
+              .filter((message) => message.role !== "tool")
+              .map((message) => {
               const isCurrentStreaming =
                 activeSession.isStreaming &&
                 activeSession.streamingMessageId === message.id;
@@ -262,9 +267,23 @@ export default function AiChatPanel({
                         done={thinkingDone || !isCurrentStreaming}
                       />
                     )}
-                    {message.role === "assistant" && !message.content ? (
+                    {message.toolEvents && message.toolEvents.length > 0 && (
+                      <ToolCallsIndicator
+                        toolEvents={message.toolEvents}
+                        isStreaming={isCurrentStreaming}
+                      />
+                    )}
+                    {message.role === "assistant" &&
+                    isCurrentStreaming &&
+                    !message.content ? (
                       !isThinking ? (
-                        <span className="streaming-cursor">▍</span>
+                        <span className="streaming-cursor">
+                          <span className="streaming-dots" aria-hidden="true">
+                            <span />
+                            <span />
+                            <span />
+                          </span>
+                        </span>
                       ) : null
                     ) : (
                       <MarkdownRenderer content={message.content} />

@@ -34,6 +34,8 @@ export interface AppSettings {
   thinking: ThinkingMode;
   /** Max tool call rounds (0 = use default 5) */
   maxToolRounds: number;
+  /** Whether the agent can use PDF tools during interpretation */
+  agentToolsEnabled: boolean;
   targetLanguage: string;
   systemPrompts: SystemPrompts;
   hoverTranslate: boolean;
@@ -58,6 +60,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   platformId: "deepseek",
   thinking: "auto",
   maxToolRounds: 5,
+  agentToolsEnabled: true,
   targetLanguage: "中文",
   systemPrompts: DEFAULT_SYSTEM_PROMPTS,
   hoverTranslate: false,
@@ -87,6 +90,8 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
     platformId,
     thinking: (value.thinking ?? DEFAULT_SETTINGS.thinking) as ThinkingMode,
     maxToolRounds: value.maxToolRounds ?? DEFAULT_SETTINGS.maxToolRounds,
+    agentToolsEnabled:
+      value.agentToolsEnabled ?? DEFAULT_SETTINGS.agentToolsEnabled,
     targetLanguage: value.targetLanguage ?? DEFAULT_SETTINGS.targetLanguage,
     systemPrompts: {
       translate:

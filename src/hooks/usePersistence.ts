@@ -10,8 +10,10 @@ import { showConfirm } from "../services/dialog";
 import { error, info } from "../services/logs";
 import { SelectionState } from "../services/selection";
 import {
+  InterpretationMessage,
   InterpretationSession,
   SessionAction,
+  ToolEvent,
   appendUserMessage,
   createSession,
   deleteSession,
@@ -19,7 +21,6 @@ import {
   loadSession,
   saveSession,
   startAssistantResponse,
-  updateMessageContent,
 } from "../services/sessions";
 import {
   StashItem,
@@ -34,10 +35,15 @@ import {
   buildSystemPrompt,
   SelectionAction,
   ChatMessage,
+  ToolCall,
 } from "../services/llm";
+import type { TokenUsage } from "../types/llm";
 import { AppSettings } from "../services/settings";
+import { PLATFORM_PRESETS } from "../data/platformPresets";
 import { PdfTab } from "./useTabs";
 import { useStreaming } from "./useStreaming";
+import { beginToolSession, ToolSession } from "../services/pdfTools";
+import { getOpenFileHashes } from "../services/pdfToolsRegistry";
 
 export type { SelectionState } from "../services/selection";
 
@@ -409,131 +415,426 @@ export function usePersistence({
     [annotationsByHash]
   );
 
+  /** Build a human-readable summary of a tool call for UI status lines. */
+  const toolSummary = useCallback((name: string, argsJson: string): string => {
+    try {
+      const args = JSON.parse(argsJson);
+      if (name === "read_pdf_page") {
+        return i18n.t("tools.callReadPage", { page: args.page_number ?? "?" });
+      }
+      if (name === "search_in_pdf") {
+        return i18n.t("tools.callSearch", { query: args.query ?? "?" });
+      }
+      if (name === "list_open_pdfs") {
+        return i18n.t("tools.callList");
+      }
+    } catch {
+      // fall through
+    }
+    return name;
+  }, []);
+
   const runSessionStream = useCallback(
     (session: InterpretationSession, messageId: string) => {
       const sessionRef = { current: session };
-
       const currentSettings = settingsRef.current;
-      const messagesForApi: ChatMessage[] = [
-        {
-          role: "system",
-          content: buildSystemPrompt(
-            sessionRef.current.action ?? "explain",
-            currentSettings.targetLanguage,
-            currentSettings.systemPrompts
-          ),
-        },
-        ...sessionRef.current.messages
-          .filter((m) => !(m.role === "assistant" && m.id === messageId))
-          .map((m) => ({ role: m.role, content: m.content }) as ChatMessage),
-      ];
+      const preset = PLATFORM_PRESETS[currentSettings.platformId];
+      const toolsEnabled =
+        currentSettings.agentToolsEnabled &&
+        (preset?.supportsTools ?? false) &&
+        (sessionRef.current.action === "explain" ||
+          sessionRef.current.action === "custom");
+      const maxRounds =
+        currentSettings.maxToolRounds > 0 ? currentSettings.maxToolRounds : 5;
+      const toolSession: ToolSession | null = toolsEnabled
+        ? beginToolSession()
+        : null;
 
-      streaming.run(
-        messageId,
-        messagesForApi,
-        {
-          onChunk: (_chunk, accumulated) => {
-            const updated = updateMessageContent(
-              sessionRef.current,
-              messageId,
-              accumulated
-            );
-            sessionRef.current = updated;
-            setSessions((prev) =>
-              prev.map((s) => (s.id === updated.id ? updated : s))
-            );
-          },
-          onReasoningChunk: (_chunk, accumulated) => {
+      const buildSystemContent = () => {
+        const base = buildSystemPrompt(
+          sessionRef.current.action ?? "explain",
+          currentSettings.targetLanguage,
+          currentSettings.systemPrompts
+        );
+        if (!toolsEnabled) return base;
+        return `${base}\n\n${i18n.t("llm.toolsSystemAddendum")}`;
+      };
+
+      const buildApiMessages = (): ChatMessage[] => {
+        return [
+          { role: "system", content: buildSystemContent() },
+          ...sessionRef.current.messages
+            .filter((m) => !(m.role === "assistant" && m.id === messageId))
+            .map((m) => ({
+              role: m.role,
+              content: m.content,
+              toolCallId: m.toolCallId,
+              toolCalls: m.toolCalls,
+              reasoningContent: m.reasoningContent,
+            })) as ChatMessage[],
+        ];
+      };
+
+      const runOneRound = async (
+        round: number,
+        messages: ChatMessage[],
+        enableTools: boolean
+      ): Promise<{
+        content: string;
+        reasoning: string;
+        toolCalls: ToolCall[];
+        usage?: TokenUsage;
+        aborted: boolean;
+        hadError: boolean;
+      }> => {
+        return new Promise((resolve) => {
+          const key = `${messageId}-${round}`;
+          let content = "";
+          let reasoning = "";
+          let usage: TokenUsage | undefined;
+          const toolCalls: ToolCall[] = [];
+          const toolEventsMap = new Map<string, ToolEvent>();
+
+          const updateMessageInState = (
+            updater: (
+              m: InterpretationMessage
+            ) => InterpretationMessage | undefined
+          ) => {
             setSessions((prev) =>
               prev.map((s) => {
                 if (s.id !== sessionRef.current.id) return s;
-                return {
+                const nextMessages = s.messages.map((m) =>
+                  m.id === messageId ? (updater(m) ?? m) : m
+                );
+                const updated: InterpretationSession = {
                   ...s,
-                  messages: s.messages.map((m) =>
-                    m.id === messageId
-                      ? { ...m, reasoningContent: accumulated }
-                      : m
-                  ),
+                  messages: nextMessages,
                 };
-              })
-            );
-          },
-          onUsage: (usage) => {
-            setSessions((prev) =>
-              prev.map((s) => {
-                if (s.id !== sessionRef.current.id) return s;
-                const updated = {
-                  ...s,
-                  lastPromptTokens: usage.promptTokens,
-                  messages: s.messages.map((m) =>
-                    m.id === messageId ? { ...m, usage } : m
-                  ),
-                };
-                // Keep sessionRef in sync so onDone/onError don't clobber
-                // lastPromptTokens with a stale snapshot.
                 sessionRef.current = updated;
                 return updated;
               })
             );
-          },
-          onError: (message, error) => {
-            const currentContent =
-              sessionRef.current.messages.find((m) => m.id === messageId)
-                ?.content ?? "";
-            const accumulated = `${currentContent}\n\n${i18n.t(
-              "common.errorPrefix"
-            )} ${message}`;
-            const updated = updateMessageContent(
-              sessionRef.current,
-              messageId,
-              accumulated
+          };
+
+          streaming.run(
+            key,
+            messages,
+            {
+              onChunk: (_chunk, accumulated) => {
+                content = accumulated;
+                updateMessageInState((m) => ({ ...m, content: accumulated }));
+              },
+              onReasoningChunk: (_chunk, accumulated) => {
+                reasoning = accumulated;
+                updateMessageInState((m) => ({
+                  ...m,
+                  reasoningContent: accumulated,
+                }));
+              },
+              onToolCall: (name, args, callId) => {
+                toolCalls.push({
+                  id: callId,
+                  type: "function",
+                  function: { name, arguments: args },
+                });
+                toolEventsMap.set(callId, {
+                  name,
+                  summary: toolSummary(name, args),
+                  status: "running",
+                });
+                updateMessageInState((m) => ({
+                  ...m,
+                  toolEvents: Array.from(toolEventsMap.values()),
+                }));
+              },
+              onUsage: (u) => {
+                usage = u;
+              },
+              onError: (message, error) => {
+                const currentContent =
+                  sessionRef.current.messages.find((m) => m.id === messageId)
+                    ?.content ?? "";
+                const accumulated = `${currentContent}\n\n${i18n.t(
+                  "common.errorPrefix"
+                )} ${message}`;
+                updateMessageInState((m) => ({
+                  ...m,
+                  content: accumulated,
+                  error,
+                }));
+                resolve({
+                  content,
+                  reasoning,
+                  toolCalls,
+                  usage,
+                  aborted: false,
+                  hadError: true,
+                });
+              },
+              onDone: () => {
+                resolve({
+                  content,
+                  reasoning,
+                  toolCalls,
+                  usage,
+                  aborted: false,
+                  hadError: false,
+                });
+              },
+              onAbort: () => {
+                resolve({
+                  content,
+                  reasoning,
+                  toolCalls,
+                  usage,
+                  aborted: true,
+                  hadError: false,
+                });
+              },
+            },
+            {
+              thinking: currentSettings.thinking,
+              enableTools,
+              authorizedFileHashes: getOpenFileHashes(),
+            }
+          );
+        });
+      };
+
+      const appendAssistantToolMessage = (
+        content: string,
+        reasoning: string,
+        toolCalls: ToolCall[],
+        toolEvents: ToolEvent[]
+      ) => {
+        const assistantMsg: InterpretationMessage = {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content,
+          createdAt: Date.now(),
+          reasoningContent: reasoning || undefined,
+          toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+          toolEvents: toolEvents.length > 0 ? toolEvents : undefined,
+        };
+        setSessions((prev) =>
+          prev.map((s) => {
+            if (s.id !== sessionRef.current.id) return s;
+            // Insert before the streaming placeholder message so the final
+            // assistant message stays last.
+            const index = s.messages.findIndex((m) => m.id === messageId);
+            const messages = [...s.messages];
+            if (index !== -1) {
+              messages.splice(index, 0, assistantMsg);
+            } else {
+              messages.push(assistantMsg);
+            }
+            // 将 toolEvents 固化到新消息后，清空 streaming placeholder 上的
+            // 临时 running 状态，避免下一轮无新工具时仍显示旧 spinner。
+            const nextMessages = messages.map((m) =>
+              m.id === messageId ? { ...m, toolEvents: undefined } : m
             );
-            // Store structured error on the message for ErrorBanner
-            const withError = {
-              ...updated,
-              messages: updated.messages.map((m) =>
-                m.id === messageId ? { ...m, error } : m
-              ),
-            };
-            sessionRef.current = withError;
-            setSessions((prev) =>
-              prev.map((s) => (s.id === withError.id ? withError : s))
+            const updated = { ...s, messages: nextMessages };
+            sessionRef.current = updated;
+            return updated;
+          })
+        );
+        return assistantMsg;
+      };
+
+      const appendToolResultMessage = (
+        toolCallId: string,
+        name: string,
+        result: string
+      ) => {
+        const toolMsg: InterpretationMessage = {
+          id: crypto.randomUUID(),
+          role: "tool",
+          content: result,
+          createdAt: Date.now(),
+          toolCallId,
+          name,
+        };
+        setSessions((prev) =>
+          prev.map((s) => {
+            if (s.id !== sessionRef.current.id) return s;
+            const index = s.messages.findIndex((m) => m.id === messageId);
+            const messages = [...s.messages];
+            if (index !== -1) {
+              messages.splice(index, 0, toolMsg);
+            } else {
+              messages.push(toolMsg);
+            }
+            const updated = { ...s, messages };
+            sessionRef.current = updated;
+            return updated;
+          })
+        );
+        return toolMsg;
+      };
+
+      const finishStreaming = () => {
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === sessionRef.current.id
+              ? {
+                  ...s,
+                  isStreaming: false,
+                  streamingMessageId: undefined,
+                  updatedAt: Date.now(),
+                }
+              : s
+          )
+        );
+      };
+
+      const runAgentLoop = async () => {
+        let messages = buildApiMessages();
+        const seenCalls = new Map<string, string>();
+        let totalUsage: TokenUsage | undefined;
+        try {
+          for (let round = 0; round <= maxRounds; round++) {
+            const isLastChance = round >= maxRounds;
+            const { content, reasoning, toolCalls, usage, aborted, hadError } =
+              await runOneRound(
+                round,
+                messages,
+                toolsEnabled && !isLastChance
+              );
+
+            if (usage) {
+              if (!totalUsage) {
+                totalUsage = { ...usage };
+              } else {
+                totalUsage.promptTokens += usage.promptTokens;
+                totalUsage.completionTokens += usage.completionTokens;
+                totalUsage.totalTokens += usage.totalTokens;
+                if (usage.reasoningTokens !== undefined) {
+                  totalUsage.reasoningTokens =
+                    (totalUsage.reasoningTokens ?? 0) + usage.reasoningTokens;
+                }
+                if (usage.cachedTokens !== undefined) {
+                  totalUsage.cachedTokens =
+                    (totalUsage.cachedTokens ?? 0) + usage.cachedTokens;
+                }
+              }
+            }
+
+            if (aborted || hadError) {
+              finishStreaming();
+              return;
+            }
+
+            if (isLastChance || toolCalls.length === 0) {
+              // Persist accumulated usage on the final assistant message.
+              if (totalUsage) {
+                setSessions((prev) =>
+                  prev.map((s) =>
+                    s.id === sessionRef.current.id
+                      ? {
+                          ...s,
+                          lastPromptTokens: totalUsage!.promptTokens,
+                          messages: s.messages.map((m) =>
+                            m.id === messageId ? { ...m, usage: totalUsage } : m
+                          ),
+                        }
+                      : s
+                  )
+                );
+              }
+              finishStreaming();
+              return;
+            }
+
+            // Build the assistant tool-calls message (persisted for replay).
+            const runningEvents = toolCalls.map((call) => ({
+              name: call.function.name,
+              summary: toolSummary(call.function.name, call.function.arguments),
+              status: "running" as const,
+            }));
+            const assistantMsg = appendAssistantToolMessage(
+              content,
+              reasoning,
+              toolCalls,
+              runningEvents
             );
-            // Finish streaming based on prev state to preserve lastPromptTokens
-            setSessions((prev) =>
-              prev.map((s) =>
-                s.id === sessionRef.current.id
-                  ? {
-                      ...s,
-                      isStreaming: false,
-                      streamingMessageId: undefined,
-                      updatedAt: Date.now(),
-                    }
-                  : s
-              )
-            );
-          },
-          onDone: () => {
-            // Use prev-based update to preserve fields (e.g. lastPromptTokens)
-            // that onUsage set in React state but not in sessionRef.
-            setSessions((prev) =>
-              prev.map((s) =>
-                s.id === sessionRef.current.id
-                  ? {
-                      ...s,
-                      isStreaming: false,
-                      streamingMessageId: undefined,
-                      updatedAt: Date.now(),
-                    }
-                  : s
-              )
-            );
-          },
-        },
-        { thinking: currentSettings.thinking }
-      );
+
+            // Rebuild messages with the new assistant message and tool results.
+            messages = [
+              ...messages,
+              {
+                role: assistantMsg.role,
+                content: assistantMsg.content,
+                toolCalls: assistantMsg.toolCalls,
+                reasoningContent: assistantMsg.reasoningContent,
+              } as ChatMessage,
+            ];
+
+            for (const call of toolCalls) {
+              const callKey = `${call.function.name}:${call.function.arguments}`;
+              let result: string;
+              if (seenCalls.has(callKey)) {
+                result = seenCalls.get(callKey)!;
+              } else {
+                const { result: r } = await toolSession!.executeToolCall(
+                  call.function.name,
+                  call.function.arguments
+                );
+                result = r;
+                seenCalls.set(callKey, result);
+              }
+
+              // Mark tool event as done on the assistant message.
+              setSessions((prev) =>
+                prev.map((s) => {
+                  if (s.id !== sessionRef.current.id) return s;
+                  return {
+                    ...s,
+                    messages: s.messages.map((m) => {
+                      if (m.id !== assistantMsg.id || !m.toolEvents) return m;
+                      return {
+                        ...m,
+                        toolEvents: m.toolEvents.map((e) =>
+                          e.name === call.function.name &&
+                          e.summary ===
+                            toolSummary(
+                              call.function.name,
+                              call.function.arguments
+                            )
+                            ? { ...e, status: "done" as const }
+                            : e
+                        ),
+                      };
+                    }),
+                  };
+                })
+              );
+
+              const toolMsg = appendToolResultMessage(
+                call.id,
+                call.function.name,
+                result
+              );
+              messages.push({
+                role: "tool",
+                content: toolMsg.content,
+                toolCallId: toolMsg.toolCallId,
+              } as ChatMessage);
+            }
+          }
+          // Should never reach here; maxRounds forces a final no-tools round.
+          finishStreaming();
+        } catch (err) {
+          error(`Agent loop error: ${err}`);
+          finishStreaming();
+        } finally {
+          await toolSession?.dispose();
+        }
+      };
+
+      // Start the loop. Aborting the original messageId also cancels any round.
+      runAgentLoop();
     },
-    [streaming]
+    [streaming, toolSummary]
   );
 
   const startSessionFromStashes = useCallback(
@@ -793,7 +1094,7 @@ export function usePersistence({
     (sessionId: string) => {
       const session = sessions.find((s) => s.id === sessionId);
       if (!session?.streamingMessageId) return;
-      streaming.abort(session.streamingMessageId);
+      streaming.abortPrefix(session.streamingMessageId);
       setSessions((prev) =>
         prev.map((s) =>
           s.id === sessionId

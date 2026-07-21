@@ -535,7 +535,7 @@ struct AppSettings {
     /// Thinking mode: "enabled" | "disabled" | "auto"
     #[serde(default = "default_thinking")]
     thinking: String,
-    /// Max tool call rounds (0 = use global default of 5)
+    /// Max tool call rounds (0 = use global default of 20)
     #[serde(default = "default_max_tool_rounds")]
     max_tool_rounds: u32,
     /// Whether the agent can use PDF tools during interpretation.
@@ -560,7 +560,7 @@ fn default_thinking() -> String {
 }
 
 fn default_max_tool_rounds() -> u32 {
-    5
+    20
 }
 
 fn default_agent_tools_enabled() -> bool {
@@ -1143,7 +1143,7 @@ mod tests {
             },
             platform_id: "deepseek".to_string(),
             thinking: "auto".to_string(),
-            max_tool_rounds: 5,
+            max_tool_rounds: 20,
             agent_tools_enabled: true,
             target_language: "中文".to_string(),
             system_prompts: SystemPrompts::default(),

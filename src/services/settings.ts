@@ -32,7 +32,7 @@ export interface AppSettings {
   platformId: PlatformId;
   /** Thinking mode preference */
   thinking: ThinkingMode;
-  /** Max tool call rounds (0 = use default 5) */
+  /** Max tool call rounds (0 = use default 20) */
   maxToolRounds: number;
   /** Whether the agent can use PDF tools during interpretation */
   agentToolsEnabled: boolean;
@@ -59,7 +59,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   },
   platformId: "deepseek",
   thinking: "auto",
-  maxToolRounds: 5,
+  maxToolRounds: 20,
   agentToolsEnabled: true,
   targetLanguage: "中文",
   systemPrompts: DEFAULT_SYSTEM_PROMPTS,

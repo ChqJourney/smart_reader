@@ -475,6 +475,47 @@ export function usePersistence({
         ];
       };
 
+      const buildFinalNoToolsMessages = (
+        sourceMessages: ChatMessage[]
+      ): ChatMessage[] => {
+        const finalMessages: ChatMessage[] = [];
+
+        for (const message of sourceMessages) {
+          if (message.role === "tool") {
+            finalMessages.push({
+              role: "user",
+              content: i18n.t("llm.toolResultContext", {
+                content: message.content,
+              }),
+            });
+            continue;
+          }
+
+          if (message.toolCalls && message.toolCalls.length > 0) {
+            const assistantContent = message.content.trim();
+            if (assistantContent) {
+              finalMessages.push({
+                role: "assistant",
+                content: assistantContent,
+              });
+            }
+            continue;
+          }
+
+          finalMessages.push({
+            role: message.role,
+            content: message.content,
+          });
+        }
+
+        finalMessages.push({
+          role: "system",
+          content: i18n.t("llm.toolLimitFinalInstruction", { maxRounds }),
+        });
+
+        return finalMessages;
+      };
+
       const runOneRound = async (
         round: number,
         messages: ChatMessage[],
@@ -694,10 +735,14 @@ export function usePersistence({
         try {
           for (let round = 0; round <= maxRounds; round++) {
             const isLastChance = round >= maxRounds;
+            const roundMessages =
+              isLastChance && toolsEnabled
+                ? buildFinalNoToolsMessages(messages)
+                : messages;
             const { content, reasoning, toolCalls, usage, aborted, hadError } =
               await runOneRound(
                 round,
-                messages,
+                roundMessages,
                 toolsEnabled && !isLastChance
               );
 
@@ -725,6 +770,29 @@ export function usePersistence({
             }
 
             if (isLastChance || toolCalls.length === 0) {
+              if (isLastChance && toolCalls.length > 0) {
+                const finalContent =
+                  content.trim() || i18n.t("llm.toolLimitReachedFallback");
+                setSessions((prev) =>
+                  prev.map((s) =>
+                    s.id === sessionRef.current.id
+                      ? {
+                          ...s,
+                          messages: s.messages.map((m) =>
+                            m.id === messageId
+                              ? {
+                                  ...m,
+                                  content: finalContent,
+                                  toolEvents: undefined,
+                                }
+                              : m
+                          ),
+                        }
+                      : s
+                  )
+                );
+              }
+
               // Persist accumulated usage on the final assistant message.
               if (totalUsage) {
                 setSessions((prev) =>

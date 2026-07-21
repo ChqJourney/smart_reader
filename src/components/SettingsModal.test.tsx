@@ -47,7 +47,7 @@ const defaultSettings = {
   },
   platformId: "deepseek" as const,
   thinking: "auto" as const,
-  maxToolRounds: 5,
+  maxToolRounds: 20,
   agentToolsEnabled: true,
   targetLanguage: "中文",
   systemPrompts: {
@@ -148,7 +148,7 @@ describe("SettingsModal", () => {
       },
       platformId: "deepseek",
       thinking: "auto",
-      maxToolRounds: 5,
+      maxToolRounds: 20,
       agentToolsEnabled: true,
       targetLanguage: "English",
       systemPrompts: defaultSettings.systemPrompts,

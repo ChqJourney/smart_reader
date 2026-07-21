@@ -700,7 +700,7 @@ export default function SettingsModal({
                     <p className="settings-field-hint">
                       {t("settings.maxToolRoundsHint", {
                         defaultValue:
-                          "0 表示使用默认值 5。AI 读取 PDF 内容时的最大调用轮次。",
+                          "0 表示使用默认值 20。AI 读取 PDF 内容时的最大调用轮次。",
                       })}
                     </p>
                   </label>

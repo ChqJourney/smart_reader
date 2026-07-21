@@ -1241,15 +1241,21 @@ describe("usePersistence", () => {
 
     it("forces a final no-tools round when maxRounds is reached", async () => {
       const { streamChatCompletion } = await import("../services/llm");
-      const optionsList: { enableTools?: boolean }[] = [];
+      const requests: {
+        messages: unknown[];
+        options: { enableTools?: boolean };
+      }[] = [];
       vi.mocked(streamChatCompletion).mockImplementation(
-        async function* (_messages, options) {
-          optionsList.push({ enableTools: options?.enableTools });
+        async function* (messages, options) {
+          requests.push({
+            messages,
+            options: { enableTools: options?.enableTools },
+          });
           yield {
             type: "toolCall" as const,
             name: "search_in_pdf",
             args: JSON.stringify({ file_hash: "hash-a", query: "clause" }),
-            callId: `call-${optionsList.length}`,
+            callId: `call-${requests.length}`,
           };
           yield { type: "done" as const };
         }
@@ -1290,9 +1296,27 @@ describe("usePersistence", () => {
         expect(session?.isStreaming).toBe(false);
       });
 
-      expect(optionsList.length).toBeGreaterThanOrEqual(2);
-      expect(optionsList[0].enableTools).toBe(true);
-      expect(optionsList[1].enableTools).toBe(false);
+      expect(requests.length).toBeGreaterThanOrEqual(2);
+      expect(requests[0].options.enableTools).toBe(true);
+      expect(requests[1].options.enableTools).toBe(false);
+      expect(requests[1].messages).toEqual(
+        expect.not.arrayContaining([
+          expect.objectContaining({ role: "tool" }),
+          expect.objectContaining({ toolCalls: expect.anything() }),
+        ])
+      );
+      expect(JSON.stringify(requests[1].messages)).toContain(
+        "文档查阅工具调用已达到本次上限"
+      );
+
+      const session = hookRef!.sessions.find(
+        (s) => s.id === "session-explain"
+      )!;
+      const finalMessage = session.messages[session.messages.length - 1];
+      expect(finalMessage.content).toContain(
+        "已达到本次文档查阅工具调用上限"
+      );
+      expect(finalMessage.toolEvents).toBeUndefined();
       expect(toolMocks.dispose).toHaveBeenCalledTimes(1);
     });
 

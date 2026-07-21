@@ -204,7 +204,10 @@
     },
     "customInterpretPrompt": "Please answer the following question in {{targetLanguage}}:\n\n{{prompt}}\n\n{{sources}}",
     "customInterpretSource": "Excerpt {{index}} ({{fileName}} page {{page}}):\n{{text}}",
-    "toolsSystemAddendum": "You can use tools to look up content in currently open PDFs. When the excerpt refers to other clause numbers, tables, or definitions and accurate interpretation requires it, use search_in_pdf / read_pdf_page to check the source before answering. Cite sources as (page N) in your answer. Do not fabricate clauses that were not found."
+    "toolsSystemAddendum": "You can use tools to look up content in currently open PDFs. When the excerpt refers to other clause numbers, tables, or definitions and accurate interpretation requires it, use search_in_pdf / read_pdf_page to check the source before answering. Cite sources as (page N) in your answer. Do not fabricate clauses that were not found.",
+    "toolLimitFinalInstruction": "Document lookup tool calls have reached this session limit ({{maxRounds}} rounds). Do not request more tools; answer naturally and completely using only the user's excerpts and the tool results already provided above. If the available information is still insufficient, say what needs manual verification.",
+    "toolResultContext": "The following completed document lookup result is available as answer context:\n{{content}}",
+    "toolLimitReachedFallback": "The document lookup limit has been reached for this response. Please continue from the lookup records already shown in the panel and the source excerpt; if more clause checks are needed, raise the maximum tool call setting and start the interpretation again."
   },
   "tools": {
     "status": {

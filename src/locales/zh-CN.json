@@ -204,7 +204,10 @@
     },
     "customInterpretPrompt": "请用{{targetLanguage}}回答以下问题：\n\n{{prompt}}\n\n{{sources}}",
     "customInterpretSource": "片段 {{index}}（{{fileName}} 第 {{page}} 页）：\n{{text}}",
-    "toolsSystemAddendum": "你可以使用工具查阅当前打开的 PDF 原文。当片段提及其他条款号、表格或定义且对准确解读有必要时，先用 search_in_pdf / read_pdf_page 查阅再回答；回答中引用来源格式为（第 N 页）；不要编造未查阅到的条款内容。"
+    "toolsSystemAddendum": "你可以使用工具查阅当前打开的 PDF 原文。当片段提及其他条款号、表格或定义且对准确解读有必要时，先用 search_in_pdf / read_pdf_page 查阅再回答；回答中引用来源格式为（第 N 页）；不要编造未查阅到的条款内容。",
+    "toolLimitFinalInstruction": "文档查阅工具调用已达到本次上限（{{maxRounds}} 轮）。不要再请求工具；请只基于用户提供的片段和上文已查阅到的工具结果，用自然、完整的方式回答。如果信息仍不足，请说明哪些点尚需人工核对。",
+    "toolResultContext": "以下是一次已完成的文档查阅结果，作为回答依据：\n{{content}}",
+    "toolLimitReachedFallback": "已达到本次文档查阅工具调用上限。请基于右侧已展示的查阅记录和原文片段继续判断；如仍需更多条款核对，可以调高「最大工具调用次数」后重新发起解读。"
   },
   "tools": {
     "status": {

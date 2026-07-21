@@ -10,7 +10,7 @@ const DEFAULT_SETTINGS = {
   },
   platformId: "deepseek",
   thinking: "auto",
-  maxToolRounds: 5,
+  maxToolRounds: 20,
   agentToolsEnabled: true,
   targetLanguage: "中文",
   systemPrompts: {
@@ -150,7 +150,7 @@ describe("settings service", () => {
       llm: { baseUrl: "x", apiKey: "y", model: "z" },
       platformId: "custom",
       thinking: "auto",
-      maxToolRounds: 5,
+      maxToolRounds: 20,
       agentToolsEnabled: true,
       targetLanguage: "中文",
       systemPrompts: {

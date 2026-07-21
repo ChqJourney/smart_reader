@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-19
+
 ### Added
 - 解读 / 自定义解读 / 追问时启用 **Agent Tools**：LLM 可通过 `list_open_pdfs`、`read_pdf_page`、`search_in_pdf` 三个 Function Calling 工具查阅当前打开的 PDF 原文，辅助验证条款引用与跨页内容。
 - 新增工具调用状态指示器 `ToolCallsIndicator`：流式解读运行时显示“正在搜索/读取”提示，完成后可折叠查看调用记录。

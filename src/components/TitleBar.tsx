@@ -108,6 +108,9 @@ export default function TitleBar({
         </button>
       </div>
 
+      {/* ── Divider before window controls ──────────── */}
+      <div className="titlebar-wc-divider" />
+
       {/* ── Window Controls (platform order) ─────────── */}
       <div className="titlebar-wc">
         <button

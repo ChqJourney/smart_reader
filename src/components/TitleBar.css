@@ -2,21 +2,23 @@
    TitleBar — Modern custom titlebar for SpecReader AI
    Design language: thin, frosted glass, refined spacing,
    premium accent colors, subtle interactions.
+   Height 44px — sits slightly above the 40px tab header
+   for a correct "window top / tabs below" hierarchy.
    ═════════════════════════════════════════════════════ */
 
 .titlebar {
   display: flex;
   align-items: center;
   gap: 0;
-  height: 38px;
-  padding: 0 4px 0 10px;
+  height: 44px;
+  padding: 0 8px 0 14px;
 
   /* Frosted glass */
   background:
     linear-gradient(
       to bottom,
-      rgba(253, 254, 255, 0.92),
-      rgba(250, 251, 253, 0.88)
+      rgba(253, 254, 255, 0.94),
+      rgba(249, 250, 252, 0.90)
     );
   backdrop-filter: blur(20px) saturate(180%);
 
@@ -35,23 +37,23 @@
 .titlebar-brand {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex-shrink: 0;
-  padding-right: 2px;
+  padding-right: 4px;
   cursor: default;
 }
 
 .titlebar-logo-img {
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
   flex-shrink: 0;
   filter: drop-shadow(0 1px 2px rgba(30, 64, 175, 0.12));
 }
 
 .titlebar-brand-name {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 13.5px;
+  font-weight: 550;
   letter-spacing: -0.02em;
   color: #1e293b;           /* slate-800 */
   white-space: nowrap;
@@ -60,9 +62,9 @@
 /* ── Divider (thin vertical rule) ───────────────── */
 .titlebar-divider {
   width: 1px;
-  height: 18px;
+  height: 20px;
   background: rgba(148, 163, 184, 0.28);   /* slate-400 @ 28% */
-  margin: 0 8px;
+  margin: 0 10px;
   flex-shrink: 0;
   border-radius: 1px;
 }
@@ -76,11 +78,12 @@
 
 /* Override recent-files trigger to fit titlebar context */
 .titlebar-center .recent-files-trigger {
-  padding: 4px 10px;
-  font-size: 82%;
+  height: 30px;
+  padding: 0 11px;
+  font-size: 81%;
   background: transparent;
   border-color: transparent;
-  border-radius: 6px;
+  border-radius: 7px;
   color: #64748b;          /* slate-500 */
 }
 
@@ -100,7 +103,7 @@
 .titlebar-center .recent-files-count {
   background: rgba(148, 163, 184, 0.18);
   color: #475569;
-  font-size: 68%;
+  font-size: 67%;
 }
 
 .titlebar-center .recent-files-trigger.open .recent-files-count {
@@ -112,72 +115,74 @@
 .titlebar-spacer {
   flex: 1;
   height: 100%;
-  min-width: 24px;
+  min-width: 28px;
 }
 
 /* ── Right actions ───────────────────────────────── */
 .titlebar-actions {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 5px;
   flex-shrink: 0;
-  margin-left: 2px;
+  margin-left: 5px;
 }
 
-/* Open PDF button — refined primary */
+/* Open PDF — tinted primary (harmonizes with ghost settings) */
 .titlebar-open-btn {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 11px;
-  font-size: 81%;
-  font-weight: 500;
+  gap: 6px;
+  height: 30px;
+  padding: 0 13px;
+  font-size: 13px;
+  font-weight: 550;
   line-height: 1;
-  color: #ffffff;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  border: none;
+  color: #2563eb;                              /* blue-600 */
+  background: rgba(37, 99, 235, 0.08);          /* tinted */
+  border: 1px solid rgba(37, 99, 235, 0.16);    /* hairline accent */
   border-radius: 7px;
   cursor: pointer;
   white-space: nowrap;
   transition:
-    opacity 0.15s ease,
-    transform 0.10s ease,
-    box-shadow 0.15s ease;
-  box-shadow:
-    0 1px 2px rgba(37, 99, 235, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.10s ease;
 }
 
 .titlebar-open-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  box-shadow:
-    0 2px 6px rgba(37, 99, 235, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  background: rgba(37, 99, 235, 0.14);
+  border-color: rgba(37, 99, 235, 0.30);
+  color: #1d4ed8;                               /* blue-700 */
 }
 
 .titlebar-open-btn:active:not(:disabled) {
+  background: rgba(37, 99, 235, 0.18);
+  border-color: rgba(37, 99, 235, 0.34);
   transform: translateY(0.5px);
-  box-shadow:
-    0 1px 2px rgba(37, 99, 235, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .titlebar-open-btn:disabled {
-  opacity: 0.45;
+  opacity: 0.5;
   cursor: not-allowed;
+  background: rgba(37, 99, 235, 0.05);
+  border-color: rgba(37, 99, 235, 0.08);
+  color: #93c5fd;                               /* blue-300 */
 }
 
-/* Settings — ghost icon button */
+/* Settings — ghost icon button (neutral, pairs with tinted open) */
 .titlebar-settings-btn {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 28px;
+  width: 34px;
+  height: 30px;           /* exact match with open-btn height */
   background: transparent;
-  color: #94a3b8;         /* slate-400 */
+  color: #64748b;         /* slate-500 */
   border: none;
-  border-radius: 6px;
+  border-radius: 7px;
   cursor: pointer;
   transition:
     background 0.15s ease,
@@ -185,12 +190,22 @@
 }
 
 .titlebar-settings-btn:hover {
-  background: rgba(100, 116, 139, 0.09);
-  color: #475569;         /* slate-600 */
+  background: rgba(100, 116, 139, 0.10);
+  color: #334155;         /* slate-700 */
 }
 
 .titlebar-settings-btn:active {
-  background: rgba(100, 116, 139, 0.14);
+  background: rgba(100, 116, 139, 0.16);
+}
+
+/* ── Divider before window controls ─────────────── */
+.titlebar-wc-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(148, 163, 184, 0.26);
+  margin: 0 8px 0 6px;
+  flex-shrink: 0;
+  border-radius: 1px;
 }
 
 /* ── Window Controls ─────────────────────────────── */
@@ -198,18 +213,17 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  margin-left: 4px;
 }
 
 .wc-btn {
-  width: 30px;
-  height: 28px;
+  width: 34px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: 7px;
   color: #64748b;         /* slate-500 */
   cursor: pointer;
   transition:

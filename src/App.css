@@ -26,39 +26,6 @@ body {
   height: 100vh;
 }
 
-.app-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.92);
-  border-bottom: 1px solid #e5e5e5;
-  backdrop-filter: blur(12px);
-  flex-shrink: 0;
-  /* backdrop-filter 会让 header 形成独立层叠上下文，显式抬高层级，
-     否则 header 内的下拉面板（最近文件）会被 .app-main 的内容盖住 */
-  position: relative;
-  z-index: 101;
-}
-
-.app-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.app-brand-icon {
-  color: #0078d4;
-}
-
-.app-header h1 {
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #1f1f1f;
-  letter-spacing: -0.01em;
-}
-
 .icon-btn {
   display: inline-flex;
   align-items: center;

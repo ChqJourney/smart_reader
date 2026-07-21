@@ -20,7 +20,7 @@ import {
 } from "./hooks/useRightPanelLayout";
 import { useRecentFiles, type RecentFile } from "./hooks/useRecentFiles";
 import { useSplitView } from "./hooks/useSplitView";
-import RecentFilesBar from "./components/RecentFilesBar";
+import TitleBar from "./components/TitleBar";
 import {
   AppSettings,
   DEFAULT_SETTINGS,
@@ -536,37 +536,19 @@ function App() {
 
   return (
     <div className="app">
-      <header className="app-header">
-        <RecentFilesBar
-          files={recentFiles.recentFiles}
-          openFilePaths={openFilePaths}
-          onFileClick={handleRecentFileClick}
-          onOpenInSplit={handleOpenRecentInSplit}
-          onTogglePin={recentFiles.togglePinRecentFile}
-          onRemove={recentFiles.removeRecentFile}
-          onClear={recentFiles.clearRecentFiles}
-        />
-        <div className="app-header-actions">
-          <button
-            className="icon-btn settings-btn"
-            onClick={() => setSettingsOpen(true)}
-            aria-label={t("app.openSettings")}
-            title={t("app.openSettings")}
-          >
-            <Icon name="settings" size={18} />
-          </button>
-          <button
-            data-testid="open-pdf-btn"
-            className="icon-btn primary open-pdf-btn"
-            onClick={handleOpenPdf}
-            aria-label={t("app.openPdf")}
-            title={t("app.openPdf")}
-          >
-            <Icon name="open" size={16} />
-            <span>{t("app.openPdf")}</span>
-          </button>
-        </div>
-      </header>
+      <TitleBar
+        recentFiles={{
+          files: recentFiles.recentFiles,
+          openFilePaths: openFilePaths,
+          onFileClick: handleRecentFileClick,
+          onOpenInSplit: handleOpenRecentInSplit,
+          onTogglePin: recentFiles.togglePinRecentFile,
+          onRemove: recentFiles.removeRecentFile,
+          onClear: recentFiles.clearRecentFiles,
+        }}
+        onOpenPdf={handleOpenPdf}
+        onOpenSettings={() => setSettingsOpen(true)}
+      />
 
       {tabs.tabs.length > 0 && (
         <div className="tab-bar" ref={tabBarRef} onWheel={handleTabBarWheel}>

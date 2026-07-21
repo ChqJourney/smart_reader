@@ -5,7 +5,10 @@
     "exitSplitView": "退出并排视图",
     "exitSplit": "退出并排",
     "showPdf": "显示 PDF",
-    "showAiAssistant": "显示 AI 助手"
+    "showAiAssistant": "显示 AI 助手",
+    "minimize": "最小化",
+    "toggleMaximize": "最大化 / 还原",
+    "close": "关闭"
   },
   "tab": {
     "close": "关闭标签页",

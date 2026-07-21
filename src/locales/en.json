@@ -5,7 +5,10 @@
     "exitSplitView": "Exit Split View",
     "exitSplit": "Exit Split",
     "showPdf": "Show PDF",
-    "showAiAssistant": "Show AI Assistant"
+    "showAiAssistant": "Show AI Assistant",
+    "minimize": "Minimize",
+    "toggleMaximize": "Maximize / Restore",
+    "close": "Close"
   },
   "tab": {
     "close": "Close Tab",

@@ -1,0 +1,233 @@
+/* ═════════════════════════════════════════════════════
+   TitleBar — Modern custom titlebar for SpecReader AI
+   Design language: thin, frosted glass, refined spacing,
+   premium accent colors, subtle interactions.
+   ═════════════════════════════════════════════════════ */
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  height: 38px;
+  padding: 0 4px 0 10px;
+
+  /* Frosted glass */
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(253, 254, 255, 0.92),
+      rgba(250, 251, 253, 0.88)
+    );
+  backdrop-filter: blur(20px) saturate(180%);
+
+  /* Subtle separator — no hard border */
+  box-shadow:
+    0 0.5px 0 rgba(15, 23, 42, 0.06),
+    0 1px 2px rgba(15, 23, 42, 0.03);
+
+  flex-shrink: 0;
+  position: relative;
+  z-index: 101;
+  user-select: none;
+}
+
+/* ── Brand ──────────────────────────────────────── */
+.titlebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  padding-right: 2px;
+  cursor: default;
+}
+
+.titlebar-logo-img {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(30, 64, 175, 0.12));
+}
+
+.titlebar-brand-name {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: #1e293b;           /* slate-800 */
+  white-space: nowrap;
+}
+
+/* ── Divider (thin vertical rule) ───────────────── */
+.titlebar-divider {
+  width: 1px;
+  height: 18px;
+  background: rgba(148, 163, 184, 0.28);   /* slate-400 @ 28% */
+  margin: 0 8px;
+  flex-shrink: 0;
+  border-radius: 1px;
+}
+
+/* ── Center zone ────────────────────────────────── */
+.titlebar-center {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Override recent-files trigger to fit titlebar context */
+.titlebar-center .recent-files-trigger {
+  padding: 4px 10px;
+  font-size: 82%;
+  background: transparent;
+  border-color: transparent;
+  border-radius: 6px;
+  color: #64748b;          /* slate-500 */
+}
+
+.titlebar-center .recent-files-trigger:hover {
+  background: rgba(100, 116, 139, 0.08);
+  border-color: transparent;
+  color: #334155;
+}
+
+.titlebar-center .recent-files-trigger.open {
+  background: #eff6ff;      /* blue-50 */
+  border-color: transparent;
+  color: #2563eb;           /* blue-600 */
+}
+
+/* Count badge inside titlebar */
+.titlebar-center .recent-files-count {
+  background: rgba(148, 163, 184, 0.18);
+  color: #475569;
+  font-size: 68%;
+}
+
+.titlebar-center .recent-files-trigger.open .recent-files-count {
+  background: #bfdbfe;     /* blue-200 */
+  color: #1d4ed8;           /* blue-700 */
+}
+
+/* ── Spacer / drag region ───────────────────────── */
+.titlebar-spacer {
+  flex: 1;
+  height: 100%;
+  min-width: 24px;
+}
+
+/* ── Right actions ───────────────────────────────── */
+.titlebar-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+/* Open PDF button — refined primary */
+.titlebar-open-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  font-size: 81%;
+  font-weight: 500;
+  line-height: 1;
+  color: #ffffff;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    opacity 0.15s ease,
+    transform 0.10s ease,
+    box-shadow 0.15s ease;
+  box-shadow:
+    0 1px 2px rgba(37, 99, 235, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.titlebar-open-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  box-shadow:
+    0 2px 6px rgba(37, 99, 235, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.titlebar-open-btn:active:not(:disabled) {
+  transform: translateY(0.5px);
+  box-shadow:
+    0 1px 2px rgba(37, 99, 235, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.titlebar-open-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Settings — ghost icon button */
+.titlebar-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 28px;
+  background: transparent;
+  color: #94a3b8;         /* slate-400 */
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.titlebar-settings-btn:hover {
+  background: rgba(100, 116, 139, 0.09);
+  color: #475569;         /* slate-600 */
+}
+
+.titlebar-settings-btn:active {
+  background: rgba(100, 116, 139, 0.14);
+}
+
+/* ── Window Controls ─────────────────────────────── */
+.titlebar-wc {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.wc-btn {
+  width: 30px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: #64748b;         /* slate-500 */
+  cursor: pointer;
+  transition:
+    background 0.13s ease,
+    color 0.13s ease;
+}
+
+.wc-btn:hover {
+  background: rgba(100, 116, 139, 0.10);
+  color: #1e293b;         /* slate-800 */
+}
+
+.wc-btn:active {
+  background: rgba(100, 116, 139, 0.18);
+}
+
+/* Close button hover — system red */
+.wc-btn.wc-close:hover {
+  background: #dc2626;     /* red-600 */
+  color: #ffffff;
+}

@@ -9,7 +9,7 @@ import "./RecentFilesBar.css";
 // 条目超过该数量时面板顶部出现搜索框
 const SEARCH_THRESHOLD = 8;
 
-interface RecentFilesBarProps {
+export interface RecentFilesBarProps {
   files: RecentFile[];
   /** 当前已打开为 tab 的文件路径，用于「已打开」标记 */
   openFilePaths?: string[];

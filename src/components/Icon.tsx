@@ -36,7 +36,10 @@ export type IconName =
   | "bookmark"
   | "clock"
   | "pin"
-  | "table-of-contents";
+  | "table-of-contents"
+  | "minimize"
+  | "maximize"
+  | "restore";
 
 interface IconProps {
   name: IconName;
@@ -620,6 +623,48 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
       <circle cx="4.5" cy="6" r="1.2" fill="currentColor" />
       <circle cx="4.5" cy="10" r="1.2" fill="currentColor" />
       <circle cx="4.5" cy="14" r="1.2" fill="currentColor" />
+    </>
+  ),
+  minimize: (
+    <path
+      d="M5 14h10"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+    />
+  ),
+  maximize: (
+    <rect
+      x="4"
+      y="4"
+      width="12"
+      height="12"
+      rx="1"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    />
+  ),
+  restore: (
+    <>
+      <rect
+        x="7"
+        y="4"
+        width="9"
+        height="9"
+        rx="1"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M4 13V7a1 1 0 0 1 1-1h6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
     </>
   ),
 };

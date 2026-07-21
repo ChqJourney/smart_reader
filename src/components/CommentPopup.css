@@ -1,0 +1,91 @@
+.comment-popup {
+  position: absolute;
+  z-index: 21;
+  width: 300px;
+  max-height: 280px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid #e0e0e0;
+  border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  overflow: hidden;
+  transform: translate(-50%, 12px);
+}
+
+.comment-popup.dragging {
+  opacity: 0.92;
+  cursor: grabbing;
+}
+
+.comment-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0px 2px;
+  background: #fafafa;
+  border-bottom: 1px solid #e8e8e8;
+  cursor: grab;
+  user-select: none;
+}
+
+.comment-popup-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #1f1f1f;
+}
+
+.comment-popup-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.comment-popup-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #616161;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.comment-popup-actions button:hover {
+  background: #f0f0f0;
+  color: #1f1f1f;
+}
+
+.comment-popup-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  padding: 8px 12px;
+}
+
+.comment-popup-textarea {
+  flex: 1;
+  min-height: 80px;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: #333;
+}
+
+.comment-popup-textarea::placeholder {
+  color: #aaa;
+}

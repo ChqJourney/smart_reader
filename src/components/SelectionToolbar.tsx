@@ -8,6 +8,8 @@ interface SelectionToolbarProps {
   selection: { text: string; x: number; y: number } | null;
   onAction: (action: SelectionAction, text: string) => void;
   onAddToStash?: (text: string) => void;
+  onCopy?: (text: string) => void;
+  onAddComment?: (text: string) => void;
   onDismiss: () => void;
 }
 
@@ -15,6 +17,8 @@ export default function SelectionToolbar({
   selection,
   onAction,
   onAddToStash,
+  onCopy,
+  onAddComment,
   onDismiss,
 }: SelectionToolbarProps) {
   const { t } = useTranslation();
@@ -53,6 +57,20 @@ export default function SelectionToolbar({
   const handleAddToStashClick = () => {
     if (selection?.text) {
       onAddToStash?.(selection.text);
+      onDismiss();
+    }
+  };
+
+  const handleCopyClick = () => {
+    if (selection?.text) {
+      onCopy?.(selection.text);
+      onDismiss();
+    }
+  };
+
+  const handleAddCommentClick = () => {
+    if (selection?.text) {
+      onAddComment?.(selection.text);
       onDismiss();
     }
   };
@@ -100,6 +118,24 @@ export default function SelectionToolbar({
       >
         <Icon name="translate" size={16} />
         <span>{t("action.translate")}</span>
+      </button>
+      <button
+        className="icon-btn"
+        onClick={handleCopyClick}
+        aria-label={t("action.copy")}
+        title={t("action.copy")}
+      >
+        <Icon name="copy" size={16} />
+        <span>{t("action.copy")}</span>
+      </button>
+      <button
+        className="icon-btn"
+        onClick={handleAddCommentClick}
+        aria-label={t("action.comment")}
+        title={t("action.comment")}
+      >
+        <Icon name="comment" size={16} />
+        <span>{t("action.comment")}</span>
       </button>
     </div>
   );

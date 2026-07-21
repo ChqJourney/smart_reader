@@ -27,6 +27,10 @@
   background: #0078d4;
 }
 
+.annotation-marker.comment {
+  background: #8b5cf6;
+}
+
 .annotation-marker:hover {
   transform: translate(-50%, -50%) scale(1.15);
   box-shadow:

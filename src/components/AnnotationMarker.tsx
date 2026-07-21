@@ -99,7 +99,9 @@ export default function AnnotationMarker({
       : t("marker.stash")
     : annotation.type === "translate"
       ? t("marker.translate")
-      : t("marker.explain");
+      : annotation.type === "comment"
+        ? t("marker.comment")
+        : t("marker.explain");
 
   return (
     <div
@@ -121,7 +123,13 @@ export default function AnnotationMarker({
         )
       ) : (
         <Icon
-          name={annotation.type === "translate" ? "translate" : "explain"}
+          name={
+            annotation.type === "translate"
+              ? "translate"
+              : annotation.type === "comment"
+                ? "comment"
+                : "explain"
+          }
           size={12}
         />
       )}

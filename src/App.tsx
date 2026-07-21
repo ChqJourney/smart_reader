@@ -28,6 +28,7 @@ import {
   saveSettings,
 } from "./services/settings";
 import { getContextWindow } from "./data/platformPresets";
+import { copyToClipboard } from "./utils/clipboard";
 import { useDictionaryStatus } from "./hooks/useDictionaryStatus";
 import { checkForUpdate } from "./services/updater";
 import { error } from "./services/logs";
@@ -448,6 +449,29 @@ function App() {
     [activeSelection, persistence, tabs]
   );
 
+  const handleCopy = useCallback(
+    (text: string) => {
+      if (!tabs.activeTab) return;
+      // `void` + `.catch`: copyToClipboard falls back to execCommand('copy')
+      // which throws when it fails — surface the failure to the log instead of
+      // letting it become an unhandled promise rejection.
+      void copyToClipboard(text).catch((err) => {
+        error(`Failed to copy selection: ${err}`);
+      });
+      tabs.clearTabSelection(tabs.activeTab.id);
+    },
+    [tabs]
+  );
+
+  const handleAddComment = useCallback(
+    (text: string) => {
+      if (!activeSelection || !tabs.activeTab) return;
+      persistence.handleAddComment(activeSelection, text);
+      tabs.clearTabSelection(tabs.activeTab.id);
+    },
+    [activeSelection, persistence, tabs]
+  );
+
   const handleGotoStash = useCallback(
     (stash: StashItem) => {
       tabs.gotoTabPage(stash.source.tabId, stash.source.page);
@@ -859,6 +883,8 @@ function App() {
         selection={activeSelection}
         onAction={handleSelectionAction}
         onAddToStash={handleAddToStash}
+        onCopy={handleCopy}
+        onAddComment={handleAddComment}
         onDismiss={() => {
           if (tabs.activeTab) {
             tabs.clearTabSelection(tabs.activeTab.id);

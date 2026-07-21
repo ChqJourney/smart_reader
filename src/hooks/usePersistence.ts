@@ -70,6 +70,7 @@ export interface UsePersistenceReturn {
   focusedTabStashes: StashItem[];
   focusedTabSessions: InterpretationSession[];
   handleAddToStash: (selection: SelectionState, text: string) => void;
+  handleAddComment: (selection: SelectionState, text: string) => void;
   handleRemoveStash: (id: string) => void;
   handleClearStashes: () => void;
   handleCustomInterpret: (prompt: string, visibleStashes: StashItem[]) => void;
@@ -987,6 +988,31 @@ export function usePersistence({
     [activeTab, openRightPanel]
   );
 
+  const handleAddComment = useCallback(
+    (selection: SelectionState, text: string) => {
+      if (!activeTab) return;
+
+      const commentAnnotation = createAnnotation(
+        "comment",
+        text,
+        selection.page,
+        selection.pdfX,
+        selection.pdfY,
+        {
+          width: selection.width,
+          height: selection.height,
+          fileHash: activeTab.fileHash,
+        }
+      );
+      setAnnotationsByHash((prev) => {
+        const fileHash = activeTab.fileHash;
+        const list = prev[fileHash] || [];
+        return { ...prev, [fileHash]: [...list, commentAnnotation] };
+      });
+    },
+    [activeTab]
+  );
+
   const handleRemoveStash = useCallback((id: string) => {
     setStashes((prev) => removeStash(prev, id));
     setAnnotationsByHash((prev) => {
@@ -1278,6 +1304,7 @@ export function usePersistence({
     focusedTabStashes,
     focusedTabSessions,
     handleAddToStash,
+    handleAddComment,
     handleRemoveStash,
     handleClearStashes,
     handleCustomInterpret,

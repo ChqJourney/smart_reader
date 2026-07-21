@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Annotation } from "../services/annotations";
 import { AppSettings } from "../services/settings";
 import AnnotationMarker from "./AnnotationMarker";
+import CommentPopup from "./CommentPopup";
 import ExplainPopup from "./ExplainPopup";
 import StashInterpretedPopup from "./StashInterpretedPopup";
 import TranslatePopup from "./TranslatePopup";
@@ -63,6 +64,7 @@ export default function PdfAnnotations({
                   onUpdate(annotation.id, { hidden: !annotation.hidden });
                 } else if (
                   annotation.type === "explain" ||
+                  annotation.type === "comment" ||
                   isInterpretedStash
                 ) {
                   setOpenPopupId((current) =>
@@ -89,6 +91,18 @@ export default function PdfAnnotations({
                 onUpdate={(patch) => onUpdate(annotation.id, patch)}
                 onHide={() => onUpdate(annotation.id, { hidden: true })}
                 onClose={() => onDelete(annotation.id)}
+              />
+            )}
+            {annotation.type === "comment" && openPopupId === annotation.id && (
+              <CommentPopup
+                annotation={annotation}
+                scale={scale}
+                onUpdate={(patch) => onUpdate(annotation.id, patch)}
+                onHide={() => setOpenPopupId(null)}
+                onClose={() => {
+                  setOpenPopupId(null);
+                  onDelete(annotation.id);
+                }}
               />
             )}
             {annotation.type === "explain" && openPopupId === annotation.id && (

@@ -11,7 +11,7 @@ export interface AnnotationPosition {
 
 export interface Annotation {
   id: string;
-  type: "translate" | "explain" | "stash";
+  type: "translate" | "explain" | "stash" | "comment";
   text: string;
   position: AnnotationPosition;
   content: string;
@@ -67,7 +67,7 @@ export async function getPdfHash(filePath: string): Promise<string> {
 }
 
 export function createAnnotation(
-  type: "translate" | "explain" | "stash",
+  type: "translate" | "explain" | "stash" | "comment",
   text: string,
   page: number,
   x: number,
@@ -85,7 +85,7 @@ export function createAnnotation(
     text,
     position: { page, x, y, width: options?.width, height: options?.height },
     content: "",
-    isStreaming: true,
+    isStreaming: type === "comment" ? false : true,
     hidden: type === "translate" ? false : undefined,
     createdAt: Date.now(),
     stashId: options?.stashId,

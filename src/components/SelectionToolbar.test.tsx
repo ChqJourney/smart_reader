@@ -67,6 +67,42 @@ describe("SelectionToolbar", () => {
     expect(onDismiss).toHaveBeenCalled();
   });
 
+  it("calls onCopy with text then dismisses", () => {
+    const onCopy = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <SelectionToolbar
+        selection={{ text: "hello", x: 0, y: 0 }}
+        onAction={vi.fn()}
+        onCopy={onCopy}
+        onDismiss={onDismiss}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /复制/i }));
+
+    expect(onCopy).toHaveBeenCalledWith("hello");
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
+  it("calls onAddComment with text then dismisses", () => {
+    const onAddComment = vi.fn();
+    const onDismiss = vi.fn();
+    render(
+      <SelectionToolbar
+        selection={{ text: "hello", x: 0, y: 0 }}
+        onAction={vi.fn()}
+        onAddComment={onAddComment}
+        onDismiss={onDismiss}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /批注/i }));
+
+    expect(onAddComment).toHaveBeenCalledWith("hello");
+    expect(onDismiss).toHaveBeenCalled();
+  });
+
   it("dismisses when clicking outside", async () => {
     const onDismiss = vi.fn();
     render(

@@ -90,7 +90,8 @@
     "stash": "暂存",
     "interpretedStash": "已解读暂存",
     "translate": "翻译",
-    "explain": "解读"
+    "explain": "解读",
+    "comment": "批注"
   },
   "recentFiles": {
     "title": "最近打开的文件",
@@ -233,7 +234,14 @@
   },
   "action": {
     "translate": "翻译",
-    "explain": "解读"
+    "explain": "解读",
+    "copy": "复制",
+    "comment": "批注"
+  },
+  "comment": {
+    "title": "批注",
+    "hidePopup": "隐藏批注框",
+    "placeholder": "输入批注内容…"
   },
   "common": {
     "cancel": "取消",

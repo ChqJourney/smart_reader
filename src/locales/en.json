@@ -90,7 +90,8 @@
     "stash": "Stash",
     "interpretedStash": "Interpreted Stash",
     "translate": "Translate",
-    "explain": "Explain"
+    "explain": "Explain",
+    "comment": "Comment"
   },
   "recentFiles": {
     "title": "Recent Files",
@@ -233,7 +234,14 @@
   },
   "action": {
     "translate": "Translate",
-    "explain": "Explain"
+    "explain": "Explain",
+    "copy": "Copy",
+    "comment": "Comment"
+  },
+  "comment": {
+    "title": "Comment",
+    "hidePopup": "Hide comment box",
+    "placeholder": "Type your comment…"
   },
   "common": {
     "cancel": "Cancel",

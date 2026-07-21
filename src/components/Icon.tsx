@@ -39,7 +39,9 @@ export type IconName =
   | "table-of-contents"
   | "minimize"
   | "maximize"
-  | "restore";
+  | "restore"
+  | "copy"
+  | "comment";
 
 interface IconProps {
   name: IconName;
@@ -660,6 +662,38 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
       />
       <path
         d="M4 13V7a1 1 0 0 1 1-1h6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  copy: (
+    <>
+      <rect
+        x="7"
+        y="7"
+        width="9"
+        height="9"
+        rx="1.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M4 12V4a1 1 0 0 1 1-1h8"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </>
+  ),
+  comment: (
+    <>
+      <path
+        d="M4 4h12a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H8l-4 3v-3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z"
         fill="none"
         stroke="currentColor"
         strokeWidth="1.5"

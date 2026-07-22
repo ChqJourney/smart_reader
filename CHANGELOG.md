@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-07-21
+
 ### Added
 - 选区工具条新增「复制」按钮：一键将选中文本写入系统剪贴板（优先 `navigator.clipboard`，Tauri webview 下自动降级到 `execCommand`）。
 - 选区工具条新增「批注」按钮：在选区处生成紫色 comment 标记与类翻译框的可编辑批注；输入内容按 PDF 文件 SHA-256 hash 持久化，重开 PDF 自动恢复，支持拖拽移动、隐藏与删除。

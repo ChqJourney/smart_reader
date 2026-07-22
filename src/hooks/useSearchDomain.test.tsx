@@ -78,6 +78,72 @@ describe("useSearchDomain", () => {
     expect(m.page).toBe(1);
   });
 
+  it("finds a phrase spanning item boundaries and highlights every contributing item", async () => {
+    const pdf = makeMockPdf([
+      [
+        { str: "shall", x: 10, y: 20, width: 24, height: 12 },
+        { str: "comply", x: 38, y: 20, width: 30, height: 12 },
+      ],
+    ]);
+    const goToPageRef = { current: vi.fn() as ((p: number) => void) | null };
+    const currentPageRef = { current: 1 };
+    const { result } = renderSearch(pdf, 1, 1, goToPageRef, currentPageRef);
+
+    act(() => {
+      result.current.setSearchOpen(true);
+      result.current.setSearchQuery("shall comply");
+    });
+
+    await waitFor(() => expect(result.current.searchMatches).toHaveLength(1));
+    const highlights = result.current.searchHighlightsByPage.get(1)!;
+    expect(highlights).toHaveLength(2);
+    expect(highlights.map((highlight) => highlight.x)).toEqual([10, 38]);
+    expect(highlights.map((highlight) => highlight.width)).toEqual([24, 30]);
+  });
+
+  it("finds a phrase spanning a line break and word-by-word items", async () => {
+    const pdf = makeMockPdf([
+      [
+        { str: "rated", x: 10, y: 20, width: 25, height: 12 },
+        { str: "voltage", x: 10, y: 40, width: 35, height: 12 },
+        { str: "shall", x: 10, y: 60, width: 24, height: 12 },
+        { str: "comply", x: 38, y: 60, width: 30, height: 12 },
+      ],
+    ]);
+    const goToPageRef = { current: vi.fn() as ((p: number) => void) | null };
+    const currentPageRef = { current: 1 };
+    const { result } = renderSearch(pdf, 1, 1, goToPageRef, currentPageRef);
+
+    act(() => {
+      result.current.setSearchOpen(true);
+      result.current.setSearchQuery("rated voltage");
+    });
+    await waitFor(() => expect(result.current.searchMatches).toHaveLength(1));
+
+    act(() => result.current.setSearchQuery("shall comply"));
+    await waitFor(() => expect(result.current.searchMatches).toHaveLength(1));
+  });
+
+  it("does not inject a space when PDF.js splits one word into adjacent items", async () => {
+    const pdf = makeMockPdf([
+      [
+        { str: "com", x: 10, y: 20, width: 18, height: 12 },
+        { str: "ply", x: 28, y: 20, width: 18, height: 12 },
+      ],
+    ]);
+    const goToPageRef = { current: vi.fn() as ((p: number) => void) | null };
+    const currentPageRef = { current: 1 };
+    const { result } = renderSearch(pdf, 1, 1, goToPageRef, currentPageRef);
+
+    act(() => {
+      result.current.setSearchOpen(true);
+      result.current.setSearchQuery("comply");
+    });
+
+    await waitFor(() => expect(result.current.searchMatches).toHaveLength(1));
+    expect(result.current.searchHighlightsByPage.get(1)).toHaveLength(2);
+  });
+
   it("does NOT rebuild the index when scale changes (9.1/9.6)", async () => {
     const pdf = makeMockPdf([
       [{ str: "hello", x: 10, y: 20, width: 50, height: 12 }],

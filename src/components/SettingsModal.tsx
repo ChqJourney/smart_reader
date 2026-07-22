@@ -61,6 +61,8 @@ interface SettingsModalProps {
   initialSettings: AppSettings;
   onClose: () => void;
   onSave: (settings: AppSettings) => void;
+  /** 重新运行首次启动配置向导（可选） */
+  onRunWizard?: () => void;
 }
 
 const PAGE_LIST: SettingsPage[] = ["model", "feature", "system", "about"];
@@ -79,6 +81,7 @@ export default function SettingsModal({
   initialSettings,
   onClose,
   onSave,
+  onRunWizard,
 }: SettingsModalProps) {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
@@ -514,6 +517,20 @@ export default function SettingsModal({
                   <div className="settings-section-hint">
                     {t("settings.llmApiHint")}
                   </div>
+
+                  {onRunWizard && (
+                    <div className="settings-run-wizard">
+                      <button
+                        type="button"
+                        className="settings-text-btn"
+                        onClick={onRunWizard}
+                      >
+                        {t("settings.runWizard", {
+                          defaultValue: "运行配置向导",
+                        })}
+                      </button>
+                    </div>
+                  )}
 
                   {/* Platform selector */}
                   <label className="settings-field">

@@ -8,6 +8,7 @@ import PdfViewer, {
 import SelectionToolbar from "./components/SelectionToolbar";
 import AiChatPanel from "./components/AiChatPanel";
 import SettingsModal from "./components/SettingsModal";
+import SetupWizard from "./components/SetupWizard";
 import Icon from "./components/Icon";
 import { StashItem } from "./services/stash";
 import { InterpretationSession } from "./services/sessions";
@@ -26,8 +27,9 @@ import {
   DEFAULT_SETTINGS,
   loadSettings,
   saveSettings,
+  checkApiKey,
 } from "./services/settings";
-import { getContextWindow } from "./data/platformPresets";
+import { getContextWindow, PLATFORM_LIST } from "./data/platformPresets";
 import { copyToClipboard } from "./utils/clipboard";
 import { useDictionaryStatus } from "./hooks/useDictionaryStatus";
 import { checkForUpdate } from "./services/updater";
@@ -47,6 +49,7 @@ function App() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const dictionaryStatus = useDictionaryStatus();
 
   // PDF bytes cache keyed by filePath. Reused across tab switches so large
@@ -78,6 +81,28 @@ function App() {
       cancelled = true;
     };
   }, []);
+
+  // 首次启动检测：若没有任何平台配置过 API Key，自动弹出配置向导。
+  // 让非编程用户不必自己摸索「设置 → 模型 → 找 Key」，直接跟随三步向导完成。
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    let cancelled = false;
+    const platformIds = PLATFORM_LIST.filter((p) => p.id !== "custom").map(
+      (p) => p.id
+    );
+    Promise.all(platformIds.map((id) => checkApiKey(id)))
+      .then((results) => {
+        if (cancelled) return;
+        const anyKeyConfigured = results.some(Boolean);
+        if (!anyKeyConfigured) setWizardOpen(true);
+      })
+      .catch((err) => {
+        error(`[App] 首次启动向导检测失败: ${err}`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [settingsLoaded]);
 
   // Check for application updates shortly after startup. Errors are ignored
   // so that a missing network or non-Tauri test environment does not break
@@ -308,6 +333,23 @@ function App() {
     await saveSettings(newSettings);
     setSettings(newSettings);
     setSettingsOpen(false);
+  }, []);
+
+  // 配置向导完成：保存并应用最终设置，关闭向导。
+  const handleWizardComplete = useCallback((finalSettings: AppSettings) => {
+    setSettings(finalSettings);
+    setWizardOpen(false);
+  }, []);
+
+  // 配置向导跳过：未配置也能浏览 PDF，关闭向导即可。
+  const handleWizardSkip = useCallback(() => {
+    setWizardOpen(false);
+  }, []);
+
+  // 从「设置」中重新运行配置向导。
+  const handleRunWizard = useCallback(() => {
+    setSettingsOpen(false);
+    setWizardOpen(true);
   }, []);
 
   const handleOpenPdf = useCallback(async () => {
@@ -877,6 +919,15 @@ function App() {
           initialSettings={settings}
           onClose={() => setSettingsOpen(false)}
           onSave={handleSaveSettings}
+          onRunWizard={handleRunWizard}
+        />
+      )}
+      {wizardOpen && (
+        <SetupWizard
+          open={wizardOpen}
+          initialSettings={settings}
+          onComplete={handleWizardComplete}
+          onSkip={handleWizardSkip}
         />
       )}
       <SelectionToolbar

@@ -386,6 +386,27 @@
   font-weight: 500;
 }
 
+.settings-apikey-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.settings-text-btn {
+  padding: 0;
+  background: transparent;
+  border: none;
+  font-size: 0.8rem;
+  color: var(--accent, #0078d4);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.settings-text-btn:hover {
+  text-decoration: underline;
+}
+
 .settings-download-progress {
   margin-top: 12px;
   display: flex;

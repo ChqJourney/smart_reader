@@ -12,7 +12,8 @@ import {
   PlatformId,
   openDefaultAppsSettings,
   saveSettings,
-  getApiKey,
+  checkApiKey,
+  deleteApiKey,
 } from "../services/settings";
 import {
   PLATFORM_LIST,
@@ -98,8 +99,12 @@ export default function SettingsModal({
     "idle" | "testing" | "success" | "error"
   >("idle");
   const [testResult, setTestResult] = useState<string | null>(null);
-  /** Per-platform API key cache (in-memory, not persisted). Keyed by platformId. */
-  const apiKeysCacheRef = useRef<Record<string, string>>({});
+  /**
+   * Per-platform user-typed API key drafts (in-memory, not persisted).
+   * The real key is never loaded from the backend; this only stores what
+   * the user has typed since the modal opened.
+   */
+  const draftApiKeysRef = useRef<Record<string, string>>({});
   /** Tracks which platforms have an API key configured in keyring. */
   const [platformsWithKey, setPlatformsWithKey] = useState<Set<string>>(
     new Set()
@@ -117,9 +122,9 @@ export default function SettingsModal({
     setPendingUpdate(null);
     setTestState("idle");
     setTestResult(null);
-    // Initialize API key cache with the current platform's key
-    apiKeysCacheRef.current = {
-      [initialSettings.platformId]: initialSettings.llm.apiKey,
+    // The backend no longer returns plaintext API keys. Start with empty drafts.
+    draftApiKeysRef.current = {
+      [initialSettings.platformId]: "",
     };
   }, [initialSettings, open]);
 
@@ -132,16 +137,12 @@ export default function SettingsModal({
     let cancelled = false;
     Promise.all(
       platformIds.map(async (id) => {
-        const key = await getApiKey(id);
-        return { id, hasKey: !!key };
+        const hasKey = await checkApiKey(id);
+        return { id, hasKey };
       })
     ).then((results) => {
       if (cancelled) return;
       const set = new Set<string>();
-      // Always include the current platform if it has a key in settings
-      if (settings.llm.apiKey) {
-        set.add(settings.platformId);
-      }
       results.forEach(({ id, hasKey }) => {
         if (hasKey) set.add(id);
       });
@@ -291,24 +292,21 @@ export default function SettingsModal({
     setSettings((s) => ({ ...s, llm: { ...s.llm, ...patch } }));
   };
 
-  /** When platform changes, auto-fill baseUrl/model and load that platform's API key. */
+  /** When platform changes, auto-fill baseUrl/model and restore any user-typed draft. */
   const handlePlatformChange = async (platformId: PlatformId) => {
-    // Cache the current platform's API key before switching
-    apiKeysCacheRef.current[settings.platformId] = settings.llm.apiKey;
+    // Cache whatever the user has typed for the current platform (may be empty).
+    draftApiKeysRef.current[settings.platformId] = settings.llm.apiKey;
 
     const preset = PLATFORM_PRESETS[platformId];
-    // Try in-memory cache first, then fall back to keyring
-    let cachedKey = apiKeysCacheRef.current[platformId];
-    if (cachedKey === undefined) {
-      cachedKey = (await getApiKey(platformId)) ?? "";
-      apiKeysCacheRef.current[platformId] = cachedKey;
-    }
+    // Restore a user-typed draft if present; otherwise leave the input empty.
+    // The real key is never loaded from the backend.
+    const draftKey = draftApiKeysRef.current[platformId] ?? "";
 
     if (platformId === "custom") {
       setSettings((s) => ({
         ...s,
         platformId,
-        llm: { ...s.llm, apiKey: cachedKey ?? "" },
+        llm: { ...s.llm, apiKey: draftKey },
       }));
       return;
     }
@@ -319,9 +317,25 @@ export default function SettingsModal({
         ...s.llm,
         baseUrl: preset.baseUrl,
         model: preset.defaultModelId,
-        apiKey: cachedKey ?? "",
+        apiKey: draftKey,
       },
     }));
+  };
+
+  /** Remove the stored API key for the current platform. */
+  const handleDeleteApiKey = async () => {
+    try {
+      await deleteApiKey(settings.platformId);
+      draftApiKeysRef.current[settings.platformId] = "";
+      updateLlm({ apiKey: "" });
+      setPlatformsWithKey((prev) => {
+        const next = new Set(prev);
+        next.delete(settings.platformId);
+        return next;
+      });
+    } catch (err) {
+      error(`Failed to delete API key: ${err}`);
+    }
   };
 
   /** Test the LLM connection with current (saved) settings. */
@@ -575,7 +589,7 @@ export default function SettingsModal({
                   {/* API Key */}
                   <label className="settings-field">
                     {t("settings.apiKey")}
-                    {settings.llm.apiKey && (
+                    {platformsWithKey.has(settings.platformId) && (
                       <span className="settings-apikey-configured">
                         {t("settings.apiKeyConfigured", {
                           defaultValue: "已配置",
@@ -586,22 +600,41 @@ export default function SettingsModal({
                       type="password"
                       value={settings.llm.apiKey}
                       onChange={(e) => updateLlm({ apiKey: e.target.value })}
-                      placeholder="sk-..."
+                      placeholder={
+                        platformsWithKey.has(settings.platformId)
+                          ? t("settings.apiKeyPlaceholderConfigured", {
+                              defaultValue: "已配置（输入新 key 覆盖）",
+                            })
+                          : "sk-..."
+                      }
                     />
-                    {PLATFORM_PRESETS[settings.platformId].apiKeyHelpUrl && (
-                      <a
-                        href={
-                          PLATFORM_PRESETS[settings.platformId].apiKeyHelpUrl
-                        }
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="settings-help-link"
-                      >
-                        {t("settings.howToGetApiKey", {
-                          defaultValue: "如何获取 API Key?",
-                        })}
-                      </a>
-                    )}
+                    <div className="settings-apikey-actions">
+                      {platformsWithKey.has(settings.platformId) && (
+                        <button
+                          type="button"
+                          className="settings-text-btn"
+                          onClick={handleDeleteApiKey}
+                        >
+                          {t("settings.clearApiKey", {
+                            defaultValue: "清除",
+                          })}
+                        </button>
+                      )}
+                      {PLATFORM_PRESETS[settings.platformId].apiKeyHelpUrl && (
+                        <a
+                          href={
+                            PLATFORM_PRESETS[settings.platformId].apiKeyHelpUrl
+                          }
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="settings-help-link"
+                        >
+                          {t("settings.howToGetApiKey", {
+                            defaultValue: "如何获取 API Key?",
+                          })}
+                        </a>
+                      )}
+                    </div>
                     {PLATFORM_PRESETS[settings.platformId].apiKeyHint && (
                       <p className="settings-field-hint">
                         {PLATFORM_PRESETS[settings.platformId].apiKeyHint}

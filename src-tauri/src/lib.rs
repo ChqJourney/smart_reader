@@ -203,7 +203,8 @@ pub fn run() {
             delete_session,
             load_settings,
             save_settings,
-            get_api_key,
+            check_api_key,
+            delete_api_key,
             load_recent_files,
             save_recent_files,
             check_files_exist,
@@ -826,21 +827,16 @@ fn save_settings_to_disk(base_dir: &std::path::Path, settings: AppSettings) -> R
     Ok(())
 }
 
-/// Load settings from disk and restore the API key from secure storage.
-/// The JSON file never contains the actual API key.
-///
-/// For backwards compatibility with versions that stored the API key in
-/// settings.json, if secure storage has no entry but the on-disk file still
-/// contains a non-empty key, the key is migrated into secure storage.
+/// Load settings from disk and migrate any plaintext API key into secure
+/// storage. The returned `AppSettings` intentionally leaves `llm.api_key`
+/// empty so the actual key is never exposed to the webview.
 fn load_settings_with_storage(
     base_dir: &std::path::Path,
     storage: &dyn secure_storage::ApiKeyStorage,
 ) -> Result<AppSettings, String> {
     let mut settings = load_settings_from_disk(base_dir)?;
     match storage.retrieve(&settings.platform_id)? {
-        Some(key) => {
-            settings.llm.api_key = key;
-        }
+        Some(_) => {}
         None => {
             // Migrate a plaintext API key from older versions into the keyring.
             if !settings.llm.api_key.is_empty() {
@@ -852,18 +848,25 @@ fn load_settings_with_storage(
             }
         }
     }
+    // Never return the real API key to the frontend.
+    settings.llm.api_key = String::new();
     Ok(settings)
 }
 
-/// Persist settings. The API key is stored in secure storage; the on-disk
-/// JSON is written with an empty apiKey field. If secure storage fails,
-/// the entire save is rejected so the key is never silently written to disk.
+/// Persist settings. Non-sensitive fields are written to disk with an empty
+/// apiKey field. If the incoming `llm.api_key` is non-empty it is stored in
+/// secure storage; if it is empty the existing secure-storage entry is left
+/// untouched (so the frontend never needs to hold the plaintext key). If
+/// secure storage fails, the entire save is rejected so the key is never
+/// silently written to disk.
 fn save_settings_with_storage(
     base_dir: &std::path::Path,
     mut settings: AppSettings,
     storage: &dyn secure_storage::ApiKeyStorage,
 ) -> Result<(), String> {
-    storage.store(&settings.platform_id, &settings.llm.api_key)?;
+    if !settings.llm.api_key.is_empty() {
+        storage.store(&settings.platform_id, &settings.llm.api_key)?;
+    }
     settings.llm.api_key = String::new();
     save_settings_to_disk(base_dir, settings)
 }
@@ -985,19 +988,34 @@ async fn save_settings(
     .map_err(|e| format!("Task failed: {}", e))?
 }
 
-/// Retrieve the API key for a specific platform from keyring.
-/// Used by the frontend when switching platforms in settings.
+/// Check whether an API key is configured for a specific platform.
+/// Returns a boolean instead of the plaintext key so the key never leaves
+/// the backend.
 #[tauri::command]
-async fn get_api_key(
+async fn check_api_key(
     state: tauri::State<'_, AppState>,
     platform_id: String,
-) -> Result<Option<String>, String> {
+) -> Result<bool, String> {
     let storage = state.api_key_storage.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        storage.retrieve(&platform_id)
+        storage
+            .retrieve(&platform_id)
+            .map(|key| key.is_some())
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
+}
+
+/// Delete the stored API key for a specific platform.
+#[tauri::command]
+async fn delete_api_key(
+    state: tauri::State<'_, AppState>,
+    platform_id: String,
+) -> Result<(), String> {
+    let storage = state.api_key_storage.clone();
+    tauri::async_runtime::spawn_blocking(move || storage.delete(&platform_id))
+        .await
+        .map_err(|e| format!("Task failed: {}", e))?
 }
 
 #[tauri::command]
@@ -1636,7 +1654,8 @@ mod tests {
         );
 
         let loaded = load_settings_with_storage(base.path(), storage.as_ref()).unwrap();
-        assert_eq!(loaded.llm.api_key, "sk-test");
+        // The actual API key must never be returned to callers (and therefore the webview).
+        assert_eq!(loaded.llm.api_key, "");
     }
 
     #[test]
@@ -1669,16 +1688,21 @@ mod tests {
         settings.llm.api_key = "sk-from-plaintext".to_string();
         save_settings_to_disk(base.path(), settings).unwrap();
 
+        // After migration the returned settings must still mask the key.
         let loaded = load_settings_with_storage(base.path(), storage.as_ref()).unwrap();
-        assert_eq!(loaded.llm.api_key, "sk-from-plaintext");
+        assert_eq!(loaded.llm.api_key, "");
+        assert_eq!(
+            storage.retrieve("deepseek").unwrap(),
+            Some("sk-from-plaintext".to_string())
+        );
 
         // The plaintext key should have been removed from disk.
         let from_disk = load_settings_from_disk(base.path()).unwrap();
         assert_eq!(from_disk.llm.api_key, "");
 
-        // A subsequent load should retrieve the key from secure storage.
+        // A subsequent load should still not expose the key to the frontend.
         let loaded_again = load_settings_with_storage(base.path(), storage.as_ref()).unwrap();
-        assert_eq!(loaded_again.llm.api_key, "sk-from-plaintext");
+        assert_eq!(loaded_again.llm.api_key, "");
     }
 
     #[test]
@@ -1692,6 +1716,55 @@ mod tests {
 
         let loaded = load_settings_with_storage(base.path(), storage.as_ref()).unwrap();
         assert_eq!(loaded.llm.api_key, "");
+    }
+
+    #[test]
+    fn save_settings_preserves_existing_key_when_api_key_field_is_empty() {
+        let base = tempfile::tempdir().unwrap();
+        let storage: Arc<dyn secure_storage::ApiKeyStorage> =
+            Arc::new(secure_storage::MemoryStorage::new());
+
+        // First save stores the real key.
+        let mut settings = sample_settings();
+        settings.llm.api_key = "sk-existing".to_string();
+        save_settings_with_storage(base.path(), settings, storage.as_ref()).unwrap();
+
+        // A subsequent save from the frontend has an empty apiKey because the
+        // frontend never receives the real key. The existing key must be preserved.
+        let mut settings = sample_settings();
+        settings.llm.api_key = String::new();
+        save_settings_with_storage(base.path(), settings, storage.as_ref()).unwrap();
+
+        assert_eq!(
+            storage.retrieve("deepseek").unwrap(),
+            Some("sk-existing".to_string())
+        );
+        let from_disk = load_settings_from_disk(base.path()).unwrap();
+        assert_eq!(from_disk.llm.api_key, "");
+    }
+
+    #[test]
+    fn check_api_key_reflects_secure_storage_state() {
+        let storage: Arc<dyn secure_storage::ApiKeyStorage> =
+            Arc::new(secure_storage::MemoryStorage::new());
+        assert!(!storage.retrieve("deepseek").unwrap().is_some());
+
+        storage.store("deepseek", "sk-test").unwrap();
+        assert!(storage.retrieve("deepseek").unwrap().is_some());
+
+        storage.delete("deepseek").unwrap();
+        assert!(!storage.retrieve("deepseek").unwrap().is_some());
+    }
+
+    #[test]
+    fn delete_api_key_removes_secure_storage_entry() {
+        let storage: Arc<dyn secure_storage::ApiKeyStorage> =
+            Arc::new(secure_storage::MemoryStorage::new());
+        storage.store("deepseek", "sk-test").unwrap();
+        assert!(storage.retrieve("deepseek").unwrap().is_some());
+
+        storage.delete("deepseek").unwrap();
+        assert_eq!(storage.retrieve("deepseek").unwrap(), None);
     }
 
     #[test]

@@ -131,7 +131,13 @@ export async function loadSettings(): Promise<AppSettings> {
     const backend = await invoke<AppSettings>("load_settings");
     if (isValidSettings(backend)) {
       const normalized = normalizeSettings(backend);
-      if (!normalized.llm.apiKey) {
+      // Defense in depth: the backend already masks the API key, but never let
+      // a plaintext key from any source leak into the rest of the frontend.
+      normalized.llm.apiKey = "";
+      // Only migrate a legacy localStorage key if no key is already configured
+      // in secure storage.
+      const hasBackendKey = await checkApiKey(normalized.platformId);
+      if (!hasBackendKey) {
         return mergeWithLegacy(normalized);
       }
       return normalized;
@@ -161,15 +167,26 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
 }
 
 /**
- * Retrieve the API key for a specific platform from the system keyring.
- * Used when switching platforms in settings to show the correct key.
+ * Check whether an API key is configured for a specific platform.
+ * Returns a boolean; the actual key never leaves the backend.
  */
-export async function getApiKey(platformId: string): Promise<string | null> {
+export async function checkApiKey(platformId: string): Promise<boolean> {
   try {
-    return await invoke<string | null>("get_api_key", { platformId });
+    return await invoke<boolean>("check_api_key", { platformId });
   } catch (err) {
-    error(`Failed to get API key for ${platformId}: ${err}`);
-    return null;
+    error(`Failed to check API key for ${platformId}: ${err}`);
+    return false;
+  }
+}
+
+/**
+ * Delete the stored API key for a specific platform.
+ */
+export async function deleteApiKey(platformId: string): Promise<void> {
+  try {
+    await invoke("delete_api_key", { platformId });
+  } catch (err) {
+    error(`Failed to delete API key for ${platformId}: ${err}`);
   }
 }
 

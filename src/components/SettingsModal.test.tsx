@@ -90,6 +90,9 @@ describe("SettingsModal", () => {
       if (command === "download_dictionary") {
         return Promise.resolve(undefined);
       }
+      if (command === "check_api_key") {
+        return Promise.resolve(false);
+      }
       return Promise.reject(
         new Error(`No mock handler for command: ${command}`)
       );
@@ -118,6 +121,95 @@ describe("SettingsModal", () => {
     );
     expect(screen.getByLabelText(/API Key/i)).toHaveValue("");
     expect(screen.getByLabelText("Model")).toHaveValue("deepseek-v4-flash");
+  });
+
+  it("uses check_api_key and never fetches plaintext api key", async () => {
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("check_api_key", {
+        platformId: "deepseek",
+      });
+    });
+    expect(mockInvoke).not.toHaveBeenCalledWith(
+      "get_api_key",
+      expect.anything()
+    );
+  });
+
+  it("shows configured badge and clear button when backend has a key", async () => {
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "check_dictionary") {
+        return Promise.resolve({ exists: false, path: "" });
+      }
+      if (command === "download_dictionary") {
+        return Promise.resolve(undefined);
+      }
+      if (command === "check_api_key") {
+        return Promise.resolve(true);
+      }
+      return Promise.reject(
+        new Error(`No mock handler for command: ${command}`)
+      );
+    });
+
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("已配置")).toBeInTheDocument();
+    });
+    expect(screen.getByText("清除")).toBeInTheDocument();
+  });
+
+  it("calls delete_api_key and clears configured state when clear clicked", async () => {
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "check_dictionary") {
+        return Promise.resolve({ exists: false, path: "" });
+      }
+      if (command === "download_dictionary") {
+        return Promise.resolve(undefined);
+      }
+      if (command === "check_api_key") {
+        return Promise.resolve(true);
+      }
+      if (command === "delete_api_key") {
+        return Promise.resolve(undefined);
+      }
+      return Promise.reject(
+        new Error(`No mock handler for command: ${command}`)
+      );
+    });
+
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("清除")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText("清除"));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("delete_api_key", {
+        platformId: "deepseek",
+      });
+    });
+    expect(screen.queryByText("已配置")).not.toBeInTheDocument();
+    expect(screen.queryByText("清除")).not.toBeInTheDocument();
   });
 
   it("saves updated settings", () => {

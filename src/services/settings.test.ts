@@ -32,13 +32,14 @@ describe("settings service", () => {
   it("loads default settings from backend", async () => {
     mockTauriInvoke({
       load_settings: () => ({ ...DEFAULT_SETTINGS }),
+      check_api_key: () => false,
     });
     const { loadSettings } = await import("../services/settings");
     const settings = await loadSettings();
     expect(settings).toEqual(DEFAULT_SETTINGS);
   });
 
-  it("merges backend settings when backend has custom values", async () => {
+  it("does not expose backend api key to frontend", async () => {
     mockTauriInvoke({
       load_settings: () => ({
         llm: {
@@ -48,11 +49,12 @@ describe("settings service", () => {
         },
         targetLanguage: "English",
       }),
+      check_api_key: () => true,
     });
     const { loadSettings } = await import("../services/settings");
     const settings = await loadSettings();
     expect(settings.llm.baseUrl).toBe("https://custom.example.com");
-    expect(settings.llm.apiKey).toBe("sk-test");
+    expect(settings.llm.apiKey).toBe("");
     expect(settings.targetLanguage).toBe("English");
     expect(settings.systemPrompts).toEqual(DEFAULT_SETTINGS.systemPrompts);
   });
@@ -67,6 +69,7 @@ describe("settings service", () => {
         },
         targetLanguage: "中文",
       }),
+      check_api_key: () => true,
     });
     const { loadSettings } = await import("../services/settings");
     const settings = await loadSettings();
@@ -74,7 +77,7 @@ describe("settings service", () => {
     expect(settings.systemPrompts.explain).toContain("阅读助手");
   });
 
-  it("migrates legacy localStorage config when backend apiKey is empty", async () => {
+  it("migrates legacy localStorage config when backend has no api key", async () => {
     localStorage.setItem(
       "standardread-llm-config",
       JSON.stringify({ apiKey: "legacy-key", model: "legacy-model" })
@@ -82,6 +85,7 @@ describe("settings service", () => {
     let savedSettings: any = null;
     mockTauriInvoke({
       load_settings: () => ({ ...DEFAULT_SETTINGS }),
+      check_api_key: () => false,
       save_settings: (args) => {
         savedSettings = args.settings;
         return null;
@@ -96,7 +100,7 @@ describe("settings service", () => {
     expect(localStorage.getItem("standardread-llm-config")).toBeNull();
   });
 
-  it("does not migrate legacy config when backend already has apiKey", async () => {
+  it("does not migrate legacy config when backend already has an api key", async () => {
     localStorage.setItem(
       "standardread-llm-config",
       JSON.stringify({ apiKey: "legacy-key" })
@@ -106,11 +110,12 @@ describe("settings service", () => {
       load_settings: () => ({
         llm: {
           baseUrl: "https://api.example.com",
-          apiKey: "backend-key",
+          apiKey: "",
           model: "gpt-4",
         },
         targetLanguage: "中文",
       }),
+      check_api_key: () => true,
       save_settings: (args) => {
         savedSettings = args.settings;
         return null;
@@ -118,7 +123,7 @@ describe("settings service", () => {
     });
     const { loadSettings } = await import("../services/settings");
     const settings = await loadSettings();
-    expect(settings.llm.apiKey).toBe("backend-key");
+    expect(settings.llm.apiKey).toBe("");
     expect(savedSettings).toBe("not-called");
   });
 
@@ -162,5 +167,27 @@ describe("settings service", () => {
     };
     await saveSettings(settings);
     expect(saved).toEqual(settings);
+  });
+
+  it("checkApiKey returns backend result", async () => {
+    mockTauriInvoke({
+      check_api_key: ({ platformId }) => platformId === "openai",
+    });
+    const { checkApiKey } = await import("../services/settings");
+    expect(await checkApiKey("openai")).toBe(true);
+    expect(await checkApiKey("deepseek")).toBe(false);
+  });
+
+  it("deleteApiKey invokes backend command", async () => {
+    let deletedPlatform: string | null = null;
+    mockTauriInvoke({
+      delete_api_key: ({ platformId }) => {
+        deletedPlatform = platformId;
+        return null;
+      },
+    });
+    const { deleteApiKey } = await import("../services/settings");
+    await deleteApiKey("openai");
+    expect(deletedPlatform).toBe("openai");
   });
 });

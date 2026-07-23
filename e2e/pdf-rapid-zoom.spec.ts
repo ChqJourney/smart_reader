@@ -29,6 +29,9 @@ async function setupTauriMock(
             };
           if (cmd === "load_recent_files") return [];
           if (cmd === "get_pdf_hash") return "test-hash";
+          // Pretend a key exists so the first-run SetupWizard does not open
+          // and overlay the UI under test.
+          if (cmd === "check_api_key") return true;
           return undefined;
         },
       };

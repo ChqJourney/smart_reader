@@ -58,6 +58,9 @@ async function setupTauriMock(
           if (cmd === "check_dictionary") {
             return { exists: false, path: "", size: null };
           }
+          // Pretend a key exists so the first-run SetupWizard does not open
+          // and overlay the UI under test.
+          if (cmd === "check_api_key") return true;
           if (cmd === "chat_completions_stream") {
             // LLM streaming is now proxied through the Rust backend via a
             // Tauri Channel. args.onEvent is the Channel instance; calling

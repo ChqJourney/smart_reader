@@ -80,6 +80,9 @@ async function setupLargeDocTauriMock(page: import("@playwright/test").Page) {
           if (cmd === "authorize_pdf_path") {
             return undefined;
           }
+          // Pretend a key exists so the first-run SetupWizard does not open
+          // and overlay the UI under test.
+          if (cmd === "check_api_key") return true;
           console.warn("Unhandled Tauri invoke command:", cmd, args);
           return undefined;
         },

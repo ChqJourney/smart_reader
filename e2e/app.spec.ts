@@ -2,6 +2,17 @@ import { test, expect } from "@playwright/test";
 
 test.describe("App E2E", () => {
   test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => {
+      // No real Tauri backend in E2E. check_api_key must report "configured"
+      // or the first-run SetupWizard opens and overlays the UI under test.
+      // Everything else keeps rejecting, same as without a mock.
+      (window as any).__TAURI_INTERNALS__ = {
+        invoke: async (cmd: string) => {
+          if (cmd === "check_api_key") return true;
+          throw new Error(`Unhandled Tauri invoke command: ${cmd}`);
+        },
+      };
+    });
     await page.goto("/");
   });
 
@@ -36,12 +47,16 @@ test.describe("App E2E", () => {
 
   test("opens and closes settings", async ({ page }) => {
     await page.getByRole("button", { name: "打开设置" }).click();
-    // The default platform (deepseek) renders Base URL as a read-only input
-    // without a placeholder, so we assert on the API Key input which always
-    // carries the "sk-..." placeholder on the model settings page.
-    await expect(page.getByPlaceholder("sk-...")).toBeVisible();
+    // The mock reports every platform's API key as configured (to keep the
+    // first-run wizard closed), so the key input shows the "configured"
+    // placeholder instead of "sk-...".
+    const dialog = page.getByRole("dialog", { name: "设置" });
+    await expect(dialog).toBeVisible();
+    await expect(
+      page.getByPlaceholder("已配置（输入新 key 覆盖）")
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "取消" }).click();
-    await expect(page.getByPlaceholder("sk-...")).not.toBeVisible();
+    await expect(dialog).not.toBeVisible();
   });
 });

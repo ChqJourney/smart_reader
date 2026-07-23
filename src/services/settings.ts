@@ -24,6 +24,7 @@ export type PlatformId =
   | "volcengine"
   | "openrouter"
   | "openai"
+  | "xiaomimimo"
   | "custom";
 
 export interface AppSettings {

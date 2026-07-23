@@ -14,6 +14,7 @@
 export type PlatformId =
   | "deepseek"
   | "kimi"
+  | "xiaomimimo"
   | "bailian"
   | "glm"
   | "volcengine"
@@ -108,6 +109,28 @@ export const PLATFORM_PRESETS: Record<PlatformId, PlatformPreset> = {
     apiKeyHelpUrl: "https://platform.moonshot.cn/console/api-keys",
     supportsTools: true,
   },
+  xiaomimimo: {
+    id: "xiaomimimo",
+    label: "Xiaomi MiMo",
+    baseUrl: "https://api.xiaomimimo.com/v1",
+    models: [
+      {
+        id: "mimo-v2.5-pro",
+        label: "MiMo-V2.5-Pro（旗舰，1M 上下文）",
+        supportsThinking: true,
+        contextWindow: 1048576,
+      },
+      {
+        id: "mimo-v2.5",
+        label: "MiMo-V2.5（原生全模态，1M 上下文）",
+        supportsThinking: false,
+        contextWindow: 1048576,
+      },
+    ],
+    defaultModelId: "mimo-v2.5-pro",
+    apiKeyHelpUrl: "https://platform.xiaomimimo.com/console/api-keys",
+    supportsTools: true,
+  },
   bailian: {
     id: "bailian",
     label: "阿里云百炼（通义千问等）",
@@ -161,7 +184,7 @@ export const PLATFORM_PRESETS: Record<PlatformId, PlatformPreset> = {
       },
     ],
     defaultModelId: "glm-5.2",
-    apiKeyHelpUrl: "https://open.bigmodel.cn/usercenter/apikeys",
+    apiKeyHelpUrl: "https://open.bigmodel.cn/apikey/platform",
     apiKeyHint: "API Key 是两段式（含点号），请完整复制",
     supportsTools: true,
   },

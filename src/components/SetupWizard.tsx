@@ -32,6 +32,7 @@ const PLATFORM_BLURB: Partial<Record<PlatformId, string>> = {
   volcengine: "火山引擎豆包，国产模型",
   openai: "OpenAI 官方 GPT，需海外信用卡",
   openrouter: "聚合多家海外模型，需海外信用卡",
+  xiaomimimo: "小米 MiMo，1M 超长上下文，国产访问快",
 };
 
 type TagKind = "recommended" | "free" | "card";
@@ -51,6 +52,7 @@ const WIZARD_ORDER: PlatformId[] = [
   "bailian",
   "glm",
   "volcengine",
+  "xiaomimimo",
   "openai",
   "openrouter",
 ];

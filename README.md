@@ -10,7 +10,7 @@
 - **前端**：React 18 + TypeScript 5.6 + Vite 6
 - **PDF 渲染**：pdfjs-dist 4.8
 - **Markdown 渲染**：react-markdown
-- **AI 调用**：OpenAI 兼容 API（DeepSeek / Kimi / Qwen / OpenAI 等）
+- **AI 调用**：OpenAI 兼容 API，经 Rust 后端代理转发，API Key 存系统钥匙串、不进入 webview；多平台预设（DeepSeek / Kimi / 百炼 / GLM / 火山引擎 / OpenRouter / OpenAI / 自定义），默认平台 DeepSeek、默认模型 deepseek-v4-flash
 
 ## 开发环境要求
 
@@ -77,71 +77,69 @@ cd src-tauri && cargo test
 
 ```
 .
-├── docs/                              # 产品设计文档
-│   ├── PRD.md                         # 产品需求文档
-│   └── AGENT_TOOLS_DESIGN.md          # 完整目标架构设计（Tools / Clause 索引等）
+├── docs/                              # 产品设计文档（PRD / Agent Tools 设计）
 ├── src/                               # 前端源码
-│   ├── App.tsx                        # 应用顶层：Tab 管理、双栏布局、批注/会话状态
-│   ├── App.css                        # 全局样式
-│   ├── main.tsx                       # React 入口
-│   ├── components/                    # React 组件
-│   │   ├── PdfViewer.tsx              # PDF 渲染、选区、单页/连续模式、键盘导航
-│   │   ├── PdfAnnotations.tsx         # 按页渲染 markers 与 popup
-│   │   ├── AnnotationMarker.tsx       # 可拖动的翻译/解读/暂存标记
-│   │   ├── SelectionToolbar.tsx       # 选区上方浮动工具条
-│   │   ├── TranslatePopup.tsx         # 翻译浮层
-│   │   ├── ExplainPopup.tsx           # 解读详情浮层
-│   │   ├── StashInterpretedPopup.tsx  # 已解读暂存浮层
-│   │   ├── AiChatPanel.tsx            # 右侧面板（设置、暂存区、解读记录）
-│   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗
-│   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
-│   │   └── Icon.tsx                   # SVG 图标组件
-│   ├── hooks/                         # 可复用状态逻辑
+│   ├── App.tsx / App.css / main.tsx   # 应用顶层、全局样式、React 入口
+│   ├── components/                    # React 组件（30+，每组件配同名 .css）
+│   │   ├── TitleBar.tsx               # 自定义标题栏（品牌区、最近文件、窗口控制）
+│   │   ├── SetupWizard.tsx            # 首次启动配置向导（选平台 → 填 Key → 测试连接）
+│   │   ├── PdfViewer.tsx / PdfPage.tsx            # PDF 渲染、选区、缩放、单页/连续模式
+│   │   ├── PdfAnnotations.tsx / AnnotationMarker.tsx / *Popup.tsx  # 批注与浮层
+│   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录、追问）
+│   │   ├── SettingsModal.tsx / RecentFilesBar.tsx / CustomInterpretModal.tsx
+│   │   └── MarkdownRenderer.tsx / ContextWidget.tsx / ThinkingIndicator.tsx / Icon.tsx 等
+│   ├── hooks/                         # 可复用状态逻辑（18 个）
+│   │   └── useTabs / usePersistence / useRecentFiles / useSplitView /
+│   │       usePdfDocument / useViewportManager / useZoomAnchor / useSearchDomain /
+│   │       useScrollPageSync / useTabRestore / useWordLookup / useDictionaryStatus /
+│   │       useDrag / useClampedPopupPosition / useStreaming / useModal / useRightPanelLayout
 │   ├── services/                      # 业务逻辑与 Tauri 命令封装
-│   │   ├── annotations.ts             # Annotation 类型 + CRUD + 持久化调用
-│   │   ├── settings.ts                # 应用设置（LLM + 目标语言 + 悬停翻译开关）CRUD
-│   │   ├── dictionary.ts              # ECDICT 本地词典查询与下载进度监听
-│   │   ├── llm.ts                     # LLM 配置、SSE 流式请求、Prompt 模板
-│   │   ├── sessions.ts                # 解读会话数据结构与管理
-│   │   └── stash.ts                   # 暂存片段数据结构与管理
+│   │   ├── llm.ts / settings.ts / updater.ts / dialog.ts / logs.ts / selection.ts
+│   │   ├── annotations.ts / sessions.ts / stash.ts / recentFiles.ts / dictionary.ts
+│   │   └── pdfTools.ts / pdfToolsRegistry.ts      # Agent Tools 执行层与授权注册表
+│   ├── data/platformPresets.ts        # LLM 多平台预设
+│   ├── types/llm.ts                   # LLM 相关类型
+│   ├── i18n/ + locales/               # i18next 接入（zh-CN / en）
 │   └── test/                          # 测试工具与全局 mock
-│       ├── setup.ts
-│       └── mocks/tauri.ts
 ├── src-tauri/                         # Tauri Rust 后端
 │   ├── src/
 │   │   ├── lib.rs                     # Tauri 命令
-│   │   ├── dictionary.rs              # ECDICT 本地词典
+│   │   ├── llm_proxy.rs               # LLM 请求代理（SSE 转发、工具调用累积、错误分类）
 │   │   ├── secure_storage.rs          # API Key 系统钥匙串封装
-│   │   └── main.rs                    # 后端入口
+│   │   └── dictionary.rs / paths.rs / main.rs
 │   ├── capabilities/                  # Tauri 权限配置
 │   ├── Cargo.toml
 │   └── tauri.conf.json
-├── eslint.config.js                   # ESLint flat config
-├── e2e/                               # Playwright E2E 测试
-├── scripts/                           # 辅助脚本
-├── package.json
-├── vite.config.ts
-├── playwright.config.ts
-└── tsconfig.json
+├── e2e/                               # Playwright E2E 测试（6 个 spec + fixtures）
+├── scripts/                           # 辅助脚本（版本同步、发版、测试 PDF 生成）
+├── package.json / vite.config.ts / playwright.config.ts / tsconfig.json
+└── eslint.config.js
 ```
 
 ## 当前已实现能力（超轻量版）
 
-- 多 PDF Tab 同时打开（最多 10 个）。
+- 多 PDF Tab 同时打开（最多 10 个），支持左右分屏并排对照两份 PDF。
+- 自定义标题栏：无边框窗口，集成品牌区、最近文件入口、打开 PDF / 设置与窗口控制按钮。
+- 首次启动配置向导（SetupWizard）：选平台 → 填 API Key → 测试连接（真实调用 LLM 验证）；全部平台未配置 Key 时自动弹出，设置中可重跑。
 - PDF 本地渲染、文本选区、缩放、页码跳转、单页 / 连续滚动阅读模式。
-- 选中文本后浮动工具条：加入暂存、解读、翻译。
+- 全文搜索（Ctrl / Cmd + F，跨 text item 短语匹配，结果逐页高亮跳转）与大纲 / 目录导航。
+- 选中文本后浮动工具条：复制、批注、加入暂存、解读、翻译；批注生成紫色可拖动标记（CommentPopup，防抖保存）。
 - 翻译生成可拖动 / 隐藏 / 删除的浮层批注。
-- 解读生成蓝色标记，并在右侧面板展示可点击跳转的解读记录。
+- 解读生成蓝色标记，并在右侧面板展示可点击跳转的解读记录，支持多轮追问。
 - 自定义解读：把多个暂存片段一次性发给 LLM。
-- 解读记录支持多轮追问；**解读 / 自定义解读 / 追问时启用 Agent Tools**，LLM 可通过 Function Calling 查阅当前打开的 PDF 原文，辅助验证条款引用与跨页内容。
+- **解读 / 自定义解读 / 追问时启用 Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文，辅助验证条款引用与跨页内容；轮次上限默认 20，超限优雅收尾并提示。
+- LLM 请求经 Rust 后端代理转发：API Key 只存系统钥匙串、按平台分条目，不再暴露给 webview；多平台预设（deepseek / kimi / bailian / glm / volcengine / openrouter / openai / custom）。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
+- 最近文件面板：置顶、搜索、失效置灰、上次读到的页码回写、分屏对照打开。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
-- LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 单独存放于系统钥匙串，不再落入 `settings.json` 或 `localStorage`。
+- 会话上下文用量条（ContextWidget）、思考过程展示（ThinkingIndicator）、Markdown 渲染（含 KaTeX 公式）。
+- 软件自动更新：启动 3 秒后自动检查，设置「关于」页可手动检查。
+- i18n 框架接入（i18next，zh-CN / en 两个 locales；当前界面固定中文，en 预埋）。
 
 明确未实现（已规划到后续版本）：
 
-- PDF 文本提取、Clause 索引、目录导航、全文搜索。
-- 术语表、引用追踪、测试清单生成。
+- Clause 索引、引用追踪。
+- 术语表、测试清单生成。
 - 表格截图 + 多模态读取。
 - License 激活校验。
 

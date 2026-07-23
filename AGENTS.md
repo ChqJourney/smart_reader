@@ -14,11 +14,13 @@
 
 已实现能力：
 
+- 自定义标题栏（无边框窗口 `decorations: false`）：品牌区拖动 + 最近文件 / 打开 PDF / 设置 + 窗口控制按钮。
+- 首次启动配置向导（SetupWizard）：选平台 → 填 Key → 测试连接，全部平台未配置 Key 时才自动弹出，设置里可重跑。
 - 多 PDF Tab 同时打开（最多 10 个），支持左右分屏并排对照两份 PDF。
 - PDF 本地渲染、文本选区、缩放、页码跳转、单页 / 连续滚动阅读模式。
-- 全文搜索（Ctrl / Cmd + F，结果逐页高亮、Enter / Shift+Enter 前后跳转）。
+- 全文搜索（Ctrl / Cmd + F，支持跨 text item 短语匹配，结果逐页高亮、Enter / Shift+Enter 前后跳转）。
 - 大纲 / 目录导航面板（PDF 自带 outline 时可用，点击跳转章节）。
-- 选中文本后浮动工具条：加入暂存、解读、翻译。
+- 选中文本后浮动工具条：加入暂存、解读、翻译、复制、批注（comment 浮层，可拖动编辑）。
 - 翻译生成可拖动 / 隐藏 / 删除的浮层批注。
 - 解读生成蓝色标记，并在右侧面板展示可点击跳转的解读记录，支持多轮追问。
 - 自定义解读：把多个暂存片段一次性发给 LLM。暂存区支持选择模式勾选部分片段（未进入选择模式时默认全选）；解读要求弹窗仅能通过「取消」/「发送」关闭。
@@ -26,7 +28,11 @@
 - 最近文件下拉面板：置顶常用标准、按文件名/路径搜索、显示目录/相对时间/上次读到的页码、失效文件置灰、单条移除与两段式清空、从列表直接在分屏打开对照（快捷键 Ctrl/Cmd+Shift+O 开合面板）。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
 - 解读 / 自定义解读 / 追问时启用 **Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文（`list_open_pdfs`、`read_pdf_page`、`search_in_pdf`），辅助验证条款引用与跨页内容。
-- LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 单独存放于系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不再落入 `settings.json`。
+- LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 按平台分条目存放于系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不再落入 `settings.json`。
+- LLM 请求整体后端代理化（`llm_proxy.rs`）：前端不再直接发起 HTTP 请求，API Key 不进入 webview。
+- 软件自动更新：启动 3 秒后自动检查，设置「关于」页可手动检查；失败仅记日志。
+- 单实例 + 文件关联：通过 `open-pdf` 系统事件打开 PDF（如双击 .pdf 文件）。
+- i18n 框架接入（i18next + react-i18next）：当前 `lng` 硬编码 `zh-CN`、界面不可切换语言，`en.json` 为预埋；`targetLanguage` 是 LLM 输出语言，与 UI 语言无关。
 
 明确未实现（已规划到后续版本）：
 
@@ -37,19 +43,22 @@
 
 ## 2. 技术栈
 
-| 层级          | 技术                                        |
-| ------------- | ------------------------------------------- |
-| 桌面框架      | Tauri 2.0（Rust 后端 + Web 前端）           |
-| 前端框架      | React 18 + TypeScript 5.6                   |
-| 构建工具      | Vite 6                                      |
-| PDF 渲染      | pdfjs-dist 4.8                              |
-| UI 图标       | 自定义 `Icon` 组件（SVG 集合）              |
-| Markdown 渲染 | react-markdown                              |
-| 后端语言      | Rust（tauri 2.11, edition 2021）            |
-| 后端存储      | 本地 JSON 文件（AppData）                   |
-| 前端单元测试  | Vitest 4.1 + jsdom + @testing-library/react |
-| E2E 测试      | Playwright 1.61                             |
-| 后端测试      | `cargo test`                                |
+| 层级          | 技术                                                          |
+| ------------- | ------------------------------------------------------------ |
+| 桌面框架      | Tauri 2.0（Rust 后端 + Web 前端）                              |
+| Tauri 插件    | log / dialog / shell / updater / process / single-instance   |
+| 前端框架      | React 18 + TypeScript 5.6                                     |
+| 构建工具      | Vite 6                                                        |
+| PDF 渲染      | pdfjs-dist 4.8                                                |
+| UI 图标       | 自定义 `Icon` 组件（SVG 集合）                                  |
+| Markdown 渲染 | react-markdown（gfm / math / katex）                           |
+| 国际化        | i18next + react-i18next                                       |
+| 后端语言      | Rust（tauri 2.11, edition 2021）                               |
+| 后端主要依赖  | reqwest / tokio / rusqlite / zip / keyring                     |
+| 后端存储      | 本地 JSON 文件（AppData）                                      |
+| 前端单元测试  | Vitest 4.1 + jsdom + @testing-library/react                   |
+| E2E 测试      | Playwright 1.61                                               |
+| 后端测试      | `cargo test`                                                  |
 
 ## 3. 开发环境要求
 
@@ -69,80 +78,106 @@ npm install
 .
 ├── docs/                              # 产品设计文档
 │   ├── PRD.md                         # 产品需求文档（v0.5）
-│   └── AGENT_TOOLS_DESIGN.md          # 完整目标架构设计（Tools / Clause 索引等）
+│   ├── AGENT_TOOLS_DESIGN.md          # 完整目标架构设计（Tools / Clause 索引等）
+│   └── LLM_PLATFORM_COMPATIBILITY.md  # 各 LLM 平台 OpenAI 兼容性调研
 ├── src/                               # 前端源码
-│   ├── App.tsx                        # 应用顶层：Tab 管理、双栏布局、批注/会话状态
-│   ├── App.css                        # 全局样式
-│   ├── main.tsx                       # React 入口
+│   ├── App.tsx                        # 应用顶层：编排 hooks、双栏布局、wizard / focusedViewer / pdfCacheRef
+│   ├── App.css                        # 全局样式（reset、壳层布局、tab 栏、分割条、icon-btn 基础样式）
+│   ├── main.tsx                       # React 入口（ErrorBoundary 顶层包裹）
 │   ├── vite-env.d.ts                  # Vite 类型声明
-│   ├── components/                    # React 组件
-│   │   ├── PdfViewer.tsx              # PDF 渲染、选区、单页/连续模式、键盘导航
+│   ├── components/                    # React 组件（每个组件配同名 {Component}.css，由组件文件顶部 import）
+│   │   ├── PdfViewer.tsx              # PDF 渲染协调层、选区、单页/连续模式、键盘导航
+│   │   ├── PdfPage.tsx                # 单页渲染（canvas / textLayer / 悬停取词）
 │   │   ├── PdfAnnotations.tsx         # 按页渲染 markers 与 popup
-│   │   ├── AnnotationMarker.tsx       # 可拖动的翻译/解读/暂存标记
-│   │   ├── SelectionToolbar.tsx       # 选区上方浮动工具条
+│   │   ├── AnnotationMarker.tsx       # 可拖动的翻译/解读/暂存/批注标记
+│   │   ├── SelectionToolbar.tsx       # 选区上方浮动工具条（暂存/解读/翻译/复制/批注）
 │   │   ├── TranslatePopup.tsx         # 翻译浮层
 │   │   ├── ExplainPopup.tsx           # 解读详情浮层
+│   │   ├── CommentPopup.tsx           # 批注浮层（拖动编辑、300ms 防抖保存、隐藏/删除）
 │   │   ├── StashInterpretedPopup.tsx  # 已解读暂存浮层
 │   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录、流式中止）
+│   │   ├── ContextWidget.tsx          # 会话上下文用量条（数据源 activeSession.lastPromptTokens；frozen 态为预留半成品）
+│   │   ├── MarkdownRenderer.tsx       # react-markdown + gfm/math/katex，自定义 sanitize schema，公式解析失败降级纯文本
+│   │   ├── ThinkingIndicator.tsx      # 思考中/已思考 tokens 指示（可展开 reasoningContent）
 │   │   ├── SettingsModal.tsx          # 全局设置 Modal（左侧分页：模型设置 / 功能设置 / 系统设置 / 关于）
-│   │   ├── RecentFilesBar.tsx         # 最近文件：顶栏触发按钮 + 下拉面板（置顶/搜索/分屏打开）
+│   │   ├── SetupWizard.tsx            # 首次启动配置向导（选平台 → 填 Key → 测试连接）
+│   │   ├── TitleBar.tsx               # 自定义标题栏（data-tauri-drag-region + RecentFilesBar + 窗口控制）
+│   │   ├── RecentFilesBar.tsx         # 最近文件：触发按钮 + 下拉面板（置顶/搜索/分屏打开）
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗
 │   │   ├── ToolCallsIndicator.tsx     # 工具调用状态指示器（解读流中展示）
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
+│   │   ├── ErrorBoundary.tsx          # 顶层错误边界
+│   │   ├── ErrorBanner.tsx            # 错误横幅（预留，当前未接入）
 │   │   └── Icon.tsx                   # SVG 图标组件
 │   ├── hooks/                         # 可复用状态逻辑
 │   │   ├── useTabs.ts                 # Tab 管理
-│   │   ├── usePersistence.ts          # 批注/会话/暂存状态与持久化
+│   │   ├── usePersistence.ts          # 批注/会话/暂存状态与持久化（含 Agent loop runSessionStream）
 │   │   ├── useRightPanelLayout.ts     # 右侧面板布局
 │   │   ├── useRecentFiles.ts          # 最近文件列表（置顶/单条移除/lastPage 回写/配额）
 │   │   ├── useSplitView.ts            # 双排视图状态
 │   │   ├── useDictionaryStatus.tsx    # 本地词典下载状态与进度
-│   │   ├── useWordLookup.ts           # 悬停取词查词逻辑
-│   │   ├── usePdfDocument.ts          # PDF 加载/缓存/大纲（自 PdfViewer 抽出）
+│   │   ├── useWordLookup.ts           # 悬停取词查词逻辑（PdfPage 使用）
+│   │   ├── usePdfDocument.ts          # PDF 加载/缓存/大纲
 │   │   ├── useViewportManager.ts      # viewport 预加载/可见页/wrapper refs/自加载回写（条目带 scale）
 │   │   ├── useZoomAnchor.ts           # 缩放锚点捕获与恢复
-│   │   ├── useSearchDomain.ts         # 搜索索引/高亮/导航（PDF 原始坐标）
+│   │   ├── useSearchDomain.ts         # 搜索索引/高亮/导航（跨 text item 短语匹配，PDF 原始坐标）
 │   │   ├── useScrollPageSync.ts       # 连续滚动页码同步（含换页死区）+ scrollTop 上报
 │   │   ├── useTabRestore.ts           # tab 状态恢复 + pending 页跳转
 │   │   ├── useDrag.ts                 # 通用拖拽（全局监听 + 阈值）
 │   │   ├── useClampedPopupPosition.ts # 浮层 clamp 定位（支持 yPercent）
 │   │   ├── useStreaming.ts            # LLM 流式输出状态
 │   │   └── useModal.ts                # Modal 通用逻辑
+│   ├── i18n/                          # i18next 初始化（index.ts，lng 硬编码 zh-CN）
+│   ├── locales/                       # zh-CN.json / en.json（顶层 key 分组一致，en 为预埋）
+│   ├── data/
+│   │   └── platformPresets.ts         # LLM 平台预设（8 个，见 6.3）
+│   ├── types/
+│   │   └── llm.ts                     # LLM 相关类型（LlmProfile 等多 profile 类型为前瞻预留、未落地）
 │   ├── utils/                         # 纯函数工具
 │   │   ├── coordinateConverter.ts     # PDF↔wrapper↔screen 坐标转换
 │   │   ├── zoomAnchor.ts              # 缩放锚点几何计算
 │   │   ├── fitToWidth.ts              # 适合宽度 scale 计算
 │   │   ├── popupPosition.ts           # 浮层定位 clamp 计算
+│   │   ├── clipboard.ts               # 复制到剪贴板（navigator.clipboard + execCommand 回退）
 │   │   ├── time.ts                    # 相对时间格式化（最近文件列表）
 │   │   └── path.ts                    # 路径工具（basename/dirname/中间省略）
 │   ├── services/                      # 业务逻辑与 Tauri 命令封装
-│   │   ├── annotations.ts             # Annotation 类型 + CRUD + 持久化调用
-│   │   ├── settings.ts                # 应用设置（LLM + 目标语言 + 悬停翻译开关）CRUD
+│   │   ├── annotations.ts             # Annotation 类型（含 "comment"）+ CRUD + 持久化调用
+│   │   ├── settings.ts                # 应用设置 CRUD、PlatformId 联合类型、checkApiKey/deleteApiKey
 │   │   ├── dictionary.ts              # ECDICT 本地词典查询与下载进度监听
-│   │   ├── llm.ts                     # LLM 配置读取、SSE 流式请求、Prompt 模板
+│   │   ├── llm.ts                     # streamChatCompletion（Channel 桥接后端代理）、Prompt 模板（i18n 化）
 │   │   ├── pdfToolsRegistry.ts        # 当前打开 PDF 的轻量元数据注册表（Agent Tools 授权数据源）
 │   │   ├── pdfTools.ts                # Agent Tools 执行层（瞬态 ToolSession）
 │   │   ├── recentFiles.ts             # 最近文件 CRUD + 文件存在性检查
 │   │   ├── sessions.ts                # 解读会话数据结构与管理
-│   │   └── stash.ts                   # 暂存片段数据结构与管理
+│   │   ├── stash.ts                   # 暂存片段数据结构与管理
+│   │   ├── selection.ts               # SelectionState 类型
+│   │   ├── dialog.ts                  # plugin-dialog 确认/消息框封装
+│   │   ├── logs.ts                    # plugin-log 五级日志（所有消息先经 redactSensitiveInfo 脱敏 sk-/Bearer/主目录路径）
+│   │   └── updater.ts                 # plugin-updater + plugin-process：checkForUpdate/checkUpdateInfo/installUpdate
 │   └── test/                          # 测试工具
 │       ├── setup.ts                   # Vitest 全局 setup / mock
 │       └── mocks/tauri.ts             # mockTauriInvoke 辅助函数
 ├── src-tauri/                         # Tauri Rust 后端
 │   ├── src/
-│   │   ├── lib.rs                     # Tauri 命令：read_pdf_bytes / get_pdf_hash / load_pdf_data / save_pdf_data / load_session / save_session / delete_session / load_recent_files / save_recent_files / check_files_exist / check_dictionary / download_dictionary / lookup_word
+│   │   ├── lib.rs                     # Tauri 命令注册与数据持久化（见 6.1）
+│   │   ├── llm_proxy.rs               # LLM 请求后端代理（chat_completions_stream 等）+ 工具 schema
 │   │   ├── dictionary.rs              # ECDICT 本地词典下载（断点续传）、解压、查询
+│   │   ├── paths.rs                   # AppData 路径（app_data_dir()）+ 旧目录递归迁移
+│   │   ├── secure_storage.rs          # ApiKeyStorage trait + KeyringStorage / MemoryStorage（API Key 按平台分条目）
 │   │   └── main.rs                    # 后端入口
 │   ├── capabilities/                  # Tauri 权限配置
 │   ├── icons/                         # 应用图标
 │   ├── Cargo.toml
-│   └── tauri.conf.json                # 应用窗口、构建、打包配置
+│   └── tauri.conf.json                # 窗口（decorations: false）、CSP、updater 插件、构建打包配置
 ├── e2e/                               # Playwright E2E 测试
 │   ├── fixtures/                      # 测试用 PDF（含 60 页大文档 sample-long.pdf）
 │   ├── app.spec.ts                    # 主布局 / 面板显隐 / 设置
-│   ├── pdf-page-jump.spec.ts          # 连续滚动页码跳转
 │   ├── multi-tab-state.spec.ts        # 多 tab 状态隔离
-│   └── pdf-large-doc.spec.ts          # 大文档 fit 不偏移 / 深度缩放页码稳定 / 快速切 tab 恢复
+│   ├── pdf-large-doc.spec.ts          # 大文档 fit 不偏移 / 深度缩放页码稳定 / 快速切 tab 恢复
+│   ├── pdf-page-jump.spec.ts          # 连续滚动页码跳转
+│   ├── pdf-rapid-zoom.spec.ts         # 快速缩放回归
+│   └── pdf-selection-translate.spec.ts # 选区翻译流程
 ├── scripts/                           # 辅助脚本
 │   ├── gen-sample-pdf.mjs             # 生成测试 PDF
 │   ├── gen-sample-short-pdf.mjs       # 生成短页测试 PDF
@@ -251,7 +286,7 @@ cd src-tauri && cargo test
 - `save_session(session: InterpretationSession)`：保存会话 JSON。
 - `delete_session(sessionId: string)`：删除会话文件。
 - `authorize_pdf_path(filePath: string)`：将用户通过对话框选择的 PDF 路径加入后端授权白名单，`read_pdf_bytes` / `get_pdf_hash` 会校验该白名单。
-- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM + 目标语言 + Agent Tools 总开关 + 悬停翻译开关 + 日志级别）；API Key 通过系统钥匙串读写。
+- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 悬停翻译开关 + 日志级别）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表（`RecentFile` 含 `pinned` 置顶与 `lastPage` 阅读页码字段，旧数据通过 `#[serde(default)]` 兼容）。
 - `check_files_exist(paths: string[])`：批量检查文件是否仍存在于磁盘，最近文件面板用它置灰已移动/删除的条目。
 - `open_path(path: string)`：仅允许打开 `http://` / `https://` URL，禁止本地文件路径与目录。
@@ -259,23 +294,29 @@ cd src-tauri && cargo test
 - `check_dictionary()`：检查本地 ECDICT 词典是否存在及大小。
 - `download_dictionary()`：下载 ECDICT SQLite 词典（支持断点续传），通过 `dictionary-download-progress` event 推送进度。
 - `lookup_word(word: string)`：查询单词释义。
+- `open_default_apps_settings()`：打开系统默认应用设置页（Windows），配合 PDF 文件关联引导。
+- `check_api_key(platform_id)` / `delete_api_key(platform_id)`：按平台检查 / 删除钥匙串中的 API Key；key 按平台分条目存储（`llm_api_key_{platform_id}`，`secure_storage.rs`），旧单条目 `llm_api_key` 透明迁移。
+- `chat_completions_stream(params, onEvent: Channel<StreamEvent>)`：LLM 请求后端代理（`llm_proxy.rs`），见 6.3。
+- `cancel_chat_completions(request_id)`：中止进行中的 LLM 流。
+- `test_connection(...)`：测试当前平台配置连通性（配置向导与设置页使用）。
 
 ### 6.2 数据持久化
 
-后端将数据存在 **AppData** 目录下：
+后端将数据存在 **AppData** 目录下，根目录由 `src-tauri/src/paths.rs` 的 `app_data_dir()` 统一返回 `<AppData>/SpecReader`；因 bundle identifier 变更，首次访问会把旧目录 `<data_dir>/photonee/SpecReader` 递归迁移到新位置：
 
 ```
 <AppData>/
-└── photonee/SpecReader/          # identifier 保持 photonee
+└── SpecReader/
     ├── annotations/
     │   ├── {pdf_hash}.json        # 批注 + 关联 session ids
     │   └── sessions/
     │       └── {session_id}.json  # 解读会话详情
     ├── dict/
-    │   └── ecdict.sqlite          # ECDICT 本地离线词典（首次启用悬停翻译时下载）
+    │   ├── ecdict.sqlite          # ECDICT 本地离线词典（首次启用悬停翻译时下载）
+    │   └── ecdict.sqlite.extract/ # 解压临时目录
     ├── logs/
     │   └── app.log                # 应用运行日志（默认 Warn 级别，可在设置中调整，保留最近 3 个文件各 10 MB）
-    ├── settings.json              # LLM 配置 + 目标语言 + Agent Tools 开关 + 悬停翻译开关 + 日志级别
+    ├── settings.json              # LLM 平台/模型 + 目标语言 + Agent Tools 开关 + 悬停翻译开关 + 日志级别
     └── recent_files.json          # 最近打开文件列表
 ```
 
@@ -285,48 +326,57 @@ cd src-tauri && cargo test
 
 ### 6.3 LLM 调用
 
-- `services/llm.ts` 中的 `streamChatCompletion` 使用标准 OpenAI 兼容 SSE 接口。
-- Prompt 模板包括 `buildSelectionPrompt`（翻译 / 解读）和 `buildCustomInterpretPrompt`（自定义解读），均接收 `targetLanguage` 参数。
-- System prompt 也通过 `buildSystemPrompt(targetLanguage)` 按目标语言生成；启用 Agent Tools 时会追加 `llm.toolsSystemAddendum` 工具使用引导段（与用户可编辑 system prompt 解耦）。
-- `StreamEvent` 包含 `toolCall` 分支，完整工具调用信息（`name` / `args` / `callId`）由后端 `llm_proxy.rs` 按 `index` 累积后一次性下发。
+LLM 流量已整体改为 **Rust 后端代理**（`src-tauri/src/llm_proxy.rs`），前端不再直接发起 HTTP 请求：
+
+- 前端 `services/llm.ts` 的 `streamChatCompletion` 通过 `invoke("chat_completions_stream", { params, onEvent: Channel })` 建立流，AsyncGenerator 桥接 Channel 事件；abort 走 `cancel_chat_completions`。
+- 后端从磁盘 settings 读 baseUrl / model、按 `platformId` 从钥匙串读 API Key，reqwest 流式 POST 后经 `tauri::ipc::Channel<StreamEvent>` 逐事件推给前端；SSE tool_call 片段按 `index` 累积，`finish_reason` 时一次性下发完整 toolCall。
+- **API Key 不暴露给 webview**：`load_settings` 返回前强制 `apiKey=""`，旧版明文 key 自动迁移进钥匙串后从磁盘清除；`save_settings` 收到非空 key 只写钥匙串，钥匙串不可用则拒绝保存。
+- Prompt 模板（`buildSelectionPrompt` 翻译/解读、`buildCustomInterpretPrompt` 自定义解读、`buildSystemPrompt`）仍在 `services/llm.ts`，已 i18n 化（走 `i18n.t`，模板文案在 locales JSON）；均接收 `targetLanguage` 参数。启用 Agent Tools 时 system prompt 追加 `llm.toolsSystemAddendum` 工具使用引导段（与用户可编辑 system prompt 解耦）。
 - LLM 配置与目标语言通过 `services/settings.ts` 持久化到后端 AppData；首次启动时会从旧的 `localStorage` 键 `standardread-llm-config` 迁移一次。
-- 默认模型为 `gpt-4o-mini`，默认目标语言为 `中文`。
+- 平台预设集中在 `src/data/platformPresets.ts`（8 个：`deepseek` / `kimi` / `bailian` / `glm` / `volcengine` / `openrouter` / `openai` / `custom`，含 `supportsTools` / `supportsThinking` / `contextWindow` / `apiKeyHelpUrl` 等字段）；`PlatformId` 联合类型在 `services/settings.ts` 有一份需与预设同步。默认平台 `deepseek`、默认模型 `deepseek-v4-flash`，默认目标语言为 `中文`。
 
 ### 6.4 核心状态流
 
 ```
-App.tsx
-├── tabs / activeTabId / secondaryTabId   # PDF Tab 状态（单视图 + 并排视图）
-├── annotations                           # 全局批注列表
-├── sessions                              # 全局解读会话列表
-├── stashes                               # 当前 PDF 的暂存片段
-├── selection                             # 当前 PDF 选区
-├── rightVisible / rightPanelWidth        # 面板布局
-├── recentFiles                           # 最近打开文件列表
-├── settings / settingsOpen               # 全局设置与 Modal
-├── dictionaryStatus                      # 本地 ECDICT 词典状态（存在性、下载进度）
-└── splitPct                              # 并排视图左右面板比例
+App.tsx（编排层，具体状态已下沉到 hooks）
+├── useTabs：tabs / activeTabId / secondaryTabId   # PDF Tab 状态（单视图 + 并排视图）
+├── usePersistence：annotations / sessions / stashes / selection
+├── useRightPanelLayout：rightVisible / rightPanelWidth
+├── useRecentFiles：recentFiles
+├── useSplitView：splitPct                         # 并排视图左右面板比例
+├── settings / settingsOpen                        # 全局设置与 Modal
+├── dictionaryStatus                               # 本地 ECDICT 词典状态（存在性、下载进度）
+├── wizardOpen                                     # 首次启动配置向导（settings 加载后对全部平台 checkApiKey，全未配置才自动弹出；设置里可重跑）
+├── focusedViewer                                  # 分屏时决定 AI 面板跟随哪个 tab
+└── pdfCacheRef                                    # App 级 PDF bytes 缓存（filePath→Uint8Array），同步给 syncOpenPdfs
 
-PdfViewer.tsx（协调层：UI + 组合 hooks，详见 docs/REFACTOR_PLAN.md）
+App.tsx 还接入：
+├── TitleBar            # 自定义标题栏（品牌区 data-tauri-drag-region + RecentFilesBar + 打开PDF/设置 + 窗口控制）
+├── SetupWizard         # 首次启动配置向导
+├── updater             # 启动 3 秒后 checkForUpdate，失败仅记日志；设置「关于」页可手动检查
+└── `open-pdf` 系统事件监听（单实例 / 文件关联打开 PDF）
+（main.tsx 顶层以 ErrorBoundary 包裹整个应用）
+
+PdfViewer.tsx（协调层：UI + 组合 hooks）
 ├── usePdfDocument                      # pdf / numPages / isLoading / outline
 ├── useViewportManager                  # pageViewports / visiblePages / 预加载
 ├── useZoomAnchor                       # 缩放锚点（isZooming 抑制）
-├── useSearchDomain                     # 搜索索引/高亮/导航（PDF 原始坐标）
+├── useSearchDomain                     # 跨 text item 短语搜索索引/高亮/导航（PDF 原始坐标）
 ├── useScrollPageSync                   # 滚动页码同步 + scrollTop 上报
 ├── useTabRestore                       # tab 状态恢复 + pending 跳转
 ├── pageNum / scale / viewMode          # 本组件持有的三要素状态
 ├── 文本选区 → onSelection
-└── hoverTranslate → WordTooltip        # 悬停取词翻译
+└── PdfPage                             # 单页渲染组件；悬停取词（useWordLookup + WordTooltip）已下沉到 PdfPage
 
 AiChatPanel.tsx
 ├── expandedId / expandedStashIds
-└── 检测到 isStreaming 会话时启动 SSE 流；展示最终 assistant 消息上的 `toolEvents`
+└── 检测到 isStreaming 会话时启动流；展示最终 assistant 消息上的 `toolEvents`
 
 ToolCallsIndicator.tsx
 └── 工具调用状态指示器：running / done / 折叠明细
 
 SettingsModal.tsx
-└── 左侧分页设置弹窗：模型设置（LLM/轮次）、功能设置（语言/悬停翻译/Agent Tools 开关/系统提示词）、系统设置（日志/默认打开方式）、关于（版本/软件更新/License）
+└── 左侧分页设置弹窗：模型设置（平台/模型/Key/轮次）、功能设置（语言/悬停翻译/Agent Tools 开关/系统提示词）、系统设置（日志/默认打开方式/重跑向导）、关于（版本/软件更新/License）
 ```
 
 ### 6.5 Agent Tools 工作流
@@ -348,9 +398,10 @@ runSessionStream（usePersistence.ts）
 ```
 
 - PDF 文档实例为**瞬态**：每个 agent loop 内按需懒建 `PDFDocumentProxy`，loop 结束 `dispose` 销毁；不与 viewer 共享，避免切 tab 时生命周期耦合。
-- 授权边界：`pdfToolsRegistry.ts` 只保留当前打开 tab 的轻量元数据（`fileHash` / `fileName` / `filePath` / `numPages`），工具只服务登记在册的 hash；`getPdfBytes` 优先复用 App 级 bytes 缓存，未命中时回退 `read_pdf_bytes`。
+- 授权边界：白名单由前端 `pdfToolsRegistry.ts` 执行，只保留当前打开 tab 的轻量元数据（`fileHash` / `fileName` / `filePath` / `numPages`），工具只服务登记在册的 hash；`getPdfBytes` 优先复用 App 级 bytes 缓存，未命中时回退 `read_pdf_bytes`。（后端 `StreamParams.authorized_file_hashes` 为保留字段，未启用。）
 - 工具消息（assistant-tool + tool result）会持久化到会话，追问时原样回放，并携带 `toolCalls` / `toolCallId` / `reasoningContent`。
-- 轮次上限：`settings.maxToolRounds`（0 视为默认 5），达上限后强制一轮无 tools 收尾。
+- 轮次上限：`settings.maxToolRounds`（默认 **20**，见 `settings.ts` 的 `DEFAULT_SETTINGS`；UI 输入最小值 1）。
+- 超限优雅收尾：最后一轮把 tool 消息改写为 user 上下文、剥掉 assistant `toolCalls` 并追加 system 指令（i18n key `llm.toolLimitFinalInstruction`）；若模型仍返回 toolCalls 且无正文，用 `llm.toolLimitReachedFallback` 文案兜底。
 - 降级：总开关关闭或平台 `supportsTools=false` 时行为同未启用工具的旧流程。
 
 ## 7. 代码组织约定
@@ -378,7 +429,8 @@ runSessionStream（usePersistence.ts）
 
 ### 7.4 CSS
 
-- 样式集中写在 `src/App.css` 一个文件中（当前项目未使用 CSS Modules / Tailwind）。
+- 全局样式（reset、壳层布局、tab 栏、分割条、icon-btn 基础样式）集中在 `src/App.css`（已收缩）。
+- 每个组件另有同名 `{Component}.css`，由组件文件顶部 `import`；未使用 CSS Modules / Tailwind。
 - 类名使用连字符（kebab-case），状态类如 `.active`、`.expanded`、`.streaming`、`.highlighted`。
 
 ### 7.5 注释
@@ -396,37 +448,12 @@ runSessionStream（usePersistence.ts）
   - setup 文件：`src/test/setup.ts`
   - 匹配：`src/**/*.{test,spec}.{ts,tsx}`
   - 覆盖率 provider：`v8`
-- 主要覆盖：
-  - `services/annotations.test.ts`：批注 CRUD、Tauri invoke mock。
-  - `services/settings.test.ts`：AppSettings 默认值、后端 invoke mock、旧 localStorage 配置迁移。
-  - `services/llm.test.ts`：LLM 配置默认值、SSE 流解析、Prompt 构建（含目标语言）。
-  - `services/sessions.test.ts`：会话消息更新、流状态。
-  - `services/stash.test.ts`：暂存片段管理。
-  - `services/pdfTools.test.ts`：Agent Tools 三工具正常路径、白名单拒绝、页码越界、截断、搜索无命中、未知工具、非法 JSON、异常转错误文本、session dispose 幂等。
-  - `services/pdfToolsRegistry.test.ts`：sync 增删、关闭 tab 后 `isAuthorized=false`、numPages 回填、`getCachedBytes` 命中与回退。
-  - `hooks/usePersistence.test.tsx`：StrictMode 下 `handleFollowUp` 不双发、流式中断、annotation 删除、分屏 annotation 隔离、关闭 Tab 资源清理；Agent Loop 工具调用→执行→收尾、消息落盘与追问回放、同参去重、达 `maxRounds` 强制无 tools 收尾、总开关关闭降级、dispose 三路径。
-  - `hooks/useRecentFiles.test.ts`：最近文件增删、置顶/超额降级、单条移除、lastPage 回写、分组配额。
-  - `hooks/useSplitView.test.ts`：双排视图进入/退出。
-  - `components/SelectionToolbar.test.tsx`：工具条渲染、点击外部关闭。
-  - `components/AnnotationMarker.test.tsx`：拖拽后不误触发点击。
-  - `components/PdfAnnotations.test.tsx`：按页与 `fileHash` 过滤、交互回调。
-  - `components/AiChatPanel.test.tsx`：流式更新、中止按钮。
-  - `components/ToolCallsIndicator.test.tsx`：running / done / 折叠渲染。
-  - `components/SettingsModal.test.tsx`：设置表单与保存回调。
-  - `components/RecentFilesBar.test.tsx`：面板开合、置顶分组、元信息行、搜索过滤、键盘导航、失效文件置灰、两段式清空。
-  - `components/PdfViewer.pageJump.test.tsx`：连续滚动页码跳转、过期 scale 条目按 live scale 重算的滚动位置累加。
-  - `components/PdfViewer.state.test.tsx`：tab 状态恢复、恢复窗口页码同步抑制、记录回灌防 stomp。
-  - `components/PdfPage.test.tsx`：wrapper 尺寸渲染期直驱（无 prop→state 滞后）、过期 scale 条目重算、自加载上报。
-  - `hooks/useViewportManager.test.tsx`：viewport 预加载、ensureViewport 按需加载与就绪门控、可见页 bail-out、条目去重、rapid-zoom 无混合尺度、reportViewportLoaded 批量回写/过期 scale 丢弃。
-  - `hooks/useZoomAnchor.test.tsx`：缩放锚点捕获/恢复、边界缩放置锁抑制、缩放连点中锚点按 live scale 换算。
-  - `hooks/useScrollPageSync.test.tsx`：滚动页码即时同步、jump/zoom 抑制、页边界换页死区（PAGE_SWITCH_MARGIN_PX）。
-  - `hooks/useTabRestore.test.tsx`：mount 恢复一次语义、initialState 仅 mount 应用一次（防记录回灌）、恢复窗口 jump 锁持有/释放、pending 跳转等待目标页以上全部 viewport、激活 tab 的 post-mount 跳转。
-  - `hooks/useSearchDomain.test.tsx`：PDF 坐标索引、缩放不重建、goToPageRef 不重跳、searchLoading 重置。
-  - `hooks/useDrag.test.tsx`：拖拽阈值、全局监听、清理。
-  - `utils/coordinateConverter.test.ts` / `utils/zoomAnchor.test.ts` / `utils/fitToWidth.test.ts` / `utils/popupPosition.test.ts`：纯函数基准。
-  - `App.test.tsx`：面板显隐、会话清理、Recent Files。
-  - `components/WordTooltip.test.tsx`：悬停翻译 tooltip 渲染（可选，与 PdfViewer 集成测试覆盖）。
-  - `services/dictionary.test.ts` / `hooks/useDictionaryStatus.test.ts`：词典状态与下载进度（如补充）。
+- 测试文件已 40+ 个，与源码同目录（`{name}.test.ts(x)`），按类别概括：
+  - `services/`：annotations / settings / llm（Channel 流桥接、Prompt 构建）/ sessions / stash / pdfTools / pdfToolsRegistry / updater / clipboard 等，覆盖 CRUD、invoke mock、错误转文本、白名单拒绝等路径。
+  - `hooks/`：usePersistence（Agent loop 全流程、流式中断、tab 清理）、useViewportManager / useZoomAnchor / useScrollPageSync / useTabRestore / useSearchDomain（页码、缩放、恢复回归的重灾区）、useRecentFiles / useSplitView / useDrag 等。
+  - `components/`：PdfViewer（pageJump / state）、PdfPage、AiChatPanel、SettingsModal、RecentFilesBar、SelectionToolbar、AnnotationMarker、ToolCallsIndicator、SetupWizard 等渲染与交互。
+  - `utils/`：coordinateConverter / zoomAnchor / fitToWidth / popupPosition / clipboard 等纯函数基准。
+  - 完整清单直接看代码内 `*.test.*` 文件与 `TESTING.md`（含历史 bug 修复记录）。
 - Mock 策略：
   - `setup.ts` 中全局 mock `crypto.randomUUID`、`localStorage`、`matchMedia`、`IntersectionObserver`、`ResizeObserver`。
   - 相关测试用 `vi.doMock("@tauri-apps/api/core")` mock `invoke`。
@@ -436,11 +463,13 @@ runSessionStream（usePersistence.ts）
 
 ### 8.2 E2E 测试
 
-- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`。
-- `app.spec.ts`：主布局、顶部最近文件入口、设置 Modal、面板显隐。
-- `pdf-page-jump.spec.ts`：连续滚动模式下页码跳转正确性，使用 mock 的 Tauri `invoke` 返回 PDF 字节。
-- `multi-tab-state.spec.ts`：多 tab 页码/批注隔离、关闭 tab 后状态保持。
-- `pdf-large-doc.spec.ts`：>50 页大文档回归——适合宽度不横向偏移、深度缩放页码不抖动、快速切换 tab 恢复页码（fixtures 含 `gen-sample-long-pdf.mjs` 生成的 60 页 PDF）。
+- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 6 个 spec：
+  - `app.spec.ts`：主布局、顶部最近文件入口、设置 Modal、面板显隐。
+  - `pdf-page-jump.spec.ts`：连续滚动模式下页码跳转正确性，使用 mock 的 Tauri `invoke` 返回 PDF 字节。
+  - `multi-tab-state.spec.ts`：多 tab 页码/批注隔离、关闭 tab 后状态保持。
+  - `pdf-large-doc.spec.ts`：>50 页大文档回归——适合宽度不横向偏移、深度缩放页码不抖动、快速切换 tab 恢复页码（fixtures 含 `gen-sample-long-pdf.mjs` 生成的 60 页 PDF）。
+  - `pdf-rapid-zoom.spec.ts`：快速缩放回归。
+  - `pdf-selection-translate.spec.ts`：选区翻译流程。
 - 单实例与文件关联需在打包后的安装包上手动验证，E2E 较难覆盖。
 
 ### 8.3 后端测试
@@ -454,9 +483,9 @@ runSessionStream（usePersistence.ts）
 
 - **PDF 不上传云端**：文件仅在本地读取和渲染。
 - **仅主动选择的内容发送给 LLM**：翻译 / 解读只发送用户选中的文本片段，不会自动上传整篇文档。
-- **API Key 存储**：API Key 通过 Rust `keyring` crate 存入系统钥匙串；`settings.json` 中只保留空占位。钥匙串不可用时 `save_settings` 会明确拒绝保存并返回错误，不回退明文存储。
-- **不要在前端日志中打印 API Key 或完整文件内容**。
-- Tauri CSP 当前配置为 `null`，后续如引入外部资源需要收紧。
+- **API Key 存储**：API Key 通过 Rust `keyring` crate 按平台分条目存入系统钥匙串（`llm_api_key_{platform_id}`，旧单条目自动迁移）；`settings.json` 中只保留空占位，且 `load_settings` 返回前强制 `apiKey=""`，Key 不回传 webview（LLM 请求走后端代理）。钥匙串不可用时 `save_settings` 会明确拒绝保存并返回错误，不回退明文存储。
+- **不要在前端日志中打印 API Key 或完整文件内容**；`services/logs.ts` 的 `redactSensitiveInfo` 会统一脱敏 `sk-` / `Bearer` / 主目录路径。
+- Tauri CSP 已配置（`tauri.conf.json`：`default-src 'self'`；`connect-src 'self'` + localhost + `https:` 等），引入新的外部资源时需同步收紧。
 
 ## 10. 常见改动注意事项
 
@@ -475,15 +504,16 @@ runSessionStream（usePersistence.ts）
 
 ### 10.3 修改本地词典
 
-- ECDICT 下载源、临时文件路径、最终文件路径集中在 `src-tauri/src/dictionary.rs` 顶部常量。
-- 下载支持断点续传：依赖服务器 `Accept-Ranges: bytes`，临时文件为 `ecdict.sqlite.zip.tmp`，最终文件为 `dict/ecdict.sqlite`。
+- ECDICT 下载源、临时文件路径、最终文件路径集中在 `src-tauri/src/dictionary.rs` 顶部常量；`SPECREADER_DICT_URL` 环境变量可覆盖下载源。
+- 下载支持断点续传：依赖服务器 `Accept-Ranges: bytes`，临时文件为 `ecdict.sqlite.zip.tmp`，最终文件为 `dict/ecdict.sqlite`（解压临时目录 `ecdict.sqlite.extract/`）。
 - 下载过程带重试机制：单块读取超时、连接中断或服务器返回非成功状态码时，会自动从已下载位置重试最多 5 次，并继续通过 `dictionary-download-progress` event 推送进度。
+- 解压防 zip 炸弹：总解压大小上限 1.5GB；预留 sha256 校验常量（当前为空串，跳过校验）。
 - 解压后的 SQLite 文件通过文件头魔数 `SQLite format 3\0` 定位，不依赖 zip 内的文件名（避免中文文件名编码问题）。
 - 替换词库时，建议同时删除旧 `ecdict.sqlite` 与 `.tmp`，并清空 `DICT_CONNECTION` 缓存。
 
 ### 10.4 修改 Prompt
 
-- Prompt 模板集中在 `src/services/llm.ts`。
+- Prompt 模板函数集中在 `src/services/llm.ts`，模板文案已 i18n 化，实际文案在 `locales/zh-CN.json` / `en.json` 的 `llm.*` 段，改文案需两边同步。
 - 修改后检查 `services/llm.test.ts` 中相关断言是否仍然成立。
 
 ### 10.5 修改 UI 布局
@@ -496,11 +526,11 @@ runSessionStream（usePersistence.ts）
 
 ### 10.6 修改 Agent Tools
 
-- 工具 schema 与累积逻辑在后端 `src-tauri/src/llm_proxy.rs`；新增/修改工具名需同步更新 `builtin_tools()` 与平台命名约束（Kimi 正则最严）。
+- 工具 schema 与累积逻辑在后端 `src-tauri/src/llm_proxy.rs`；工具名固定 snake_case（`list_open_pdfs` / `read_pdf_page` / `search_in_pdf`，定义在 `builtin_tools()`），新增/修改工具需同步前端 `pdfTools.ts`。
 - 前端工具实现在 `src/services/pdfTools.ts`；任何错误都应捕获并转为 result 文本，不得向 loop 抛异常。
 - 授权与元数据在 `src/services/pdfToolsRegistry.ts`；`App.tsx` 通过 `syncOpenPdfs(tabs, getCachedBytes)` 同步当前打开 tab。修改注册表接口时需同步 `App.tsx` 调用点与 `pdfToolsRegistry.test.ts`。
 - Agent loop 在 `hooks/usePersistence.ts` 的 `runSessionStream`；修改轮次、去重、收尾逻辑时需同步 `usePersistence.test.tsx`。
-- UI 状态组件为 `components/ToolCallsIndicator.tsx`；样式集中在 `src/App.css`。
+- UI 状态组件为 `components/ToolCallsIndicator.tsx`；样式在同名 `ToolCallsIndicator.css`。
 - 相关 i18n key 在 `locales/zh-CN.json` / `en.json` 的 `tools.*` 与 `llm.toolsSystemAddendum` 段，修改后需两边同步。
 
 ## 11. 持续集成
@@ -534,13 +564,13 @@ cd src-tauri && cargo test
 
 - `docs/PRD.md`：产品需求、MVP 范围、数据模型。
 - `docs/AGENT_TOOLS_DESIGN.md`：完整目标架构（Tools、Clause 索引、术语表、测试清单、表格多模态读取）。
-- `docs/AGENT_TOOLS_PHASE1_PLAN.md`：Agent Tools 第一期实施计划（解读时查阅已打开 PDF）。
+- `docs/LLM_PLATFORM_COMPATIBILITY.md`：各 LLM 平台 OpenAI 兼容性调研（平台预设参考）。
 - `TESTING.md`：详细测试说明与已发现的 bug 修复记录。
 - `README.md`：快速开始与项目简介。
 
 ## 13. 版本信息
 
-- 前端版本：`0.8.3`
-- Tauri 应用版本：`0.8.3`
+- 前端版本：`0.9.5`
+- Tauri 应用版本：`0.9.5`
 - 产品名称：`SpecReader AI`
 - 应用标识：`com.photonee.specreader`

@@ -13,12 +13,17 @@
 │   └── test/                     # 测试工具与全局 mock
 │       ├── setup.ts              # Vitest 全局 setup
 │       └── mocks/tauri.ts        # Tauri invoke mock 辅助
-├── e2e/                          # Playwright E2E 测试
+├── e2e/                          # Playwright E2E 测试（6 个 spec）
+│   ├── fixtures/                 # 测试用 PDF（gen-sample-*.mjs 生成，含 60 页大文档）
 │   ├── app.spec.ts
-│   └── pdf-page-jump.spec.ts
+│   ├── pdf-page-jump.spec.ts
+│   ├── multi-tab-state.spec.ts
+│   ├── pdf-large-doc.spec.ts
+│   ├── pdf-rapid-zoom.spec.ts
+│   └── pdf-selection-translate.spec.ts
 ├── playwright.config.ts          # Playwright 配置
 ├── vite.config.ts                # Vitest 配置
-└── src-tauri/src/lib.rs          # Rust 源码与测试
+└── src-tauri/src/                # Rust 源码与测试（lib.rs / secure_storage.rs / llm_proxy.rs）
 ```
 
 ## 可用命令
@@ -57,22 +62,13 @@ Vitest 配置位于 `vite.config.ts`：
 
 ### 测试范围
 
-- **services/annotations.test.ts**：标注的 CRUD、Tauri invoke 调用。
-- **hooks/usePersistence.test.tsx**：StrictMode 下 `handleFollowUp` 不双发、流式中断、annotation 删除、分屏 annotation 隔离、关闭 Tab 资源清理；Agent Loop 工具调用→执行→收尾、消息落盘与追问回放、同参去重、达 `maxRounds` 强制无 tools 收尾、总开关关闭降级。
-- **services/llm.test.ts**：LLM 配置读写、提示词构建、SSE 流解析。
-- **services/sessions.test.ts**：会话消息更新、流状态、删除。
-- **services/stash.test.ts**：暂存片段增删改。
-- **services/pdfTools.test.ts**：Agent Tools 三工具正常路径、白名单拒绝、页码越界、截断、搜索无命中、未知工具、非法 JSON、异常转错误文本、session dispose 幂等。
-- **services/pdfToolsRegistry.test.ts**：当前打开 PDF 的轻量元数据同步、关闭 tab 后授权失效、bytes 缓存命中与 `read_pdf_bytes` 回退。
-- **components/SelectionToolbar.test.tsx**：工具栏渲染、点击外部关闭。
-- **components/AnnotationMarker.test.tsx**：标注标记渲染、拖拽、点击。
-- **components/PdfAnnotations.test.tsx**：页面标注过滤、交互回调。
-- **components/AiChatPanel.test.tsx**：设置面板、解释流更新、暂存区与追问渲染。
-- **components/ToolCallsIndicator.test.tsx**：工具调用状态 running / done / 折叠渲染。
-- **components/CustomInterpretModal.test.tsx**：自定义解读弹窗打开、提交、关闭。
-- **components/PdfViewer.pageJump.test.tsx**：连续滚动页码跳转逻辑。
-- **components/SettingsModal.test.tsx**：设置表单、保存回调、悬停翻译开关与下载确认弹窗。
-- **App.test.tsx**：面板显隐切换、头部渲染、会话清理、悬停翻译开关集成。
+当前约 40 个 `*.test.*` 文件，按目录分类概括如下：
+
+- **services/**：`annotations`（CRUD 与持久化）、`settings`（默认值、后端 invoke、旧 localStorage 迁移）、`llm`（配置读写、Prompt 构建、SSE 流解析）、`sessions`（消息更新、流状态、删除）、`stash`（暂存片段增删改）、`pdfTools`（Agent Tools 三工具正常路径、白名单拒绝、页码越界、截断、搜索无命中、未知工具、非法 JSON、异常转错误文本、session dispose 幂等）、`pdfToolsRegistry`（打开 PDF 元数据同步、关闭 tab 授权失效、bytes 缓存命中与回退）、`dictionary`（词典状态与查询）。
+- **hooks/**：`usePersistence`（StrictMode 下 `handleFollowUp` 不双发、流式中断、annotation 删除、分屏隔离、关闭 Tab 资源清理；Agent Loop 工具调用→执行→收尾、消息落盘与追问回放、同参去重、达 `maxRounds` 强制无 tools 收尾、总开关关闭降级）、`useRecentFiles`（增删、置顶、配额、lastPage 回写）、`useSplitView`、`useTabs`、`useViewportManager`（viewport 预加载与就绪门控）、`useZoomAnchor`（缩放锚点捕获/恢复）、`useScrollPageSync`（滚动页码同步与换页死区）、`useTabRestore`（tab 状态恢复与 pending 跳转）、`useSearchDomain`（PDF 坐标索引与搜索导航）、`useDrag`（拖拽阈值与清理）、`useDictionaryStatus`（下载进度状态流转）。
+- **components/**：`PdfViewer` 拆分为 pageJump / state / zoom 三组测试（连续滚动跳转、tab 状态恢复、快速缩放回归）；`PdfPage`（wrapper 尺寸直驱、过期 scale 重算）；`SelectionToolbar`、`AnnotationMarker`（拖拽后不误触发点击）、`PdfAnnotations`（按页与 fileHash 过滤）、`AiChatPanel`（流式更新、中止）、`ToolCallsIndicator`、`SettingsModal`、`RecentFilesBar`、`CustomInterpretModal`、`CommentPopup`、`ExplainPopup`、`TranslatePopup`、`MarkdownRenderer`。
+- **utils/**：`coordinateConverter` / `zoomAnchor` / `fitToWidth` / `popupPosition` / `time` / `path` / `clipboard` 等纯函数基准测试。
+- **App.test.tsx**：面板显隐切换、头部渲染、会话清理、悬停翻译开关集成（mock `PdfViewer` 避免加载 pdfjs-dist）。
 
 ### Mock 策略
 
@@ -95,12 +91,13 @@ Vitest 配置位于 `vite.config.ts`：
 
 ### 测试范围
 
+E2E 测试通过 mock Tauri `invoke` 返回 PDF 字节，fixtures 目录包含 `scripts/gen-sample-*.mjs` 生成的三个测试 PDF（含 60 页大文档 `sample-long.pdf`）。
+
 `e2e/app.spec.ts` 覆盖：
 
-- 主布局渲染（标题、Open PDF 按钮）。
-- PDF 面板显隐切换。
-- AI 面板显隐切换。
-- 设置表单的打开与关闭。
+- 主布局渲染、顶部最近文件入口。
+- PDF 面板与 AI 面板显隐切换。
+- 设置 Modal 的打开与关闭。
 
 `e2e/pdf-page-jump.spec.ts` 覆盖：
 
@@ -108,9 +105,28 @@ Vitest 配置位于 `vite.config.ts`：
 - 从已滚动位置跳转、连续多次跳转、大视口/短页面场景下的跳转准确性。
 - 跳转完成后页码输入框不再漂移（防止可见页检测与跳转锁竞争）。
 
+`e2e/multi-tab-state.spec.ts` 覆盖：
+
+- 多 tab 页码 / 批注状态隔离。
+- 关闭 tab 后重新打开的状态保持。
+
+`e2e/pdf-large-doc.spec.ts` 覆盖（60 页大文档回归）：
+
+- 适合宽度时不横向偏移。
+- 深度缩放时页码稳定不抖动。
+- 快速切换 tab 后页码恢复正确。
+
+`e2e/pdf-rapid-zoom.spec.ts` 覆盖：
+
+- 快速连续缩放场景的渲染与页码回归。
+
+`e2e/pdf-selection-translate.spec.ts` 覆盖：
+
+- 选中文本 → 浮动工具条 → 翻译流程。
+
 ### 运行注意
 
-E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 环境下建议设置 `CI=true`。
+E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 环境下建议设置 `CI=true`。单实例与文件关联需在打包后的安装包上手动验证，E2E 较难覆盖。
 
 ## 后端测试
 
@@ -135,6 +151,11 @@ E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 
 
 - `MemoryStorage` API Key 存取与删除。
 - `load_settings_with_storage` / `save_settings_with_storage`：settings JSON 中无 API Key 明文、keyring 失败时拒绝保存。
+
+`src-tauri/src/llm_proxy.rs` 中的 `#[cfg(test)]` 模块覆盖：
+
+- 请求体构建：思考参数（thinking）按开启/关闭/自动正确下发或省略、tools 字段序列化、tool 消息 snake_case 字段名。
+- 错误分类：401 → 认证错误、404 → 模型不存在、429 → 限流、500 → 服务器错误、400 context length → 上下文超限。
 
 ### 可测试性重构
 
@@ -176,9 +197,9 @@ E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 
    - 修复：`src/components/PdfViewer.tsx` 改为以「页面顶部距离视口顶部最近」作为当前页判断标准，并引入跳转锁避免可见页检测与跳转滚动竞争。
    - 回归测试：`src/components/PdfViewer.pageJump.test.tsx` 与 `e2e/pdf-page-jump.spec.ts`
 
-## 安全与数据可靠性修复（对应 `AUDIT_FIX_PLAN.md`）
+## 安全与数据可靠性修复
 
-本轮修复覆盖了审计报告中的 Critical / High / P0 / P1 / P2 项，核心变化如下：
+针对安全审计发现的 Critical / High / P0 / P1 / P2 项做过一轮集中修复，核心变化如下：
 
 1. **`handleFollowUp` StrictMode 双发 SSE（C-1）**
    - 修复：`src/hooks/usePersistence.ts` 将 `runSessionStream` 移到 `setSessions` updater 外部。
@@ -220,7 +241,7 @@ E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 
     - 回归测试：`src/hooks/usePersistence.test.tsx`
 
 11. **CI 缺少 type-check / lint / build / audit（H-11）**
-    - 修复：新增 `eslint.config.js`、`.prettierrc.json` 与相关 npm scripts；`.github/workflows/ci.yml` 增加对应步骤与 `cargo audit`。
+    - 修复：新增 `eslint.config.js`、`.prettierrc.json` 与相关 npm scripts；CI workflow 增加对应步骤与 `cargo audit`（现 CI 已分层，见下文「持续集成」）。
     - 回归测试：CI 流水线自身验证
 
 ## 悬停取词翻译测试
@@ -240,21 +261,25 @@ E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 
    - `download_dictionary`：返回 resolved Promise，并通过 `listen` 的回调推送 `{ status: "done", downloaded, total }` 模拟下载完成。
    - `lookup_word`：返回 `{ word, phonetic, translation, ... }` 或 `null`。
 
-## 持续集成建议
+## 持续集成
 
-在 CI 中可依次执行：
+CI 在 `.github/workflows/` 下分层触发，避免每次 push 都跑全量：
+
+| Workflow       | 触发                               | 内容                                                                                              |
+| -------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `ci-quick.yml` | 非 master 分支 push                | type-check / lint / 单元测试                                                                      |
+| `ci-full.yml`  | master push / PR                   | 上述全部 + 前端 build + cargo test / clippy / audit + 双浏览器 E2E（三个 job 并行，Rust 依赖有缓存） |
+| `release.yml`  | 手动 dispatch（输入版本号）        | 一键发版，当前仅发布 Windows 安装包与可执行文件                                                    |
+| `landing.yml`  | master 上 `landing/**` 变更 / 手动 | 部署 GitHub Pages                                                                                 |
+
+约定：`docs/**`、`landing/**`、`**.md` 的变更不触发 CI（paths-ignore）；审计类检查（npm audit / cargo audit）只在 master 集成时运行，不作为日常 push 门禁。
+
+本地可按需单独运行各层检查以加快反馈：
 
 ```bash
 npm ci
 npx playwright install chromium
-npm run type-check
-npm run lint
-npm run build
-npm audit --audit-level=moderate
 npm run test
 npm run test:e2e
 cd src-tauri && cargo test
-# cargo install cargo-audit && cargo audit
 ```
-
-如需跳过 E2E 或后端测试，可单独运行对应命令。

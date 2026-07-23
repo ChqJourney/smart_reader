@@ -2,7 +2,7 @@
 
 > 目标：用“轻量 PDF 解析 + LLM Function Calling Tools”替代传统 RAG，实现标准文档的智能阅读理解  
 > 适用：文本型 PDF，强章节结构，多语言，答案需精确溯源  
-> 状态：本文为完整目标架构。当前「超轻量版」暂不实现 Clause 索引、Tools 调用、术语表、测试清单等功能，仅保留 PDF 阅读 + 翻译 + 解读。
+> 状态：本文为完整目标架构，正文设计保留作参考。当前（v0.9.5）Agent Tools 第一期已落地：`list_open_pdfs` / `read_pdf_page` / `search_in_pdf` 三工具，在解读 / 自定义解读 / 追问时启用（轮次上限默认 20），LLM 请求经 Rust 后端代理 `llm_proxy.rs` 发出；Clause 索引、术语表、测试清单、表格多模态读取等仍为后续规划。
 
 ---
 

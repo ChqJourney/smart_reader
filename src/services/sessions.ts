@@ -19,7 +19,7 @@ export interface InterpretationMessage {
   createdAt: number;
   /** Accumulated reasoning/thinking content (for ThinkingIndicator) */
   reasoningContent?: string;
-  /** Structured error if the message failed (for ErrorBanner) */
+  /** Structured error if the message failed (displayed in the UI) */
   error?: LlmError;
   /** Token usage for this message's LLM call */
   usage?: TokenUsage;
@@ -44,9 +44,6 @@ export interface InterpretationSession {
   updatedAt: number;
   /** Last prompt_tokens from the most recent LLM call (for ContextWidget) */
   lastPromptTokens?: number;
-  /** Whether this session is frozen due to context overflow */
-  frozen?: boolean;
-  frozenReason?: "context_overflow" | "manual";
 }
 
 const LEGACY_STORAGE_KEY = "standardread-interpretation-sessions";

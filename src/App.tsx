@@ -125,6 +125,11 @@ function App() {
   const hoverTranslateActive =
     settings.hoverTranslate && dictionaryStatus.status?.exists === true;
 
+  const contextWindow = useMemo(
+    () => getContextWindow(settings.platformId, settings.llm.model),
+    [settings.platformId, settings.llm.model]
+  );
+
   const [focusedViewer, setFocusedViewer] = useState<"primary" | "secondary">(
     "primary"
   );
@@ -330,9 +335,13 @@ function App() {
   );
 
   const handleSaveSettings = useCallback(async (newSettings: AppSettings) => {
-    await saveSettings(newSettings);
-    setSettings(newSettings);
-    setSettingsOpen(false);
+    try {
+      await saveSettings(newSettings);
+      setSettings(newSettings);
+      setSettingsOpen(false);
+    } catch (err) {
+      error(`[App] 保存设置失败: ${err}`);
+    }
   }, []);
 
   // 配置向导完成：保存并应用最终设置，关闭向导。
@@ -765,10 +774,7 @@ function App() {
                     onFollowUp={persistence.handleFollowUp}
                     onInterrupt={persistence.handleInterruptSession}
                     onToggleVisibility={layout.toggleRight}
-                    contextWindow={getContextWindow(
-                      settings.platformId,
-                      settings.llm.model
-                    )}
+                    contextWindow={contextWindow}
                   />
                 </div>
               </>
@@ -856,6 +862,7 @@ function App() {
                   onFollowUp={persistence.handleFollowUp}
                   onInterrupt={persistence.handleInterruptSession}
                   onToggleVisibility={layout.toggleRight}
+                  contextWindow={contextWindow}
                 />
               </div>
             ) : (
@@ -898,6 +905,7 @@ function App() {
                   onFollowUp={persistence.handleFollowUp}
                   onInterrupt={persistence.handleInterruptSession}
                   onToggleVisibility={layout.toggleRight}
+                  contextWindow={contextWindow}
                 />
               </div>
             ) : (

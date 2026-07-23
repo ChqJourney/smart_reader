@@ -7,10 +7,6 @@ interface ContextWidgetProps {
   currentTokens: number;
   /** Context window limit in tokens */
   contextWindow: number;
-  /** Whether the session is frozen */
-  frozen: boolean;
-  /** Click handler for "new session" button when frozen */
-  onNewSession?: () => void;
 }
 
 /** Threshold percentages for color coding */
@@ -20,8 +16,6 @@ const YELLOW_THRESHOLD = 0.9;
 export default function ContextWidget({
   currentTokens,
   contextWindow,
-  frozen,
-  onNewSession,
 }: ContextWidgetProps) {
   const { t } = useTranslation();
   const percent = useMemo(() => {
@@ -34,11 +28,11 @@ export default function ContextWidget({
   }, [currentTokens, contextWindow]);
 
   const colorClass = useMemo(() => {
-    if (frozen || percent >= 100) return "context-widget-red";
+    if (percent >= 100) return "context-widget-red";
     if (percent >= YELLOW_THRESHOLD * 100) return "context-widget-orange";
     if (percent >= GREEN_THRESHOLD * 100) return "context-widget-yellow";
     return "context-widget-green";
-  }, [percent, frozen]);
+  }, [percent]);
 
   const tooltip = t("contextWidget.tooltip", {
     percent,
@@ -55,20 +49,7 @@ export default function ContextWidget({
           style={{ width: `${Math.min(100, percent)}%` }}
         />
       </div>
-      <span className="context-widget-label">
-        {frozen
-          ? t("contextWidget.frozen", { defaultValue: "已满" })
-          : `${percent}%`}
-      </span>
-      {frozen && onNewSession && (
-        <button
-          type="button"
-          className="context-widget-new-session"
-          onClick={onNewSession}
-        >
-          {t("contextWidget.newSession", { defaultValue: "新建会话" })}
-        </button>
-      )}
+      <span className="context-widget-label">{`${percent}%`}</span>
     </div>
   );
 }

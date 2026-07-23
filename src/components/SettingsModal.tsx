@@ -346,8 +346,10 @@ export default function SettingsModal({
     // Save settings directly to backend (without closing the modal)
     try {
       await saveSettings(settings);
-    } catch {
-      // ignore save errors — test will still use whatever is on disk
+    } catch (err) {
+      setTestState("error");
+      setTestResult(String(err));
+      return;
     }
     setTestState("testing");
     setTestResult(null);

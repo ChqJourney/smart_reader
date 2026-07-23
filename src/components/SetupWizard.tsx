@@ -156,9 +156,13 @@ export default function SetupWizard({
           "内容超出模型上下文长度，请减少所选片段长度后重试。"
         );
       case "serverError":
-        return w("errorServer", "服务错误（{{status}}），请稍后重试或换用其他平台。", {
-          status: err.status,
-        });
+        return w(
+          "errorServer",
+          "服务错误（{{status}}），请稍后重试或换用其他平台。",
+          {
+            status: err.status,
+          }
+        );
       default: {
         const detail =
           "detail" in err
@@ -199,7 +203,14 @@ export default function SetupWizard({
       agentToolsEnabled,
       targetLanguage,
     }),
-    [initialSettings, platformId, preset, thinking, agentToolsEnabled, targetLanguage]
+    [
+      initialSettings,
+      platformId,
+      preset,
+      thinking,
+      agentToolsEnabled,
+      targetLanguage,
+    ]
   );
 
   const handleTest = useCallback(async () => {
@@ -231,10 +242,10 @@ export default function SetupWizard({
     const finalSettings = buildSettings(apiKey.trim());
     try {
       await saveSettings(finalSettings);
-    } catch {
-      // 测试已成功，保存失败不阻断进入主界面，避免二次挫败
+      onComplete(finalSettings);
+    } catch (err) {
+      setTestError({ kind: "unknown", status: 0, body: String(err) });
     }
-    onComplete(finalSettings);
   }, [apiKey, buildSettings, onComplete]);
 
   const stepLabel = (n: Step): string => {
@@ -271,9 +282,7 @@ export default function SetupWizard({
           {([1, 2, 3] as Step[]).map((n) => (
             <li
               key={n}
-              className={
-                step === n ? "active" : step > n ? "done" : ""
-              }
+              className={step === n ? "active" : step > n ? "done" : ""}
             >
               <span className="wizard-step-dot">
                 {step > n ? <CheckMark /> : n}
@@ -420,10 +429,7 @@ export default function SetupWizard({
                       checked={agentToolsEnabled}
                       onChange={(e) => setAgentToolsEnabled(e.target.checked)}
                     />
-                    {w(
-                      "agentToolsLabel",
-                      "让 AI 自动核对原文条款（推荐开启）"
-                    )}
+                    {w("agentToolsLabel", "让 AI 自动核对原文条款（推荐开启）")}
                   </label>
                   <label className="wizard-field">
                     {w("targetLanguageLabel", "翻译 / 解读目标语言")}
@@ -457,7 +463,9 @@ export default function SetupWizard({
                 type="button"
                 className="icon-btn primary wizard-test-btn"
                 onClick={handleTest}
-                disabled={testState === "testing" || (!apiKey.trim() && !hasExistingKey)}
+                disabled={
+                  testState === "testing" || (!apiKey.trim() && !hasExistingKey)
+                }
               >
                 {testState === "testing"
                   ? w("testing", "测试中...")

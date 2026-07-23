@@ -112,17 +112,20 @@ function isLogLevel(value: unknown): value is LogLevel {
   );
 }
 
-function mergeWithLegacy(base: AppSettings): AppSettings {
+async function mergeWithLegacy(base: AppSettings): Promise<AppSettings> {
   const legacy = loadLegacySettings();
   if (!legacy) return base;
   const merged: AppSettings = {
     ...base,
     llm: { ...base.llm, ...legacy },
   };
-  saveSettings(merged).catch(() => {
-    // ignore background save errors
-  });
-  localStorage.removeItem(LEGACY_STORAGE_KEY);
+  try {
+    await saveSettings(merged);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    // Keep the legacy localStorage key if the backend save failed so the
+    // API key is not lost; it will be retried on next load.
+  }
   return merged;
 }
 
@@ -138,14 +141,14 @@ export async function loadSettings(): Promise<AppSettings> {
       // in secure storage.
       const hasBackendKey = await checkApiKey(normalized.platformId);
       if (!hasBackendKey) {
-        return mergeWithLegacy(normalized);
+        return await mergeWithLegacy(normalized);
       }
       return normalized;
     }
   } catch (err) {
     error(`Failed to load settings: ${err}`);
   }
-  return mergeWithLegacy({ ...DEFAULT_SETTINGS });
+  return await mergeWithLegacy({ ...DEFAULT_SETTINGS });
 }
 
 function loadLegacySettings(): Partial<LlmConfig> | null {
@@ -163,6 +166,7 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
     await invoke("save_settings", { settings });
   } catch (err) {
     error(`Failed to save settings: ${err}`);
+    throw err;
   }
 }
 

@@ -100,6 +100,22 @@ describe("settings service", () => {
     expect(localStorage.getItem("standardread-llm-config")).toBeNull();
   });
 
+  it("keeps legacy localStorage config when migration save fails", async () => {
+    localStorage.setItem(
+      "standardread-llm-config",
+      JSON.stringify({ apiKey: "legacy-key", model: "legacy-model" })
+    );
+    mockTauriInvoke({
+      load_settings: () => ({ ...DEFAULT_SETTINGS }),
+      check_api_key: () => false,
+      save_settings: () => Promise.reject(new Error("disk full")),
+    });
+    const { loadSettings } = await import("../services/settings");
+    const settings = await loadSettings();
+    expect(settings.llm.apiKey).toBe("legacy-key");
+    expect(localStorage.getItem("standardread-llm-config")).not.toBeNull();
+  });
+
   it("does not migrate legacy config when backend already has an api key", async () => {
     localStorage.setItem(
       "standardread-llm-config",

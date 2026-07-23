@@ -281,7 +281,9 @@ fn classify_http_error(status: u16, body: &str, model: &str) -> LlmError {
     let body_trimmed = body.trim();
     match status {
         401 => LlmError::Auth {
-            detail: extract_error_message(body_trimmed).unwrap_or_else(|| "API Key 不正确或已失效".into()),
+            // Never echo the provider's raw 401 body: some services (e.g. DeepSeek)
+            // include the API key in the error message. Use a safe fixed detail.
+            detail: "API Key 不正确或已失效".into(),
         },
         404 => {
             let detail = extract_error_message(body_trimmed)
@@ -919,7 +921,9 @@ mod tests {
         let error = classify_http_error(401, body, "deepseek-chat");
         match error {
             LlmError::Auth { detail } => {
-                assert!(detail.contains("invalid"));
+                // The raw provider message (which may contain the API key) must not leak.
+                assert!(!detail.contains("fake"));
+                assert!(detail.contains("API Key"));
             }
             _ => panic!("Expected Auth error"),
         }

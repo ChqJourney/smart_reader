@@ -152,6 +152,10 @@ export function usePersistence({
   const settingsRef = useRef<AppSettings>(settings);
   const streaming = useStreaming();
   const { abortAll } = streaming;
+  // Allow handleInterruptSession to stop the agent loop even between LLM rounds
+  // (e.g. while tool calls are being executed). Each active session registers an
+  // abort callback that is checked before starting a new round or running a tool.
+  const agentLoopAbortRef = useRef<Map<string, () => void>>(new Map());
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -438,6 +442,10 @@ export function usePersistence({
   const runSessionStream = useCallback(
     (session: InterpretationSession, messageId: string) => {
       const sessionRef = { current: session };
+      let loopAborted = false;
+      agentLoopAbortRef.current.set(session.id, () => {
+        loopAborted = true;
+      });
       const currentSettings = settingsRef.current;
       const preset = PLATFORM_PRESETS[currentSettings.platformId];
       const toolsEnabled =
@@ -464,7 +472,7 @@ export function usePersistence({
       const buildApiMessages = (): ChatMessage[] => {
         return [
           { role: "system", content: buildSystemContent() },
-          ...sessionRef.current.messages
+          ...(sessionRef.current.messages
             .filter((m) => !(m.role === "assistant" && m.id === messageId))
             .map((m) => ({
               role: m.role,
@@ -472,7 +480,7 @@ export function usePersistence({
               toolCallId: m.toolCallId,
               toolCalls: m.toolCalls,
               reasoningContent: m.reasoningContent,
-            })) as ChatMessage[],
+            })) as ChatMessage[]),
         ];
       };
 
@@ -735,6 +743,10 @@ export function usePersistence({
         let totalUsage: TokenUsage | undefined;
         try {
           for (let round = 0; round <= maxRounds; round++) {
+            if (loopAborted) {
+              finishStreaming();
+              return;
+            }
             const isLastChance = round >= maxRounds;
             const roundMessages =
               isLastChance && toolsEnabled
@@ -839,6 +851,10 @@ export function usePersistence({
             ];
 
             for (const call of toolCalls) {
+              if (loopAborted) {
+                finishStreaming();
+                return;
+              }
               const callKey = `${call.function.name}:${call.function.arguments}`;
               let result: string;
               if (seenCalls.has(callKey)) {
@@ -896,6 +912,7 @@ export function usePersistence({
           error(`Agent loop error: ${err}`);
           finishStreaming();
         } finally {
+          agentLoopAbortRef.current.delete(session.id);
           await toolSession?.dispose();
         }
       };
@@ -1188,6 +1205,8 @@ export function usePersistence({
     (sessionId: string) => {
       const session = sessions.find((s) => s.id === sessionId);
       if (!session?.streamingMessageId) return;
+      // Signal the agent loop to stop before starting the next round or tool.
+      agentLoopAbortRef.current.get(sessionId)?.();
       streaming.abortPrefix(session.streamingMessageId);
       setSessions((prev) =>
         prev.map((s) =>

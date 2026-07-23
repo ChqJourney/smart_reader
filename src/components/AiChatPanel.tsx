@@ -229,7 +229,6 @@ export default function AiChatPanel({
               <ContextWidget
                 currentTokens={activeSession.lastPromptTokens}
                 contextWindow={contextWindow}
-                frozen={!!activeSession.frozen}
               />
             )}
           <div className="ai-chat-messages" role="log" aria-live="polite">
@@ -238,60 +237,60 @@ export default function AiChatPanel({
               // 消息上的 toolEvents 摘要感知，避免历史记录过于冗长。
               .filter((message) => message.role !== "tool")
               .map((message) => {
-              const isCurrentStreaming =
-                activeSession.isStreaming &&
-                activeSession.streamingMessageId === message.id;
-              const hasReasoning = !!message.reasoningContent;
-              const isThinking =
-                isCurrentStreaming && hasReasoning && !message.content;
-              const thinkingDone = hasReasoning && !!message.content;
-              return (
-                <div
-                  key={message.id}
-                  className={`ai-chat-message ${message.role} ${
-                    message.role === "assistant" && !message.content
-                      ? "streaming"
-                      : ""
-                  }`}
-                >
-                  <div className="ai-chat-role">
-                    {message.role === "user"
-                      ? t("chat.userLabel")
-                      : t("chat.aiLabel")}
-                  </div>
-                  <div className="ai-chat-content">
-                    {(hasReasoning || isThinking) && (
-                      <ThinkingIndicator
-                        isThinking={isThinking}
-                        reasoningContent={message.reasoningContent || ""}
-                        done={thinkingDone || !isCurrentStreaming}
-                      />
-                    )}
-                    {message.toolEvents && message.toolEvents.length > 0 && (
-                      <ToolCallsIndicator
-                        toolEvents={message.toolEvents}
-                        isStreaming={isCurrentStreaming}
-                      />
-                    )}
-                    {message.role === "assistant" &&
-                    isCurrentStreaming &&
-                    !message.content ? (
-                      !isThinking ? (
-                        <span className="streaming-cursor">
-                          <span className="streaming-dots" aria-hidden="true">
-                            <span />
-                            <span />
-                            <span />
+                const isCurrentStreaming =
+                  activeSession.isStreaming &&
+                  activeSession.streamingMessageId === message.id;
+                const hasReasoning = !!message.reasoningContent;
+                const isThinking =
+                  isCurrentStreaming && hasReasoning && !message.content;
+                const thinkingDone = hasReasoning && !!message.content;
+                return (
+                  <div
+                    key={message.id}
+                    className={`ai-chat-message ${message.role} ${
+                      message.role === "assistant" && !message.content
+                        ? "streaming"
+                        : ""
+                    }`}
+                  >
+                    <div className="ai-chat-role">
+                      {message.role === "user"
+                        ? t("chat.userLabel")
+                        : t("chat.aiLabel")}
+                    </div>
+                    <div className="ai-chat-content">
+                      {(hasReasoning || isThinking) && (
+                        <ThinkingIndicator
+                          isThinking={isThinking}
+                          reasoningContent={message.reasoningContent || ""}
+                          done={thinkingDone || !isCurrentStreaming}
+                        />
+                      )}
+                      {message.toolEvents && message.toolEvents.length > 0 && (
+                        <ToolCallsIndicator
+                          toolEvents={message.toolEvents}
+                          isStreaming={isCurrentStreaming}
+                        />
+                      )}
+                      {message.role === "assistant" &&
+                      isCurrentStreaming &&
+                      !message.content ? (
+                        !isThinking ? (
+                          <span className="streaming-cursor">
+                            <span className="streaming-dots" aria-hidden="true">
+                              <span />
+                              <span />
+                              <span />
+                            </span>
                           </span>
-                        </span>
-                      ) : null
-                    ) : (
-                      <MarkdownRenderer content={message.content} />
-                    )}
+                        ) : null
+                      ) : (
+                        <MarkdownRenderer content={message.content} />
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
           </div>
           <div className="ai-chat-input-area">
             <FollowUpInput

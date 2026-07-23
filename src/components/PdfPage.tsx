@@ -248,6 +248,12 @@ function PdfPage({
         await renderTaskRef.current.promise;
         if (isCancelled) return;
 
+        // Release fonts/images/operator-list held by this render (pdfTools
+        // parity — pdfTools.ts already does this). getTextContent and
+        // getAnnotations below re-parse lazily and stay valid afterwards;
+        // this mirrors what pdf.js's own viewer does after rendering.
+        page.cleanup();
+
         const textContent = await page.getTextContent();
         if (isCancelled) return;
 
@@ -330,6 +336,27 @@ function PdfPage({
       renderTaskRef.current?.cancel();
     };
   }, [pdf, pageNum, scale, viewport, shouldRender]);
+
+  // Free the canvas bitmap when the page leaves the render window. The render
+  // effect above early-returns for offscreen pages but never clears the
+  // already-painted bitmap, so every visited page of a long document kept its
+  // full canvas (width·DPR × height·DPR × 4 bytes) resident in WebView2 GPU
+  // memory. Zeroing the canvas dimensions releases the bitmap; the wrapper
+  // keeps its size via the controlled `style` prop (and the canvas keeps its
+  // CSS size from the last render), so scroll geometry is unaffected. The
+  // page re-renders from scratch when shouldRender flips back to true.
+  useEffect(() => {
+    if (shouldRender || !hasRenderedRef.current) return;
+    hasRenderedRef.current = false;
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.width = 0;
+      canvas.height = 0;
+    }
+    textItemsRef.current = [];
+    linkAnnotationsRef.current = [];
+    setLinkAnnotations([]);
+  }, [shouldRender]);
 
   // IntersectionObserver for visibility
   useEffect(() => {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, waitFor } from "@testing-library/react";
 import PdfPage from "./PdfPage";
 import type { PageViewportInfo } from "./PdfViewer";
@@ -13,17 +13,20 @@ vi.mock("../services/logs", () => ({
 }));
 
 function makePdf() {
+  const page = {
+    getViewport: ({ scale }: { scale: number }) => ({
+      width: 100 * scale,
+      height: 200 * scale,
+      scale,
+    }),
+    render: vi.fn(() => ({ promise: Promise.resolve(), cancel: vi.fn() })),
+    getTextContent: () => Promise.resolve({ items: [] }),
+    getAnnotations: () => Promise.resolve([]),
+    cleanup: vi.fn(),
+  };
   return {
-    getPage: vi.fn(async () => ({
-      getViewport: ({ scale }: { scale: number }) => ({
-        width: 100 * scale,
-        height: 200 * scale,
-        scale,
-      }),
-      render: () => ({ promise: Promise.resolve() }),
-      getTextContent: () => Promise.resolve({ items: [] }),
-      getAnnotations: () => Promise.resolve([]),
-    })),
+    getPage: vi.fn(async () => page),
+    page,
   };
 }
 
@@ -39,7 +42,7 @@ function renderPage(
       pdf={pdf as never}
       pageNum={1}
       scale={props.scale ?? 1.5}
-      shouldRender={false}
+      shouldRender={props.shouldRender ?? false}
       pageViewport={props.pageViewport ?? null}
       onViewportLoaded={props.onViewportLoaded}
       settings={DEFAULT_SETTINGS}
@@ -135,5 +138,69 @@ describe("PdfPage wrapper sizing", () => {
     // Give any (unexpected) async work a chance to run.
     await new Promise((r) => setTimeout(r, 30));
     expect(pdf.getPage).not.toHaveBeenCalled();
+  });
+});
+
+describe("PdfPage rendering resources", () => {
+  beforeEach(() => {
+    // jsdom has no 2d canvas backend; stub just enough for the render effect.
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      setTransform: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("calls page.cleanup() after a successful render", async () => {
+    // Rendering holds fonts/images/operator-list on the page proxy; releasing
+    // them after render keeps long documents from accumulating per-page
+    // resources (pdfTools parity).
+    const { pdf } = renderPage({
+      shouldRender: true,
+      pageViewport: { width: 200, height: 300, scale: 1.5 },
+      scale: 1.5,
+    });
+
+    await waitFor(() => {
+      expect(pdf.page.render).toHaveBeenCalled();
+      expect(pdf.page.cleanup).toHaveBeenCalled();
+    });
+  });
+
+  it("zeroes the canvas bitmap when the page leaves the render window", async () => {
+    // Offscreen pages used to keep their full (DPR-scaled) canvas bitmap
+    // resident. Scrolling the page out of the render window must free it;
+    // the wrapper keeps its size via the controlled style prop.
+    const { container, pdf, rerender } = renderPage({
+      shouldRender: true,
+      pageViewport: { width: 200, height: 300, scale: 1.5 },
+      scale: 1.5,
+    });
+
+    const canvas = container.querySelector("canvas");
+    if (!canvas) throw new Error("canvas not found");
+    await waitFor(() => {
+      expect(canvas.width).toBeGreaterThan(0);
+    });
+    // Let the post-render chain (textContent → hasRenderedRef) settle.
+    await new Promise((r) => setTimeout(r, 0));
+
+    rerender(
+      <PdfPage
+        pdf={pdf as never}
+        pageNum={1}
+        scale={1.5}
+        shouldRender={false}
+        pageViewport={{ width: 200, height: 300, scale: 1.5 }}
+        settings={DEFAULT_SETTINGS}
+      />
+    );
+
+    await waitFor(() => {
+      expect(canvas.width).toBe(0);
+      expect(canvas.height).toBe(0);
+    });
   });
 });

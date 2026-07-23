@@ -151,7 +151,7 @@ export const PLATFORM_PRESETS: Record<PlatformId, PlatformPreset> = {
         id: "glm-5.2",
         label: "GLM-5.2（最新旗舰）",
         supportsThinking: true,
-        contextWindow: 128000,
+        contextWindow: 256000,
       },
       {
         id: "glm-4-flash",

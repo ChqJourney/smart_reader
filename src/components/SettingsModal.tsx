@@ -90,6 +90,7 @@ export default function SettingsModal({
   const [activePage, setActivePage] = useState<SettingsPage>("model");
   const [showDownloadConfirm, setShowDownloadConfirm] = useState(false);
   const [downloadPending, setDownloadPending] = useState(false);
+  const [showMoreSettings, setShowMoreSettings] = useState(false);
   const [version, setVersion] = useState<string>("0.1.0");
   const [licenseText, setLicenseText] = useState<string | null>(null);
   const [currentPlatform, setCurrentPlatform] = useState<string | null>(null);
@@ -119,6 +120,7 @@ export default function SettingsModal({
     setActivePage("model");
     setShowDownloadConfirm(false);
     setDownloadPending(false);
+    setShowMoreSettings(false);
     setUpdateState("idle");
     setUpdateVersion(null);
     setUpdateError(null);
@@ -685,77 +687,104 @@ export default function SettingsModal({
                     )}
                   </div>
 
-                  {/* Thinking mode toggle */}
-                  {(() => {
-                    const model = findModel(
-                      settings.platformId,
-                      settings.llm.model
-                    );
-                    const supportsThinking = model?.supportsThinking ?? false;
-                    if (!supportsThinking && settings.platformId !== "custom") {
-                      return null;
-                    }
-                    return (
-                      <label className="settings-field">
-                        {t("settings.thinkingMode", {
-                          defaultValue: "思考模式",
+                  <button
+                    type="button"
+                    className="settings-more-toggle"
+                    onClick={() => setShowMoreSettings((s) => !s)}
+                    aria-expanded={showMoreSettings}
+                  >
+                    {showMoreSettings
+                      ? t("settings.hideMoreSettings", {
+                          defaultValue: "收起更多设置",
+                        })
+                      : t("settings.moreSettings", {
+                          defaultValue: "更多设置",
                         })}
-                        <select
-                          value={settings.thinking}
+                    <Icon
+                      name={showMoreSettings ? "chevron-up" : "chevron-down"}
+                      size={14}
+                    />
+                  </button>
+
+                  {showMoreSettings && (
+                    <>
+                      {/* Thinking mode toggle */}
+                      {(() => {
+                        const model = findModel(
+                          settings.platformId,
+                          settings.llm.model
+                        );
+                        const supportsThinking =
+                          model?.supportsThinking ?? false;
+                        if (
+                          !supportsThinking &&
+                          settings.platformId !== "custom"
+                        ) {
+                          return null;
+                        }
+                        return (
+                          <label className="settings-field">
+                            {t("settings.thinkingMode", {
+                              defaultValue: "思考模式",
+                            })}
+                            <select
+                              value={settings.thinking}
+                              onChange={(e) =>
+                                setSettings((s) => ({
+                                  ...s,
+                                  thinking: e.target.value as ThinkingMode,
+                                }))
+                              }
+                            >
+                              <option value="auto">
+                                {t("settings.thinkingAuto", {
+                                  defaultValue: "自动（模型默认）",
+                                })}
+                              </option>
+                              <option value="enabled">
+                                {t("settings.thinkingEnabled", {
+                                  defaultValue: "开启（推理更深入，更慢）",
+                                })}
+                              </option>
+                              <option value="disabled">
+                                {t("settings.thinkingDisabled", {
+                                  defaultValue: "关闭（快速响应）",
+                                })}
+                              </option>
+                            </select>
+                          </label>
+                        );
+                      })()}
+
+                      {/* Max tool rounds */}
+                      <label className="settings-field">
+                        {t("settings.maxToolRounds", {
+                          defaultValue: "最大工具调用次数",
+                        })}
+                        <input
+                          type="number"
+                          min={0}
+                          max={20}
+                          value={settings.maxToolRounds}
                           onChange={(e) =>
                             setSettings((s) => ({
                               ...s,
-                              thinking: e.target.value as ThinkingMode,
+                              maxToolRounds: Math.max(
+                                0,
+                                Math.min(20, parseInt(e.target.value) || 0)
+                              ),
                             }))
                           }
-                        >
-                          <option value="auto">
-                            {t("settings.thinkingAuto", {
-                              defaultValue: "自动（模型默认）",
-                            })}
-                          </option>
-                          <option value="enabled">
-                            {t("settings.thinkingEnabled", {
-                              defaultValue: "开启（推理更深入，更慢）",
-                            })}
-                          </option>
-                          <option value="disabled">
-                            {t("settings.thinkingDisabled", {
-                              defaultValue: "关闭（快速响应）",
-                            })}
-                          </option>
-                        </select>
+                        />
+                        <p className="settings-field-hint">
+                          {t("settings.maxToolRoundsHint", {
+                            defaultValue:
+                              "0 表示使用默认值 20。AI 读取 PDF 内容时的最大调用轮次。",
+                          })}
+                        </p>
                       </label>
-                    );
-                  })()}
-
-                  {/* Max tool rounds */}
-                  <label className="settings-field">
-                    {t("settings.maxToolRounds", {
-                      defaultValue: "最大工具调用次数",
-                    })}
-                    <input
-                      type="number"
-                      min={0}
-                      max={20}
-                      value={settings.maxToolRounds}
-                      onChange={(e) =>
-                        setSettings((s) => ({
-                          ...s,
-                          maxToolRounds: Math.max(
-                            0,
-                            Math.min(20, parseInt(e.target.value) || 0)
-                          ),
-                        }))
-                      }
-                    />
-                    <p className="settings-field-hint">
-                      {t("settings.maxToolRoundsHint", {
-                        defaultValue:
-                          "0 表示使用默认值 20。AI 读取 PDF 内容时的最大调用轮次。",
-                      })}
-                    </p>
-                  </label>
+                    </>
+                  )}
                 </section>
               )}
 
@@ -959,7 +988,7 @@ export default function SettingsModal({
                     </div>
                     <button
                       type="button"
-                      className="icon-btn"
+                      className="settings-action-btn"
                       onClick={handleOpenLogs}
                     >
                       {t("settings.openLogs")}
@@ -1018,7 +1047,7 @@ export default function SettingsModal({
                     {updateState === "idle" && (
                       <button
                         type="button"
-                        className="icon-btn"
+                        className="settings-action-btn"
                         onClick={handleCheckUpdate}
                       >
                         {t("settings.checkForUpdates")}

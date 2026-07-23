@@ -119,15 +119,17 @@
   },
   "settings": {
     "title": "设置",
-    "description": "配置 LLM API、功能选项与系统信息。",
+    "description": "配置大模型 API KEY、功能选项与系统信息。",
     "pages": {
       "model": "模型设置",
       "feature": "功能设置",
       "system": "系统设置",
       "about": "关于"
     },
-    "llmApi": "LLM API",
+    "llmApi": "大模型API KEY",
     "llmApiHint": "用于翻译、解读与自定义问答的模型接入信息。",
+    "moreSettings": "更多设置",
+    "hideMoreSettings": "收起更多设置",
     "apiBaseUrl": "API Base URL",
     "model": "Model",
     "apiKey": "API Key",

@@ -163,6 +163,21 @@ function App() {
     settings,
   });
 
+  // persistence 根对象随 sessions 状态变化（流式输出期间每个 flush 都变），
+  // 把回调需要调用的方法解构为稳定别名，保证依赖它们的 App 回调身份稳定。
+  // （deps 里直接写 persistence.xxx 成员会触发 react-hooks v7 的
+  // exhaustive-deps 告警：方法调用按读取根对象处理。）
+  const {
+    handleAddToStash: persistenceHandleAddToStash,
+    handleSelectionAction: persistenceHandleSelectionAction,
+    handleAddComment: persistenceHandleAddComment,
+    abortSessionsForTab: persistenceAbortSessionsForTab,
+    setStashes: persistenceSetStashes,
+  } = persistence;
+  // tabs 根对象随阅读状态（页码/滚动）高频变化；onStateChange 每次渲染都传
+  // 给 PdfViewer，用稳定别名避免该 prop 随 tab 状态抖动。
+  const { handleViewerStateChange } = tabs;
+
   const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
@@ -389,14 +404,66 @@ function App() {
     };
   }, []);
 
+  // 退出前 flush：批注/会话保存走 500ms 防抖，直接关窗会丢失最后一个窗口期
+  // 内的修改；同时把当前打开 tab 的页码回写到最近文件（平时仅在显式关 tab
+  // 时回写）。用 ref 持有最新闭包，保证 listener 只注册一次。
+  const flushOnExitRef = useRef(async () => {
+    for (const tab of tabs.tabs) {
+      if (tab.pageNum) {
+        recentFiles.updateLastPage(tab.filePath, tab.pageNum);
+      }
+    }
+    await persistence.flushPendingSaves();
+  });
+  flushOnExitRef.current = async () => {
+    for (const tab of tabs.tabs) {
+      if (tab.pageNum) {
+        recentFiles.updateLastPage(tab.filePath, tab.pageNum);
+      }
+    }
+    await persistence.flushPendingSaves();
+  };
+
+  // 优先用 Tauri onCloseRequested（比 beforeunload 可靠：WebView2 关窗时
+  // 不一定触发 beforeunload）。preventDefault 阻止立即销毁，落盘完成后手动
+  // destroy；非 Tauri 环境（浏览器 dev / 测试）静默跳过。
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    let flushing = false;
+    import("@tauri-apps/api/window")
+      .then(({ getCurrentWindow }) => {
+        const win = getCurrentWindow();
+        return win.onCloseRequested((event) => {
+          event.preventDefault();
+          if (flushing) return; // 重复触发不再重入，等待首次 flush 完成
+          flushing = true;
+          void (async () => {
+            try {
+              // 后端卡住时不能阻塞关窗，超时兜底
+              await Promise.race([
+                flushOnExitRef.current(),
+                new Promise((resolve) => setTimeout(resolve, 3000)),
+              ]);
+            } finally {
+              await win.destroy();
+            }
+          })();
+        });
+      })
+      .then((unsub) => {
+        unlisten = unsub;
+      })
+      .catch(() => {
+        // ignore: 非 Tauri 环境无窗口 API
+      });
+    return () => unlisten?.();
+  }, []);
+
   const handleSecondaryViewerStateChange = useCallback(
     (state: PdfViewerState) => {
-      tabs.handleViewerStateChange(
-        state,
-        splitView.secondaryTabId ?? undefined
-      );
+      handleViewerStateChange(state, splitView.secondaryTabId ?? undefined);
     },
-    [tabs.handleViewerStateChange, splitView.secondaryTabId]
+    [handleViewerStateChange, splitView.secondaryTabId]
   );
 
   const handleSaveSettings = useCallback(async (newSettings: AppSettings) => {
@@ -495,7 +562,7 @@ function App() {
 
       tabs.handleCloseTab(e, tabId, () => {
         if (closingTab) {
-          persistence.abortSessionsForTab(
+          persistenceAbortSessionsForTab(
             tabId,
             closingTab.fileHash,
             remainingTabIds
@@ -512,7 +579,7 @@ function App() {
         if (!pathStillOpen && closingTab) {
           pdfCacheRef.current.delete(closingTab.filePath);
         }
-        persistence.setStashes((prev) =>
+        persistenceSetStashes((prev) =>
           prev.filter((s) => s.source.tabId !== tabId)
         );
         if (isSecondary || (isActive && splitView.isSplitView)) {
@@ -520,7 +587,13 @@ function App() {
         }
       });
     },
-    [tabs, persistence, splitView, recentFiles]
+    [
+      tabs,
+      splitView,
+      recentFiles,
+      persistenceAbortSessionsForTab,
+      persistenceSetStashes,
+    ]
   );
 
   const handleSelection = useCallback(
@@ -566,19 +639,19 @@ function App() {
   const handleAddToStash = useCallback(
     (text: string) => {
       if (!focusedSelection || !focusedTab) return;
-      persistence.handleAddToStash(focusedSelection, text);
+      persistenceHandleAddToStash(focusedSelection, text);
       tabs.clearTabSelection(focusedTab.id);
     },
-    [focusedSelection, focusedTab, persistence, tabs]
+    [focusedSelection, focusedTab, persistenceHandleAddToStash, tabs]
   );
 
   const handleSelectionAction = useCallback(
     (action: SelectionAction, text: string) => {
       if (!focusedSelection || !focusedTab) return;
-      persistence.handleSelectionAction(focusedSelection, action, text);
+      persistenceHandleSelectionAction(focusedSelection, action, text);
       tabs.clearTabSelection(focusedTab.id);
     },
-    [focusedSelection, focusedTab, persistence, tabs]
+    [focusedSelection, focusedTab, persistenceHandleSelectionAction, tabs]
   );
 
   const handleCopy = useCallback(
@@ -598,10 +671,10 @@ function App() {
   const handleAddComment = useCallback(
     (text: string) => {
       if (!focusedSelection || !focusedTab) return;
-      persistence.handleAddComment(focusedSelection, text);
+      persistenceHandleAddComment(focusedSelection, text);
       tabs.clearTabSelection(focusedTab.id);
     },
-    [focusedSelection, focusedTab, persistence, tabs]
+    [focusedSelection, focusedTab, persistenceHandleAddComment, tabs]
   );
 
   const handleGotoStash = useCallback(
@@ -793,7 +866,7 @@ function App() {
               className="pdf-panel expanded"
               ref={primaryPanelRef}
               style={{ flex: splitPct }}
-              onClick={() => setFocusedViewer("primary")}
+              onMouseDown={() => setFocusedViewer("primary")}
             >
               <PdfViewer
                 key={tabs.activeTab?.id ?? "no-tab"}
@@ -801,6 +874,7 @@ function App() {
                 tabId={tabs.activeTab?.id}
                 filePath={tabs.activeTab?.filePath ?? ""}
                 fileHash={tabs.activeTab?.fileHash}
+                isFocused={focusedViewer === "primary"}
                 cachedBytes={
                   tabs.activeTab
                     ? pdfCacheRef.current.get(tabs.activeTab.filePath)
@@ -833,7 +907,7 @@ function App() {
               className="pdf-panel expanded"
               ref={secondaryPanelRef}
               style={{ flex: 100 - splitPct }}
-              onClick={() => setFocusedViewer("secondary")}
+              onMouseDown={() => setFocusedViewer("secondary")}
             >
               <PdfViewer
                 key={splitView.secondaryTabId ?? "no-secondary"}
@@ -841,6 +915,7 @@ function App() {
                 tabId={splitView.secondaryTabId ?? undefined}
                 filePath={secondaryTab?.filePath ?? ""}
                 fileHash={secondaryTab?.fileHash}
+                isFocused={focusedViewer === "secondary"}
                 cachedBytes={
                   secondaryTab
                     ? pdfCacheRef.current.get(secondaryTab.filePath)

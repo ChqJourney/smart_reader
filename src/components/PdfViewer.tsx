@@ -82,6 +82,12 @@ interface PdfViewerProps {
   onExplainClick?: (tabId: string, id: string) => void;
   hoverTranslate?: boolean;
   settings: AppSettings;
+  /**
+   * 是否为当前焦点屏。分屏时两个 PdfViewer 同时挂载，window 级 keydown
+   * （Ctrl+F / 翻页 / 滚动）只应由焦点屏响应，否则两屏同弹搜索条、
+   * 方向键同滚两份文档。单视图恒 true（缺省值）。
+   */
+  isFocused?: boolean;
 }
 
 const SCROLL_STEP = 80; // px for arrow keys
@@ -161,6 +167,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       onExplainClick,
       hoverTranslate,
       settings,
+      isFocused = true,
     },
     ref
   ) {
@@ -451,6 +458,9 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // Keyboard navigation
     useEffect(() => {
       const handleKeyDown = (e: KeyboardEvent) => {
+        // 分屏时两个 viewer 都挂在 window 上监听，非焦点屏直接忽略，
+        // 避免 Ctrl+F 两屏同弹搜索条、方向键同滚两份文档。
+        if (!isFocused) return;
         if (!pdf || numPages === 0) return;
 
         const isModifier = e.ctrlKey || e.metaKey;
@@ -540,7 +550,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [pdf, numPages, viewMode, searchOpen, searchMatches]);
+    }, [pdf, numPages, viewMode, searchOpen, searchMatches, isFocused]);
 
     const zoomOut = useCallback(() => {
       zoomTo(scale * (1 - ZOOM_STEP_RATIO));

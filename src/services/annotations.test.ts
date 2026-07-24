@@ -84,12 +84,12 @@ describe("annotations service", () => {
       expect(result.sessionIds).toEqual(["session-1", "session-2"]);
     });
 
-    it("returns empty data when backend throws", async () => {
+    it("rethrows backend errors so callers can skip persistence", async () => {
+      // 加载失败必须抛错：若降级为空数据，调用方无法区分「失败」与「为空」，
+      // 后续防抖保存会用空数据覆盖磁盘上已有的批注。
       mockInvoke.mockRejectedValue(new Error("fail"));
 
-      const result = await loadPdfData("/path/to/file.pdf");
-
-      expect(result).toEqual({ annotations: [], sessionIds: [] });
+      await expect(loadPdfData("/path/to/file.pdf")).rejects.toThrow("fail");
     });
   });
 

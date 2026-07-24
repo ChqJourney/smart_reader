@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import {
   ChatMessage,
   streamChatCompletion,
@@ -116,5 +116,10 @@ export function useStreaming() {
     controllersRef.current.clear();
   }, []);
 
-  return { run, abort, abortPrefix, abortAll };
+  // 返回对象用 useMemo 固定引用：usePersistence 的 runSessionStream 依赖
+  // 本对象，对象字面量会让它在每次渲染重建并击穿上层 memo 链。
+  return useMemo(
+    () => ({ run, abort, abortPrefix, abortAll }),
+    [run, abort, abortPrefix, abortAll]
+  );
 }

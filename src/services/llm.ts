@@ -2,7 +2,12 @@ import i18n from "i18next";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { info, warn } from "./logs";
 import { LlmConfig, SystemPrompts } from "./settings";
-import type { ThinkingMode, TokenUsage, ChatMessage, LlmError } from "../types/llm";
+import type {
+  ThinkingMode,
+  TokenUsage,
+  ChatMessage,
+  LlmError,
+} from "../types/llm";
 import type { ToolCall } from "../types/llm";
 
 export type { LlmConfig, SystemPrompts };
@@ -122,11 +127,23 @@ export async function* streamChatCompletion(
     }
   };
 
-  // Handle abort: tell the backend to cancel
+  // 标记流结束并唤醒正在等待的 generator，保证消费者 Promise 一定 settle。
+  const markFinished = () => {
+    finished = true;
+    if (resolveWait) {
+      resolveWait();
+      resolveWait = null;
+    }
+  };
+
+  // Handle abort: tell the backend to cancel, and terminate the local
+  // generator immediately. 若 SSE 连接已停滞（服务器不再吐数据），Channel
+  // 不会再有新事件，不能依赖后端的 Done/Error 来结束 generator。
   const onAbort = () => {
     invoke("cancel_chat_completions", { requestId }).catch(() => {
       // ignore cancel errors
     });
+    markFinished();
   };
   options?.signal?.addEventListener("abort", onAbort);
 
@@ -143,6 +160,11 @@ export async function* streamChatCompletion(
       onEvent: channel,
     });
 
+    // 后端命令一旦 settle（正常返回、panic 或 invoke 层错误），Channel
+    // 不会再有新事件；唤醒 generator 排空队列后退出，避免它永远等待
+    // （例如后端 panic 未发送 Error/Done、或 invoke 直接 reject 的死路）。
+    streamPromise.then(markFinished, markFinished);
+
     // Yield events as they arrive
     while (!finished || queue.length > 0) {
       if (queue.length > 0) {
@@ -154,8 +176,12 @@ export async function* streamChatCompletion(
       }
     }
 
-    // Wait for the invoke to fully complete
-    await streamPromise;
+    // 用户主动中止后不再等待后端命令返回：停滞的连接可能永不 settle，
+    // 不能让 generator 挂死（由 useStreaming 的 aborted 检查走 onAbort，
+    // 不显示为错误）。正常/错误路径仍等待以透传 invoke 层错误。
+    if (!options?.signal?.aborted) {
+      await streamPromise;
+    }
 
     const duration = Math.round(performance.now() - start);
     info(`llmRequestCompleted: requestId=${requestId} durationMs=${duration}`);

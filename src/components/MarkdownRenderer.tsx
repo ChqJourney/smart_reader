@@ -122,10 +122,10 @@ class MarkdownErrorBoundary extends React.Component<
   }
 }
 
-export default function MarkdownRenderer({
-  content,
-  className = "",
-}: MarkdownRendererProps) {
+// props 只有字符串（content / className），包一层 memo：流式输出时
+// AiChatPanel 每次状态更新都会重渲染，未变化的历史消息不必重跑
+// react-markdown（解析 + KaTeX 渲染成本高）。
+function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
   return (
     <MarkdownErrorBoundary content={content} className={className}>
       <div className={`markdown-content ${className}`}>
@@ -148,3 +148,5 @@ export default function MarkdownRenderer({
     </MarkdownErrorBoundary>
   );
 }
+
+export default React.memo(MarkdownRenderer);

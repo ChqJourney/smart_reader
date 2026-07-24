@@ -796,7 +796,26 @@ fn load_pdf_data_from_disk(
         });
     }
 
-    Err("Failed to parse annotations file".to_string())
+    // 文件存在但新旧格式都解析失败：JSON 已损坏。
+    // 不能返回空数据（前端随后的防抖保存会覆盖原文件，永久丢失批注），
+    // 先把原文件重命名备份，再返回错误让前端感知损坏。
+    let timestamp = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let backup_path = path.with_file_name(format!(
+        "{}.corrupt-{}",
+        path.file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "annotations.json".to_string()),
+        timestamp
+    ));
+    std::fs::rename(&path, &backup_path)
+        .map_err(|e| format!("Failed to back up corrupt annotations file: {}", e))?;
+    Err(format!(
+        "Annotations file is corrupt and has been backed up to: {}",
+        backup_path.display()
+    ))
 }
 
 fn save_pdf_data_to_disk(
@@ -1486,6 +1505,41 @@ mod tests {
             load_pdf_data_from_disk(&cache, base.path(), pdf_path.to_str().unwrap()).unwrap();
         assert_eq!(loaded.annotations, annotations);
         assert!(loaded.session_ids.is_empty());
+    }
+
+    #[test]
+    fn load_pdf_data_corrupt_json_backs_up_and_errors() {
+        // 损坏的 JSON 必须报错并备份原文件，绝不能返回空数据导致被覆盖。
+        let base = tempfile::tempdir().unwrap();
+        let pdf_dir = tempfile::tempdir().unwrap();
+        let pdf_path = pdf_dir.path().join("test.pdf");
+        std::fs::write(&pdf_path, b"pdf content").unwrap();
+
+        let corrupt_raw = r#"{"annotations": [broken json"#;
+        let cache = test_hash_cache();
+        let path = annotations_path(&cache, base.path(), pdf_path.to_str().unwrap()).unwrap();
+        std::fs::write(&path, corrupt_raw).unwrap();
+
+        let err = load_pdf_data_from_disk(&cache, base.path(), pdf_path.to_str().unwrap())
+            .expect_err("corrupt file should fail");
+        assert!(err.contains("corrupt"), "error should mention corruption: {}", err);
+        assert!(err.contains("backed up"), "error should mention backup: {}", err);
+
+        // 原文件已被重命名为 {hash}.json.corrupt-{ts}，内容保持一致
+        assert!(!path.exists());
+        let backups: Vec<PathBuf> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| {
+                p.file_name()
+                    .map(|n| n.to_string_lossy().contains(".json.corrupt-"))
+                    .unwrap_or(false)
+            })
+            .collect();
+        assert_eq!(backups.len(), 1, "exactly one .corrupt-* backup expected");
+        let backup_raw = std::fs::read_to_string(&backups[0]).unwrap();
+        assert_eq!(backup_raw, corrupt_raw);
+        assert!(err.contains(&backups[0].display().to_string()));
     }
 
     #[test]

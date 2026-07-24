@@ -36,8 +36,10 @@ export async function loadPdfData(filePath: string): Promise<PdfData> {
     const result = await invoke<PdfData>("load_pdf_data", { filePath });
     return result;
   } catch (err) {
+    // 加载失败必须抛给调用方：若降级为空数据，后续防抖保存会把空桶覆盖
+    // 写回磁盘，静默清空用户已有批注（文件损坏/瞬时 IO 错误都可能触发）。
     error(`Failed to load PDF data: ${err}`);
-    return { annotations: [], sessionIds: [] };
+    throw err;
   }
 }
 

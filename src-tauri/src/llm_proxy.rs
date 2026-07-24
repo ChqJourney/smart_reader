@@ -645,26 +645,65 @@ pub async fn chat_completions_stream(
     }
 
     // Stream the response body
-    use futures_util::StreamExt;
-    let mut stream = response.bytes_stream();
+    let stream = response.bytes_stream();
+
+    pump_sse_stream(stream, &cancel_flag, &on_event).await;
+    cleanup();
+    Ok(())
+}
+
+/// 轮询等待取消标志被置位。
+///
+/// `cancel_chat_completions` 只能置 `AtomicBool`（无通知机制），
+/// 短间隔轮询即可做到用户感知上的「立即」取消（延迟 ≤ 50ms）。
+async fn wait_for_cancel(flag: &AtomicBool) {
+    while !flag.load(Ordering::Relaxed) {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+}
+
+/// 消费 SSE 字节流，把解析出的 StreamEvent 推给前端 Channel。
+///
+/// 取消标志与 `stream.next()` 通过 `futures_util::select!` 竞争：连接停滞
+/// （服务器不再吐数据）时 `stream.next()` 永不返回，若只在循环顶部
+/// 检查取消标志，取消请求将永远不会被处理，前端只能等 300s 总超时兜底。
+/// （tokio 未启用 macros feature，故用 futures_util 的 select!。）
+async fn pump_sse_stream<S, B, E>(
+    mut stream: S,
+    cancel_flag: &AtomicBool,
+    on_event: &Channel<StreamEvent>,
+) where
+    S: futures_util::Stream<Item = Result<B, E>> + Unpin,
+    B: AsRef<[u8]>,
+    E: std::fmt::Display,
+{
+    use futures_util::{FutureExt, StreamExt};
+
     let mut buffer = String::new();
     let mut tool_call_accumulators: Vec<ToolCallAcc> = Vec::new();
 
     loop {
-        // Check for cancellation
-        if cancel_flag.load(Ordering::Relaxed) {
-            cleanup();
-            let _ = on_event.send(StreamEvent::Error {
-                error: LlmError::StreamInterrupted {
-                    partial_content: String::new(),
-                },
-            });
-            return Ok(());
-        }
+        let cancel = wait_for_cancel(cancel_flag).fuse();
+        let next = stream.next().fuse();
+        futures_util::pin_mut!(cancel, next);
 
-        match stream.next().await {
+        let next_item = futures_util::select! {
+            _ = cancel => {
+                // 与原有取消路径一致：发送 StreamInterrupted，由前端
+                // （signal.aborted 检查）决定不显示为错误。
+                let _ = on_event.send(StreamEvent::Error {
+                    error: LlmError::StreamInterrupted {
+                        partial_content: String::new(),
+                    },
+                });
+                return;
+            }
+            item = next => item,
+        };
+
+        match next_item {
             Some(Ok(chunk)) => {
-                buffer.push_str(&String::from_utf8_lossy(&chunk));
+                buffer.push_str(&String::from_utf8_lossy(chunk.as_ref()));
 
                 // Take ownership of buffer content to avoid borrow conflicts.
                 // Split into complete lines + remaining partial line.
@@ -675,13 +714,13 @@ pub async fn chat_completions_stream(
                     buffer = remainder.to_string();
                 }
 
+                let mut done = false;
                 for line in &lines {
-                    match parse_sse_line(line, &mut tool_call_accumulators, &on_event) {
+                    match parse_sse_line(line, &mut tool_call_accumulators, on_event) {
                         Ok(should_continue) => {
                             if !should_continue {
-                                cleanup();
-                                let _ = on_event.send(StreamEvent::Done);
-                                return Ok(());
+                                done = true;
+                                break;
                             }
                         }
                         Err(e) => {
@@ -689,24 +728,30 @@ pub async fn chat_completions_stream(
                         }
                     }
                 }
+                if done {
+                    let _ = on_event.send(StreamEvent::Done);
+                    return;
+                }
             }
             Some(Err(e)) => {
-                cleanup();
                 let _ = on_event.send(StreamEvent::Error {
                     error: LlmError::Network {
                         detail: format!("流式读取失败: {}", e),
                     },
                 });
-                return Ok(());
+                return;
             }
             None => {
                 // Stream ended — process any remaining buffer
                 if !buffer.is_empty() {
-                    let _ = parse_sse_line(&buffer, &mut tool_call_accumulators, &on_event);
+                    let _ = parse_sse_line(&buffer, &mut tool_call_accumulators, on_event);
                 }
-                cleanup();
+                // 未收到 [DONE]/finish_reason 而流直接结束时，残余 buffer
+                // 解析不会触发 flush，需兜底 flush，否则已累积的
+                // tool_calls 会被静默丢弃。
+                flush_tool_calls(&mut tool_call_accumulators, on_event);
                 let _ = on_event.send(StreamEvent::Done);
-                return Ok(());
+                return;
             }
         }
     }
@@ -1082,5 +1127,93 @@ mod tests {
             .filter(|e| matches!(e, StreamEvent::ToolCall { .. }))
             .collect();
         assert_eq!(tool_calls.len(), 2);
+    }
+
+    /// 在 current-thread runtime 上运行异步测试（tokio 未启用 macros feature）。
+    fn block_on<F: std::future::Future>(fut: F) -> F::Output {
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .unwrap();
+        rt.block_on(fut)
+    }
+
+    #[test]
+    fn pump_cancels_when_stream_stalls() {
+        use futures_util::StreamExt;
+
+        block_on(async {
+            let (channel, events) = test_channel();
+            let cancel_flag = Arc::new(AtomicBool::new(false));
+            // 停滞的连接：吐出一段内容后再也不产生新数据。
+            let stream = futures_util::stream::iter(vec![Ok::<_, String>(
+                b"data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n".to_vec(),
+            )])
+            .chain(futures_util::stream::pending());
+
+            let flag = cancel_flag.clone();
+            let pump = pump_sse_stream(stream, &cancel_flag, &channel);
+            tokio::pin!(pump);
+
+            // 取消置位后 pump 必须在轮询间隔内结束，而不是永远等待。
+            let cancelled = async {
+                flag.store(true, Ordering::Relaxed);
+                pump.await
+            };
+            tokio::time::timeout(std::time::Duration::from_secs(5), cancelled)
+                .await
+                .expect("stalled stream must terminate promptly after cancel");
+
+            let guard = events.lock().unwrap();
+            assert!(guard.iter().any(|e| matches!(
+                e,
+                StreamEvent::Error {
+                    error: LlmError::StreamInterrupted { .. }
+                }
+            )));
+        });
+    }
+
+    #[test]
+    fn pump_flushes_tool_calls_when_stream_ends_without_done() {
+        block_on(async {
+            let (channel, events) = test_channel();
+            let cancel_flag = Arc::new(AtomicBool::new(false));
+            // 流正常结束，但没有 [DONE] 也没有 finish_reason。
+            let stream = futures_util::stream::iter(vec![Ok::<_, String>(
+                b"data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_9\",\"function\":{\"name\":\"search_in_pdf\",\"arguments\":\"{}\"}}]}}]}\n\n".to_vec(),
+            )]);
+
+            pump_sse_stream(stream, &cancel_flag, &channel).await;
+
+            let guard = events.lock().unwrap();
+            assert!(guard.iter().any(|e| matches!(
+                e,
+                StreamEvent::ToolCall { name, call_id, .. }
+                    if name == "search_in_pdf" && call_id == "call_9"
+            )));
+            assert!(guard.iter().any(|e| matches!(e, StreamEvent::Done)));
+        });
+    }
+
+    #[test]
+    fn pump_streams_chunks_and_done_normally() {
+        block_on(async {
+            let (channel, events) = test_channel();
+            let cancel_flag = Arc::new(AtomicBool::new(false));
+            let stream = futures_util::stream::iter(vec![
+                Ok::<_, String>(b"data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n".to_vec()),
+                Ok::<_, String>(b"data: [DONE]\n\n".to_vec()),
+            ]);
+
+            pump_sse_stream(stream, &cancel_flag, &channel).await;
+
+            let guard = events.lock().unwrap();
+            assert!(guard.iter().any(|e| matches!(
+                e,
+                StreamEvent::Chunk { content } if content == "hello"
+            )));
+            assert!(guard.iter().any(|e| matches!(e, StreamEvent::Done)));
+        });
     }
 }

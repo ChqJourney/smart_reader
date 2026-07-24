@@ -387,4 +387,16 @@ describe("useTabs", () => {
     });
     expect(result.current.activeTabId).toBe(tabA!);
   });
+
+  // 返回值引用稳定：状态未变化时 rerender 必须复用同一对象，
+  // 否则 App 层依赖它的 useCallback 会每次渲染重建（击穿 PdfPage memo）。
+  it("returns a stable object reference across re-renders without state change", () => {
+    const { result, rerender } = renderHook(() => useTabs());
+
+    const first = result.current;
+    rerender();
+    rerender();
+
+    expect(result.current).toBe(first);
+  });
 });

@@ -97,6 +97,35 @@ describe("CommentPopup", () => {
     });
   });
 
+  it("commits the latest content on unmount without waiting for the debounce", () => {
+    const onUpdate = vi.fn();
+    const { unmount } = render(
+      <div
+        className="pdf-page-wrapper"
+        style={{ width: 400, height: 400, position: "relative" }}
+      >
+        <CommentPopup
+          annotation={makeAnnotation()}
+          scale={1}
+          onUpdate={onUpdate}
+          onHide={vi.fn()}
+          onClose={vi.fn()}
+        />
+      </div>
+    );
+
+    const textarea = screen.getByPlaceholderText(/输入批注/);
+    fireEvent.change(textarea, { target: { value: "未等防抖的内容" } });
+
+    // 不推进 300ms 防抖计时器，直接 unmount：最终内容必须被提交一次
+    unmount();
+
+    expect(onUpdate).toHaveBeenCalledWith({
+      content: "未等防抖的内容",
+      isStreaming: false,
+    });
+  });
+
   it("calls onClose when the delete button is clicked", () => {
     const onClose = vi.fn();
     render(

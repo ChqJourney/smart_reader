@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 export interface UseSplitViewReturn {
   isSplitView: boolean;
@@ -22,11 +22,15 @@ export function useSplitView(): UseSplitViewReturn {
     setSecondaryTabId(null);
   }, []);
 
-  return {
-    isSplitView,
-    secondaryTabId,
-    enterSplitView,
-    exitSplitView,
-    setSecondaryTabId,
-  };
+  // 返回对象用 useMemo 固定引用，避免 App 层依赖它的回调每次渲染重建。
+  return useMemo(
+    () => ({
+      isSplitView,
+      secondaryTabId,
+      enterSplitView,
+      exitSplitView,
+      setSecondaryTabId,
+    }),
+    [isSplitView, secondaryTabId, enterSplitView, exitSplitView]
+  );
 }

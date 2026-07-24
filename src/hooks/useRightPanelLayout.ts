@@ -178,18 +178,34 @@ export function useRightPanelLayout(): UseRightPanelLayoutReturn {
       ? (effectiveRightWidth / availableWidth) * 100
       : RIGHT_PANEL_DEFAULT_FRACTION * 100;
 
-  return {
-    mainRef,
-    leftVisible,
-    rightVisible,
-    rightPanelWidth,
-    setRightPanelWidth,
-    toggleLeft,
-    toggleRight,
-    openRightPanel,
-    startResize,
-    effectiveRightWidth,
-    leftPct,
-    rightPct,
-  };
+  // 返回对象用 useMemo 固定引用，避免 App 层依赖它的回调每次渲染重建。
+  return useMemo(
+    () => ({
+      mainRef,
+      leftVisible,
+      rightVisible,
+      rightPanelWidth,
+      setRightPanelWidth,
+      toggleLeft,
+      toggleRight,
+      openRightPanel,
+      startResize,
+      effectiveRightWidth,
+      leftPct,
+      rightPct,
+    }),
+    [
+      leftVisible,
+      rightVisible,
+      rightPanelWidth,
+      setRightPanelWidth,
+      toggleLeft,
+      toggleRight,
+      openRightPanel,
+      startResize,
+      effectiveRightWidth,
+      leftPct,
+      rightPct,
+    ]
+  );
 }

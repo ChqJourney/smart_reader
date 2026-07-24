@@ -1,5 +1,5 @@
 import i18n from "i18next";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { error as logError, info } from "../services/logs";
 import { PdfViewerState } from "../components/PdfViewer";
@@ -293,19 +293,38 @@ export function useTabs(): UseTabsReturn {
     );
   }, []);
 
-  return {
-    tabs,
-    activeTabId,
-    activeTab,
-    handleOpenPdf,
-    openPdfByPath,
-    handleCloseTab,
-    handleTabClick,
-    handleViewerStateChange,
-    gotoTabPage,
-    setTabSelection,
-    clearTabSelection,
-    setTabHighlightedAnnotationId,
-    clearTabPendingGotoPage,
-  };
+  // 返回对象用 useMemo 固定引用：否则 App 每次渲染都拿到新对象，
+  // 依赖它的 useCallback 会跟着重建，一路击穿 PdfPage 的 React.memo。
+  return useMemo(
+    () => ({
+      tabs,
+      activeTabId,
+      activeTab,
+      handleOpenPdf,
+      openPdfByPath,
+      handleCloseTab,
+      handleTabClick,
+      handleViewerStateChange,
+      gotoTabPage,
+      setTabSelection,
+      clearTabSelection,
+      setTabHighlightedAnnotationId,
+      clearTabPendingGotoPage,
+    }),
+    [
+      tabs,
+      activeTabId,
+      activeTab,
+      handleOpenPdf,
+      openPdfByPath,
+      handleCloseTab,
+      handleTabClick,
+      handleViewerStateChange,
+      gotoTabPage,
+      setTabSelection,
+      clearTabSelection,
+      setTabHighlightedAnnotationId,
+      clearTabPendingGotoPage,
+    ]
+  );
 }

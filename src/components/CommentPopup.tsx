@@ -31,6 +31,10 @@ export default function CommentPopup({
   // over a stale `onUpdate` when the component unmounts.
   onUpdateRef.current = onUpdate;
 
+  // 用 ref 持有最新输入，unmount flush 时避免闭包旧值。
+  const localContentRef = useRef(localContent);
+  localContentRef.current = localContent;
+
   const left = annotation.position.x * scale;
   const top = annotation.position.y * scale;
 
@@ -76,6 +80,18 @@ export default function CommentPopup({
     }, 300);
     return () => clearTimeout(timeout);
   }, [localContent]);
+
+  // unmount 时提交最终内容：上面的 300ms 防抖 cleanup 只 clearTimeout，
+  // 若用户在窗口期内切页/关闭浮层/退出应用，最后一段输入会丢失。
+  // 内容与防抖提交相同（幂等），已保存过的场景重复提交无副作用。
+  useEffect(() => {
+    return () => {
+      onUpdateRef.current({
+        content: localContentRef.current,
+        isStreaming: false,
+      });
+    };
+  }, []);
 
   return (
     <div

@@ -37,6 +37,29 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
   message: vi.fn(),
 }));
 
+// Mock the Tauri window API: capture the onCloseRequested handler so tests can
+// simulate window close, and stub the controls TitleBar touches on mount.
+const mockWindow = vi.hoisted(() => ({
+  closeHandler: null as null | ((event: { preventDefault: () => void }) => void),
+  destroy: vi.fn(() => Promise.resolve()),
+  minimize: vi.fn(() => Promise.resolve()),
+  unmaximize: vi.fn(() => Promise.resolve()),
+  toggleMaximize: vi.fn(() => Promise.resolve()),
+  close: vi.fn(() => Promise.resolve()),
+  isMaximized: () => Promise.resolve(false),
+  onResized: () => Promise.resolve(() => {}),
+}));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    ...mockWindow,
+    onCloseRequested: (cb: (event: { preventDefault: () => void }) => void) => {
+      mockWindow.closeHandler = cb;
+      return Promise.resolve(() => {});
+    },
+  }),
+}));
+
 vi.mock("./services/llm", async () => {
   const actual =
     await vi.importActual<typeof import("./services/llm")>("./services/llm");
@@ -266,6 +289,49 @@ describe("App", () => {
         path: "/test/file.pdf",
         lastPage: 5,
       });
+    });
+  });
+
+  it("flushes pending annotations and last page on window close", async () => {
+    renderApp();
+    await openPdf("/test/file.pdf");
+
+    triggerPdfSelection();
+    fireEvent.click(screen.getByRole("button", { name: "批注" }));
+    fireEvent.click(screen.getByTestId("trigger-state-change")); // pageNum → 5
+
+    // 不等 500ms 防抖，直接触发关窗：退出前必须把脏数据落盘
+    expect(mockWindow.closeHandler).toBeTruthy();
+    const preventDefault = vi.fn();
+    await act(async () => {
+      mockWindow.closeHandler!({ preventDefault });
+    });
+
+    expect(preventDefault).toHaveBeenCalled();
+
+    await waitFor(() => {
+      const pdfSaves = mockInvoke.mock.calls.filter(
+        ([cmd, args]) =>
+          cmd === "save_pdf_data" &&
+          (args as { filePath?: string })?.filePath === "/test/file.pdf"
+      );
+      expect(pdfSaves.length).toBeGreaterThan(0);
+    });
+
+    // 退出时把当前打开 tab 的页码回写到最近文件
+    await waitFor(() => {
+      const saves = mockInvoke.mock.calls.filter(
+        ([cmd]) => cmd === "save_recent_files"
+      );
+      expect(saves[saves.length - 1]?.[1]?.files?.[0]).toMatchObject({
+        path: "/test/file.pdf",
+        lastPage: 5,
+      });
+    });
+
+    // flush 完成后才销毁窗口
+    await waitFor(() => {
+      expect(mockWindow.destroy).toHaveBeenCalled();
     });
   });
 

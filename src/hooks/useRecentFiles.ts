@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   RecentFile,
   loadRecentFiles,
@@ -142,13 +142,25 @@ export function useRecentFiles(): UseRecentFilesReturn {
     saveRecentFiles([]);
   }, []);
 
-  return {
-    recentFiles,
-    loaded,
-    addRecentFile,
-    removeRecentFile,
-    togglePinRecentFile,
-    updateLastPage,
-    clearRecentFiles,
-  };
+  // 返回对象用 useMemo 固定引用，避免 App 层依赖它的回调每次渲染重建。
+  return useMemo(
+    () => ({
+      recentFiles,
+      loaded,
+      addRecentFile,
+      removeRecentFile,
+      togglePinRecentFile,
+      updateLastPage,
+      clearRecentFiles,
+    }),
+    [
+      recentFiles,
+      loaded,
+      addRecentFile,
+      removeRecentFile,
+      togglePinRecentFile,
+      updateLastPage,
+      clearRecentFiles,
+    ]
+  );
 }

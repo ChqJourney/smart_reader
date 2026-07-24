@@ -1267,6 +1267,232 @@ describe("usePersistence", () => {
     expect(hookRef!.stashes).toHaveLength(0);
   });
 
+  describe("data-loss prevention", () => {
+    const selection = {
+      text: "selected",
+      x: 10,
+      y: 20,
+      pdfX: 5,
+      pdfY: 6,
+      page: 2,
+    };
+
+    const tabA: PdfTab = {
+      id: "tab-a",
+      filePath: "/a.pdf",
+      fileName: "a.pdf",
+      fileHash: "hash-a",
+    };
+    const tabB: PdfTab = {
+      id: "tab-b",
+      filePath: "/b.pdf",
+      fileName: "b.pdf",
+      fileHash: "hash-b",
+    };
+
+    function propsFor(tab: PdfTab): UsePersistenceProps {
+      return {
+        activeTab: tab,
+        activeTabId: tab.id,
+        secondaryTab: null,
+        isSplitView: false,
+        focusedTab: tab,
+        openRightPanel: vi.fn(),
+        settings: DEFAULT_SETTINGS,
+      };
+    }
+
+    function mockInvokeWithLoad(
+      loadImpl: (args?: InvokeArgs) => Promise<unknown>
+    ) {
+      return (command: string, args?: InvokeArgs): Promise<any> => {
+        if (command === "load_pdf_data") return loadImpl(args);
+        if (
+          [
+            "save_pdf_data",
+            "save_session",
+            "delete_session",
+            "log_error",
+          ].includes(command)
+        ) {
+          return Promise.resolve(null);
+        }
+        return Promise.reject(
+          new Error(`No mock handler for command: ${command}`)
+        );
+      };
+    }
+
+    it("does not persist a hash whose initial load failed", async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const invokeSpy = vi
+        .mocked(invoke)
+        .mockImplementation(
+          mockInvokeWithLoad(() => Promise.reject(new Error("disk error")))
+        );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={propsFor(tabA)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+
+      // 加载失败后用户仍做了编辑（内存中的新批注）
+      act(() => {
+        hookRef!.handleAddComment(selection, "note");
+      });
+      expect(hookRef!.annotations).toHaveLength(1);
+
+      await act(async () => {
+        vi.runAllTimers();
+      });
+
+      // 该 hash 从未成功加载，任何情况下都不得写回磁盘——否则「加载失败 →
+      // 空数据覆盖」会静默清空该 PDF 的已有批注。
+      const saveCalls = invokeSpy.mock.calls.filter(
+        ([cmd]) => cmd === "save_pdf_data"
+      );
+      expect(saveCalls).toHaveLength(0);
+    });
+
+    it("flushes dirty annotations of the previous tab immediately on tab switch", async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const invokeSpy = vi
+        .mocked(invoke)
+        .mockImplementation(
+          mockInvokeWithLoad(() =>
+            Promise.resolve({ annotations: [], sessionIds: [] })
+          )
+        );
+
+      let hookRef: UsePersistenceReturn;
+      const { rerender } = render(
+        <ConfigurableHarness
+          props={propsFor(tabA)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+
+      // 等加载完成（hash-a 被标记为已加载）
+      await act(async () => {});
+
+      act(() => {
+        hookRef!.handleAddComment(selection, "note");
+      });
+
+      // 立即切 tab（<500ms 防抖窗口内，不推进任何计时器）
+      rerender(
+        <ConfigurableHarness
+          props={propsFor(tabB)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+      // 只让 flush 的微任务落地；500ms 防抖定时器确定未触发
+      await act(async () => {});
+
+      const saveCalls = invokeSpy.mock.calls.filter(
+        ([cmd, args]) =>
+          cmd === "save_pdf_data" &&
+          (args as { filePath?: string } | undefined)?.filePath === "/a.pdf"
+      );
+      expect(saveCalls).toHaveLength(1);
+      const savedData = (
+        saveCalls[0][1] as { data: { annotations: { text: string }[] } }
+      ).data;
+      expect(savedData.annotations.some((a) => a.text === "note")).toBe(true);
+    });
+
+    it("flushPendingSaves persists dirty annotations and changed sessions immediately", async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const invokeSpy = vi
+        .mocked(invoke)
+        .mockImplementation(
+          mockInvokeWithLoad(() =>
+            Promise.resolve({ annotations: [], sessionIds: [] })
+          )
+        );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={propsFor(tabA)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+      await act(async () => {});
+
+      const session: InterpretationSession = {
+        id: "session-1",
+        sources: [
+          {
+            id: "stash-1",
+            source: {
+              tabId: "tab-a",
+              fileName: "a.pdf",
+              filePath: "/a.pdf",
+              fileHash: "hash-a",
+              page: 1,
+              pdfX: 0,
+              pdfY: 0,
+            },
+            text: "stash text",
+            createdAt: 1,
+          },
+        ],
+        messages: [{ id: "msg-1", role: "user", content: "hi", createdAt: 1 }],
+        isStreaming: false,
+        createdAt: 1,
+        updatedAt: 1,
+      };
+
+      act(() => {
+        hookRef!.handleAddComment(selection, "note");
+        hookRef!.setSessions([session]);
+      });
+
+      // 不推进 500ms 防抖，直接 flush（模拟退出前落盘）
+      await act(async () => {
+        await hookRef!.flushPendingSaves();
+      });
+
+      const pdfSaves = invokeSpy.mock.calls.filter(
+        ([cmd, args]) =>
+          cmd === "save_pdf_data" &&
+          (args as { filePath?: string } | undefined)?.filePath === "/a.pdf"
+      );
+      expect(pdfSaves.length).toBeGreaterThan(0);
+      const sessionSaves = invokeSpy.mock.calls.filter(
+        ([cmd, args]) =>
+          cmd === "save_session" &&
+          (args as { session?: { id?: string } } | undefined)?.session?.id ===
+            "session-1"
+      );
+      expect(sessionSaves.length).toBeGreaterThan(0);
+
+      // flush 后脏标记已清、防抖定时器已取消，推进计时器不应重复保存
+      invokeSpy.mockClear();
+      await act(async () => {
+        vi.runAllTimers();
+      });
+      expect(
+        invokeSpy.mock.calls.filter(([cmd]) => cmd === "save_pdf_data")
+      ).toHaveLength(0);
+      expect(
+        invokeSpy.mock.calls.filter(([cmd]) => cmd === "save_session")
+      ).toHaveLength(0);
+    });
+  });
+
   describe("agent loop", () => {
     beforeEach(() => {
       toolMocks.executeToolCall.mockReset();
@@ -1695,6 +1921,139 @@ describe("usePersistence", () => {
 
       await waitFor(() => {
         expect(toolMocks.dispose).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
+  describe("流式合批", () => {
+    // 返回值引用稳定：状态未变化时 re-render 必须复用同一对象，
+    // 否则 App 层依赖 persistence 的回调会每次渲染重建。
+    it("返回对象引用在无关 re-render 间保持稳定", () => {
+      const props: UsePersistenceProps = {
+        activeTab: null,
+        activeTabId: null,
+        secondaryTab: null,
+        isSplitView: false,
+        focusedTab: null,
+        openRightPanel: vi.fn(),
+        settings: DEFAULT_SETTINGS,
+      };
+      const refs: UsePersistenceReturn[] = [];
+      const { rerender } = render(
+        <ConfigurableHarness props={props} onHook={(hook) => refs.push(hook)} />
+      );
+      rerender(
+        <ConfigurableHarness props={props} onHook={(hook) => refs.push(hook)} />
+      );
+
+      expect(refs.length).toBeGreaterThan(1);
+      const last = refs[refs.length - 1];
+      for (const ref of refs) {
+        expect(ref).toBe(last);
+      }
+    });
+
+    it("快速到达的多个 chunk 只触发有限次渲染，且 flush 后内容完整", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      const chunks = Array.from({ length: 30 }, (_, i) => `chunk-${i} `);
+      vi.mocked(streamChatCompletion).mockImplementation(async function* () {
+        for (const chunk of chunks) {
+          yield { type: "chunk" as const, content: chunk };
+        }
+        yield { type: "done" as const };
+      });
+
+      let hookRef: UsePersistenceReturn;
+      let renderCount = 0;
+      render(
+        <TestHarness
+          onHook={(hook) => {
+            hookRef = hook;
+            renderCount += 1;
+          }}
+        />
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+
+      const rendersBeforeStream = renderCount;
+
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      await waitFor(() => {
+        const session = hookRef!.sessions.find(
+          (s) => s.id === "session-explain"
+        );
+        expect(session?.isStreaming).toBe(false);
+      });
+
+      // 逐 chunk setSessions 时 30 个 chunk 至少触发 30 次渲染；
+      // 合批后流期间的渲染次数应远小于 chunk 数。
+      expect(renderCount - rendersBeforeStream).toBeLessThan(chunks.length);
+
+      const assistantMessage = hookRef!.sessions
+        .find((s) => s.id === "session-explain")!
+        .messages.find((m) => m.role === "assistant");
+      expect(assistantMessage?.content).toBe(chunks.join(""));
+    });
+
+    it("流未结束时按定时器 flush 已累积内容", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      let releaseStream: () => void = () => {};
+      vi.mocked(streamChatCompletion).mockImplementation(async function* () {
+        yield { type: "chunk" as const, content: "partial" };
+        // 流挂起：验证 50ms flush 定时器在流未结束时也会落状态。
+        await new Promise<void>((resolve) => {
+          releaseStream = resolve;
+        });
+        yield { type: "done" as const };
+      });
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <TestHarness
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      // fake timers 开启 shouldAdvanceTime，50ms flush 定时器会随真实时间触发；
+      // 流仍挂起时内容已落状态。
+      await waitFor(() => {
+        const session = hookRef!.sessions.find(
+          (s) => s.id === "session-explain"
+        );
+        const assistantMessage = session?.messages.find(
+          (m) => m.role === "assistant"
+        );
+        expect(assistantMessage?.content).toBe("partial");
+      });
+      expect(
+        hookRef!.sessions.find((s) => s.id === "session-explain")?.isStreaming
+      ).toBe(true);
+
+      // 放行流结束，收尾正常。
+      await act(async () => {
+        releaseStream();
+      });
+      await waitFor(() => {
+        const session = hookRef!.sessions.find(
+          (s) => s.id === "session-explain"
+        );
+        expect(session?.isStreaming).toBe(false);
       });
     });
   });

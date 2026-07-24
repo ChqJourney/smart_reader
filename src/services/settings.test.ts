@@ -11,7 +11,7 @@ const DEFAULT_SETTINGS = {
   platformId: "deepseek",
   thinking: "auto",
   maxToolRounds: 20,
-  agentToolsEnabled: true,
+  agentToolsEnabled: false,
   targetLanguage: "中文",
   systemPrompts: {
     translate:

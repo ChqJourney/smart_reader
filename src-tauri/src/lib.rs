@@ -607,7 +607,7 @@ fn default_max_tool_rounds() -> u32 {
 }
 
 fn default_agent_tools_enabled() -> bool {
-    true
+    false
 }
 
 fn default_target_language() -> String {

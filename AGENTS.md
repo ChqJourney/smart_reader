@@ -377,7 +377,7 @@ ToolCallsIndicator.tsx
 └── 工具调用状态指示器：running / done / 折叠明细
 
 SettingsModal.tsx
-└── 左侧分页设置弹窗：模型设置（平台/模型/Key/轮次）、功能设置（语言/悬停翻译/Agent Tools 开关/系统提示词）、系统设置（日志/默认打开方式/重跑向导）、关于（版本/软件更新/License）
+└── 左侧分页设置弹窗：模型设置（平台/模型/Key）、功能设置（语言/悬停翻译/Agent Tools 开关（默认关闭，开启后显示 maxToolRounds 轮次设置）/系统提示词）、系统设置（日志/默认打开方式/重跑向导）、关于（版本/软件更新/License）
 ```
 
 ### 6.5 Agent Tools 工作流

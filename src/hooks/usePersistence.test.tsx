@@ -127,7 +127,9 @@ function TestHarness({
     isSplitView: false,
     focusedTab: null,
     openRightPanel: vi.fn(),
-    settings: DEFAULT_SETTINGS,
+    // 多数用例经过解读流程，保持工具开启以覆盖工具链路；
+    // 默认关闭的行为由 "disables tools when agentToolsEnabled is false" 用例验证。
+    settings: { ...DEFAULT_SETTINGS, agentToolsEnabled: true },
   });
   onHook(hook);
   return null;
@@ -1747,7 +1749,11 @@ describe("usePersistence", () => {
               isSplitView: false,
               focusedTab: null,
               openRightPanel: vi.fn(),
-              settings: { ...DEFAULT_SETTINGS, maxToolRounds: 1 },
+              settings: {
+                ...DEFAULT_SETTINGS,
+                maxToolRounds: 1,
+                agentToolsEnabled: true,
+              },
             }}
             onHook={(hook) => {
               hookRef = hook;

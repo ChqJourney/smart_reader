@@ -328,6 +328,34 @@ describe("SettingsModal", () => {
     expect(onSave).not.toHaveBeenCalled();
   });
 
+  it("shows max tool rounds only when agent tools are enabled", () => {
+    renderModal({
+      open: true,
+      initialSettings: { ...defaultSettings, agentToolsEnabled: false },
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    // 模型设置页不再展示该设置
+    fireEvent.click(screen.getByText("更多设置"));
+    expect(
+      screen.queryByLabelText(/^最大工具调用次数/)
+    ).not.toBeInTheDocument();
+
+    switchToFeaturePage();
+    expect(
+      screen.queryByLabelText(/^最大工具调用次数/)
+    ).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText("启用智能查阅文档"));
+    expect(screen.getByLabelText(/^最大工具调用次数/)).toHaveValue(20);
+
+    fireEvent.click(screen.getByLabelText("启用智能查阅文档"));
+    expect(
+      screen.queryByLabelText(/^最大工具调用次数/)
+    ).not.toBeInTheDocument();
+  });
+
   it("shows download confirm when toggling hover translate on without dictionary", () => {
     const onSave = vi.fn();
     renderModal({

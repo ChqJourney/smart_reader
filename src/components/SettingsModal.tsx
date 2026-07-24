@@ -755,34 +755,6 @@ export default function SettingsModal({
                           </label>
                         );
                       })()}
-
-                      {/* Max tool rounds */}
-                      <label className="settings-field">
-                        {t("settings.maxToolRounds", {
-                          defaultValue: "最大工具调用次数",
-                        })}
-                        <input
-                          type="number"
-                          min={0}
-                          max={20}
-                          value={settings.maxToolRounds}
-                          onChange={(e) =>
-                            setSettings((s) => ({
-                              ...s,
-                              maxToolRounds: Math.max(
-                                0,
-                                Math.min(20, parseInt(e.target.value) || 0)
-                              ),
-                            }))
-                          }
-                        />
-                        <p className="settings-field-hint">
-                          {t("settings.maxToolRoundsHint", {
-                            defaultValue:
-                              "0 表示使用默认值 20。AI 读取 PDF 内容时的最大调用轮次。",
-                          })}
-                        </p>
-                      </label>
                     </>
                   )}
                 </section>
@@ -890,6 +862,34 @@ export default function SettingsModal({
                         defaultValue: "启用智能查阅文档",
                       })}
                     </label>
+                    {settings.agentToolsEnabled && (
+                      <label className="settings-field">
+                        {t("settings.maxToolRounds", {
+                          defaultValue: "最大工具调用次数",
+                        })}
+                        <input
+                          type="number"
+                          min={0}
+                          max={20}
+                          value={settings.maxToolRounds}
+                          onChange={(e) =>
+                            setSettings((s) => ({
+                              ...s,
+                              maxToolRounds: Math.max(
+                                0,
+                                Math.min(20, parseInt(e.target.value) || 0)
+                              ),
+                            }))
+                          }
+                        />
+                        <p className="settings-field-hint">
+                          {t("settings.maxToolRoundsHint", {
+                            defaultValue:
+                              "0 表示使用默认值 20。AI 读取 PDF 内容时的最大调用轮次。",
+                          })}
+                        </p>
+                      </label>
+                    )}
                   </section>
 
                   <section className="settings-section">

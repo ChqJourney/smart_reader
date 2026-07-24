@@ -61,7 +61,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   platformId: "deepseek",
   thinking: "auto",
   maxToolRounds: 20,
-  agentToolsEnabled: true,
+  agentToolsEnabled: false,
   targetLanguage: "中文",
   systemPrompts: DEFAULT_SYSTEM_PROMPTS,
   hoverTranslate: false,

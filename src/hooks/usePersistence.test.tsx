@@ -1018,6 +1018,255 @@ describe("usePersistence", () => {
     expect(hookRef!.focusedTabSessions[0].id).toBe("session-a");
   });
 
+  it("merges stashes and sessions across visible tabs in split view", () => {
+    let hookRef: UsePersistenceReturn;
+    const activeTab: PdfTab = {
+      id: "tab-a",
+      filePath: "/a.pdf",
+      fileName: "a.pdf",
+      fileHash: "hash-a",
+    };
+    const secondaryTab: PdfTab = {
+      id: "tab-b",
+      filePath: "/b.pdf",
+      fileName: "b.pdf",
+      fileHash: "hash-b",
+    };
+    const props: UsePersistenceProps = {
+      activeTab,
+      activeTabId: "tab-a",
+      secondaryTab,
+      isSplitView: true,
+      focusedTab: activeTab,
+      openRightPanel: vi.fn(),
+      settings: DEFAULT_SETTINGS,
+    };
+
+    render(
+      <StrictMode>
+        <ConfigurableHarness
+          props={props}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    const makeStash = (id: string, tabId: string, fileHash: string) => ({
+      id,
+      source: {
+        tabId,
+        fileName: `${tabId}.pdf`,
+        filePath: `/${tabId}.pdf`,
+        fileHash,
+        page: 1,
+        pdfX: 0,
+        pdfY: 0,
+      },
+      text: id,
+      createdAt: 1,
+    });
+
+    act(() => {
+      hookRef!.setStashes([
+        makeStash("stash-a", "tab-a", "hash-a"),
+        makeStash("stash-b", "tab-b", "hash-b"),
+      ]);
+      hookRef!.setSessions([
+        {
+          id: "session-a",
+          sources: [makeStash("src-a", "tab-a", "hash-a")],
+          messages: [],
+          isStreaming: false,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        {
+          id: "session-b",
+          sources: [makeStash("src-b", "tab-b", "hash-b")],
+          messages: [],
+          isStreaming: false,
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ]);
+    });
+
+    // 分屏下右侧面板合并显示两个可见 tab 的暂存与解读记录
+    expect(hookRef!.visibleTabStashes.map((s) => s.id)).toEqual([
+      "stash-a",
+      "stash-b",
+    ]);
+    expect(hookRef!.visibleTabSessions.map((s) => s.id)).toEqual([
+      "session-a",
+      "session-b",
+    ]);
+  });
+
+  it("adds stash and comment for the focused tab instead of the active tab", () => {
+    let hookRef: UsePersistenceReturn;
+    const activeTab: PdfTab = {
+      id: "tab-a",
+      filePath: "/a.pdf",
+      fileName: "a.pdf",
+      fileHash: "hash-a",
+    };
+    const focusedTab: PdfTab = {
+      id: "tab-b",
+      filePath: "/b.pdf",
+      fileName: "b.pdf",
+      fileHash: "hash-b",
+    };
+    const props: UsePersistenceProps = {
+      activeTab,
+      activeTabId: "tab-a",
+      secondaryTab: focusedTab,
+      isSplitView: true,
+      focusedTab,
+      openRightPanel: vi.fn(),
+      settings: DEFAULT_SETTINGS,
+    };
+
+    render(
+      <StrictMode>
+        <ConfigurableHarness
+          props={props}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    const selection = {
+      text: "selected",
+      x: 10,
+      y: 20,
+      pdfX: 5,
+      pdfY: 6,
+      page: 2,
+    };
+
+    act(() => {
+      hookRef!.handleAddToStash(selection, "selected");
+      hookRef!.handleAddComment(selection, "note");
+    });
+
+    // 暂存归属焦点屏 tab，批注落到焦点屏的 fileHash 桶
+    expect(hookRef!.stashes).toHaveLength(1);
+    expect(hookRef!.stashes[0].source.tabId).toBe("tab-b");
+    expect(hookRef!.stashes[0].source.fileHash).toBe("hash-b");
+    const hashes = hookRef!.annotations.map((a) => a.fileHash);
+    expect(hashes).toEqual(["hash-b", "hash-b"]);
+  });
+
+  it("marks interpreted stash annotations across file hashes", async () => {
+    const { streamChatCompletion } = await import("../services/llm");
+    vi.mocked(streamChatCompletion).mockImplementation(
+      makeMockStream(["done"])
+    );
+
+    let hookRef: UsePersistenceReturn;
+    const focusedTab: PdfTab = {
+      id: "tab-a",
+      filePath: "/a.pdf",
+      fileName: "a.pdf",
+      fileHash: "hash-a",
+    };
+    const secondaryTab: PdfTab = {
+      id: "tab-b",
+      filePath: "/b.pdf",
+      fileName: "b.pdf",
+      fileHash: "hash-b",
+    };
+    const props: UsePersistenceProps = {
+      activeTab: focusedTab,
+      activeTabId: "tab-a",
+      secondaryTab,
+      isSplitView: true,
+      focusedTab,
+      openRightPanel: vi.fn(),
+      settings: DEFAULT_SETTINGS,
+    };
+
+    render(
+      <StrictMode>
+        <ConfigurableHarness
+          props={props}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    const makeStash = (id: string, tabId: string, fileHash: string) => ({
+      id,
+      source: {
+        tabId,
+        fileName: `${tabId}.pdf`,
+        filePath: `/${tabId}.pdf`,
+        fileHash,
+        page: 1,
+        pdfX: 0,
+        pdfY: 0,
+      },
+      text: id,
+      createdAt: 1,
+    });
+    const stashA = makeStash("stash-a", "tab-a", "hash-a");
+    const stashB = makeStash("stash-b", "tab-b", "hash-b");
+
+    act(() => {
+      hookRef!.setStashes([stashA, stashB]);
+      hookRef!.setAnnotations([
+        {
+          id: "anno-a",
+          type: "stash",
+          text: "a",
+          position: { page: 1, x: 0, y: 0 },
+          content: "",
+          isStreaming: false,
+          createdAt: 1,
+          fileHash: "hash-a",
+          stashId: "stash-a",
+        },
+        {
+          id: "anno-b",
+          type: "stash",
+          text: "b",
+          position: { page: 1, x: 0, y: 0 },
+          content: "",
+          isStreaming: false,
+          createdAt: 1,
+          fileHash: "hash-b",
+          stashId: "stash-b",
+        },
+      ]);
+    });
+
+    act(() => {
+      hookRef!.handleCustomInterpret("请分析", [stashA, stashB]);
+    });
+
+    // 跨 PDF 自定义解读：两个 fileHash 桶里的 stash 批注都被标记为已解读，
+    // 否则第二个文件的批注会在解读后被误删、重启后也会丢失。
+    const annoA = hookRef!.annotations.find((a) => a.id === "anno-a");
+    const annoB = hookRef!.annotations.find((a) => a.id === "anno-b");
+    expect(annoA).toMatchObject({
+      interpretedGroupSize: 2,
+      interpretedIndex: 0,
+    });
+    expect(annoB).toMatchObject({
+      interpretedGroupSize: 2,
+      interpretedIndex: 1,
+    });
+    expect(annoA?.sessionId).toBeDefined();
+    expect(annoB?.sessionId).toBe(annoA?.sessionId);
+    expect(hookRef!.stashes).toHaveLength(0);
+  });
+
   describe("agent loop", () => {
     beforeEach(() => {
       toolMocks.executeToolCall.mockReset();
@@ -1313,9 +1562,7 @@ describe("usePersistence", () => {
         (s) => s.id === "session-explain"
       )!;
       const finalMessage = session.messages[session.messages.length - 1];
-      expect(finalMessage.content).toContain(
-        "已达到本次文档查阅工具调用上限"
-      );
+      expect(finalMessage.content).toContain("已达到本次文档查阅工具调用上限");
       expect(finalMessage.toolEvents).toBeUndefined();
       expect(toolMocks.dispose).toHaveBeenCalledTimes(1);
     });

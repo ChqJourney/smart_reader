@@ -124,10 +124,22 @@ describe("RecentFilesBar", () => {
   it("opens a file in split view via the split button", () => {
     const props = renderBar();
     openPanel();
-    const splitButtons = screen.getAllByLabelText("在右侧分屏打开");
+    const splitButtons = screen.getAllByLabelText("在右侧并排打开");
     fireEvent.click(splitButtons[0]);
     expect(props.onOpenInSplit).toHaveBeenCalledWith(files[0]);
     expect(props.onFileClick).not.toHaveBeenCalled();
+  });
+
+  it("shows the side-by-side hint when split opening is available", () => {
+    renderBar();
+    openPanel();
+    expect(screen.getByText(/拖拽标签到阅读区/)).toBeInTheDocument();
+  });
+
+  it("hides the side-by-side hint when split opening is unavailable", () => {
+    renderBar({ onOpenInSplit: undefined });
+    openPanel();
+    expect(screen.queryByText(/拖拽标签到阅读区/)).not.toBeInTheDocument();
   });
 
   it("requires two clicks to clear all", () => {

@@ -42,6 +42,11 @@ struct AppState {
     dict_connection: Arc<Mutex<Option<rusqlite::Connection>>>,
     /// Cancellation flags for in-flight LLM streaming requests, keyed by request_id.
     cancel_tokens: llm_proxy::CancelMap,
+    /// PDF paths requested before the frontend listener is ready (e.g. cold
+    /// start via file association). Every `open-pdf` emit also records the
+    /// path here so the frontend can drain it on mount; hot-start emits are
+    /// harmless duplicates because the frontend dedupes.
+    pending_open_paths: Mutex<Vec<String>>,
 }
 
 impl AppState {
@@ -52,6 +57,7 @@ impl AppState {
             pdf_hash_cache: Arc::new(Mutex::new(HashMap::new())),
             dict_connection: Arc::new(Mutex::new(None)),
             cancel_tokens: Arc::new(Mutex::new(HashMap::new())),
+            pending_open_paths: Mutex::new(Vec::new()),
         }
     }
 
@@ -64,6 +70,17 @@ impl AppState {
 
     fn is_path_allowed(&self, path: &std::path::Path) -> bool {
         self.allowed_paths.lock().unwrap().contains(path)
+    }
+
+    fn record_pending_open_path(&self, path: &str) {
+        self.pending_open_paths
+            .lock()
+            .unwrap()
+            .push(path.to_string());
+    }
+
+    fn take_pending_open_paths(&self) -> Vec<String> {
+        std::mem::take(&mut *self.pending_open_paths.lock().unwrap())
     }
 }
 
@@ -115,9 +132,20 @@ fn emit_open_pdf(app_handle: &tauri::AppHandle, args: &[String]) {
             "Security audit: single-instance activation with PDF: {}",
             sanitize_path_for_log(&path)
         );
-        if let Err(e) = app_handle.emit(OPEN_PDF_EVENT, path) {
-            log::warn!("Failed to emit open-pdf event: {}", e);
-        }
+        notify_open_pdf(app_handle, path);
+    }
+}
+
+/// Record the requested PDF path in `pending_open_paths` and emit the
+/// `open-pdf` event. Recording happens before emitting so a cold-start
+/// request (frontend listener not yet registered) is never lost: the
+/// frontend drains the pending list via `take_pending_open_pdfs` on mount.
+fn notify_open_pdf(app_handle: &tauri::AppHandle, path: String) {
+    app_handle
+        .state::<AppState>()
+        .record_pending_open_path(&path);
+    if let Err(e) = app_handle.emit(OPEN_PDF_EVENT, path) {
+        log::warn!("Failed to emit open-pdf event: {}", e);
     }
 }
 
@@ -196,6 +224,7 @@ pub fn run() {
             open_default_apps_settings,
             get_pdf_hash,
             authorize_pdf_path,
+            take_pending_open_pdfs,
             load_pdf_data,
             save_pdf_data,
             load_session,
@@ -224,13 +253,21 @@ pub fn run() {
             // Finder file-open / single-instance activation: pick the first PDF
             // URL and emit it to the frontend so the existing window opens it.
             for url in urls {
-                let path = url.to_string();
-                if path.to_lowercase().ends_with(".pdf") {
+                // `url.to_string()` keeps the `file://` scheme; convert to a
+                // real filesystem path instead. Skip URLs that are not files.
+                let path = match url.to_file_path() {
+                    Ok(p) => p.to_string_lossy().into_owned(),
+                    Err(()) => {
+                        log::warn!("Skipping non-file URL in open event: {}", url);
+                        continue;
+                    }
+                };
+                if is_pdf_path(&path) {
                     log::info!(
                         "Security audit: macOS open-url activation with PDF: {}",
                         sanitize_path_for_log(&path)
                     );
-                    let _ = _app_handle.emit(OPEN_PDF_EVENT, path);
+                    notify_open_pdf(_app_handle, path);
                     break;
                 }
             }
@@ -260,6 +297,11 @@ fn open_default_apps_settings() -> Result<(), String> {
     {
         Err("Setting the default PDF reader is only supported on Windows".to_string())
     }
+}
+
+#[tauri::command]
+fn take_pending_open_pdfs(state: tauri::State<'_, AppState>) -> Vec<String> {
+    state.take_pending_open_paths()
 }
 
 #[tauri::command]
@@ -1087,6 +1129,44 @@ async fn lookup_word(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pending_open_paths_take_returns_and_clears() {
+        // 冷启动时 open-pdf 事件可能在前端监听注册前发出，
+        // 路径需入队保存，前端 mount 后 take 一次取走并清空。
+        let state = AppState::new();
+        state.record_pending_open_path("/tmp/a.pdf");
+        assert_eq!(state.take_pending_open_paths(), vec!["/tmp/a.pdf"]);
+        assert!(state.take_pending_open_paths().is_empty());
+    }
+
+    #[test]
+    fn pending_open_paths_preserve_insertion_order() {
+        let state = AppState::new();
+        state.record_pending_open_path("/tmp/a.pdf");
+        state.record_pending_open_path("/tmp/b.pdf");
+        state.record_pending_open_path("/tmp/c.pdf");
+        assert_eq!(
+            state.take_pending_open_paths(),
+            vec!["/tmp/a.pdf", "/tmp/b.pdf", "/tmp/c.pdf"]
+        );
+    }
+
+    #[test]
+    fn pending_open_paths_take_on_empty_returns_empty() {
+        let state = AppState::new();
+        assert!(state.take_pending_open_paths().is_empty());
+    }
+
+    #[test]
+    fn pending_open_paths_can_enqueue_after_take() {
+        // take 清空后，新的打开请求应能再次入队。
+        let state = AppState::new();
+        state.record_pending_open_path("/tmp/a.pdf");
+        let _ = state.take_pending_open_paths();
+        state.record_pending_open_path("/tmp/b.pdf");
+        assert_eq!(state.take_pending_open_paths(), vec!["/tmp/b.pdf"]);
+    }
 
     fn sample_annotation(id: &str) -> Annotation {
         Annotation {

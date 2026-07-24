@@ -355,4 +355,36 @@ describe("useTabs", () => {
     expect(restoredTab?.pageNum).toBe(5);
     expect(restoredTab?.pendingGotoPage).toBe(5);
   });
+
+  it("jumps to a background tab's page without activating it when activate is false", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    let tabA: string;
+    let tabB: string;
+    await act(async () => {
+      const tab = await result.current.openPdfByPath("/test/a.pdf");
+      tabA = tab!.id;
+    });
+    await act(async () => {
+      const tab = await result.current.openPdfByPath("/test/b.pdf");
+      tabB = tab!.id;
+    });
+
+    // tabB 为 active；对 tabA 做静默跳页（分屏下副屏跳转的场景）
+    act(() => {
+      result.current.gotoTabPage(tabA!, 4, { activate: false });
+    });
+
+    expect(result.current.activeTabId).toBe(tabB!);
+    const backgroundTab = result.current.tabs.find((t) => t.id === tabA!);
+    expect(backgroundTab?.pageNum).toBe(4);
+    expect(backgroundTab?.pendingGotoPage).toBe(4);
+    expect(backgroundTab?.scrollTop).toBeUndefined();
+
+    // 默认行为不变：不带 options 时仍然激活目标 tab
+    act(() => {
+      result.current.gotoTabPage(tabA!, 6);
+    });
+    expect(result.current.activeTabId).toBe(tabA!);
+  });
 });

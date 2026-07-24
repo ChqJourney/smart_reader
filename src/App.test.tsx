@@ -34,6 +34,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
   confirm: vi.fn(),
+  message: vi.fn(),
 }));
 
 vi.mock("./services/llm", async () => {
@@ -55,6 +56,7 @@ vi.mock("./components/PdfViewer", () => ({
     (
       {
         tabId,
+        filePath,
         onSelection,
         onToggleVisibility,
         onStateChange,
@@ -63,6 +65,7 @@ vi.mock("./components/PdfViewer", () => ({
         onAnnotationDelete,
       }: {
         tabId?: string;
+        filePath?: string;
         onSelection?: (
           tabId: string,
           text: string,
@@ -85,7 +88,7 @@ vi.mock("./components/PdfViewer", () => ({
       lastAnnotations.mockImplementation(() => annotations ?? []);
       lastInitialState(initialState);
       return (
-        <div data-testid="pdf-viewer" ref={ref}>
+        <div data-testid="pdf-viewer" data-filepath={filePath} ref={ref}>
           PdfViewer
           <button
             data-testid="trigger-selection"
@@ -182,6 +185,8 @@ function setupMockInvoke(
           return Promise.resolve([]);
         case "check_dictionary":
           return Promise.resolve({ exists: false, path: "" });
+        case "take_pending_open_pdfs":
+          return Promise.resolve([]);
         case "check_files_exist":
           return Promise.resolve(
             ((args?.paths as string[]) ?? []).map(() => true)
@@ -863,7 +868,7 @@ describe("App", () => {
     expect(screen.getByLabelText("显示 AI 助手")).toBeInTheDocument();
   });
 
-  it("switches right panel focus when clicking a viewer in split view", async () => {
+  it("merges stashes from both viewers in split view and keeps them visible on focus switch", async () => {
     (open as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce("/test/file-a.pdf")
       .mockResolvedValueOnce("/test/file-b.pdf");
@@ -906,24 +911,31 @@ describe("App", () => {
       ).toBeInTheDocument();
     });
 
-    // Click the secondary panel; the right panel should now show the other tab.
+    // Click the secondary panel; merged display keeps the primary stash visible.
     const panels = document.querySelectorAll(".pdf-panel");
     expect(panels).toHaveLength(2);
     fireEvent.click(panels[1]);
-
-    await waitFor(() => {
-      expect(
-        screen.getByRole("tab", { name: /暂存区 \(0\)/i })
-      ).toBeInTheDocument();
-    });
-
-    // Click back to the primary panel; the stash should reappear.
-    fireEvent.click(panels[0]);
     await waitFor(() => {
       expect(
         screen.getByRole("tab", { name: /暂存区 \(1\)/i })
       ).toBeInTheDocument();
     });
+
+    // Select text in the secondary viewer and stash it too:
+    // the selection toolbar follows the viewer where the selection was made.
+    fireEvent.click(screen.getAllByTestId("trigger-selection")[1]);
+    fireEvent.click(screen.getByRole("button", { name: /加入暂存/i }));
+    await waitFor(() => {
+      expect(
+        screen.getByRole("tab", { name: /暂存区 \(2\)/i })
+      ).toBeInTheDocument();
+    });
+
+    // Both stashes are listed with their source file names.
+    const stashSources = document.querySelectorAll(".stash-item-source");
+    const sourceTexts = Array.from(stashSources).map((el) => el.textContent);
+    expect(sourceTexts.some((s) => s?.includes("file-a.pdf"))).toBe(true);
+    expect(sourceTexts.some((s) => s?.includes("file-b.pdf"))).toBe(true);
   });
 
   it("opens only one tab when the open-pdf event is emitted multiple times", async () => {
@@ -957,5 +969,155 @@ describe("App", () => {
     expect(
       screen.getAllByRole("button", { name: /关闭 file.pdf/i })
     ).toHaveLength(1);
+  });
+
+  it("opens PDFs buffered by the backend during a cold start", async () => {
+    setupMockInvoke({
+      take_pending_open_pdfs: () => ["/test/pending.pdf"],
+    });
+
+    renderApp();
+
+    await waitFor(() => {
+      expect(screen.getByText("pending.pdf")).toBeInTheDocument();
+    });
+    expect(
+      screen.getAllByRole("button", { name: /关闭 pending.pdf/i })
+    ).toHaveLength(1);
+  });
+
+  it("shows a drop-zone overlay while dragging over the main area", async () => {
+    renderApp();
+    await openPdf();
+
+    const main = document.querySelector("main") as HTMLElement;
+    expect(screen.queryByText("松开以并排打开")).not.toBeInTheDocument();
+
+    fireEvent.dragEnter(main);
+    expect(screen.getByText("松开以并排打开")).toBeInTheDocument();
+
+    // 子元素间移动造成的成对 enter/leave 不应让遮罩抖动消失
+    fireEvent.dragEnter(main);
+    fireEvent.dragLeave(main);
+    expect(screen.getByText("松开以并排打开")).toBeInTheDocument();
+
+    fireEvent.dragLeave(main);
+    expect(screen.queryByText("松开以并排打开")).not.toBeInTheDocument();
+
+    // drop 时兜底复位
+    fireEvent.dragEnter(main);
+    expect(screen.getByText("松开以并排打开")).toBeInTheDocument();
+    fireEvent.drop(main, {
+      dataTransfer: { getData: vi.fn(() => "") },
+    });
+    expect(screen.queryByText("松开以并排打开")).not.toBeInTheDocument();
+  });
+
+  it("enters split view via the tab-bar side-by-side button", async () => {
+    (open as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("/test/file-a.pdf")
+      .mockResolvedValueOnce("/test/file-b.pdf");
+
+    renderApp();
+    await openPdf("/test/file-a.pdf");
+
+    // 只有一个 tab 时不显示入口
+    expect(screen.queryByLabelText("并排对照")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId("open-pdf-btn"));
+    await waitFor(() => {
+      expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByLabelText("并排对照"));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);
+    });
+    // 进入分屏后入口消失，退出按钮出现
+    expect(screen.queryByLabelText("并排对照")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("退出并排视图")).toBeInTheDocument();
+  });
+
+  it("jumps to a secondary-tab stash without collapsing the split view", async () => {
+    (open as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("/test/file-a.pdf")
+      .mockResolvedValueOnce("/test/file-b.pdf");
+
+    renderApp();
+
+    await openPdf("/test/file-a.pdf");
+    fireEvent.click(screen.getByTestId("open-pdf-btn"));
+    await waitFor(() => {
+      expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
+    });
+
+    // Drag file-a (inactive) into the main area: it becomes the secondary tab.
+    const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i })
+      .parentElement as HTMLElement;
+    let draggedTabId = "";
+    const dataTransfer = {
+      setData: vi.fn((_format: string, value: string) => {
+        draggedTabId = value;
+      }),
+      effectAllowed: "",
+      getData: vi.fn(() => draggedTabId),
+      dropEffect: "",
+    };
+
+    const main = document.querySelector("main") as HTMLElement;
+    fireEvent.dragStart(inactiveTab, { dataTransfer });
+    fireEvent.dragOver(main, { dataTransfer });
+    fireEvent.drop(main, { dataTransfer });
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);
+    });
+
+    // Stash from the secondary viewer (file-a).
+    fireEvent.click(screen.getAllByTestId("trigger-selection")[1]);
+    fireEvent.click(screen.getByRole("button", { name: /加入暂存/i }));
+    await waitFor(() => {
+      expect(
+        screen.getByRole("tab", { name: /暂存区 \(1\)/i })
+      ).toBeInTheDocument();
+    });
+
+    // Click the stash text to jump to its page in the secondary viewer.
+    fireEvent.click(screen.getByText("selected text"));
+
+    // 主屏仍是 file-b（active 不被切换），两个面板渲染不同的 PDF。
+    await waitFor(() => {
+      const viewers = screen.getAllByTestId("pdf-viewer");
+      expect(viewers).toHaveLength(2);
+      expect(viewers[0].getAttribute("data-filepath")).toBe("/test/file-b.pdf");
+      expect(viewers[1].getAttribute("data-filepath")).toBe("/test/file-a.pdf");
+    });
+    const activeTabEl = document.querySelector(".tab-item.active");
+    expect(activeTabEl?.textContent).toContain("file-b.pdf");
+  });
+
+  it("shows a notice when a recent file cannot be opened side by side", async () => {
+    const { message } = await import("@tauri-apps/plugin-dialog");
+    setupMockInvoke({
+      load_recent_files: () => [
+        { path: "/test/file.pdf", fileName: "file.pdf", openedAt: 1 },
+      ],
+    });
+
+    renderApp();
+    await openPdf("/test/file.pdf");
+
+    fireEvent.click(screen.getByTestId("recent-files-trigger"));
+    fireEvent.click(await screen.findByLabelText("在右侧并排打开"));
+
+    // 目标文件就是主视图本身，无法并排，应提示而非静默降级
+    await waitFor(() => {
+      expect(message).toHaveBeenCalledWith(
+        expect.stringContaining("无法并排打开"),
+        expect.objectContaining({ kind: "info" })
+      );
+    });
+    expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(1);
   });
 });

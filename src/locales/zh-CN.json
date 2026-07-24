@@ -4,6 +4,8 @@
     "openPdf": "打开 PDF",
     "exitSplitView": "退出并排视图",
     "exitSplit": "退出并排",
+    "enterSplitView": "并排对照",
+    "dropToSplit": "松开以并排打开",
     "showPdf": "显示 PDF",
     "showAiAssistant": "显示 AI 助手",
     "minimize": "最小化",
@@ -12,7 +14,8 @@
   },
   "tab": {
     "close": "关闭标签页",
-    "closeNamed": "关闭 {{fileName}}"
+    "closeNamed": "关闭 {{fileName}}",
+    "dragToSplit": "拖到阅读区可并排对照"
   },
   "pdf": {
     "hidePanel": "隐藏 PDF 面板",
@@ -104,7 +107,9 @@
     "pin": "固定到顶部",
     "unpin": "取消固定",
     "remove": "从列表中移除",
-    "openInSplit": "在右侧分屏打开",
+    "openInSplit": "在右侧并排打开",
+    "splitHint": "提示：拖拽标签到阅读区，或选中条目后按 Alt+Enter，可并排对照打开。",
+    "splitUnavailable": "无法并排打开：当前没有主文档，或该文件已在主视图中打开。",
     "opened": "已打开",
     "missing": "文件已移动或删除",
     "clear": "清空全部",

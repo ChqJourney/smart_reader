@@ -4,6 +4,8 @@
     "openPdf": "Open PDF",
     "exitSplitView": "Exit Split View",
     "exitSplit": "Exit Split",
+    "enterSplitView": "Side by Side",
+    "dropToSplit": "Release to open side by side",
     "showPdf": "Show PDF",
     "showAiAssistant": "Show AI Assistant",
     "minimize": "Minimize",
@@ -12,7 +14,8 @@
   },
   "tab": {
     "close": "Close Tab",
-    "closeNamed": "Close {{fileName}}"
+    "closeNamed": "Close {{fileName}}",
+    "dragToSplit": "Drag to the reading area to compare side by side"
   },
   "pdf": {
     "hidePanel": "Hide PDF Panel",
@@ -104,7 +107,9 @@
     "pin": "Pin to top",
     "unpin": "Unpin",
     "remove": "Remove from list",
-    "openInSplit": "Open in split view",
+    "openInSplit": "Open side by side on the right",
+    "splitHint": "Tip: drag a tab into the reading area, or press Alt+Enter on an entry, to open it side by side.",
+    "splitUnavailable": "Cannot open side by side: there is no primary document, or the file is already open in the primary view.",
     "opened": "Open",
     "missing": "File moved or deleted",
     "clear": "Clear all",

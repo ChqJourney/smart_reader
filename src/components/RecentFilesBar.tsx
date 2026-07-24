@@ -364,6 +364,12 @@ export default function RecentFilesBar({
             )}
           </div>
 
+          {files.length > 0 && onOpenInSplit && (
+            <div className="recent-files-split-hint">
+              {t("recentFiles.splitHint")}
+            </div>
+          )}
+
           {files.length > 0 && (
             <div className="recent-files-footer">
               <button

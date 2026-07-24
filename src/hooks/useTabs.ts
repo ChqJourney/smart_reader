@@ -37,7 +37,11 @@ export interface UseTabsReturn {
   ) => void;
   handleTabClick: (tabId: string, onSwitch?: () => void) => void;
   handleViewerStateChange: (state: PdfViewerState, tabId?: string) => void;
-  gotoTabPage: (tabId: string, page: number) => void;
+  gotoTabPage: (
+    tabId: string,
+    page: number,
+    options?: { activate?: boolean }
+  ) => void;
   setTabSelection: (tabId: string, selection: SelectionState | null) => void;
   clearTabSelection: (tabId: string) => void;
   setTabHighlightedAnnotationId: (
@@ -226,25 +230,32 @@ export function useTabs(): UseTabsReturn {
     [activeTabId]
   );
 
-  const gotoTabPage = useCallback((tabId: string, page: number) => {
-    setActiveTabId(tabId);
-    setTabs((prev) =>
-      prev.map((tab) =>
-        tab.id === tabId
-          ? // Clear scrollTop: this is intentional navigation to a page, and a
-            // stale saved offset would otherwise be re-applied after the jump
-            // by the mount-restore path, snapping the viewer back to the tab's
-            // previous reading spot (docs/REFACTOR_REVIEW_2026-07-17.md #4b).
-            {
-              ...tab,
-              pageNum: page,
-              pendingGotoPage: page,
-              scrollTop: undefined,
-            }
-          : tab
-      )
-    );
-  }, []);
+  const gotoTabPage = useCallback(
+    (tabId: string, page: number, options?: { activate?: boolean }) => {
+      // activate=false 用于分屏下跳转到副屏 tab：只跳页不激活，
+      // 否则副屏会被提升为 active，导致两个面板渲染同一 PDF（塌缩）。
+      if (options?.activate !== false) {
+        setActiveTabId(tabId);
+      }
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === tabId
+            ? // Clear scrollTop: this is intentional navigation to a page, and a
+              // stale saved offset would otherwise be re-applied after the jump
+              // by the mount-restore path, snapping the viewer back to the tab's
+              // previous reading spot (docs/REFACTOR_REVIEW_2026-07-17.md #4b).
+              {
+                ...tab,
+                pageNum: page,
+                pendingGotoPage: page,
+                scrollTop: undefined,
+              }
+            : tab
+        )
+      );
+    },
+    []
+  );
 
   const setTabSelection = useCallback(
     (tabId: string, selection: SelectionState | null) => {

@@ -144,7 +144,13 @@ body {
   border-color: #b4d6fb;
 }
 
-.split-view-exit {
+/* 非激活 tab 可拖拽到阅读区并排对照，给出抓取手势提示 */
+.tab-item[draggable="true"] {
+  cursor: grab;
+}
+
+.split-view-exit,
+.split-view-enter {
   margin-left: auto;
   flex-shrink: 0;
   display: inline-flex;
@@ -159,7 +165,8 @@ body {
   font-size: 0.8rem;
 }
 
-.split-view-exit:hover {
+.split-view-exit:hover,
+.split-view-enter:hover {
   background: #f0f0f0;
 }
 
@@ -212,6 +219,25 @@ body {
   display: flex;
   flex: 1;
   overflow: hidden;
+  position: relative;
+}
+
+/* 拖拽 tab 经过主区域时的 drop-zone 遮罩；
+   pointer-events: none 避免遮罩本身触发额外的 dragenter/dragleave */
+.split-drop-overlay {
+  position: absolute;
+  inset: 8px;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 120, 212, 0.08);
+  border: 2px dashed #0078d4;
+  border-radius: 8px;
+  color: #0078d4;
+  font-size: 1rem;
+  font-weight: 600;
+  pointer-events: none;
 }
 
 .pdf-panel {

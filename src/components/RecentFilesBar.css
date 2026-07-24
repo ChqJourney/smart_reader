@@ -217,6 +217,15 @@
   color: #1f1f1f;
 }
 
+.recent-files-split-hint {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-top: 1px solid #f0f0f0;
+  font-size: 0.75rem;
+  color: #8a8f98;
+  line-height: 1.4;
+}
+
 .recent-files-footer {
   flex-shrink: 0;
   display: flex;

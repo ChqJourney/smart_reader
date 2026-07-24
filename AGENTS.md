@@ -16,7 +16,7 @@
 
 - 自定义标题栏（无边框窗口 `decorations: false`）：品牌区拖动 + 最近文件 / 打开 PDF / 设置 + 窗口控制按钮。
 - 首次启动配置向导（SetupWizard）：选平台 → 填 Key → 测试连接，全部平台未配置 Key 时才自动弹出，设置里可重跑。
-- 多 PDF Tab 同时打开（最多 10 个），支持左右分屏并排对照两份 PDF。
+- 多 PDF Tab 同时打开（最多 10 个），支持左右并排对照两份 PDF。进入并排的入口：拖拽非激活 tab 到阅读区（带 drop-zone 遮罩）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
 - PDF 本地渲染、文本选区、缩放、页码跳转、单页 / 连续滚动阅读模式。
 - 全文搜索（Ctrl / Cmd + F，支持跨 text item 短语匹配，结果逐页高亮、Enter / Shift+Enter 前后跳转）。
 - 大纲 / 目录导航面板（PDF 自带 outline 时可用，点击跳转章节）。
@@ -31,7 +31,7 @@
 - LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 按平台分条目存放于系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不再落入 `settings.json`。
 - LLM 请求整体后端代理化（`llm_proxy.rs`）：前端不再直接发起 HTTP 请求，API Key 不进入 webview。
 - 软件自动更新：启动 3 秒后自动检查，设置「关于」页可手动检查；失败仅记日志。
-- 单实例 + 文件关联：通过 `open-pdf` 系统事件打开 PDF（如双击 .pdf 文件）。
+- 单实例 + 文件关联：通过 `open-pdf` 系统事件打开 PDF（如双击 .pdf 文件）；冷启动时丢失的 emit 由后端缓存，前端 listener 就绪后通过 `take_pending_open_pdfs` 取回并打开。
 - i18n 框架接入（i18next + react-i18next）：当前 `lng` 硬编码 `zh-CN`、界面不可切换语言，`en.json` 为预埋；`targetLanguage` 是 LLM 输出语言，与 UI 语言无关。
 
 明确未实现（已规划到后续版本）：
@@ -299,6 +299,7 @@ cd src-tauri && cargo test
 - `chat_completions_stream(params, onEvent: Channel<StreamEvent>)`：LLM 请求后端代理（`llm_proxy.rs`），见 6.3。
 - `cancel_chat_completions(request_id)`：中止进行中的 LLM 流。
 - `test_connection(...)`：测试当前平台配置连通性（配置向导与设置页使用）。
+- `take_pending_open_pdfs()`：返回并清空后端缓存的冷启动待打开 PDF 路径（前端在 `open-pdf` listener 注册完成后调用一次）。
 
 ### 6.2 数据持久化
 
@@ -347,14 +348,14 @@ App.tsx（编排层，具体状态已下沉到 hooks）
 ├── settings / settingsOpen                        # 全局设置与 Modal
 ├── dictionaryStatus                               # 本地 ECDICT 词典状态（存在性、下载进度）
 ├── wizardOpen                                     # 首次启动配置向导（settings 加载后对全部平台 checkApiKey，全未配置才自动弹出；设置里可重跑）
-├── focusedViewer                                  # 分屏时决定 AI 面板跟随哪个 tab
+├── focusedViewer                                  # 分屏时决定选区消费（浮动工具条/暂存/解读）跟随哪个屏；面板暂存与解读记录为双屏合并显示
 └── pdfCacheRef                                    # App 级 PDF bytes 缓存（filePath→Uint8Array），同步给 syncOpenPdfs
 
 App.tsx 还接入：
 ├── TitleBar            # 自定义标题栏（品牌区 data-tauri-drag-region + RecentFilesBar + 打开PDF/设置 + 窗口控制）
 ├── SetupWizard         # 首次启动配置向导
 ├── updater             # 启动 3 秒后 checkForUpdate，失败仅记日志；设置「关于」页可手动检查
-└── `open-pdf` 系统事件监听（单实例 / 文件关联打开 PDF）
+└── `open-pdf` 系统事件监听 + `take_pending_open_pdfs`（单实例 / 文件关联打开 PDF，含冷启动补取）
 （main.tsx 顶层以 ErrorBoundary 包裹整个应用）
 
 PdfViewer.tsx（协调层：UI + 组合 hooks）

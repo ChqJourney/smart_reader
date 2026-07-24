@@ -938,23 +938,33 @@ export function usePersistence({
 
       // Mark each source stash annotation as interpreted, with group size and self index,
       // and link it to the session so the marker can be deleted together with the session.
+      // 片段可能来自不同 PDF（分屏对照解读），按 fileHash 逐桶更新，
+      // 否则第二个文件的 stash 批注不会被标记为已解读，重启后会被加载过滤器丢弃。
       const stashIds = new Set(sources.map((s) => s.id));
-      const fileHash = sources[0]?.source.fileHash;
-      if (!fileHash) return { sessionId, session: streamingSession };
+      const fileHashes = new Set(
+        sources.map((s) => s.source.fileHash).filter(Boolean)
+      );
+      if (fileHashes.size === 0)
+        return { sessionId, session: streamingSession };
 
       setAnnotationsByHash((prev) => {
-        const list = prev[fileHash] || [];
-        const updated = list.map((a) =>
-          a.type === "stash" && a.stashId && stashIds.has(a.stashId)
-            ? {
-                ...a,
-                interpretedGroupSize: sources.length,
-                interpretedIndex: sources.findIndex((s) => s.id === a.stashId),
-                sessionId,
-              }
-            : a
-        );
-        return { ...prev, [fileHash]: updated };
+        const next = { ...prev };
+        for (const fileHash of fileHashes) {
+          const list = next[fileHash] || [];
+          next[fileHash] = list.map((a) =>
+            a.type === "stash" && a.stashId && stashIds.has(a.stashId)
+              ? {
+                  ...a,
+                  interpretedGroupSize: sources.length,
+                  interpretedIndex: sources.findIndex(
+                    (s) => s.id === a.stashId
+                  ),
+                  sessionId,
+                }
+              : a
+          );
+        }
+        return next;
       });
 
       runSessionStream(streamingSession, messageId);
@@ -966,14 +976,15 @@ export function usePersistence({
 
   const handleAddToStash = useCallback(
     (selection: SelectionState, text: string) => {
-      if (!activeTab) return;
+      // 跟随焦点屏：分屏下在副屏选中文本时，暂存归属副屏 tab。
+      if (!focusedTab) return;
 
       const stashItem = createStashItem(
         {
-          tabId: activeTab.id,
-          fileName: activeTab.fileName,
-          filePath: activeTab.filePath,
-          fileHash: activeTab.fileHash,
+          tabId: focusedTab.id,
+          fileName: focusedTab.fileName,
+          filePath: focusedTab.filePath,
+          fileHash: focusedTab.fileHash,
           page: selection.page,
           pdfX: selection.pdfX,
           pdfY: selection.pdfY,
@@ -992,22 +1003,22 @@ export function usePersistence({
           stashId: stashItem.id,
           width: selection.width,
           height: selection.height,
-          fileHash: activeTab.fileHash,
+          fileHash: focusedTab.fileHash,
         }
       );
       setAnnotationsByHash((prev) => {
-        const fileHash = activeTab.fileHash;
+        const fileHash = focusedTab.fileHash;
         const list = prev[fileHash] || [];
         return { ...prev, [fileHash]: [...list, stashAnnotation] };
       });
       openRightPanel();
     },
-    [activeTab, openRightPanel]
+    [focusedTab, openRightPanel]
   );
 
   const handleAddComment = useCallback(
     (selection: SelectionState, text: string) => {
-      if (!activeTab) return;
+      if (!focusedTab) return;
 
       const commentAnnotation = createAnnotation(
         "comment",
@@ -1018,16 +1029,16 @@ export function usePersistence({
         {
           width: selection.width,
           height: selection.height,
-          fileHash: activeTab.fileHash,
+          fileHash: focusedTab.fileHash,
         }
       );
       setAnnotationsByHash((prev) => {
-        const fileHash = activeTab.fileHash;
+        const fileHash = focusedTab.fileHash;
         const list = prev[fileHash] || [];
         return { ...prev, [fileHash]: [...list, commentAnnotation] };
       });
     },
-    [activeTab]
+    [focusedTab]
   );
 
   const handleRemoveStash = useCallback((id: string) => {
@@ -1074,7 +1085,7 @@ export function usePersistence({
 
   const handleCustomInterpret = useCallback(
     (prompt: string, visibleStashes: StashItem[]) => {
-      if (visibleStashes.length === 0 || !activeTab) return;
+      if (visibleStashes.length === 0 || !focusedTab) return;
       const enrichedPrompt = buildCustomInterpretPrompt(
         prompt,
         visibleStashes.map((s) => ({
@@ -1111,12 +1122,12 @@ export function usePersistence({
         return next;
       });
     },
-    [activeTab, startSessionFromStashes]
+    [focusedTab, startSessionFromStashes]
   );
 
   const handleSelectionAction = useCallback(
     (selection: SelectionState, action: SelectionAction, text: string) => {
-      if (!activeTab) return;
+      if (!focusedTab) return;
 
       const newAnnotation = createAnnotation(
         action,
@@ -1125,11 +1136,11 @@ export function usePersistence({
         selection.pdfX,
         selection.pdfY,
         {
-          fileHash: activeTab.fileHash,
+          fileHash: focusedTab.fileHash,
         }
       );
       setAnnotationsByHash((prev) => {
-        const fileHash = activeTab.fileHash;
+        const fileHash = focusedTab.fileHash;
         const list = prev[fileHash] || [];
         return { ...prev, [fileHash]: [...list, newAnnotation] };
       });
@@ -1139,14 +1150,14 @@ export function usePersistence({
           "explain",
           text,
           settingsRef.current.targetLanguage,
-          { fileName: activeTab.fileName, page: selection.page }
+          { fileName: focusedTab.fileName, page: selection.page }
         );
         const sourceStash = createStashItem(
           {
-            tabId: activeTab.id,
-            fileName: activeTab.fileName,
-            filePath: activeTab.filePath,
-            fileHash: activeTab.fileHash,
+            tabId: focusedTab.id,
+            fileName: focusedTab.fileName,
+            filePath: focusedTab.filePath,
+            fileHash: focusedTab.fileHash,
             page: selection.page,
             pdfX: selection.pdfX,
             pdfY: selection.pdfY,
@@ -1161,7 +1172,7 @@ export function usePersistence({
 
         // Link the annotation to the session; persistence is handled by debounced effects.
         setAnnotationsByHash((prev) => {
-          const fileHash = activeTab.fileHash;
+          const fileHash = focusedTab.fileHash;
           const list = prev[fileHash] || [];
           return {
             ...prev,
@@ -1174,7 +1185,7 @@ export function usePersistence({
         });
       }
     },
-    [activeTab, startSessionFromStashes]
+    [focusedTab, startSessionFromStashes]
   );
 
   const handleFollowUp = useCallback(

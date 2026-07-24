@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import PdfViewer, {
   PdfViewerHandle,
@@ -31,6 +32,7 @@ import {
 } from "./services/settings";
 import { getContextWindow, PLATFORM_LIST } from "./data/platformPresets";
 import { copyToClipboard } from "./utils/clipboard";
+import { showMessage } from "./services/dialog";
 import { useDictionaryStatus } from "./hooks/useDictionaryStatus";
 import { checkForUpdate } from "./services/updater";
 import { error } from "./services/logs";
@@ -273,21 +275,62 @@ function App() {
     [splitPct]
   );
 
+  // 拖拽 tab 经过主区域时显示 drop-zone 遮罩。用计数器抵消子元素间移动
+  // 造成的 dragenter/dragleave 抖动；drop / dragend 时兜底复位。
+  const [isDragOver, setIsDragOver] = useState(false);
+  const dragDepthRef = useRef(0);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepthRef.current += 1;
+    setIsDragOver(true);
+  }, []);
+
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
+    setIsDragOver(true);
   }, []);
+
+  const handleDragLeave = useCallback(() => {
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDragOver(false);
+  }, []);
+
+  const resetDragOver = useCallback(() => {
+    dragDepthRef.current = 0;
+    setIsDragOver(false);
+  }, []);
+
+  useEffect(() => {
+    if (!isDragOver) return;
+    window.addEventListener("dragend", resetDragOver);
+    window.addEventListener("drop", resetDragOver);
+    return () => {
+      window.removeEventListener("dragend", resetDragOver);
+      window.removeEventListener("drop", resetDragOver);
+    };
+  }, [isDragOver, resetDragOver]);
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
+      resetDragOver();
       const draggedTabId = e.dataTransfer.getData("text/plain");
       if (!draggedTabId || draggedTabId === tabs.activeTabId) return;
       if (!tabs.tabs.some((t) => t.id === draggedTabId)) return;
       splitView.enterSplitView(draggedTabId);
     },
-    [tabs, splitView]
+    [tabs, splitView, resetDragOver]
   );
+
+  // tab 栏「并排对照」入口：取下一个非激活 tab 作为副屏。
+  const handleEnterSplit = useCallback(() => {
+    const activeIndex = tabs.tabs.findIndex((t) => t.id === tabs.activeTabId);
+    const nextTab = tabs.tabs[(activeIndex + 1) % tabs.tabs.length];
+    if (!nextTab || nextTab.id === tabs.activeTabId) return;
+    splitView.enterSplitView(nextTab.id);
+  }, [tabs, splitView]);
 
   // 把 tab 栏上的纵向滚轮转换为横向滚动，方便用鼠标滚轮浏览溢出的 tab。
   const handleTabBarWheel = useCallback((e: React.WheelEvent) => {
@@ -308,6 +351,7 @@ function App() {
 
   // Listen for system-driven PDF open requests (single-instance file association).
   useEffect(() => {
+    let cancelled = false;
     let unsubscribe: (() => void) | undefined;
     listen<string>("open-pdf", (event) => {
       const path = event.payload;
@@ -316,12 +360,33 @@ function App() {
       });
     })
       .then((unsub) => {
+        if (cancelled) {
+          unsub();
+          return;
+        }
         unsubscribe = unsub;
+        // 冷启动时后端的 open-pdf emit 可能先于本 listener 注册而丢失，
+        // 对应路径会被后端缓存；listener 就绪后取回（并清空）这批路径。
+        invoke<string[]>("take_pending_open_pdfs")
+          .then((paths) => {
+            if (cancelled || !Array.isArray(paths)) return;
+            for (const path of paths) {
+              openPdfByPathRef.current(path).then((tab) => {
+                if (tab) addRecentFileRef.current(tab.filePath, tab.fileName);
+              });
+            }
+          })
+          .catch(() => {
+            // ignore: in non-Tauri test environments the command is unavailable
+          });
       })
       .catch(() => {
         // ignore: in non-Tauri test environments the event bridge is not available
       });
-    return () => unsubscribe?.();
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
   }, []);
 
   const handleSecondaryViewerStateChange = useCallback(
@@ -385,14 +450,20 @@ function App() {
       const tab = await tabs.openPdfByPath(file.path, file.lastPage);
       if (!tab) return;
       recentFiles.addRecentFile(tab.filePath, tab.fileName);
-      // 没有主视图，或目标就是主视图本身时无法对照，保持普通打开
-      if (!primaryId || tab.id === primaryId) return;
+      // 没有主视图，或目标就是主视图本身时无法对照，明确提示而非静默降级
+      if (!primaryId || tab.id === primaryId) {
+        await showMessage(
+          t("common.notice"),
+          t("recentFiles.splitUnavailable")
+        );
+        return;
+      }
       // openPdfByPath 会激活目标 tab；先把主视图切回原 tab，再将其设为副屏
       tabs.handleTabClick(primaryId);
       splitView.enterSplitView(tab.id);
       setFocusedViewer("secondary");
     },
-    [tabs, recentFiles, splitView]
+    [tabs, recentFiles, splitView, t]
   );
 
   const handleTabClick = useCallback(
@@ -476,62 +547,80 @@ function App() {
         width: position.width,
         height: position.height,
       });
+      // 在哪屏产生选区，焦点跟到哪屏：否则在副屏选中后浮动工具条
+      // 仍消费主屏选区，暂存/解读会落到错误的 tab。
+      if (splitView.isSplitView) {
+        if (tabId === splitView.secondaryTabId) {
+          setFocusedViewer("secondary");
+        } else if (tabId === tabs.activeTabId) {
+          setFocusedViewer("primary");
+        }
+      }
     },
-    [tabs]
+    [tabs, splitView.isSplitView, splitView.secondaryTabId]
   );
 
-  const activeSelection = tabs.activeTab?.selection ?? null;
+  // 选区消费跟随焦点屏（非分屏时 focusedTab 即 activeTab）。
+  const focusedSelection = focusedTab?.selection ?? null;
 
   const handleAddToStash = useCallback(
     (text: string) => {
-      if (!activeSelection || !tabs.activeTab) return;
-      persistence.handleAddToStash(activeSelection, text);
-      tabs.clearTabSelection(tabs.activeTab.id);
+      if (!focusedSelection || !focusedTab) return;
+      persistence.handleAddToStash(focusedSelection, text);
+      tabs.clearTabSelection(focusedTab.id);
     },
-    [activeSelection, persistence, tabs]
+    [focusedSelection, focusedTab, persistence, tabs]
   );
 
   const handleSelectionAction = useCallback(
     (action: SelectionAction, text: string) => {
-      if (!activeSelection || !tabs.activeTab) return;
-      persistence.handleSelectionAction(activeSelection, action, text);
-      tabs.clearTabSelection(tabs.activeTab.id);
+      if (!focusedSelection || !focusedTab) return;
+      persistence.handleSelectionAction(focusedSelection, action, text);
+      tabs.clearTabSelection(focusedTab.id);
     },
-    [activeSelection, persistence, tabs]
+    [focusedSelection, focusedTab, persistence, tabs]
   );
 
   const handleCopy = useCallback(
     (text: string) => {
-      if (!tabs.activeTab) return;
+      if (!focusedTab) return;
       // `void` + `.catch`: copyToClipboard falls back to execCommand('copy')
       // which throws when it fails — surface the failure to the log instead of
       // letting it become an unhandled promise rejection.
       void copyToClipboard(text).catch((err) => {
         error(`Failed to copy selection: ${err}`);
       });
-      tabs.clearTabSelection(tabs.activeTab.id);
+      tabs.clearTabSelection(focusedTab.id);
     },
-    [tabs]
+    [focusedTab, tabs]
   );
 
   const handleAddComment = useCallback(
     (text: string) => {
-      if (!activeSelection || !tabs.activeTab) return;
-      persistence.handleAddComment(activeSelection, text);
-      tabs.clearTabSelection(tabs.activeTab.id);
+      if (!focusedSelection || !focusedTab) return;
+      persistence.handleAddComment(focusedSelection, text);
+      tabs.clearTabSelection(focusedTab.id);
     },
-    [activeSelection, persistence, tabs]
+    [focusedSelection, focusedTab, persistence, tabs]
   );
 
   const handleGotoStash = useCallback(
     (stash: StashItem) => {
+      // 分屏下跳转到副屏 tab 用不激活版本，避免副屏被提升为 active
+      // 导致两个面板渲染同一 PDF（塌缩）。
+      if (
+        splitView.isSplitView &&
+        stash.source.tabId === splitView.secondaryTabId
+      ) {
+        tabs.gotoTabPage(stash.source.tabId, stash.source.page, {
+          activate: false,
+        });
+        setFocusedViewer("secondary");
+        return;
+      }
       tabs.gotoTabPage(stash.source.tabId, stash.source.page);
-      if (splitView.isSplitView) {
-        if (stash.source.tabId === tabs.activeTabId) {
-          setFocusedViewer("primary");
-        } else if (stash.source.tabId === splitView.secondaryTabId) {
-          setFocusedViewer("secondary");
-        }
+      if (splitView.isSplitView && stash.source.tabId === tabs.activeTabId) {
+        setFocusedViewer("primary");
       }
     },
     [tabs, splitView.isSplitView, splitView.secondaryTabId]
@@ -547,13 +636,14 @@ function App() {
       if (!source) return;
       const targetTab = tabs.tabs.find((t) => t.fileHash === source.fileHash);
       if (!targetTab) return;
+      if (splitView.isSplitView && targetTab.id === splitView.secondaryTabId) {
+        tabs.gotoTabPage(targetTab.id, source.page, { activate: false });
+        setFocusedViewer("secondary");
+        return;
+      }
       tabs.gotoTabPage(targetTab.id, source.page);
-      if (splitView.isSplitView) {
-        if (targetTab.id === tabs.activeTabId) {
-          setFocusedViewer("primary");
-        } else if (targetTab.id === splitView.secondaryTabId) {
-          setFocusedViewer("secondary");
-        }
+      if (splitView.isSplitView && targetTab.id === tabs.activeTabId) {
+        setFocusedViewer("primary");
       }
     },
     [tabs, splitView.isSplitView, splitView.secondaryTabId]
@@ -637,7 +727,11 @@ function App() {
                   : ""
               }`}
               onClick={() => handleTabClick(tab.id)}
-              title={tab.fileName}
+              title={
+                tab.id !== tabs.activeTabId
+                  ? `${tab.fileName}\n${t("tab.dragToSplit")}`
+                  : tab.fileName
+              }
               draggable={tab.id !== tabs.activeTabId}
               onDragStart={(e) => {
                 e.dataTransfer.setData("text/plain", tab.id);
@@ -655,6 +749,17 @@ function App() {
               </button>
             </div>
           ))}
+          {!splitView.isSplitView && tabs.tabs.length >= 2 && (
+            <button
+              className="icon-btn split-view-enter"
+              onClick={handleEnterSplit}
+              aria-label={t("app.enterSplitView")}
+              title={t("app.enterSplitView")}
+            >
+              <Icon name="panel-right" size={14} />
+              <span>{t("app.enterSplitView")}</span>
+            </button>
+          )}
           {splitView.isSplitView && (
             <button
               className="icon-btn split-view-exit"
@@ -672,9 +777,16 @@ function App() {
       <main
         className="app-main"
         ref={layout.mainRef}
+        onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
+        {isDragOver && (
+          <div className="split-drop-overlay">
+            <span>{t("app.dropToSplit")}</span>
+          </div>
+        )}
         {splitView.isSplitView ? (
           <>
             <div
@@ -758,8 +870,8 @@ function App() {
                   style={{ width: `${layout.rightPct}%` }}
                 >
                   <AiChatPanel
-                    stashes={persistence.focusedTabStashes}
-                    sessions={persistence.focusedTabSessions}
+                    stashes={persistence.visibleTabStashes}
+                    sessions={persistence.visibleTabSessions}
                     expandedSessionId={persistence.findSessionIdByAnnotationId(
                       tabs.activeTab?.highlightedAnnotationId ?? ""
                     )}
@@ -846,8 +958,8 @@ function App() {
                 }
               >
                 <AiChatPanel
-                  stashes={persistence.focusedTabStashes}
-                  sessions={persistence.focusedTabSessions}
+                  stashes={persistence.visibleTabStashes}
+                  sessions={persistence.visibleTabSessions}
                   expandedSessionId={persistence.findSessionIdByAnnotationId(
                     tabs.activeTab?.highlightedAnnotationId ?? ""
                   )}
@@ -889,8 +1001,8 @@ function App() {
             {layout.rightVisible ? (
               <div className="right-panel expanded" style={{ flex: 1 }}>
                 <AiChatPanel
-                  stashes={persistence.focusedTabStashes}
-                  sessions={persistence.focusedTabSessions}
+                  stashes={persistence.visibleTabStashes}
+                  sessions={persistence.visibleTabSessions}
                   expandedSessionId={persistence.findSessionIdByAnnotationId(
                     tabs.activeTab?.highlightedAnnotationId ?? ""
                   )}
@@ -939,14 +1051,14 @@ function App() {
         />
       )}
       <SelectionToolbar
-        selection={activeSelection}
+        selection={focusedSelection}
         onAction={handleSelectionAction}
         onAddToStash={handleAddToStash}
         onCopy={handleCopy}
         onAddComment={handleAddComment}
         onDismiss={() => {
-          if (tabs.activeTab) {
-            tabs.clearTabSelection(tabs.activeTab.id);
+          if (focusedTab) {
+            tabs.clearTabSelection(focusedTab.id);
           }
         }}
       />

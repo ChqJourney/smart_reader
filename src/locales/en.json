@@ -24,7 +24,7 @@
     "previousPage": "Previous Page",
     "nextPage": "Next Page",
     "pageNumber": "Page Number",
-    "pageNumberHint": "Enter a page number and press Enter to jump",
+    "pageNumberHint": "Click to open the go-to-page panel (Ctrl/Cmd+G)",
     "fitToWidth": "Fit to Width",
     "zoomOut": "Zoom Out",
     "zoomIn": "Zoom In",
@@ -43,7 +43,10 @@
     "noSearchResults": "No matches",
     "previousSearchMatch": "Previous Match",
     "nextSearchMatch": "Next Match",
-    "closeSearch": "Close Search"
+    "closeSearch": "Close Search",
+    "jumpToPage": "Go to page",
+    "jumpToPageHint": "Type a page number and press Enter to jump",
+    "pageRail": "Page rail"
   },
   "panel": {
     "hide": "Hide Panel"

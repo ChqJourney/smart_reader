@@ -108,9 +108,11 @@ async function jumpToPage(
   target: number,
   settleTimeout = JUMP_SETTLE_TIMEOUT
 ) {
-  const pageInput = page.getByLabel("页码");
-  await pageInput.fill(String(target));
-  await pageInput.press("Enter");
+  // 工具栏页码按钮 → 打开跳页面板 → 输入页码回车
+  await page.getByLabel("页码").click();
+  const jumpInput = page.getByLabel("跳转到页");
+  await jumpInput.fill(String(target));
+  await jumpInput.press("Enter");
   await page.waitForTimeout(settleTimeout);
 }
 
@@ -128,7 +130,7 @@ test.describe("PDF continuous mode page jump", () => {
 
     await jumpToPage(page, 5);
 
-    await expect(pageInput).toHaveValue("5");
+    await expect(pageInput).toHaveText("5");
     expect(await getVisiblePage(page)).toBe(5);
   });
 
@@ -141,11 +143,11 @@ test.describe("PDF continuous mode page jump", () => {
     await expect(pageInput).toBeVisible();
 
     await jumpToPage(page, 8);
-    await expect(pageInput).toHaveValue("8");
+    await expect(pageInput).toHaveText("8");
     expect(await getVisiblePage(page)).toBe(8);
 
     await jumpToPage(page, 3);
-    await expect(pageInput).toHaveValue("3");
+    await expect(pageInput).toHaveText("3");
     expect(await getVisiblePage(page)).toBe(3);
   });
 
@@ -162,7 +164,7 @@ test.describe("PDF continuous mode page jump", () => {
     await jumpToPage(page, 6, 400);
     await jumpToPage(page, 2, 1000);
 
-    await expect(pageInput).toHaveValue("2");
+    await expect(pageInput).toHaveText("2");
     expect(await getVisiblePage(page)).toBe(2);
   });
 
@@ -174,7 +176,7 @@ test.describe("PDF continuous mode page jump", () => {
     await expect(pageInput).toBeVisible();
 
     await jumpToPage(page, 5);
-    await expect(pageInput).toHaveValue("5");
+    await expect(pageInput).toHaveText("5");
     expect(await getVisiblePage(page)).toBe(5);
   });
 
@@ -194,7 +196,7 @@ test.describe("PDF continuous mode page jump", () => {
 
     await jumpToPage(page, 5);
 
-    await expect(pageInput).toHaveValue("5");
+    await expect(pageInput).toHaveText("5");
     expect(await getVisiblePage(page)).toBe(5);
   });
 
@@ -205,11 +207,13 @@ test.describe("PDF continuous mode page jump", () => {
 
     const pageInput = page.getByLabel("页码");
     await expect(pageInput).toBeVisible();
-    await expect(pageInput).toHaveValue("1");
+    await expect(pageInput).toHaveText("1");
 
     const target = 5;
-    await pageInput.fill(String(target));
-    await pageInput.press("Enter");
+    await pageInput.click();
+    const jumpInput = page.getByLabel("跳转到页");
+    await jumpInput.fill(String(target));
+    await jumpInput.press("Enter");
 
     // Poll the input value for several seconds. After it first reaches the
     // requested page it must never drift to a different page; any drift
@@ -217,7 +221,7 @@ test.describe("PDF continuous mode page jump", () => {
     const sequence: string[] = [];
     const start = Date.now();
     while (Date.now() - start < 2500) {
-      const value = await pageInput.inputValue();
+      const value = (await pageInput.textContent()) ?? "";
       if (sequence[sequence.length - 1] !== value) {
         sequence.push(value);
       }
@@ -229,5 +233,95 @@ test.describe("PDF continuous mode page jump", () => {
     const afterTarget = sequence.slice(targetIndex + 1);
     expect(afterTarget).toEqual([]);
     expect(await getVisiblePage(page)).toBe(target);
+  });
+});
+
+test.describe("PDF jump panel and page rail", () => {
+  test.beforeEach(async ({ page }) => {
+    await setupTauriMock(page);
+    await page.goto("/");
+  });
+
+  test("Ctrl+G opens the jump panel, Enter jumps and flashes the page number", async ({
+    page,
+  }) => {
+    await page.getByTestId("open-pdf-btn").click();
+
+    const pageInput = page.getByLabel("页码");
+    await expect(pageInput).toBeVisible();
+
+    await page.keyboard.press("Control+g");
+    const jumpInput = page.getByLabel("跳转到页");
+    await expect(jumpInput).toBeVisible();
+
+    await jumpInput.fill("5");
+    await jumpInput.press("Enter");
+
+    // 跳转生效、面板关闭、闪卡出现随后消失
+    await expect(pageInput).toHaveText("5");
+    expect(await getVisiblePage(page)).toBe(5);
+    await expect(jumpInput).toBeHidden();
+
+    const flash = page.locator(".pdf-page-flash");
+    await expect(flash).toHaveText("5");
+    await expect(flash).toBeHidden({ timeout: 2000 });
+  });
+
+  test("Escape closes the jump panel without jumping", async ({ page }) => {
+    await page.getByTestId("open-pdf-btn").click();
+
+    const pageInput = page.getByLabel("页码");
+    await expect(pageInput).toBeVisible();
+    await expect(pageInput).toHaveText("1");
+
+    await page.keyboard.press("Control+g");
+    const jumpInput = page.getByLabel("跳转到页");
+    await expect(jumpInput).toBeVisible();
+    await jumpInput.fill("4");
+    await page.keyboard.press("Escape");
+
+    await expect(jumpInput).toBeHidden();
+    await expect(pageInput).toHaveText("1");
+  });
+
+  test("dragging the page rail scrolls to the target page", async ({
+    page,
+  }) => {
+    await page.getByTestId("open-pdf-btn").click();
+
+    const pageInput = page.getByLabel("页码");
+    await expect(pageInput).toBeVisible();
+
+    const rail = page.locator(".page-rail");
+    await expect(rail).toBeVisible();
+
+    // 总页数从工具栏 "/ N" 读出
+    const infoText = await page.locator(".page-info").innerText();
+    const total = parseInt(infoText.match(/\/\s*(\d+)/)![1], 10);
+    expect(total).toBeGreaterThan(1);
+
+    // 拖到滑轨最底部 → 最后一页；拖动中 tooltip 可见
+    const box = (await rail.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + 10);
+    await page.mouse.down();
+    await expect(page.locator(".page-rail-tip")).toBeVisible();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height, {
+      steps: 10,
+    });
+    await page.mouse.up();
+    await page.waitForTimeout(JUMP_SETTLE_TIMEOUT);
+
+    await expect(pageInput).toHaveText(String(total));
+    expect(await getVisiblePage(page)).toBe(total);
+
+    // 拖回顶部 → 第 1 页
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height - 10);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2, box.y, { steps: 10 });
+    await page.mouse.up();
+    await page.waitForTimeout(JUMP_SETTLE_TIMEOUT);
+
+    await expect(pageInput).toHaveText("1");
+    expect(await getVisiblePage(page)).toBe(1);
   });
 });

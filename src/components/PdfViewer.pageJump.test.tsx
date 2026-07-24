@@ -165,7 +165,13 @@ describe("computeContinuousScrollTop", () => {
 
     // Page 3 top = (page1 height + spacing) + (page2 height + spacing)
     //            = (200 + 24) + (250 + 24) = 498
-    const top = computeContinuousScrollTop(3, container, () => null, viewports, 1);
+    const top = computeContinuousScrollTop(
+      3,
+      container,
+      () => null,
+      viewports,
+      1
+    );
 
     expect(top).toBe(498);
   });
@@ -180,7 +186,13 @@ describe("computeContinuousScrollTop", () => {
     ]);
 
     // Page 3 top = (200*2 + 24) + (250*2 + 24) = 424 + 524 = 948
-    const top = computeContinuousScrollTop(3, container, () => null, viewports, 2);
+    const top = computeContinuousScrollTop(
+      3,
+      container,
+      () => null,
+      viewports,
+      2
+    );
 
     expect(top).toBe(948);
   });
@@ -312,8 +324,8 @@ describe("PdfViewer continuous mode page jump", () => {
     );
 
     // Wait until the viewer has loaded the PDF and viewports are ready.
-    const pageInput = await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    const pageInput = await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
@@ -321,22 +333,25 @@ describe("PdfViewer continuous mode page jump", () => {
     });
     await waitForViewportsReady(container);
 
-    expect(pageInput.value).toBe("1");
+    expect(pageInput.textContent).toBe("1");
 
     const targetPage = 5;
 
-    // Simulate the user typing a page number and pressing Enter.
-    fireEvent.change(pageInput, { target: { value: String(targetPage) } });
-    fireEvent.keyDown(pageInput, { key: "Enter", code: "Enter" });
+    // Simulate the user opening the jump panel, typing a page number and
+    // pressing Enter.
+    fireEvent.click(pageInput);
+    const jumpInput = screen.getByLabelText("跳转到页");
+    fireEvent.change(jumpInput, { target: { value: String(targetPage) } });
+    fireEvent.keyDown(jumpInput, { key: "Enter", code: "Enter" });
 
     // Wait for the jump to be processed (smooth scroll is mocked, but the
     // component still holds a jump lock for a short period).
     await waitFor(() => {
-      expect(pageInput.value).toBe(String(targetPage));
+      expect(pageInput.textContent).toBe(String(targetPage));
     });
 
     // Verify the displayed page number matches the requested page.
-    expect(pageInput.value).toBe(String(targetPage));
+    expect(pageInput.textContent).toBe(String(targetPage));
 
     // Verify the container was scrolled to the exact position that puts the
     // target page at the top of the viewport.
@@ -356,8 +371,8 @@ describe("PdfViewer continuous mode page jump", () => {
     );
 
     // Wait until the viewer has loaded the PDF and viewports are ready.
-    await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
@@ -400,8 +415,8 @@ describe("PdfViewer continuous mode page jump", () => {
       <PdfViewer filePath="/fake/test.pdf" settings={DEFAULT_SETTINGS} />
     );
 
-    const pageInput = await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    const pageInput = await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
@@ -411,14 +426,14 @@ describe("PdfViewer continuous mode page jump", () => {
     // scrollTop values, which require the viewport batch to be committed.
     await waitForViewportsReady(container);
 
-    expect(pageInput.value).toBe("1");
+    expect(pageInput.textContent).toBe("1");
 
     const nextButton = screen.getByLabelText("下一页");
     const prevButton = screen.getByLabelText("上一页");
 
     fireEvent.click(nextButton);
     await waitFor(() => {
-      expect(pageInput.value).toBe("2");
+      expect(pageInput.textContent).toBe("2");
     });
 
     const canvasContainer = container.querySelector(
@@ -429,7 +444,7 @@ describe("PdfViewer continuous mode page jump", () => {
 
     fireEvent.click(prevButton);
     await waitFor(() => {
-      expect(pageInput.value).toBe("1");
+      expect(pageInput.textContent).toBe("1");
     });
     expect(canvasContainer!.scrollTop).toBe(expectedScrollTopForPage(1));
   });
@@ -442,8 +457,8 @@ describe("PdfViewer continuous mode page jump", () => {
       <PdfViewer filePath="/fake/test.pdf" settings={DEFAULT_SETTINGS} />
     );
 
-    const pageInput = await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    const pageInput = await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
@@ -530,7 +545,7 @@ describe("PdfViewer continuous mode page jump", () => {
     });
     act(flushRaf);
 
-    expect(pageInput.value).toBe("3");
+    expect(pageInput.textContent).toBe("3");
 
     vi.useRealTimers();
     globalThis.requestAnimationFrame = originalRAF;
@@ -583,8 +598,8 @@ describe("PdfViewer continuous mode page jump", () => {
 
     render(<PdfViewer filePath="/fake/test.pdf" settings={DEFAULT_SETTINGS} />);
 
-    const pageInput = await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    const pageInput = await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
@@ -592,10 +607,12 @@ describe("PdfViewer continuous mode page jump", () => {
     });
 
     // Navigate to page 3 first.
-    fireEvent.change(pageInput, { target: { value: "3" } });
-    fireEvent.keyDown(pageInput, { key: "Enter", code: "Enter" });
+    fireEvent.click(pageInput);
+    const jumpInput = screen.getByLabelText("跳转到页");
+    fireEvent.change(jumpInput, { target: { value: "3" } });
+    fireEvent.keyDown(jumpInput, { key: "Enter", code: "Enter" });
     await waitFor(() => {
-      expect(pageInput.value).toBe("3");
+      expect(pageInput.textContent).toBe("3");
     });
 
     fireEvent.keyDown(window, { key: "f", code: "KeyF", ctrlKey: true });
@@ -641,8 +658,8 @@ describe("PdfViewer continuous mode page jump", () => {
 
     render(<PdfViewer filePath="/fake/test.pdf" settings={DEFAULT_SETTINGS} />);
 
-    await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
@@ -692,8 +709,8 @@ describe("PdfViewer continuous mode page jump", () => {
       paddingLeft: "24px",
     } as CSSStyleDeclaration);
 
-    const pageInput = await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    const pageInput = await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
@@ -710,7 +727,7 @@ describe("PdfViewer continuous mode page jump", () => {
     });
 
     // 页码不变：仍是 initialState 恢复的第 3 页。
-    expect(pageInput.value).toBe("3");
+    expect(pageInput.textContent).toBe("3");
   });
 
   it("auto fits to width in single mode when autoFitToWidth is set, keeping the page number", async () => {
@@ -735,8 +752,8 @@ describe("PdfViewer continuous mode page jump", () => {
       paddingLeft: "24px",
     } as CSSStyleDeclaration);
 
-    const pageInput = await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    const pageInput = await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
@@ -748,6 +765,6 @@ describe("PdfViewer continuous mode page jump", () => {
       expect(scaleInput.value).toBe("176%");
     });
 
-    expect(pageInput.value).toBe("3");
+    expect(pageInput.textContent).toBe("3");
   });
 });

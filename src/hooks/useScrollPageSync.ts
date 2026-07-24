@@ -98,6 +98,10 @@ export function useScrollPageSync(
 
     let cancelled = false;
     let debounceTimeout: ReturnType<typeof setTimeout> | null = null;
+    // 滚动停息后的重算在 jump/zoom 锁仍持有时会延后重试，用尝试次数上限
+    // 防止锁因异常长期不释放导致无限定时循环（约 100 * 100ms = 10s）。
+    let settleAttempts = 0;
+    const MAX_SETTLE_ATTEMPTS = 100;
 
     const computeAndSyncPage = (): number => {
       const container = continuousContainerRef.current;
@@ -154,25 +158,27 @@ export function useScrollPageSync(
       return bestPage;
     };
 
-    const updateVisiblePage = () => {
-      if (cancelled || isJumpingRef.current || isZoomingRef.current) return;
-      // Update pageNum IMMEDIATELY. setPageNum uses a functional update that
-      // bails out when the page hasn't changed, so only cross-page transitions
-      // trigger a re-render. The previous version only called setPageNum
-      // inside the 100ms debounce below; its cleanup on unmount cancelled the
-      // pending update, so switching tabs within that window left tab.pageNum
-      // stale and the viewer restored to the wrong page on return (issue 10.1).
-      const bestPage = computeAndSyncPage();
-      // Debounce only the scrollTop reporting (high-frequency, less critical
-      // than the page number which is already reported via the onStateChange
-      // effect reacting to pageNum).
+    // 滚动停息后重算页码并上报 scrollTop。两个收敛保证：
+    // 1. 滚动爆发期间（如 PageRail 拖拽瞬间跨越多页）IntersectionObserver 的
+    //    可见比例还是旧值，即时计算会把未观测到的目标页跳过；停下 100ms 后
+    //    observer 已回调，重算收敛到正确页。
+    // 2. 滚动事件发生在 jump/zoom 锁持有期间（如挂载恢复等待 viewport 加载）
+    //    会被即时计算丢弃；锁释放前重试，保证解锁后仍能收敛（有次数上限）。
+    const scheduleSettle = () => {
       if (debounceTimeout) clearTimeout(debounceTimeout);
       debounceTimeout = setTimeout(() => {
         requestAnimationFrame(() => {
+          if (cancelled) return;
+          if (isJumpingRef.current || isZoomingRef.current) {
+            settleAttempts += 1;
+            if (settleAttempts < MAX_SETTLE_ATTEMPTS) scheduleSettle();
+            return;
+          }
+          const settledPage = computeAndSyncPage();
           const container = continuousContainerRef.current;
           if (container) {
             onStateChange?.({
-              pageNum: bestPage,
+              pageNum: settledPage,
               scale,
               viewMode,
               scrollTop: container.scrollTop,
@@ -180,6 +186,24 @@ export function useScrollPageSync(
           }
         });
       }, 100);
+    };
+
+    const updateVisiblePage = () => {
+      if (cancelled) return;
+      // Update pageNum IMMEDIATELY (unless a programmatic jump / zoom reflow
+      // holds the lock — those events are settled later by scheduleSettle).
+      // setPageNum uses a functional update that bails out when the page
+      // hasn't changed, so only cross-page transitions re-render. The previous
+      // version only called setPageNum inside the 100ms debounce below; its
+      // cleanup on unmount cancelled the pending update, so switching tabs
+      // within that window left tab.pageNum stale and the viewer restored to
+      // the wrong page on return (issue 10.1).
+      // computeAndSyncPage 内部已 setPageNum（函数式更新，页不变时 bail out）。
+      settleAttempts = 0;
+      if (!isJumpingRef.current && !isZoomingRef.current) computeAndSyncPage();
+      // scrollTop 上报与锁释放后的收敛重算都走停息防抖（高频，且页码已通过
+      // pageNum 的 onStateChange effect 上报）。
+      scheduleSettle();
     };
 
     container.addEventListener("scroll", updateVisiblePage);

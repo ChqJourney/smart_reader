@@ -122,8 +122,8 @@ describe("PdfViewer tab state isolation", () => {
       />
     );
 
-    await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
@@ -157,8 +157,8 @@ describe("PdfViewer tab state isolation", () => {
       />
     );
 
-    await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
@@ -199,8 +199,8 @@ describe("PdfViewer tab state isolation", () => {
       />
     );
 
-    const pageInput = await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    const pageInput = await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
@@ -208,7 +208,7 @@ describe("PdfViewer tab state isolation", () => {
     });
 
     await waitFor(() => {
-      expect(pageInput.value).toBe(String(targetPage));
+      expect(pageInput.textContent).toBe(String(targetPage));
     });
 
     const canvasContainer = container.querySelector(
@@ -235,8 +235,8 @@ describe("PdfViewer tab state isolation", () => {
       />
     );
 
-    await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
@@ -295,8 +295,8 @@ describe("PdfViewer tab state isolation", () => {
       container.querySelector(".pdf-canvas-container.continuous")
     )) as HTMLDivElement;
 
-    await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
@@ -468,9 +468,9 @@ describe("PdfViewer tab state isolation", () => {
     // Unblock the viewport loads: the restore must complete on page 3 with
     // the exact saved scroll position.
     pageResolvers.splice(0).forEach((resolve) => resolve());
-    const pageInput = screen.getByLabelText("页码") as HTMLInputElement;
+    const pageInput = screen.getByLabelText("页码") as HTMLButtonElement;
     await waitFor(() => {
-      expect(pageInput.value).toBe("3");
+      expect(pageInput.textContent).toBe("3");
     });
     await waitFor(() => {
       expect(canvasContainer.scrollTop).toBe(expectedScrollTopForPage(3));
@@ -501,15 +501,15 @@ describe("PdfViewer tab state isolation", () => {
       />
     );
 
-    const pageInput = await waitFor<HTMLInputElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLInputElement;
+    const pageInput = await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
       if (!input || input.disabled) {
         throw new Error("page input not ready yet");
       }
       return input;
     });
     await waitFor(() => {
-      expect(pageInput.value).toBe("3");
+      expect(pageInput.textContent).toBe("3");
     });
 
     // The record now says page 1 (clobbered). The viewer must ignore it.
@@ -522,6 +522,6 @@ describe("PdfViewer tab state isolation", () => {
       />
     );
     await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(pageInput.value).toBe("3");
+    expect(pageInput.textContent).toBe("3");
   });
 });

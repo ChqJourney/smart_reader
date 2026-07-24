@@ -148,10 +148,11 @@ async function jumpToPage(
   target: number,
   settleTimeout = 1500
 ) {
-  const pageInput = page.getByLabel("页码");
-  await pageInput.click();
-  await pageInput.fill(String(target));
-  await pageInput.press("Enter");
+  // 工具栏页码按钮 → 打开跳页面板 → 输入页码回车
+  await page.getByLabel("页码").click();
+  const jumpInput = page.getByLabel("跳转到页");
+  await jumpInput.fill(String(target));
+  await jumpInput.press("Enter");
   await page.waitForTimeout(settleTimeout);
 }
 
@@ -229,7 +230,7 @@ test.describe("Large document (>50 pages) zoom / fit / tab restore", () => {
     const sequence: string[] = [];
     const start = Date.now();
     while (Date.now() - start < 2500) {
-      const value = await pageInput.inputValue();
+      const value = (await pageInput.textContent()) ?? "";
       if (sequence[sequence.length - 1] !== value) {
         sequence.push(value);
       }
@@ -266,9 +267,7 @@ test.describe("Large document (>50 pages) zoom / fit / tab restore", () => {
     await page.locator(".tab-item", { hasText: "sample-long.pdf" }).click();
 
     const pageInput = page.getByLabel("页码");
-    await expect(pageInput).toHaveValue("40", { timeout: 15000 });
-    await expect
-      .poll(() => getVisiblePage(page), { timeout: 15000 })
-      .toBe(40);
+    await expect(pageInput).toHaveText("40", { timeout: 15000 });
+    await expect.poll(() => getVisiblePage(page), { timeout: 15000 }).toBe(40);
   });
 });

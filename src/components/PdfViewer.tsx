@@ -16,6 +16,8 @@ import { AppSettings } from "../services/settings";
 import { error as logError } from "../services/logs";
 import Icon from "./Icon";
 import PdfPage from "./PdfPage";
+import PageRail from "./PageRail";
+import PageJumpPanel from "./PageJumpPanel";
 import {
   computeFitToWidthScale,
   computeCenteredScrollLeft,
@@ -24,7 +26,10 @@ import { useSearchDomain } from "../hooks/useSearchDomain";
 import { getBasename } from "../utils/path";
 import { usePdfDocument, type OutlineItem } from "../hooks/usePdfDocument";
 import { useZoomAnchor } from "../hooks/useZoomAnchor";
-import { useViewportManager, type PageViewportInfo } from "../hooks/useViewportManager";
+import {
+  useViewportManager,
+  type PageViewportInfo,
+} from "../hooks/useViewportManager";
 import { useScrollPageSync } from "../hooks/useScrollPageSync";
 import { useTabRestore } from "../hooks/useTabRestore";
 import "./PdfViewer.css";
@@ -218,15 +223,16 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     const [viewMode, setViewMode] = useState<"single" | "continuous">(
       initialState?.viewMode ?? "continuous"
     );
-    const [pageInput, setPageInput] = useState(String(pageNum));
     const [scaleInput, setScaleInput] = useState(
       `${Math.round((initialState?.scale ?? 1.5) * 100)}%`
     );
     const [outlineOpen, setOutlineOpen] = useState(false);
+    // Cmd/Ctrl+G 跳页面板与跳页大数字闪卡。
+    const [jumpOpen, setJumpOpen] = useState(false);
+    const [flashPage, setFlashPage] = useState<number | null>(null);
 
     const singleContainerRef = useRef<HTMLDivElement>(null);
     const continuousContainerRef = useRef<HTMLDivElement>(null);
-    const pageInputRef = useRef<HTMLInputElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const scaleInputRef = useRef<HTMLInputElement>(null);
     const isJumpingRef = useRef(false);
@@ -303,11 +309,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       },
       []
     );
-    const {
-      zoomTo,
-      captureCursorAnchor,
-      isZoomingRef,
-    } = useZoomAnchor({
+    const { zoomTo, captureCursorAnchor, isZoomingRef } = useZoomAnchor({
       viewMode,
       scale,
       pageViewports,
@@ -364,13 +366,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         jumpScrollCleanupRef.current?.();
       };
     }, []);
-
-    // Update page input from state, but not while the user is editing.
-    useEffect(() => {
-      if (document.activeElement !== pageInputRef.current) {
-        setPageInput(String(pageNum));
-      }
-    }, [pageNum]);
 
     // Update scale input from state, but not while the user is editing.
     useEffect(() => {
@@ -478,6 +473,20 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           return;
         }
 
+        // Cmd/Ctrl+G 开合跳页面板（与 Ctrl+F 一样在 isTyping 检查之前，
+        // 输入框聚焦时也可用）。
+        if (isModifier && e.key.toLowerCase() === "g") {
+          e.preventDefault();
+          setJumpOpen((v) => !v);
+          return;
+        }
+
+        if (e.key === "Escape" && jumpOpen) {
+          e.preventDefault();
+          setJumpOpen(false);
+          return;
+        }
+
         if (e.key === "Escape" && searchOpen) {
           e.preventDefault();
           setSearchOpen(false);
@@ -557,7 +566,15 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
       window.addEventListener("keydown", handleKeyDown);
       return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [pdf, numPages, viewMode, searchOpen, searchMatches, isFocused]);
+    }, [
+      pdf,
+      numPages,
+      viewMode,
+      searchOpen,
+      searchMatches,
+      isFocused,
+      jumpOpen,
+    ]);
 
     const zoomOut = useCallback(() => {
       zoomTo(scale * (1 - ZOOM_STEP_RATIO));
@@ -612,15 +629,9 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           // applyStep would clamp to the same scale (no reflow), so setting
           // the zoom lock would leave it stuck forever — the restore effect
           // only fires on an actual scale commit (REFACTOR_REVIEW #3).
-          const atMinBoundary =
-            direction > 0 && scaleRef.current <= MIN_SCALE;
-          const atMaxBoundary =
-            direction < 0 && scaleRef.current >= MAX_SCALE;
-          if (
-            viewMode === "continuous" &&
-            !atMinBoundary &&
-            !atMaxBoundary
-          ) {
+          const atMinBoundary = direction > 0 && scaleRef.current <= MIN_SCALE;
+          const atMaxBoundary = direction < 0 && scaleRef.current >= MAX_SCALE;
+          if (viewMode === "continuous" && !atMinBoundary && !atMaxBoundary) {
             captureCursorAnchor(e.clientY);
             isZoomingRef.current = true;
           }
@@ -649,7 +660,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         if (numPages === 0) return;
         const page = Math.max(1, Math.min(numPages, target));
         setPageNum(page);
-        setPageInput(String(page));
         if (viewMode === "continuous" && continuousContainerRef.current) {
           const container = continuousContainerRef.current;
           const top = computeContinuousScrollTop(
@@ -710,6 +720,28 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       [numPages, viewMode, pageWrapperRefs]
     );
 
+    // 跳页面板提交：跳转 + 大数字闪卡。闪卡仅面板跳转触发（工具栏页码
+    // input、大纲、滑轨拖动均不闪）。
+    const handleJumpToPage = useCallback(
+      (target: number) => {
+        if (numPages === 0) return;
+        const page = Math.max(1, Math.min(numPages, target));
+        goToPage(page);
+        setFlashPage(page);
+        setJumpOpen(false);
+      },
+      [goToPage, numPages]
+    );
+
+    // 闪卡在 CSS 动画（0.5s）结束后移除。用定时器而非 onAnimationEnd：
+    // 动画被 prefers-reduced-motion 等打断时也能可靠清理。连续跳转时
+    // flashPage 变化会重置计时（渲染侧用 key 重放动画）。
+    useEffect(() => {
+      if (flashPage === null) return;
+      const timer = setTimeout(() => setFlashPage(null), 600);
+      return () => clearTimeout(timer);
+    }, [flashPage]);
+
     // Keep the search domain's goToPage ref in sync so the active-match effect
     // uses the freshest navigation function without depending on its identity.
     // (The search build/active effects and next/prev navigation now live in
@@ -767,27 +799,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           logError(`Failed to navigate to outline destination: ${err}`);
         }
       }
-    };
-
-    const handlePageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const value = e.target.value.replace(/\D/g, "");
-      setPageInput(value);
-    };
-
-    const handlePageInputKeyDown = (
-      e: React.KeyboardEvent<HTMLInputElement>
-    ) => {
-      if (e.key === "Enter") {
-        const page = parseInt(pageInput, 10);
-        if (!Number.isNaN(page)) {
-          goToPage(page);
-        }
-        e.currentTarget.blur();
-      }
-    };
-
-    const handlePageInputBlur = () => {
-      setPageInput(String(pageNum));
     };
 
     const parseScaleInput = (value: string): number | null => {
@@ -1021,18 +1032,14 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                     t("pdf.loading")
                   ) : numPages > 0 ? (
                     <>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        className="page-input"
-                        ref={pageInputRef}
-                        value={pageInput}
-                        onChange={handlePageInputChange}
-                        onKeyDown={handlePageInputKeyDown}
-                        onBlur={handlePageInputBlur}
+                      <button
+                        className="page-number-btn"
+                        onClick={() => setJumpOpen(true)}
                         aria-label={t("pdf.pageNumber")}
                         title={t("pdf.pageNumberHint")}
-                      />
+                      >
+                        {pageNum}
+                      </button>
                       <span> / {numPages}</span>
                     </>
                   ) : (
@@ -1065,19 +1072,15 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                     >
                       <Icon name="page-prev" size={16} />
                     </button>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      className="page-input"
-                      ref={pageInputRef}
-                      value={pageInput}
-                      onChange={handlePageInputChange}
-                      onKeyDown={handlePageInputKeyDown}
-                      onBlur={handlePageInputBlur}
+                    <button
+                      className="page-number-btn"
+                      onClick={() => setJumpOpen(true)}
                       disabled={isLoading}
                       aria-label={t("pdf.pageNumber")}
                       title={t("pdf.pageNumberHint")}
-                    />
+                    >
+                      {pageNum}
+                    </button>
                     <span> / {numPages}</span>
                     <button
                       className="icon-btn"
@@ -1292,6 +1295,31 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
               >
                 <Icon name="close" size={14} />
               </button>
+            </div>
+          )}
+
+          <PageRail
+            viewMode={viewMode}
+            pageNum={pageNum}
+            numPages={numPages}
+            continuousContainerRef={continuousContainerRef}
+            pageViewportsRef={pageViewportsRef}
+            scaleRef={scaleRef}
+            goToPage={goToPage}
+          />
+
+          {jumpOpen && numPages > 0 && (
+            <PageJumpPanel
+              pageNum={pageNum}
+              numPages={numPages}
+              onSubmit={handleJumpToPage}
+              onClose={() => setJumpOpen(false)}
+            />
+          )}
+
+          {flashPage !== null && (
+            <div key={flashPage} className="pdf-page-flash">
+              {flashPage}
             </div>
           )}
         </div>

@@ -81,8 +81,8 @@
   gap: 2px;
 }
 
-.pdf-controls .page-input {
-  width: 42px;
+.pdf-controls .page-number-btn {
+  min-width: 42px;
   height: 26px;
   padding: 0 4px;
   border: 1px solid transparent;
@@ -92,11 +92,12 @@
   font-size: 0.85rem;
   color: #616161;
   background: transparent;
+  cursor: pointer;
   font-variant-numeric: tabular-nums;
 }
 
-.pdf-controls .page-input:hover,
-.pdf-controls .page-input:focus {
+.pdf-controls .page-number-btn:hover:not(:disabled),
+.pdf-controls .page-number-btn:focus {
   border-color: #d1d1d1;
   background: #fff;
   outline: none;
@@ -302,6 +303,52 @@
   padding: 24px;
   background: #ededed;
   min-width: 0;
+}
+
+/* 垂直滚动条由右侧 PageRail 滑轨替代（仅隐藏垂直，保留水平滚动条用于
+   放大后的横向平移）。Chromium 支持 :vertical 伪类；WKWebView 对
+   :vertical 支持不稳定，叠加 width: 0 兜底——width 只控制垂直滚动条
+   厚度，水平滚动条厚度由 height 控制，不受影响。 */
+.pdf-canvas-container::-webkit-scrollbar {
+  width: 0;
+}
+
+.pdf-canvas-container::-webkit-scrollbar:vertical {
+  display: none;
+}
+
+/* 跳页面板确认后的大数字闪卡：中央缩放淡入后淡出，pointer-events 不拦截。 */
+.pdf-page-flash {
+  position: absolute;
+  left: 50%;
+  top: 42%;
+  transform: translate(-50%, -50%);
+  font-size: 120px;
+  font-weight: 800;
+  color: rgba(31, 31, 31, 0.85);
+  text-shadow:
+    0 4px 24px rgba(255, 255, 255, 0.9),
+    0 10px 40px rgba(0, 0, 0, 0.25);
+  z-index: 110;
+  pointer-events: none;
+  opacity: 0;
+  font-variant-numeric: tabular-nums;
+  animation: pdfPageFlashIn 0.5s ease forwards;
+}
+
+@keyframes pdfPageFlashIn {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  35% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
 }
 
 .pdf-canvas-container.continuous {

@@ -89,11 +89,13 @@ async function jumpToPage(
   page: import("@playwright/test").Page,
   target: number
 ) {
-  const pageInput = page.getByLabel("页码");
-  await expect(pageInput).toBeEnabled();
-  await pageInput.click();
-  await pageInput.fill(String(target));
-  await pageInput.press("Enter");
+  // 工具栏页码按钮 → 打开跳页面板 → 输入页码回车
+  const pageButton = page.getByLabel("页码");
+  await expect(pageButton).toBeEnabled();
+  await pageButton.click();
+  const jumpInput = page.getByLabel("跳转到页");
+  await jumpInput.fill(String(target));
+  await jumpInput.press("Enter");
   await page.waitForTimeout(1500);
 }
 
@@ -109,7 +111,7 @@ test.describe("Multi-tab state isolation", () => {
     await waitForPdfLoaded(page);
     const pageInput = page.getByLabel("页码");
     await jumpToPage(page, 5);
-    await expect(pageInput).toHaveValue("5");
+    await expect(pageInput).toHaveText("5");
 
     // Open second PDF and jump to page 3.
     await page.getByTestId("open-pdf-btn").click();
@@ -118,19 +120,19 @@ test.describe("Multi-tab state isolation", () => {
     ).toBeVisible();
     await waitForPdfLoaded(page);
     await jumpToPage(page, 3);
-    await expect(pageInput).toHaveValue("3");
+    await expect(pageInput).toHaveText("3");
 
     // Switch back to the first tab; it should still be on page 5.
     await page.locator(".tab-item", { hasText: "sample.pdf" }).click();
     await waitForPdfLoaded(page);
-    await expect(pageInput).toHaveValue("5");
+    await expect(pageInput).toHaveText("5");
 
     // Switch to the second tab again; it should still be on page 3.
     await page
       .locator(".tab-item", { hasText: "sample-short-pages.pdf" })
       .click();
     await waitForPdfLoaded(page);
-    await expect(pageInput).toHaveValue("3");
+    await expect(pageInput).toHaveText("3");
   });
 
   test("closing active tab keeps the other tab's page state", async ({
@@ -157,7 +159,7 @@ test.describe("Multi-tab state isolation", () => {
     // The remaining tab should still be on page 5.
     await waitForPdfLoaded(page);
     const pageInput = page.getByLabel("页码");
-    await expect(pageInput).toHaveValue("5");
+    await expect(pageInput).toHaveText("5");
     await expect(
       page.locator(".tab-item", { hasText: "sample.pdf" })
     ).toBeVisible();
@@ -211,7 +213,7 @@ test.describe("Multi-tab state isolation", () => {
     await waitForPdfLoaded(page);
     const pageInput = page.getByLabel("页码");
     await jumpToPage(page, 5);
-    await expect(pageInput).toHaveValue("5");
+    await expect(pageInput).toHaveText("5");
 
     // Open second PDF and jump to page 3.
     await page.getByTestId("open-pdf-btn").click();
@@ -220,7 +222,7 @@ test.describe("Multi-tab state isolation", () => {
     ).toBeVisible();
     await waitForPdfLoaded(page);
     await jumpToPage(page, 3);
-    await expect(pageInput).toHaveValue("3");
+    await expect(pageInput).toHaveText("3");
 
     // Switch back to the first tab and select some text there.
     await page.locator(".tab-item", { hasText: "sample.pdf" }).click();
@@ -249,6 +251,6 @@ test.describe("Multi-tab state isolation", () => {
       .locator(".tab-item", { hasText: "sample-short-pages.pdf" })
       .click();
     await waitForPdfLoaded(page);
-    await expect(pageInput).toHaveValue("3");
+    await expect(pageInput).toHaveText("3");
   });
 });

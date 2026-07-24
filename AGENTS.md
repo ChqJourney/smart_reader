@@ -18,6 +18,8 @@
 - 首次启动配置向导（SetupWizard）：选平台 → 填 Key → 测试连接，全部平台未配置 Key 时才自动弹出，设置里可重跑。
 - 多 PDF Tab 同时打开（最多 10 个），支持左右并排对照两份 PDF。进入并排的入口：拖拽非激活 tab 到阅读区（带 drop-zone 遮罩）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
 - PDF 本地渲染、文本选区、缩放、页码跳转、单页 / 连续滚动阅读模式。
+- 右侧页码滑轨（PageRail）：替代原生垂直滚动条（CSS 隐藏，水平滚动条保留），拖动 / 悬停时显示页码 tooltip；连续模式拖动直接驱动 scrollTop，单页模式按位置映射页码。
+- Cmd/Ctrl+G 跳页面板（PageJumpPanel）：手动输入页码回车跳转，跳转时阅读区中央闪现大数字页码闪卡（600ms 定时清除）；工具栏页码显示为按钮，点击同样打开跳页面板。
 - 全文搜索（Ctrl / Cmd + F，支持跨 text item 短语匹配，结果逐页高亮、Enter / Shift+Enter 前后跳转）。
 - 大纲 / 目录导航面板（PDF 自带 outline 时可用，点击跳转章节）。
 - 选中文本后浮动工具条：加入暂存、解读、翻译、复制、批注（comment 浮层，可拖动编辑）。
@@ -43,22 +45,22 @@
 
 ## 2. 技术栈
 
-| 层级          | 技术                                                          |
-| ------------- | ------------------------------------------------------------ |
-| 桌面框架      | Tauri 2.0（Rust 后端 + Web 前端）                              |
-| Tauri 插件    | log / dialog / shell / updater / process / single-instance   |
-| 前端框架      | React 18 + TypeScript 5.6                                     |
-| 构建工具      | Vite 6                                                        |
-| PDF 渲染      | pdfjs-dist 4.8                                                |
-| UI 图标       | 自定义 `Icon` 组件（SVG 集合）                                  |
-| Markdown 渲染 | react-markdown（gfm / math / katex）                           |
-| 国际化        | i18next + react-i18next                                       |
-| 后端语言      | Rust（tauri 2.11, edition 2021）                               |
-| 后端主要依赖  | reqwest / tokio / rusqlite / zip / keyring                     |
-| 后端存储      | 本地 JSON 文件（AppData）                                      |
-| 前端单元测试  | Vitest 4.1 + jsdom + @testing-library/react                   |
-| E2E 测试      | Playwright 1.61                                               |
-| 后端测试      | `cargo test`                                                  |
+| 层级          | 技术                                                       |
+| ------------- | ---------------------------------------------------------- |
+| 桌面框架      | Tauri 2.0（Rust 后端 + Web 前端）                          |
+| Tauri 插件    | log / dialog / shell / updater / process / single-instance |
+| 前端框架      | React 18 + TypeScript 5.6                                  |
+| 构建工具      | Vite 6                                                     |
+| PDF 渲染      | pdfjs-dist 4.8                                             |
+| UI 图标       | 自定义 `Icon` 组件（SVG 集合）                             |
+| Markdown 渲染 | react-markdown（gfm / math / katex）                       |
+| 国际化        | i18next + react-i18next                                    |
+| 后端语言      | Rust（tauri 2.11, edition 2021）                           |
+| 后端主要依赖  | reqwest / tokio / rusqlite / zip / keyring                 |
+| 后端存储      | 本地 JSON 文件（AppData）                                  |
+| 前端单元测试  | Vitest 4.1 + jsdom + @testing-library/react                |
+| E2E 测试      | Playwright 1.61                                            |
+| 后端测试      | `cargo test`                                               |
 
 ## 3. 开发环境要求
 
@@ -88,6 +90,8 @@ npm install
 │   ├── components/                    # React 组件（每个组件配同名 {Component}.css，由组件文件顶部 import）
 │   │   ├── PdfViewer.tsx              # PDF 渲染协调层、选区、单页/连续模式、键盘导航
 │   │   ├── PdfPage.tsx                # 单页渲染（canvas / textLayer / 悬停取词）
+│   │   ├── PageRail.tsx               # 右侧页码滑轨（替代垂直滚动条，拖动/悬停显示页码）
+│   │   ├── PageJumpPanel.tsx          # Cmd/Ctrl+G 跳页面板（输入页码回车跳转）
 │   │   ├── PdfAnnotations.tsx         # 按页渲染 markers 与 popup
 │   │   ├── AnnotationMarker.tsx       # 可拖动的翻译/解读/暂存/批注标记
 │   │   ├── SelectionToolbar.tsx       # 选区上方浮动工具条（暂存/解读/翻译/复制/批注）
@@ -121,7 +125,7 @@ npm install
 │   │   ├── useViewportManager.ts      # viewport 预加载/可见页/wrapper refs/自加载回写（条目带 scale）
 │   │   ├── useZoomAnchor.ts           # 缩放锚点捕获与恢复
 │   │   ├── useSearchDomain.ts         # 搜索索引/高亮/导航（跨 text item 短语匹配，PDF 原始坐标）
-│   │   ├── useScrollPageSync.ts       # 连续滚动页码同步（含换页死区）+ scrollTop 上报
+│   │   ├── useScrollPageSync.ts       # 连续滚动页码同步（含换页死区 + 停息重算收敛）+ scrollTop 上报
 │   │   ├── useTabRestore.ts           # tab 状态恢复 + pending 页跳转
 │   │   ├── useDrag.ts                 # 通用拖拽（全局监听 + 阈值）
 │   │   ├── useClampedPopupPosition.ts # 浮层 clamp 定位（支持 yPercent）
@@ -137,6 +141,7 @@ npm install
 │   │   ├── coordinateConverter.ts     # PDF↔wrapper↔screen 坐标转换
 │   │   ├── zoomAnchor.ts              # 缩放锚点几何计算
 │   │   ├── fitToWidth.ts              # 适合宽度 scale 计算
+│   │   ├── pageRail.ts                # 滑轨 pct↔页码映射、scrollTop→页码反查（viewport 缺失时按均高估算）
 │   │   ├── popupPosition.ts           # 浮层定位 clamp 计算
 │   │   ├── clipboard.ts               # 复制到剪贴板（navigator.clipboard + execCommand 回退）
 │   │   ├── time.ts                    # 相对时间格式化（最近文件列表）
@@ -175,7 +180,7 @@ npm install
 │   ├── app.spec.ts                    # 主布局 / 面板显隐 / 设置
 │   ├── multi-tab-state.spec.ts        # 多 tab 状态隔离
 │   ├── pdf-large-doc.spec.ts          # 大文档 fit 不偏移 / 深度缩放页码稳定 / 快速切 tab 恢复
-│   ├── pdf-page-jump.spec.ts          # 连续滚动页码跳转
+│   ├── pdf-page-jump.spec.ts          # 连续滚动页码跳转 / Cmd+G 跳页面板 / 右侧滑轨拖动
 │   ├── pdf-rapid-zoom.spec.ts         # 快速缩放回归
 │   └── pdf-selection-translate.spec.ts # 选区翻译流程
 ├── scripts/                           # 辅助脚本
@@ -366,6 +371,8 @@ PdfViewer.tsx（协调层：UI + 组合 hooks）
 ├── useScrollPageSync                   # 滚动页码同步 + scrollTop 上报
 ├── useTabRestore                       # tab 状态恢复 + pending 跳转
 ├── pageNum / scale / viewMode          # 本组件持有的三要素状态
+├── jumpOpen / flashPage                # Cmd/Ctrl+G 跳页面板与跳页闪卡（面板提交才闪，600ms 定时清除）
+├── PageRail                            # 右侧页码滑轨（连续模式拖动直写 scrollTop，页码由 useScrollPageSync 停息重算收敛）
 ├── 文本选区 → onSelection
 └── PdfPage                             # 单页渲染组件；悬停取词（useWordLookup + WordTooltip）已下沉到 PdfPage
 
@@ -466,7 +473,7 @@ runSessionStream（usePersistence.ts）
 
 - Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 6 个 spec：
   - `app.spec.ts`：主布局、顶部最近文件入口、设置 Modal、面板显隐。
-  - `pdf-page-jump.spec.ts`：连续滚动模式下页码跳转正确性，使用 mock 的 Tauri `invoke` 返回 PDF 字节。
+  - `pdf-page-jump.spec.ts`：连续滚动模式下页码跳转正确性、Cmd/Ctrl+G 跳页面板（输入回车跳转 + 闪卡）、右侧滑轨拖动跳页，使用 mock 的 Tauri `invoke` 返回 PDF 字节。
   - `multi-tab-state.spec.ts`：多 tab 页码/批注隔离、关闭 tab 后状态保持。
   - `pdf-large-doc.spec.ts`：>50 页大文档回归——适合宽度不横向偏移、深度缩放页码不抖动、快速切换 tab 恢复页码（fixtures 含 `gen-sample-long-pdf.mjs` 生成的 60 页 PDF）。
   - `pdf-rapid-zoom.spec.ts`：快速缩放回归。

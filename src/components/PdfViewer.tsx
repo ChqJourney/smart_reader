@@ -88,6 +88,12 @@ interface PdfViewerProps {
    * 方向键同滚两份文档。单视图恒 true（缺省值）。
    */
   isFocused?: boolean;
+  /**
+   * 挂载恢复完成后自动执行一次 fit-to-width（进入并排模式时 App 对两个
+   * 屏都开启）。页码不变：连续模式走 zoomTo 的锚点恢复，锚点页保持在
+   * 视口顶部；单页模式 pageNum 本就不受 scale 影响。
+   */
+  autoFitToWidth?: boolean;
 }
 
 const SCROLL_STEP = 80; // px for arrow keys
@@ -168,6 +174,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       hoverTranslate,
       settings,
       isFocused = true,
+      autoFitToWidth = false,
     },
     ref
   ) {
@@ -717,6 +724,10 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // is owned by useTabRestore. It runs at most once per mount: PdfViewer is
     // remounted on tab switch via key={tab.id}, so each instance restores its
     // tab's position exactly once. Must be called AFTER goToPage is defined.
+    // mountRestored 标记挂载恢复（含 scrollTop 回写）完成，供 autoFitToWidth
+    // 排序：fit 必须在恢复之后执行，缩放锚点才能捕获到正确的当前页。
+    const [mountRestored, setMountRestored] = useState(false);
+    const handleMountRestored = useCallback(() => setMountRestored(true), []);
     useTabRestore({
       initialState,
       pdf,
@@ -729,6 +740,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       onClearPendingGotoPage,
       continuousContainerRef,
       isJumpingRef,
+      onMountRestored: handleMountRestored,
       setPageNum,
       setScale,
       setViewMode,
@@ -895,6 +907,18 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       zoomTo,
       centerCurrentPageHorizontally,
     ]);
+
+    // 进入并排模式时（App 仅在分屏分支传 autoFitToWidth，两个 viewer 都会
+    // 重新挂载）自动 fit-to-width 一次。必须等挂载恢复完成再 fit：连续模式
+    // 下恢复前 scrollTop=0，缩放锚点会捕获到第 1 页，把页码拉回开头。
+    // fit 走 zoomTo 锚点恢复，锚点页保持在视口顶部，因此页码不变。
+    const autoFitDoneRef = useRef(false);
+    useEffect(() => {
+      if (!autoFitToWidth || autoFitDoneRef.current) return;
+      if (!mountRestored || !pdf || numPages === 0) return;
+      autoFitDoneRef.current = true;
+      void fitToWidth();
+    }, [autoFitToWidth, mountRestored, pdf, numPages, fitToWidth]);
 
     // Determine which pages to render: visible + adjacent
     const renderPages = useMemo(() => {

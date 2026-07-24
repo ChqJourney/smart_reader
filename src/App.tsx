@@ -875,6 +875,7 @@ function App() {
                 filePath={tabs.activeTab?.filePath ?? ""}
                 fileHash={tabs.activeTab?.fileHash}
                 isFocused={focusedViewer === "primary"}
+                autoFitToWidth
                 cachedBytes={
                   tabs.activeTab
                     ? pdfCacheRef.current.get(tabs.activeTab.filePath)
@@ -916,6 +917,7 @@ function App() {
                 filePath={secondaryTab?.filePath ?? ""}
                 fileHash={secondaryTab?.fileHash}
                 isFocused={focusedViewer === "secondary"}
+                autoFitToWidth
                 cachedBytes={
                   secondaryTab
                     ? pdfCacheRef.current.get(secondaryTab.filePath)

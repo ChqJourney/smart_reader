@@ -659,4 +659,95 @@ describe("PdfViewer continuous mode page jump", () => {
       expect(screen.getByText("Section 2")).toBeInTheDocument();
     });
   });
+
+  it("auto fits to width after mount restore when autoFitToWidth is set, keeping the page number", async () => {
+    // 模拟进入并排模式：viewer 以 autoFitToWidth 重新挂载，initialState 带
+    // 回 tab 记录的页码/缩放/滚动位置。fit 必须在 scrollTop 恢复之后执行，
+    // 且页码保持 3 不变。
+    const { container } = render(
+      <PdfViewer
+        filePath="/fake/test.pdf"
+        settings={DEFAULT_SETTINGS}
+        autoFitToWidth
+        initialState={{
+          pageNum: 3,
+          scale: SCALE,
+          viewMode: "continuous",
+          scrollTop: expectedScrollTopForPage(3),
+        }}
+      />
+    );
+
+    // fit 在挂载恢复完成后立即自动执行，clientWidth / padding mock 必须
+    // 在 viewport 加载完成前就位（容器 div 首次渲染即存在）。
+    const canvasContainer = container.querySelector(
+      ".pdf-canvas-container.continuous"
+    ) as HTMLDivElement;
+    expect(canvasContainer).not.toBeNull();
+    Object.defineProperty(canvasContainer, "clientWidth", {
+      value: 400,
+      configurable: true,
+    });
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      paddingLeft: "24px",
+    } as CSSStyleDeclaration);
+
+    const pageInput = await waitFor<HTMLInputElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLInputElement;
+      if (!input || input.disabled) {
+        throw new Error("page input not ready yet");
+      }
+      return input;
+    });
+
+    // 不等待 1.5x 的 viewport 高度就位：自动 fit 会把 scale 改为 1.76，
+    // wrapper 高度随之按 live scale 重算。直接等 fit 完成（scale 变化），
+    // 它本身就意味着挂载恢复与 viewport 加载都已完成。
+    // newScale = (400 - 24 * 2) / (200 * 1.5 / 1.5) = 352 / 200 = 1.76
+    const scaleInput = screen.getByLabelText("缩放比例") as HTMLInputElement;
+    await waitFor(() => {
+      expect(scaleInput.value).toBe("176%");
+    });
+
+    // 页码不变：仍是 initialState 恢复的第 3 页。
+    expect(pageInput.value).toBe("3");
+  });
+
+  it("auto fits to width in single mode when autoFitToWidth is set, keeping the page number", async () => {
+    const { container } = render(
+      <PdfViewer
+        filePath="/fake/test.pdf"
+        settings={DEFAULT_SETTINGS}
+        autoFitToWidth
+        initialState={{ pageNum: 3, scale: SCALE, viewMode: "single" }}
+      />
+    );
+
+    const canvasContainer = container.querySelector(
+      ".pdf-canvas-container"
+    ) as HTMLDivElement;
+    expect(canvasContainer).not.toBeNull();
+    Object.defineProperty(canvasContainer, "clientWidth", {
+      value: 400,
+      configurable: true,
+    });
+    vi.spyOn(window, "getComputedStyle").mockReturnValue({
+      paddingLeft: "24px",
+    } as CSSStyleDeclaration);
+
+    const pageInput = await waitFor<HTMLInputElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLInputElement;
+      if (!input || input.disabled) {
+        throw new Error("page input not ready yet");
+      }
+      return input;
+    });
+
+    const scaleInput = screen.getByLabelText("缩放比例") as HTMLInputElement;
+    await waitFor(() => {
+      expect(scaleInput.value).toBe("176%");
+    });
+
+    expect(pageInput.value).toBe("3");
+  });
 });

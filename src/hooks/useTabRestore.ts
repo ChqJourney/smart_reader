@@ -69,6 +69,12 @@ export interface UseTabRestoreOptions {
    * tab record with page 1.
    */
   isJumpingRef: React.MutableRefObject<boolean>;
+  /**
+   * 挂载恢复（含 scrollTop 回写）完成时触发一次。PdfViewer 的
+   * autoFitToWidth 依赖它排序：必须先恢复滚动位置再 fit-to-width，
+   * 否则缩放锚点会按 scrollTop=0 捕获到第 1 页。
+   */
+  onMountRestored?: () => void;
   setPageNum: React.Dispatch<React.SetStateAction<number>>;
   setScale: React.Dispatch<React.SetStateAction<number>>;
   setViewMode: React.Dispatch<
@@ -100,6 +106,7 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
     onClearPendingGotoPage,
     continuousContainerRef,
     isJumpingRef,
+    onMountRestored,
     setPageNum,
     setScale,
     setViewMode,
@@ -198,6 +205,7 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
         }
         pendingScrollTopRef.current = undefined;
         hasRestoredRef.current = true;
+        onMountRestored?.();
       }
       return;
     }
@@ -235,6 +243,7 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
     }
     pendingScrollTopRef.current = undefined;
     hasRestoredRef.current = true;
+    onMountRestored?.();
   }, [
     pdf,
     numPages,
@@ -246,6 +255,7 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
     onClearPendingGotoPage,
     continuousContainerRef,
     isJumpingRef,
+    onMountRestored,
     // Re-run when a NEW pending goto arrives for the already-mounted viewer
     // (active-tab stash/annotation navigation).
     initialState?.pendingGotoPage,

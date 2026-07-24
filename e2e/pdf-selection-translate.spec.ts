@@ -65,15 +65,21 @@ async function setupTauriMock(
             // LLM streaming is now proxied through the Rust backend via a
             // Tauri Channel. args.onEvent is the Channel instance; calling
             // its onmessage handler delivers stream events to the frontend.
+            // The invoke promise must only resolve AFTER all events are
+            // delivered — the frontend treats the invoke settling as
+            // "no more events will arrive" and drains the stream, so an
+            // early resolve would race ahead of these chunks.
             const channel = args?.onEvent as {
               onmessage: (msg: unknown) => void;
             };
-            setTimeout(() => {
-              channel.onmessage({ type: "chunk", content: "翻译结果：" });
-              channel.onmessage({ type: "chunk", content: "第1页" });
-              channel.onmessage({ type: "done" });
-            }, 0);
-            return undefined;
+            return new Promise<void>((resolve) => {
+              setTimeout(() => {
+                channel.onmessage({ type: "chunk", content: "翻译结果：" });
+                channel.onmessage({ type: "chunk", content: "第1页" });
+                channel.onmessage({ type: "done" });
+                resolve();
+              }, 0);
+            });
           }
           console.warn("Unhandled Tauri invoke command:", cmd, args);
           return undefined;

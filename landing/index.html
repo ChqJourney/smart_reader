@@ -5,736 +5,155 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta
       name="description"
-      content="SpecReader AI 是面向检测认证工程师与制造商合规/研发团队的桌面端 AI 助手：本地打开 IEC / ISO / EN / GB / UL 标准 PDF，选中即翻译、AI 解读与追问，全文搜索定位条款，批注与解读记录本地持久化，PDF 不上传云端。"
+      content="SpecReader AI 是面向检测认证、合规与研发团队的桌面端标准 PDF 阅读助手：本地打开文档，选中即可翻译、解读、追问并回溯来源页码。"
     />
     <meta
       name="keywords"
-      content="标准 PDF 阅读器,AI 翻译,标准解读,IEC,ISO,GB,UL,ASTM,检测认证,合规,PDF 全文搜索"
+      content="标准 PDF 阅读器,AI 翻译,标准解读,IEC,ISO,EN,GB,UL,ASTM,检测认证,合规,PDF 全文搜索"
     />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="zh_CN" />
-    <meta property="og:title" content="SpecReader AI - 标准 PDF 的 AI 阅读助手" />
+    <meta property="og:title" content="SpecReader AI - 标准 PDF 的 AI 阅读工作台" />
     <meta
       property="og:description"
-      content="本地打开标准 PDF，选中即可翻译、解读与追问；全文搜索定位条款，批注与解读记录自动保存。PDF 不上传云端。"
+      content="本地打开标准 PDF，选中即可翻译、解读与追问；结果绑定原文页码，可保存、恢复、回溯。"
     />
-    <meta
-      property="og:url"
-      content="https://chqjourney.github.io/smart_reader/"
-    />
-    <title>SpecReader AI - 标准 PDF 的 AI 阅读助手</title>
+    <meta property="og:url" content="https://chqjourney.github.io/smart_reader/" />
+    <title>SpecReader AI - 标准 PDF 的 AI 阅读工作台</title>
     <link rel="icon" type="image/svg+xml" href="assets/logo.svg" />
     <link rel="stylesheet" href="css/style.css" />
   </head>
   <body>
-    <!-- 顶部导航 -->
     <nav class="navbar" aria-label="主导航">
       <div class="container nav-inner">
-        <a class="brand" href="#" aria-label="SpecReader AI 首页">
-          <img
-            src="assets/logo.svg"
-            alt=""
-            class="brand-logo"
-            width="32"
-            height="32"
-          />
+        <a class="brand" href="#top" aria-label="SpecReader AI 首页">
+          <img src="assets/logo.svg" alt="" class="brand-logo" width="32" height="32" />
           <span class="brand-text">SpecReader AI</span>
         </a>
         <div class="nav-links">
-          <a href="#features">核心功能</a>
-          <a href="#scenarios">使用场景</a>
-          <a href="#privacy">隐私安全</a>
+          <a href="#workflow">阅读工作流</a>
+          <a href="#ai-context">AI 上下文</a>
+          <a href="#privacy">本地优先</a>
           <a href="#faq">常见问题</a>
-          <a
-            class="btn btn-primary btn-sm"
-            href="https://github.com/ChqJourney/smart_reader/releases"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            下载使用
-          </a>
+          <a class="btn btn-primary btn-sm" href="https://github.com/ChqJourney/smart_reader/releases" target="_blank" rel="noopener noreferrer">下载 Windows 版</a>
         </div>
       </div>
     </nav>
 
-    <!-- Hero 区域 -->
-    <header class="hero">
-      <div class="container hero-inner">
-        <div class="hero-content">
-          <h1 class="hero-title">
-            把标准文件<br />
-            <span class="text-gradient">读得更快、<br />理解得更准</span>
-          </h1>
-          <p class="hero-subtitle">
-            SpecReader AI
-            是面向检测认证工程师、制造商合规与研发团队的桌面端 AI 助手：<br />
-            本地打开 PDF，让 AI 帮你<span
-              id="typewriter"
-              class="typewriter"
-            ></span>
-          </p>
-          <div class="hero-actions">
-            <a
-              class="btn btn-primary btn-lg"
-              href="https://github.com/ChqJourney/smart_reader/releases"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              免费下载
-            </a>
-            <a
-              class="btn btn-secondary btn-lg"
-              href="https://github.com/ChqJourney/smart_reader"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              查看 GitHub
-            </a>
-          </div>
-          <p class="hero-note">
-            免费使用 · 支持 Windows（macOS 可从源码构建）· PDF 不上传云端
-          </p>
-        </div>
-        <div class="hero-visual">
-          <div class="demo-placeholder hero-demo" data-demo="hero">
-            <div class="demo-placeholder-icon">
-              <svg
-                width="64"
-                height="64"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-              >
-                <path
-                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                ></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="12" y1="18" x2="12" y2="12"></line>
-                <line x1="9" y1="15" x2="15" y2="15"></line>
-              </svg>
+    <main id="top">
+      <header class="hero">
+        <div class="container hero-inner">
+          <div class="hero-content">
+            <div class="eyebrow"><span class="eyebrow-dot"></span>为检测认证、合规与研发团队打造</div>
+            <h1 class="hero-title">把标准文件<br />变成<span>可追溯的判断</span></h1>
+            <p class="hero-subtitle">本地打开标准 PDF，选中即可翻译、解读、追问与回溯。每一次理解，都留在原文页码旁。</p>
+            <div class="hero-actions">
+              <a class="btn btn-primary btn-lg" href="https://github.com/ChqJourney/smart_reader/releases" target="_blank" rel="noopener noreferrer">下载 Windows 版 <span aria-hidden="true">↓</span></a>
+              <a class="btn btn-secondary btn-lg" href="#workflow">了解阅读工作流 <span aria-hidden="true">↓</span></a>
             </div>
-            <p class="demo-placeholder-title">主界面演示</p>
-            <p class="demo-placeholder-hint">放入 hero.mp4（1440×900）</p>
-          </div>
-        </div>
-      </div>
-    </header>
-
-    <!-- 痛点区域 -->
-    <section class="section section-painpoints" id="painpoints">
-      <div class="container">
-        <div class="section-header reveal">
-          <span class="section-tag">痛点</span>
-          <h2 class="section-title">读标准，不该这么累</h2>
-          <p class="section-desc">
-            IEC / ISO / EN / GB / UL / ASTM /
-            IEEE……每份标准都是数百页的专业文本，反复查词、翻页、回找，耗时又费神。
-          </p>
-        </div>
-        <div class="painpoint-grid">
-          <div class="painpoint-card reveal">
-            <div class="painpoint-icon">
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path d="M5 8l6 6"></path>
-                <path d="M4 14l6-6 2-3"></path>
-                <path d="M2 5h12"></path>
-                <path d="M7 2h1"></path>
-                <path d="M22 22l-5-10-5 10"></path>
-                <path d="M14 17h6"></path>
-              </svg>
-            </div>
-            <h3>术语与语言障碍</h3>
-            <p>
-              英文原版标准里的专业术语和缩写反复打断阅读节奏，查完词典，上下文已经断了。
-            </p>
-          </div>
-          <div class="painpoint-card reveal">
-            <div class="painpoint-icon">
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-              </svg>
-            </div>
-            <h3>条款定位难</h3>
-            <p>
-              几百页里找一条要求本就不易，"see Clause 5.2.3"
-              每出现一次，还要手动翻页、定位、再找回原来的位置。
-            </p>
-          </div>
-          <div class="painpoint-card reveal">
-            <div class="painpoint-icon">
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path
-                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                ></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-                <polyline points="10 9 9 9 8 9"></polyline>
-              </svg>
-            </div>
-            <h3>理解留不住</h3>
-            <p>
-              上周解读过的条款，这周重看又要从头再来；写报告时想引用结论，却想不起出自哪一页。
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 核心功能区域 -->
-    <section class="section section-features" id="features">
-      <div class="container">
-        <div class="section-header reveal">
-          <span class="section-tag">核心功能</span>
-          <h2 class="section-title">从打开到读懂，一步不离开文档</h2>
-          <p class="section-desc">
-            打开、定位、读懂、组合、沉淀——所有结果留在原文页码上，可保存、可恢复、可追溯。
-          </p>
-        </div>
-
-        <!-- 功能 1：打开与对照 -->
-        <div class="feature-row reveal">
-          <div class="feature-text">
-            <span class="feature-index">01</span>
-            <h3>多份标准，并排对照</h3>
-            <p>
-              同时打开多达 10 个 PDF，顶部 Tab
-              快速切换；左右分屏对照新旧版本标准或引用标准，中间分隔条可自由拖拽。
-            </p>
-            <ul class="feature-list">
-              <li>本地渲染，文件不上传云端</li>
-              <li>单页 / 连续滚动双模式</li>
-              <li>缩放、页码跳转、键盘导航</li>
-            </ul>
-          </div>
-          <div class="feature-visual">
-            <div class="demo-placeholder" data-demo="split-view">
-              <div class="demo-placeholder-icon">
-                <svg
-                  width="48"
-                  height="48"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-                  <line x1="12" y1="3" x2="12" y2="21"></line>
-                </svg>
-              </div>
-              <p class="demo-placeholder-title">多 Tab + 分屏对照新旧版本</p>
-              <p class="demo-placeholder-hint">放入 split-view.mp4</p>
+            <div class="hero-trust" aria-label="产品特性">
+              <span>本地渲染 PDF</span><span>自带模型 API</span><span>工作成果可恢复</span>
             </div>
           </div>
-        </div>
-
-        <!-- 功能 2：定位 -->
-        <div class="feature-row feature-row-reverse reveal">
-          <div class="feature-text">
-            <span class="feature-index">02</span>
-            <h3>全文搜索 + 目录跳转</h3>
-            <p>
-              Ctrl / Cmd + F
-              全文搜索，结果逐页高亮，回车逐个跳转；带大纲的标准可从目录面板一键跳到目标章节。
-            </p>
-            <ul class="feature-list">
-              <li>搜索结果全文档高亮并计数</li>
-              <li>Enter / Shift+Enter 前后跳转</li>
-              <li>大纲目录点击定位章节</li>
-            </ul>
-          </div>
-          <div class="feature-visual">
-            <div class="demo-placeholder" data-demo="search-outline">
-              <div class="demo-placeholder-icon">
-                <svg
-                  width="48"
-                  height="48"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-              </div>
-              <p class="demo-placeholder-title">全文搜索 + 大纲跳转</p>
-              <p class="demo-placeholder-hint">放入 search-outline.mp4</p>
+          <div class="hero-visual">
+            <div class="hero-orbit orbit-one"></div><div class="hero-orbit orbit-two"></div>
+            <div class="demo-placeholder hero-demo" data-demo="hero">
+              <div class="demo-placeholder-icon" aria-hidden="true">▣</div>
+              <p class="demo-placeholder-title">主界面演示</p>
+              <p class="demo-placeholder-hint">放入 hero.mp4（推荐：选中条款 → AI 解读 → 回溯原文）</p>
             </div>
+            <div class="hero-floating-note"><span class="status-dot"></span><span>解读已绑定至第 34 页</span></div>
           </div>
         </div>
+      </header>
 
-        <!-- 功能 3：悬停取词 -->
-        <div class="feature-row reveal">
-          <div class="feature-text">
-            <span class="feature-index">03</span>
-            <h3>悬停取词，离线也能查</h3>
-            <p>
-              鼠标悬停英文单词约 500ms，自动弹出 ECDICT
-              离线词典释义。词库本地下载，不调用 LLM，也不消耗任何 Token。
-            </p>
-            <ul class="feature-list">
-              <li>首次启用自动提示下载</li>
-              <li>下载支持断点续传</li>
-              <li>设置中可自由开关</li>
-            </ul>
+      <section class="section problem-section" id="painpoints">
+        <div class="container">
+          <div class="section-kicker">阅读标准的真实阻力</div>
+          <div class="split-heading reveal">
+            <h2>别再在翻页、查词与<br />回找之间丢失判断。</h2>
+            <p>一份标准往往横跨数百页。真正耗费时间的，不只是读完，而是把零散条款、术语和结论重新连成可执行的理解。</p>
           </div>
-          <div class="feature-visual">
-            <div class="demo-placeholder" data-demo="hover-word">
-              <div class="demo-placeholder-icon">
-                <svg
-                  width="48"
-                  height="48"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <path
-                    d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"
-                  ></path>
-                  <circle cx="12" cy="12" r="3"></circle>
-                </svg>
-              </div>
-              <p class="demo-placeholder-title">悬停单词翻译</p>
-              <p class="demo-placeholder-hint">放入 hover-word.mp4（或用静态截图）</p>
-            </div>
+          <div class="problem-grid">
+            <article class="problem-card reveal"><span class="problem-no">01</span><h3>术语反复打断</h3><p>英文术语、缩写和复杂句式，让阅读节奏一次次中断。</p></article>
+            <article class="problem-card problem-card-accent reveal"><span class="problem-no">02</span><h3>条款难以定位</h3><p>引用、附录与跨页条件散落在文档里，找到还要找回。</p></article>
+            <article class="problem-card reveal"><span class="problem-no">03</span><h3>理解难以沉淀</h3><p>报告要引用时，曾经得出的结论和来源页码已难追溯。</p></article>
           </div>
         </div>
+      </section>
 
-        <!-- 功能 4：翻译 -->
-        <div class="feature-row feature-row-reverse reveal">
-          <div class="feature-text">
-            <span class="feature-index">04</span>
-            <h3>选中即译，批注留在原文</h3>
-            <p>
-              选中任意段落，点击"翻译"即可在页面上生成浮层批注。批注可拖动、可隐藏、可删除，随文件保存。
-            </p>
-            <ul class="feature-list">
-              <li>目标语言可自定义</li>
-              <li>流式显示翻译结果</li>
-              <li>重开同一文件自动恢复批注</li>
-            </ul>
-          </div>
-          <div class="feature-visual">
-            <div class="demo-placeholder" data-demo="translate">
-              <div class="demo-placeholder-icon">
-                <svg
-                  width="48"
-                  height="48"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <path d="M5 8l6 6"></path>
-                  <path d="M4 14l6-6 2-3"></path>
-                  <path d="M2 5h12"></path>
-                  <path d="M7 2h1"></path>
-                  <path d="M22 22l-5-10-5 10"></path>
-                  <path d="M14 17h6"></path>
-                </svg>
-              </div>
-              <p class="demo-placeholder-title">选中文本翻译</p>
-              <p class="demo-placeholder-hint">放入 translate.mp4</p>
-            </div>
-          </div>
-        </div>
+      <section class="section workflow-section" id="workflow">
+        <div class="container">
+          <div class="section-header reveal"><span class="section-tag">一条不断线的阅读工作流</span><h2 class="section-title">从看见条款，到留下判断</h2><p class="section-desc">功能不是孤立的按钮，而是一段完整、可回到原文的工作过程。</p></div>
 
-        <!-- 功能 5：AI 解读 + 追问 -->
-        <div class="feature-row reveal">
-          <div class="feature-text">
-            <span class="feature-index">05</span>
-            <h3>AI 解读，还能接着追问</h3>
-            <p>
-              选中复杂条款，AI
-              说明其要求、意义与测试工作的关系，并提示可能相关的其他条款；右侧面板生成解读记录，可围绕同一条款多轮追问。
-            </p>
-            <ul class="feature-list">
-              <li>解读记录与来源页码绑定</li>
-              <li>支持多轮追问，流式输出</li>
-              <li>点击记录一键跳回原文</li>
-            </ul>
-          </div>
-          <div class="feature-visual">
-            <div class="demo-placeholder" data-demo="explain">
-              <div class="demo-placeholder-icon">
-                <svg
-                  width="48"
-                  height="48"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="12" y1="16" x2="12" y2="12"></line>
-                  <line x1="12" y1="8" x2="12.01" y2="8"></line>
-                </svg>
-              </div>
-              <p class="demo-placeholder-title">选中段落 AI 解读 + 追问</p>
-              <p class="demo-placeholder-hint">放入 explain.mp4</p>
-            </div>
-          </div>
-        </div>
+          <article class="workflow-row reveal">
+            <div class="workflow-copy"><span class="feature-index">01 / 读得更顺</span><h3>把定位成本，从阅读里拿走</h3><p>多份 PDF 可在 Tab 间切换，也能左右分屏对照新旧版本。全文搜索、目录跳转、页码滑轨与快速跳页，让你始终停留在需要判断的内容上。</p><div class="chip-list"><span>多 PDF 对照</span><span>全文高亮搜索</span><span>目录与页码跳转</span><span>离线悬停查词</span></div></div>
+            <div class="workflow-media"><div class="demo-placeholder" data-demo="split-view"><div class="demo-placeholder-icon" aria-hidden="true">▥</div><p class="demo-placeholder-title">并排对照与全文定位</p><p class="demo-placeholder-hint">放入 split-view.mp4 或静态截图</p></div></div>
+          </article>
 
-        <!-- 功能 6：暂存组合 -->
-        <div class="feature-row feature-row-reverse reveal">
-          <div class="feature-text">
-            <span class="feature-index">06</span>
-            <h3>暂存区：跨页片段组合解读</h3>
-            <p>
-              分散在多个页面的相关描述，先"加入暂存"，再一次选中多个片段发起自定义解读，让
-              AI 综合回答。
-            </p>
-            <ul class="feature-list">
-              <li>暂存片段支持编辑、删除、清空</li>
-              <li>点击片段一键跳回原文位置</li>
-              <li>自定义问题，按需提问</li>
-            </ul>
-          </div>
-          <div class="feature-visual">
-            <div class="demo-placeholder" data-demo="stash-interpret">
-              <div class="demo-placeholder-icon">
-                <svg
-                  width="48"
-                  height="48"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <path
-                    d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"
-                  ></path>
-                </svg>
-              </div>
-              <p class="demo-placeholder-title">暂存 + 自定义解读</p>
-              <p class="demo-placeholder-hint">放入 stash-interpret.mp4</p>
-            </div>
-          </div>
-        </div>
+          <article class="workflow-row workflow-row-reverse reveal">
+            <div class="workflow-copy"><span class="feature-index">02 / 问得更深</span><h3>选中一段，把问题问透</h3><p>翻译、解读、多轮追问与跨页暂存组合，都从你正在阅读的条款出发。复杂要求不再只得到一段答案，而能被放回真实上下文中继续追问。</p><div class="chip-list"><span>选中即翻译</span><span>AI 解读与追问</span><span>跨页暂存组合</span><span>流式输出</span></div></div>
+            <div class="workflow-media"><div class="demo-placeholder" data-demo="explain"><div class="demo-placeholder-icon" aria-hidden="true">✦</div><p class="demo-placeholder-title">条款解读与多轮追问</p><p class="demo-placeholder-hint">放入 explain.mp4</p></div></div>
+          </article>
 
-        <!-- 功能 7：沉淀与恢复 -->
-        <div class="feature-row reveal">
-          <div class="feature-text">
-            <span class="feature-index">07</span>
-            <h3>工作成果，自动沉淀</h3>
-            <p>
-              批注、解读记录、暂存片段按文件内容 hash
-              保存在本地。上周审到一半的标准，今天打开接着来——文件改名、移动路径都不影响。
-            </p>
-            <ul class="feature-list">
-              <li>按文件内容识别同一 PDF</li>
-              <li>解读记录随时回跳原文页码</li>
-              <li>数据仅存在本地，不经过任何服务器</li>
-            </ul>
-          </div>
-          <div class="feature-visual">
-            <div class="demo-placeholder" data-demo="persist">
-              <div class="demo-placeholder-icon">
-                <svg
-                  width="48"
-                  height="48"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                >
-                  <path
-                    d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"
-                  ></path>
-                  <polyline points="17 21 17 13 7 13 7 21"></polyline>
-                  <polyline points="7 3 7 8 15 8"></polyline>
-                </svg>
-              </div>
-              <p class="demo-placeholder-title">重开文件自动恢复批注与解读</p>
-              <p class="demo-placeholder-hint">放入 persist.mp4（可选）</p>
-            </div>
-          </div>
+          <article class="workflow-row reveal">
+            <div class="workflow-copy"><span class="feature-index">03 / 留得住</span><h3>让结论始终回得去原文</h3><p>翻译浮层、批注、解读记录与暂存片段都会关联文件内容和来源页码。下次打开同一份 PDF，继续阅读，也继续保有判断脉络。</p><div class="chip-list"><span>来源页码回跳</span><span>批注与解读恢复</span><span>最近文件继续阅读</span><span>文件内容识别</span></div></div>
+            <div class="workflow-media"><div class="demo-placeholder" data-demo="persist"><div class="demo-placeholder-icon" aria-hidden="true">↺</div><p class="demo-placeholder-title">成果恢复与原文回溯</p><p class="demo-placeholder-hint">放入 persist.jpg 或 persist.mp4</p></div></div>
+          </article>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- 使用场景 -->
-    <section class="section section-scenarios" id="scenarios">
-      <div class="container">
-        <div class="section-header reveal">
-          <span class="section-tag">使用场景</span>
-          <h2 class="section-title">为天天读标准的人而生</h2>
+      <section class="section ai-context-section" id="ai-context">
+        <div class="container ai-context-wrap reveal">
+          <div class="ai-context-copy"><span class="section-tag section-tag-dark">AI 上下文辅助</span><h2>不只对着一段文字回答。</h2><p>解读与追问时，AI 可以在当前打开的 PDF 中检索相关页面与内容片段，辅助理解跨页条件、核对引用线索，并把回答重新绑定到原文阅读场景。</p><p class="ai-context-note">用于辅助理解与核对，不代替工程判断、检测结论或认证决策。</p></div>
+          <div class="context-flow" aria-label="AI 解读流程"><div class="flow-step"><b>01</b><span>选中条款</span></div><div class="flow-line"></div><div class="flow-step"><b>02</b><span>查阅相关原文</span></div><div class="flow-line"></div><div class="flow-step"><b>03</b><span>结合上下文解读</span></div><div class="flow-line"></div><div class="flow-step"><b>04</b><span>回到来源页码</span></div></div>
         </div>
-        <div class="painpoint-grid">
-          <div class="painpoint-card reveal">
-            <div class="painpoint-icon">
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <path
-                  d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                ></path>
-                <polyline points="14 2 14 8 20 8"></polyline>
-                <line x1="16" y1="13" x2="8" y2="13"></line>
-                <line x1="16" y1="17" x2="8" y2="17"></line>
-              </svg>
-            </div>
-            <h3>检测实验室工程师</h3>
-            <p>
-              写报告前吃透标准：选中条款让 AI
-              解读要求与测试要点，结论留在原文页码上，出报告时可随时回溯出处。
-            </p>
-          </div>
-          <div class="painpoint-card reveal">
-            <div class="painpoint-icon">
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-                <line x1="12" y1="3" x2="12" y2="21"></line>
-              </svg>
-            </div>
-            <h3>制造商合规工程师</h3>
-            <p>
-              应对审核与标准换版：分屏对照新旧版本，差异处随手批注；审核提问时，一键跳回原文条款。
-            </p>
-          </div>
-          <div class="painpoint-card reveal">
-            <div class="painpoint-icon">
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-              >
-                <circle cx="12" cy="12" r="3"></circle>
-                <path
-                  d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
-                ></path>
-              </svg>
-            </div>
-            <h3>研发工程师</h3>
-            <p>
-              设计阶段查要求：悬停查词不打断思路，跨页片段组合解读，快速弄清"这条标准对产品意味着什么"。
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- 隐私安全区域 -->
-    <section class="section section-privacy" id="privacy">
-      <div class="container">
-        <div class="section-header reveal">
-          <span class="section-tag">隐私安全</span>
-          <h2 class="section-title">你的文件，始终属于你</h2>
-          <p class="section-desc">
-            检测认证行业的标准文件往往涉及保密要求，我们把"本地优先"作为第一性原则。
-          </p>
-        </div>
-        <div class="privacy-grid">
-          <div class="privacy-card reveal">
-            <div class="privacy-icon">🔒</div>
-            <h3>PDF 不上传云端</h3>
-            <p>文件仅在本地读取和渲染，不会发送给任何第三方服务器。</p>
-          </div>
-          <div class="privacy-card reveal">
-            <div class="privacy-icon">✂️</div>
-            <h3>仅发送选中片段</h3>
-            <p>只有你主动选中的文本，才会发送给你自己配置的 LLM API。</p>
-          </div>
-          <div class="privacy-card reveal">
-            <div class="privacy-icon">🗝️</div>
-            <h3>API Key 进系统钥匙串</h3>
-            <p>
-              API Key 存入系统安全存储（Keychain / Credential
-              Manager），配置文件中不留明文。
-            </p>
-          </div>
-          <div class="privacy-card reveal">
-            <div class="privacy-icon">💾</div>
-            <h3>数据本地持久化</h3>
-            <p>批注、解读记录、暂存片段按文件 hash 保存到本地 AppData。</p>
-          </div>
-          <div class="privacy-card reveal">
-            <div class="privacy-icon">🏢</div>
-            <h3>可接企业内网模型</h3>
-            <p>
-              Base URL 可指向内网私有部署的 OpenAI
-              兼容端点，配合离线词典，模型问答也能不出内网。
-            </p>
-          </div>
-        </div>
-      </div>
-    </section>
+      <section class="section scenario-section" id="scenarios">
+        <div class="container"><div class="section-header reveal"><span class="section-tag">为天天读标准的人而生</span><h2 class="section-title">不同角色，同一种确定感</h2></div><div class="scenario-grid"><article class="scenario-card reveal"><span class="scenario-mark">实验室</span><h3>检测实验室工程师</h3><p>把复杂条款转为可追溯的测试理解，写报告时随时回到出处。</p></article><article class="scenario-card reveal"><span class="scenario-mark">合规</span><h3>制造商合规工程师</h3><p>在标准换版与审核准备中对照条款、留下批注、快速定位。</p></article><article class="scenario-card reveal"><span class="scenario-mark">研发</span><h3>研发工程师</h3><p>设计阶段按需问清要求，理解“这条标准对产品意味着什么”。</p></article></div></div>
+      </section>
 
-    <!-- 常见问题 -->
-    <section class="section section-faq" id="faq">
-      <div class="container">
-        <div class="section-header reveal">
-          <span class="section-tag">常见问题</span>
-          <h2 class="section-title">上手前，你可能想问</h2>
-        </div>
-        <div class="faq-list">
-          <details class="faq-item reveal">
-            <summary>需要自备模型 API 吗？费用高吗？</summary>
-            <p>
-              需要。填入任意 OpenAI 兼容 API 即可（DeepSeek / Kimi / Qwen /
-              OpenAI 等），按量计费、无订阅费；日常查阅标准的消耗通常每份仅几毛到几块钱。也可填入企业内网模型地址，零外部调用。
-            </p>
-          </details>
-          <details class="faq-item reveal">
-            <summary>我的 PDF 会被上传吗？</summary>
-            <p>
-              不会。文件只在本地读取和渲染；只有你主动选中的文本片段会发送给你自己配置的
-              API。配合内网部署的模型，可以做到数据完全不出内网。
-            </p>
-          </details>
-          <details class="faq-item reveal">
-            <summary>和直接把 PDF 丢给网页版 AI 有什么区别？</summary>
-            <p>
-              整篇上传有泄密风险，且对话关掉就没了。SpecReader AI
-              只发送你选中的片段，翻译和解读以批注形式留在原文页码上，重开文件自动恢复，随时可跳回出处。
-            </p>
-          </details>
-          <details class="faq-item reveal">
-            <summary>支持哪些系统？下载哪个文件？</summary>
-            <p>
-              目前发布 Windows 版本：在 Releases 页面下载安装包
-              <code>SpecReader-AI_*_x64-setup.exe</code>，或免安装的
-              <code>SpecReader AI v*.exe</code>；安装后启动时自动检查更新。macOS
-              可从源码执行 <code>npm run tauri-build</code> 自行构建。
-            </p>
-          </details>
-        </div>
-      </div>
-    </section>
-
-    <!-- 快速上手 -->
-    <section class="section section-start" id="start">
-      <div class="container">
-        <div class="section-header reveal">
-          <span class="section-tag">快速上手</span>
-          <h2 class="section-title">三步开始用</h2>
-        </div>
-        <div class="steps">
-          <div class="step reveal">
-            <div class="step-number">1</div>
-            <h3>下载并安装</h3>
-            <p>
-              从 GitHub Releases 下载
-              <code>x64-setup.exe</code> 安装包（或免安装
-              exe），双击完成安装。
-            </p>
-          </div>
-          <div class="step-divider reveal" aria-hidden="true"></div>
-          <div class="step reveal">
-            <div class="step-number">2</div>
-            <h3>配置 LLM</h3>
-            <p>
-              在设置中填入你的 OpenAI 兼容 API（DeepSeek / Kimi / Qwen / OpenAI
-              等），API Key 会进入系统钥匙串。
-            </p>
-          </div>
-          <div class="step-divider reveal" aria-hidden="true"></div>
-          <div class="step reveal">
-            <div class="step-number">3</div>
-            <h3>打开 PDF 开始阅读</h3>
-            <p>
-              选中任意文本即可翻译或解读；Ctrl / Cmd + F
-              全文搜索，悬停单词可查离线词典。
-            </p>
+      <section class="section privacy-section" id="privacy">
+        <div class="container privacy-layout">
+          <div class="privacy-intro reveal"><span class="section-tag">本地优先，边界清晰</span><h2>你的文件，始终由你掌握。</h2><p>标准文件可能涉及保密要求。SpecReader AI 把本地阅读、可配置模型和可恢复的工作成果放在同一套明确边界里。</p></div>
+          <div class="privacy-list reveal">
+            <article><span>01</span><div><h3>本地打开与渲染</h3><p>PDF 在本地读取与渲染，不会被整份上传到产品服务器。</p></div></article>
+            <article><span>02</span><div><h3>模型请求由你决定</h3><p>翻译、解读和追问会向你配置的模型服务发送必要文本与相关上下文。</p></div></article>
+            <article><span>03</span><div><h3>企业内网也可接入</h3><p>支持配置 OpenAI 兼容端点，可按企业数据策略接入内部模型服务。</p></div></article>
+            <article><span>04</span><div><h3>密钥与成果分别保护</h3><p>API Key 进入系统钥匙串；批注、暂存与解读记录保存在本地并与文件内容关联。</p></div></article>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- CTA 区域 -->
-    <section class="section section-cta">
-      <div class="container">
-        <div class="cta-card reveal">
-          <h2>现在就让 AI 帮你读标准</h2>
-          <p>免费开放，下载即用。</p>
-          <div class="cta-actions">
-            <a
-              class="btn btn-primary btn-lg"
-              href="https://github.com/ChqJourney/smart_reader/releases"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              免费下载
-            </a>
-            <a
-              class="btn btn-secondary btn-lg"
-              href="https://github.com/ChqJourney/smart_reader"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              查看源码
-            </a>
+      <section class="section cost-section" id="cost">
+        <div class="container cost-layout reveal">
+          <div class="cost-intro"><span class="section-tag">使用成本</span><h2>日常阅读，成本可以很轻。</h2><p>SpecReader AI 不收订阅费；你只需使用自己的模型 API。轻量翻译、解读与追问场景下，选用高性价比模型，通常一天几分钱起。</p><p class="cost-note">实际费用取决于模型官方定价、上下文长度、调用次数及平台活动，请以服务商账单为准。</p></div>
+          <div class="model-cards" aria-label="推荐模型">
+            <article class="model-card"><div class="model-card-head"><span class="model-badge">推荐</span><span class="model-index">01</span></div><h3>DeepSeek-V4-Flash</h3><p>适合高频的条款翻译、简短解读与日常追问。</p><div class="model-cost"><strong>轻量使用</strong><span>一天几分钱起</span></div></article>
+            <article class="model-card model-card-dark"><div class="model-card-head"><span class="model-badge">推荐</span><span class="model-index">02</span></div><h3>小米 MiMo-V2.5</h3><p>适合需要更充分上下文理解的阅读与问答场景。</p><div class="model-cost"><strong>轻量使用</strong><span>一天几分钱起</span></div></article>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- 页脚 -->
-    <footer class="footer">
-      <div class="container footer-inner">
-        <div class="footer-brand">
-          <img src="assets/logo.svg" alt="" width="24" height="24" />
-          <span>SpecReader AI</span>
-        </div>
-        <p class="footer-copy">© 2026 SpecReader AI Team.</p>
-        <div class="footer-links">
-          <a
-            href="https://github.com/ChqJourney/smart_reader"
-            target="_blank"
-            rel="noopener noreferrer"
-            >GitHub</a
-          >
-          <a
-            href="https://github.com/ChqJourney/smart_reader/releases"
-            target="_blank"
-            rel="noopener noreferrer"
-            >Releases</a
-          >
-        </div>
-      </div>
-    </footer>
+      <section class="section start-section" id="start">
+        <div class="container"><div class="section-header reveal"><span class="section-tag">开始使用</span><h2 class="section-title">三步，开始一段可追溯的阅读</h2></div><ol class="steps reveal"><li><b>1</b><div><h3>下载 Windows 版</h3><p>从 GitHub Releases 获取安装包，安装后即可启动。</p></div></li><li><b>2</b><div><h3>配置你的模型</h3><p>通过向导或设置填入 OpenAI 兼容 API，先测试连接再开始。</p></div></li><li><b>3</b><div><h3>打开 PDF 阅读</h3><p>选中条款，翻译、解读、追问；让结果留在原文旁。</p></div></li></ol></div>
+      </section>
 
+      <section class="section faq-section" id="faq">
+        <div class="container"><div class="section-header reveal"><span class="section-tag">常见问题</span><h2 class="section-title">下载前，先把边界说清楚</h2></div><div class="faq-list reveal">
+          <details class="faq-item"><summary>支持哪些模型平台？</summary><p>可配置 OpenAI 兼容 API，包括 DeepSeek、Kimi、Qwen、OpenAI 等，也可填写企业内网兼容端点。</p></details>
+          <details class="faq-item"><summary>我的 PDF 会被上传吗？</summary><p>PDF 在本地打开和渲染，不会被整份上传到产品服务器。使用翻译、解读、追问功能时，必要文本与相关上下文会发送到你配置的模型服务。</p></details>
+          <details class="faq-item"><summary>AI 能替我作出合规结论吗？</summary><p>不能。它帮助你翻译、理解、检索和回溯条款，但不替代工程判断、检测结论或认证决策。</p></details>
+          <details class="faq-item"><summary>支持哪些系统？</summary><p>目前正式发布 Windows 版。请在 Releases 页面下载安装包，应用支持启动后检查更新。</p></details>
+          <details class="faq-item"><summary>标准 PDF 的版权如何处理？</summary><p>请确保你对本地打开的标准文件拥有合法使用权。演示与内部材料也应使用自制或获得授权的样本。</p></details>
+        </div></div>
+      </section>
+
+      <section class="section final-cta-section"><div class="container"><div class="final-cta reveal"><p class="section-kicker">让判断有出处，让阅读不断线</p><h2>下一份标准，<br />从读懂开始。</h2><p>免费下载安装，使用你自己的模型 API。</p><div class="cta-actions"><a class="btn btn-light btn-lg" href="https://github.com/ChqJourney/smart_reader/releases" target="_blank" rel="noopener noreferrer">下载 Windows 版 <span aria-hidden="true">↓</span></a><a class="btn btn-ghost btn-lg" href="https://github.com/ChqJourney/smart_reader" target="_blank" rel="noopener noreferrer">查看 GitHub</a></div></div></div></section>
+    </main>
+
+    <footer class="footer"><div class="container footer-inner"><div class="footer-brand"><img src="assets/logo.svg" alt="" width="24" height="24" /><span>SpecReader AI</span></div><p class="footer-copy">标准 PDF 的 AI 阅读工作台 · © 2026 SpecReader AI Team.</p><div class="footer-links"><a href="https://github.com/ChqJourney/smart_reader" target="_blank" rel="noopener noreferrer">GitHub</a><a href="https://github.com/ChqJourney/smart_reader/releases" target="_blank" rel="noopener noreferrer">Releases</a></div></div></footer>
     <script src="js/main.js"></script>
   </body>
 </html>

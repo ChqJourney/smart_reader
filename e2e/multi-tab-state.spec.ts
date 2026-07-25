@@ -78,8 +78,17 @@ async function setupMultiTabTauriMock(page: import("@playwright/test").Page) {
   );
 }
 
+/**
+ * keep-alive：非激活 tab 的 viewer 常驻 DOM（外层 .pdf-panel 带
+ * .viewer-hidden），viewer 内部元素的查询统一 scope 到可见面板，
+ * 避免 strict mode 命中多个 / 读到隐藏 viewer 的状态。
+ */
+function activePanel(page: import("@playwright/test").Page) {
+  return page.locator(".pdf-panel:not(.viewer-hidden)");
+}
+
 async function waitForPdfLoaded(page: import("@playwright/test").Page) {
-  const pageInput = page.getByLabel("页码");
+  const pageInput = activePanel(page).getByLabel("页码");
   await expect(pageInput).toBeVisible();
   await expect(pageInput).toBeEnabled();
   await page.waitForTimeout(1000);
@@ -90,10 +99,10 @@ async function jumpToPage(
   target: number
 ) {
   // 工具栏页码按钮 → 打开跳页面板 → 输入页码回车
-  const pageButton = page.getByLabel("页码");
+  const pageButton = activePanel(page).getByLabel("页码");
   await expect(pageButton).toBeEnabled();
   await pageButton.click();
-  const jumpInput = page.getByLabel("跳转到页");
+  const jumpInput = activePanel(page).getByLabel("跳转到页");
   await jumpInput.fill(String(target));
   await jumpInput.press("Enter");
   await page.waitForTimeout(1500);
@@ -109,7 +118,7 @@ test.describe("Multi-tab state isolation", () => {
     // Open first PDF and jump to page 5.
     await page.getByTestId("open-pdf-btn").click();
     await waitForPdfLoaded(page);
-    const pageInput = page.getByLabel("页码");
+    const pageInput = activePanel(page).getByLabel("页码");
     await jumpToPage(page, 5);
     await expect(pageInput).toHaveText("5");
 
@@ -158,7 +167,7 @@ test.describe("Multi-tab state isolation", () => {
 
     // The remaining tab should still be on page 5.
     await waitForPdfLoaded(page);
-    const pageInput = page.getByLabel("页码");
+    const pageInput = activePanel(page).getByLabel("页码");
     await expect(pageInput).toHaveText("5");
     await expect(
       page.locator(".tab-item", { hasText: "sample.pdf" })
@@ -211,7 +220,7 @@ test.describe("Multi-tab state isolation", () => {
     // Open first PDF and jump to page 5.
     await page.getByTestId("open-pdf-btn").click();
     await waitForPdfLoaded(page);
-    const pageInput = page.getByLabel("页码");
+    const pageInput = activePanel(page).getByLabel("页码");
     await jumpToPage(page, 5);
     await expect(pageInput).toHaveText("5");
 
@@ -233,7 +242,7 @@ test.describe("Multi-tab state isolation", () => {
     // own scroll retention is covered by the page-isolation test.
     await page.evaluate(() => {
       const c = document.querySelector(
-        ".pdf-canvas-container.continuous"
+        ".pdf-panel:not(.viewer-hidden) .pdf-canvas-container.continuous"
       ) as HTMLElement | null;
       if (c) c.scrollTop = 0;
     });

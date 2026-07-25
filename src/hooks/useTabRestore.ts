@@ -14,8 +14,10 @@ import type { PageViewportInfo } from "./useViewportManager";
  * invariant explicit and keeps the viewer free of restore plumbing.
  *
  * Design notes:
- * - PdfViewer is remounted on tab switch via `key={tab.id}`, so each fresh
- *   instance restores its tab's scroll position exactly once.
+ * - Each tab keeps its own mounted PdfViewer (keep-alive): switching tabs only
+ *   toggles visibility, so this hook's mount restore runs once when the tab is
+ *   FIRST opened (a remount still happens when entering/exiting split view —
+ *   those viewers live in a different tree branch).
  *   `hasRestoredRef` guards ONLY that scrollTop restore (a stale scrollTop
  *   re-applied on effect re-runs would snap the container back to an old
  *   position). Pending page jumps are NOT gated on it: goto requests can
@@ -55,6 +57,8 @@ export interface UseTabRestoreOptions {
   numPages: number;
   isLoading: boolean;
   viewMode: "single" | "continuous";
+  /** Viewer 当前页码：用于识别"激活重复带回的同页 pending"（见下）。 */
+  pageNum: number;
   pageViewports: Map<number, PageViewportInfo>;
   tabId?: string;
   /** Navigate to a page (PdfViewer's goToPage). */
@@ -77,9 +81,7 @@ export interface UseTabRestoreOptions {
   onMountRestored?: () => void;
   setPageNum: React.Dispatch<React.SetStateAction<number>>;
   setScale: React.Dispatch<React.SetStateAction<number>>;
-  setViewMode: React.Dispatch<
-    React.SetStateAction<"single" | "continuous">
-  >;
+  setViewMode: React.Dispatch<React.SetStateAction<"single" | "continuous">>;
 }
 
 /** True when viewports for every page in [1, page] are known. */
@@ -100,6 +102,7 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
     numPages,
     isLoading,
     viewMode,
+    pageNum,
     pageViewports,
     tabId,
     goToPage,
@@ -165,6 +168,17 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
 
     const pending = pendingGotoPageRef.current;
     if (pending !== undefined && tabId) {
+      // keep-alive 保活下，激活 tab（activateTab / 关闭当前 tab 的顶替激活）
+      // 会给已挂载的 viewer 重复带上 pendingGotoPage，值就是它的当前页码。
+      // 挂载恢复完成后若目标页即当前页，执行 goToPage 只会把连续模式的滚动
+      // 位置吸附到页顶、丢失页内偏移——直接清除 pending 并保持原位。真正的
+      // 跨页跳转（暂存/解读记录点击）目标页与当前页不同，不受影响；同页
+      // 点击保持原位，与 handleGotoSession 的同页早退语义一致。
+      if (hasRestoredRef.current && pending === pageNum) {
+        onClearPendingGotoPage?.(tabId);
+        pendingGotoPageRef.current = undefined;
+        return;
+      }
       // Wait until viewports for EVERY page up to the target are known, so the
       // continuous-mode jump uses exact viewport accumulation instead of DOM
       // geometry measured against not-yet-loaded placeholder heights.
@@ -249,6 +263,7 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
     numPages,
     isLoading,
     viewMode,
+    pageNum,
     pageViewports,
     tabId,
     goToPage,

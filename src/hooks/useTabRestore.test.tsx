@@ -29,6 +29,7 @@ function makeOptions(overrides?: {
   numPages?: number;
   isLoading?: boolean;
   viewMode?: "single" | "continuous";
+  pageNum?: number;
   pageViewports?: Map<number, PageViewportInfo>;
   tabId?: string;
 }) {
@@ -40,12 +41,13 @@ function makeOptions(overrides?: {
   return {
     opts: {
       initialState: overrides?.initialState,
-      pdf: (
-        overrides && "pdf" in overrides ? overrides.pdf : { dummy: true }
-      ) as never,
+      pdf: (overrides && "pdf" in overrides
+        ? overrides.pdf
+        : { dummy: true }) as never,
       numPages,
       isLoading: overrides?.isLoading ?? false,
       viewMode: overrides?.viewMode ?? "continuous",
+      pageNum: overrides?.pageNum ?? overrides?.initialState?.pageNum ?? 1,
       pageViewports,
       tabId: overrides?.tabId ?? "tab-1",
       goToPage: vi.fn(),
@@ -335,5 +337,34 @@ describe("useTabRestore", () => {
       expect(opts.goToPage).toHaveBeenCalledWith(4);
     });
     expect(container.scrollTop).toBe(10);
+  });
+
+  it("clears a post-mount pending goto targeting the CURRENT page without jumping (keep-alive activation)", async () => {
+    // keep-alive 保活下 activateTab 每次激活都带回 pendingGotoPage=tab.pageNum；
+    // viewer 已挂载且就在该页时，跳转只会把滚动位置吸附到页顶，必须跳过。
+    const { opts } = makeOptions({
+      initialState: { scrollTop: 400 },
+      pageNum: 3,
+    });
+    const { rerender } = renderHook(
+      (props: { init?: Parameters<typeof useTabRestore>[0]["initialState"] }) =>
+        useTabRestore({ ...opts, initialState: props.init }),
+      { initialProps: { init: opts.initialState } }
+    );
+
+    const container = opts.continuousContainerRef.current!;
+    await waitFor(() => {
+      expect(container.scrollTop).toBe(400);
+    });
+
+    // Activation re-delivers pendingGotoPage equal to the current page: no
+    // jump, pending cleared, scroll position untouched.
+    rerender({ init: { scrollTop: 400, pendingGotoPage: 3 } });
+
+    await waitFor(() => {
+      expect(opts.onClearPendingGotoPage).toHaveBeenCalledWith("tab-1");
+    });
+    expect(opts.goToPage).not.toHaveBeenCalled();
+    expect(container.scrollTop).toBe(400);
   });
 });

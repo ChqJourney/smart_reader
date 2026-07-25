@@ -751,10 +751,7 @@ function App() {
           targetTab.id === splitView.secondaryTabId
         ) {
           setFocusedViewer("secondary");
-        } else if (
-          splitView.isSplitView &&
-          targetTab.id === tabs.activeTabId
-        ) {
+        } else if (splitView.isSplitView && targetTab.id === tabs.activeTabId) {
           setFocusedViewer("primary");
         }
         return;
@@ -1031,44 +1028,88 @@ function App() {
           </>
         ) : layout.leftVisible ? (
           <>
-            <div
-              className={`pdf-panel ${showOnlyLeft ? "expanded" : ""}`}
-              style={
-                showBoth
-                  ? { width: `${layout.leftPct}%` }
-                  : showOnlyLeft
-                    ? { flex: 1 }
-                    : undefined
-              }
-            >
-              <PdfViewer
-                key={tabs.activeTab?.id ?? "no-tab"}
-                ref={pdfViewerRef}
-                tabId={tabs.activeTab?.id}
-                filePath={tabs.activeTab?.filePath ?? ""}
-                fileHash={tabs.activeTab?.fileHash}
-                cachedBytes={
-                  tabs.activeTab
-                    ? pdfCacheRef.current.get(tabs.activeTab.filePath)
-                    : undefined
+            {tabs.tabs.length === 0 ? (
+              <div
+                className={`pdf-panel ${showOnlyLeft ? "expanded" : ""}`}
+                style={
+                  showBoth
+                    ? { width: `${layout.leftPct}%` }
+                    : showOnlyLeft
+                      ? { flex: 1 }
+                      : undefined
                 }
-                onPdfLoaded={handlePdfLoaded}
-                onSelection={handleSelection}
-                onToggleVisibility={layout.toggleLeft}
-                initialState={activeTabInitialState}
-                onStateChange={tabs.handleViewerStateChange}
-                annotations={persistence.visibleTabAnnotations}
-                highlightedAnnotationId={
-                  tabs.activeTab?.highlightedAnnotationId
-                }
-                onAnnotationUpdate={persistence.handleAnnotationUpdate}
-                onAnnotationDelete={persistence.handleAnnotationDelete}
-                onExplainClick={handleExplainClick}
-                onClearPendingGotoPage={tabs.clearTabPendingGotoPage}
-                hoverTranslate={hoverTranslateActive}
-                settings={settings}
-              />
-            </div>
+              >
+                <PdfViewer
+                  ref={pdfViewerRef}
+                  filePath=""
+                  onPdfLoaded={handlePdfLoaded}
+                  onSelection={handleSelection}
+                  onToggleVisibility={layout.toggleLeft}
+                  onStateChange={tabs.handleViewerStateChange}
+                  onAnnotationUpdate={persistence.handleAnnotationUpdate}
+                  onAnnotationDelete={persistence.handleAnnotationDelete}
+                  onExplainClick={handleExplainClick}
+                  onClearPendingGotoPage={tabs.clearTabPendingGotoPage}
+                  hoverTranslate={hoverTranslateActive}
+                  settings={settings}
+                />
+              </div>
+            ) : (
+              // keep-alive 保活：所有已打开 tab 的 viewer 常驻挂载，非激活的
+              // 仅 display:none 隐藏。切 tab 不再重挂载 → canvas 位图、滚动
+              // 位置、页码与工具栏状态全部保留，切换瞬时完成（此前每次切换
+              // 都要重新 getDocument + 全量重渲染，界面闪"加载中"占位）。
+              tabs.tabs.map((tab) => {
+                const isActiveTab = tab.id === tabs.activeTabId;
+                return (
+                  <div
+                    key={tab.id}
+                    className={`pdf-panel ${showOnlyLeft ? "expanded" : ""} ${
+                      isActiveTab ? "" : "viewer-hidden"
+                    }`}
+                    style={
+                      showBoth
+                        ? { width: `${layout.leftPct}%` }
+                        : showOnlyLeft
+                          ? { flex: 1 }
+                          : undefined
+                    }
+                  >
+                    <PdfViewer
+                      ref={isActiveTab ? pdfViewerRef : undefined}
+                      tabId={tab.id}
+                      filePath={tab.filePath}
+                      fileHash={tab.fileHash}
+                      isActive={isActiveTab}
+                      cachedBytes={pdfCacheRef.current.get(tab.filePath)}
+                      onPdfLoaded={handlePdfLoaded}
+                      onSelection={handleSelection}
+                      onToggleVisibility={
+                        isActiveTab ? layout.toggleLeft : undefined
+                      }
+                      initialState={{
+                        pageNum: tab.pageNum,
+                        scale: tab.scale,
+                        viewMode: tab.viewMode,
+                        scrollTop: tab.scrollTop,
+                        pendingGotoPage: tab.pendingGotoPage,
+                      }}
+                      onStateChange={tabs.handleViewerStateChange}
+                      annotations={
+                        persistence.annotationsByHash[tab.fileHash || ""]
+                      }
+                      highlightedAnnotationId={tab.highlightedAnnotationId}
+                      onAnnotationUpdate={persistence.handleAnnotationUpdate}
+                      onAnnotationDelete={persistence.handleAnnotationDelete}
+                      onExplainClick={handleExplainClick}
+                      onClearPendingGotoPage={tabs.clearTabPendingGotoPage}
+                      hoverTranslate={hoverTranslateActive}
+                      settings={settings}
+                    />
+                  </div>
+                );
+              })
+            )}
             {showBoth && (
               <div className="panel-divider" onMouseDown={layout.startResize}>
                 <div className="panel-divider-handle" />

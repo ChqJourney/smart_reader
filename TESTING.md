@@ -124,6 +124,17 @@ E2E 测试通过 mock Tauri `invoke` 返回 PDF 字节，fixtures 目录包含 `
 
 - 选中文本 → 浮动工具条 → 翻译流程。
 
+### keep-alive 选择器约定
+
+单视图为 tab 保活（keep-alive）渲染：所有已打开 tab 的 PdfViewer 常驻 DOM，非激活的仅以外层 `.pdf-panel.viewer-hidden` 隐藏。因此凡是查询 viewer 内部元素（页码按钮、跳页面板、`.pdf-canvas-container`、`.pdf-page-wrapper` 等）都必须 scope 到可见面板，否则 strict mode 会命中多个或读到隐藏 viewer 的状态：
+
+```ts
+const activePanel = page.locator(".pdf-panel:not(.viewer-hidden)");
+await activePanel.getByLabel("页码").click();
+// page.evaluate 中同理：
+// document.querySelector(".pdf-panel:not(.viewer-hidden) .pdf-canvas-container")
+```
+
 ### 运行注意
 
 E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 环境下建议设置 `CI=true`。单实例与文件关联需在打包后的安装包上手动验证，E2E 较难覆盖。
@@ -265,12 +276,12 @@ E2E 测试启动 Vite dev server，首次运行可能需要下载 Chromium。CI 
 
 CI 在 `.github/workflows/` 下分层触发，避免每次 push 都跑全量：
 
-| Workflow       | 触发                               | 内容                                                                                              |
-| -------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------- |
-| `ci-quick.yml` | 非 master 分支 push                | type-check / lint / 单元测试                                                                      |
+| Workflow       | 触发                               | 内容                                                                                                 |
+| -------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `ci-quick.yml` | 非 master 分支 push                | type-check / lint / 单元测试                                                                         |
 | `ci-full.yml`  | master push / PR                   | 上述全部 + 前端 build + cargo test / clippy / audit + 双浏览器 E2E（三个 job 并行，Rust 依赖有缓存） |
-| `release.yml`  | 手动 dispatch（输入版本号）        | 一键发版，当前仅发布 Windows 安装包与可执行文件                                                    |
-| `landing.yml`  | master 上 `landing/**` 变更 / 手动 | 部署 GitHub Pages                                                                                 |
+| `release.yml`  | 手动 dispatch（输入版本号）        | 一键发版，当前仅发布 Windows 安装包与可执行文件                                                      |
+| `landing.yml`  | master 上 `landing/**` 变更 / 手动 | 部署 GitHub Pages                                                                                    |
 
 约定：`docs/**`、`landing/**`、`**.md` 的变更不触发 CI（paths-ignore）；审计类检查（npm audit / cargo audit）只在 master 集成时运行，不作为日常 push 门禁。
 

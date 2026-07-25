@@ -40,7 +40,8 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({
 // Mock the Tauri window API: capture the onCloseRequested handler so tests can
 // simulate window close, and stub the controls TitleBar touches on mount.
 const mockWindow = vi.hoisted(() => ({
-  closeHandler: null as null | ((event: { preventDefault: () => void }) => void),
+  closeHandler: null as
+    null | ((event: { preventDefault: () => void }) => void),
   destroy: vi.fn(() => Promise.resolve()),
   minimize: vi.fn(() => Promise.resolve()),
   unmaximize: vi.fn(() => Promise.resolve()),
@@ -176,7 +177,12 @@ vi.mock("./components/PdfViewer", () => ({
 }));
 
 function triggerPdfSelection() {
-  fireEvent.click(screen.getByTestId("trigger-selection"));
+  // keep-alive 下非激活 tab 的 viewer 常驻 DOM（外层 wrapper 带
+  // .viewer-hidden），只对激活 viewer 触发选区。
+  const btn = document.querySelector(
+    ".pdf-panel:not(.viewer-hidden) [data-testid='trigger-selection']"
+  ) as HTMLElement;
+  fireEvent.click(btn);
 }
 
 async function openPdf(path = "/test/file.pdf") {
@@ -818,10 +824,14 @@ describe("App", () => {
       expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);
     });
 
-    // Exit split view and verify we are back to a single PDF panel.
+    // Exit split view and verify we are back to a single VISIBLE PDF panel
+    // (keep-alive: the other tab's viewer stays mounted but hidden).
     fireEvent.click(screen.getByLabelText("退出并排视图"));
     await waitFor(() => {
-      expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(1);
+      const visibleViewers = document.querySelectorAll(
+        ".pdf-panel:not(.viewer-hidden) [data-testid='pdf-viewer']"
+      );
+      expect(visibleViewers).toHaveLength(1);
     });
   });
 

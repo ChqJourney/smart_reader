@@ -75,7 +75,11 @@ interface PdfViewerProps {
   ) => void;
   onToggleVisibility?: () => void;
   initialState?: Partial<PdfViewerState & { pendingGotoPage?: number }>;
-  onStateChange?: (state: PdfViewerState) => void;
+  /**
+   * 上报 viewer 状态。keep-alive 下多个 viewer 同时挂载，必须携带 tabId，
+   * 否则 App 侧无法区分上报来源（缺省会误写入当前激活 tab 的记录）。
+   */
+  onStateChange?: (state: PdfViewerState, tabId?: string) => void;
   onClearPendingGotoPage?: (tabId: string) => void;
   annotations?: Annotation[];
   highlightedAnnotationId?: string | null;
@@ -93,6 +97,14 @@ interface PdfViewerProps {
    * 方向键同滚两份文档。单视图恒 true（缺省值）。
    */
   isFocused?: boolean;
+  /**
+   * keep-alive 保活场景下该 viewer 是否为激活 tab（App 对非激活 tab 的
+   * viewer 加 display:none 而非卸载）。隐藏时忽略 IntersectionObserver 的
+   * 可见性上报与滚动页码同步：display:none 会让 IO 对全部页回报 ratio=0，
+   * 若不清空拦截，visiblePages 会被清空、renderPages 收缩，PdfPage 的离屏
+   * 释放逻辑随之把 canvas 位图清零，保活失效。分屏两个屏均可见，传 true。
+   */
+  isActive?: boolean;
   /**
    * 挂载恢复完成后自动执行一次 fit-to-width（进入并排模式时 App 对两个
    * 屏都开启）。页码不变：连续模式走 zoomTo 的锚点恢复，锚点页保持在
@@ -179,6 +191,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       hoverTranslate,
       settings,
       isFocused = true,
+      isActive = true,
       autoFitToWidth = false,
     },
     ref
@@ -295,6 +308,22 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       pageViewportsRef.current = pageViewports;
     }, [pageViewports]);
 
+    // keep-alive 隐藏（display:none）时 IntersectionObserver 会对所有页回报
+    // ratio=0；忽略这些回调以冻结 visiblePages / renderPages，已渲染的
+    // canvas 位图得以保留，重新激活时零重渲染。用 ref 读 isActive 保持回调
+    // 引用稳定，避免 PdfPage 的 IO effect 因回调变化而重绑。
+    const isActiveRef = useRef(isActive);
+    useEffect(() => {
+      isActiveRef.current = isActive;
+    }, [isActive]);
+    const handlePageVisibility = useCallback(
+      (page: number, ratio: number) => {
+        if (!isActiveRef.current) return;
+        setPageVisible(page, ratio);
+      },
+      [setPageVisible]
+    );
+
     // Zoom scroll-anchoring (capture/restore + isZooming suppression) is owned
     // by useZoomAnchor. The viewer only forwards the restored state to the
     // parent via the live onStateChange ref, so the hook stays free of the
@@ -306,9 +335,9 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         viewMode: "single" | "continuous";
         scrollTop: number;
       }) => {
-        onStateChangeRef.current?.(state);
+        onStateChangeRef.current?.(state, tabId);
       },
-      []
+      [tabId]
     );
     const { zoomTo, captureCursorAnchor, isZoomingRef } = useZoomAnchor({
       viewMode,
@@ -472,9 +501,9 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         lastStateRef.current.viewMode !== newState.viewMode
       ) {
         lastStateRef.current = newState;
-        onStateChange?.(newState);
+        onStateChange?.(newState, tabId);
       }
-    }, [pageNum, scale, viewMode, onStateChange]);
+    }, [pageNum, scale, viewMode, onStateChange, tabId]);
 
     // Clamp pageNum when numPages becomes known or changes
     useEffect(() => {
@@ -484,8 +513,9 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     }, [numPages, pageNum]);
 
     // PDF loading/caching/outline now live in usePdfDocument (see hook call
-    // above). filePath changes trigger a remount (key=tab.id), so viewport/page
-    // state and refs are naturally reset — no inline reset needed here.
+    // above). Each tab keeps its own mounted PdfViewer (keep-alive), so
+    // filePath never changes for a given instance — viewport/page state and
+    // refs need no inline reset here.
 
     // Keyboard navigation
     useEffect(() => {
@@ -717,12 +747,15 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
             // state stays accurate after a programmatic jump. Without this
             // the post-jump scrollTop is never reported until the user
             // scrolls again, so switching tabs restores a stale position.
-            onStateChangeRef.current?.({
-              pageNum: page,
-              scale: scaleRef.current,
-              viewMode,
-              scrollTop: container.scrollTop,
-            });
+            onStateChangeRef.current?.(
+              {
+                pageNum: page,
+                scale: scaleRef.current,
+                viewMode,
+                scrollTop: container.scrollTop,
+              },
+              tabId
+            );
           };
           const handleScroll = () => {
             clearTimeout(timeout);
@@ -741,7 +774,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           jumpScrollCleanupRef.current = cleanup;
         }
       },
-      [numPages, viewMode, pageWrapperRefs]
+      [numPages, viewMode, pageWrapperRefs, tabId]
     );
 
     // 跳页面板提交：跳转 + 大数字闪卡。闪卡仅面板跳转触发（工具栏页码
@@ -777,9 +810,10 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     }, [goToPage]);
 
     // Tab restore (initialState sync + pending goto page + scrollTop restore)
-    // is owned by useTabRestore. It runs at most once per mount: PdfViewer is
-    // remounted on tab switch via key={tab.id}, so each instance restores its
-    // tab's position exactly once. Must be called AFTER goToPage is defined.
+    // is owned by useTabRestore. It runs at most once per mount: each tab keeps
+    // its own mounted PdfViewer (keep-alive), so each instance restores its
+    // tab's position exactly once when the tab is first opened. Must be called
+    // AFTER goToPage is defined.
     // mountRestored 标记挂载恢复（含 scrollTop 回写）完成，供 autoFitToWidth
     // 排序：fit 必须在恢复之后执行，缩放锚点才能捕获到正确的当前页。
     const [mountRestored, setMountRestored] = useState(false);
@@ -790,6 +824,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       numPages,
       isLoading,
       viewMode,
+      pageNum,
       pageViewports,
       tabId,
       goToPage,
@@ -883,6 +918,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       isJumpingRef,
       isZoomingRef,
       pageVisibilityRatios,
+      isActive,
     });
 
     const goToPrevPage = () => setPageNum((p) => Math.max(1, p - 1));
@@ -1239,7 +1275,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                     fileName={fileName}
                     onSelection={handleSelection}
                     onGoToPage={goToPage}
-                    onVisibilityChange={setPageVisible}
+                    onVisibilityChange={handlePageVisibility}
                     onViewportLoaded={reportViewportLoaded}
                     annotations={annotations}
                     highlightedAnnotationId={highlightedAnnotationId}

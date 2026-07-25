@@ -66,6 +66,12 @@ export interface UseScrollPageSyncOptions {
    * correct (page jumps also set pageNum explicitly and suppress this sync).
    */
   pageVisibilityRatios?: React.MutableRefObject<Map<number, number>>;
+  /**
+   * False while the viewer is keep-alive hidden (inactive tab, display:none).
+   * Scroll/resize callbacks are ignored so a hidden viewer never recomputes
+   * or reports page state from a 0-size layout.
+   */
+  isActive?: boolean;
 }
 
 /**
@@ -89,6 +95,7 @@ export function useScrollPageSync(
     isJumpingRef,
     isZoomingRef,
     pageVisibilityRatios,
+    isActive = true,
   } = options;
 
   useEffect(() => {
@@ -190,6 +197,9 @@ export function useScrollPageSync(
 
     const updateVisiblePage = () => {
       if (cancelled) return;
+      // Keep-alive hidden viewer (display:none): layout is 0-sized and no real
+      // scrolling can happen — ignore scroll/resize callbacks entirely.
+      if (!isActive) return;
       // Update pageNum IMMEDIATELY (unless a programmatic jump / zoom reflow
       // holds the lock — those events are settled later by scheduleSettle).
       // setPageNum uses a functional update that bails out when the page
@@ -228,5 +238,6 @@ export function useScrollPageSync(
     isJumpingRef,
     isZoomingRef,
     pageVisibilityRatios,
+    isActive,
   ]);
 }

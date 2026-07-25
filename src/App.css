@@ -252,6 +252,11 @@ body {
   flex: 1;
 }
 
+/* keep-alive：非激活 tab 的 viewer 常驻挂载但隐藏，切 tab 瞬时恢复 */
+.pdf-panel.viewer-hidden {
+  display: none;
+}
+
 .right-panel {
   overflow: hidden;
   display: flex;

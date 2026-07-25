@@ -92,19 +92,28 @@ async function setupLargeDocTauriMock(page: import("@playwright/test").Page) {
   );
 }
 
+/**
+ * keep-alive：非激活 tab 的 viewer 常驻 DOM（外层 .pdf-panel 带
+ * .viewer-hidden），viewer 内部元素的查询统一 scope 到可见面板，
+ * 避免 strict mode 命中多个 / 读到隐藏 viewer 的状态。
+ */
+function activePanel(page: import("@playwright/test").Page) {
+  return page.locator(".pdf-panel:not(.viewer-hidden)");
+}
+
 /** The page whose top edge is closest to the container top (same rule as the app). */
 async function getVisiblePage(
   page: import("@playwright/test").Page
 ): Promise<number | null> {
   return page.evaluate(() => {
     const container = document.querySelector(
-      ".pdf-canvas-container.continuous"
+      ".pdf-panel:not(.viewer-hidden) .pdf-canvas-container.continuous"
     ) as HTMLElement | null;
     if (!container) return null;
 
     const containerRect = container.getBoundingClientRect();
     const wrappers = Array.from(
-      document.querySelectorAll(".pdf-page-wrapper")
+      container.querySelectorAll(".pdf-page-wrapper")
     ) as HTMLElement[];
 
     let bestPage = 1;
@@ -131,14 +140,14 @@ async function getScrollLeft(
 ): Promise<number> {
   return page.evaluate(() => {
     const container = document.querySelector(
-      ".pdf-canvas-container.continuous"
+      ".pdf-panel:not(.viewer-hidden) .pdf-canvas-container.continuous"
     ) as HTMLElement | null;
     return container ? container.scrollLeft : -1;
   });
 }
 
 async function waitForPdfLoaded(page: import("@playwright/test").Page) {
-  const pageInput = page.getByLabel("页码");
+  const pageInput = activePanel(page).getByLabel("页码");
   await expect(pageInput).toBeVisible();
   await expect(pageInput).toBeEnabled();
 }
@@ -149,8 +158,8 @@ async function jumpToPage(
   settleTimeout = 1500
 ) {
   // 工具栏页码按钮 → 打开跳页面板 → 输入页码回车
-  await page.getByLabel("页码").click();
-  const jumpInput = page.getByLabel("跳转到页");
+  await activePanel(page).getByLabel("页码").click();
+  const jumpInput = activePanel(page).getByLabel("跳转到页");
   await jumpInput.fill(String(target));
   await jumpInput.press("Enter");
   await page.waitForTimeout(settleTimeout);
@@ -266,7 +275,7 @@ test.describe("Large document (>50 pages) zoom / fit / tab restore", () => {
     // Final switch back: the restore must land on page 40, not page 1.
     await page.locator(".tab-item", { hasText: "sample-long.pdf" }).click();
 
-    const pageInput = page.getByLabel("页码");
+    const pageInput = activePanel(page).getByLabel("页码");
     await expect(pageInput).toHaveText("40", { timeout: 15000 });
     await expect.poll(() => getVisiblePage(page), { timeout: 15000 }).toBe(40);
   });

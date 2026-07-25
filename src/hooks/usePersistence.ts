@@ -65,6 +65,8 @@ export interface UsePersistenceProps {
 export interface UsePersistenceReturn {
   annotations: Annotation[];
   visibleTabAnnotations: Annotation[];
+  /** 按 fileHash 分桶的批注（keep-alive viewer 按 tab 各自传递）。 */
+  annotationsByHash: Record<string, Annotation[]>;
   setAnnotations: React.Dispatch<React.SetStateAction<Annotation[]>>;
   stashes: StashItem[];
   setStashes: React.Dispatch<React.SetStateAction<StashItem[]>>;
@@ -1493,6 +1495,7 @@ export function usePersistence({
     () => ({
       annotations,
       visibleTabAnnotations,
+      annotationsByHash,
       setAnnotations,
       stashes,
       setStashes,
@@ -1521,6 +1524,7 @@ export function usePersistence({
     [
       annotations,
       visibleTabAnnotations,
+      annotationsByHash,
       setAnnotations,
       stashes,
       sessions,

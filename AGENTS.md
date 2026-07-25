@@ -16,7 +16,7 @@
 
 - 自定义标题栏（无边框窗口 `decorations: false`）：品牌区拖动 + 最近文件 / 打开 PDF / 设置 + 窗口控制按钮。
 - 首次启动配置向导（SetupWizard）：选平台 → 填 Key → 测试连接，全部平台未配置 Key 时才自动弹出，设置里可重跑。
-- 多 PDF Tab 同时打开（最多 10 个），支持左右并排对照两份 PDF。进入并排的入口：拖拽非激活 tab 到阅读区（带 drop-zone 遮罩）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
+- 多 PDF Tab 同时打开（最多 10 个），单视图下所有 tab 的 PdfViewer **常驻挂载（keep-alive）**：切 tab 仅切换 `display:none`，canvas 位图 / 滚动位置 / 页码 / 工具栏状态全部保留，切换瞬时完成；隐藏 viewer 通过 `isActive` prop 冻结 IO 可见性上报与滚动页码同步，激活时带回的同页 `pendingGotoPage` 由 useTabRestore 直接清除不跳转。支持左右并排对照两份 PDF。进入并排的入口：拖拽非激活 tab 到阅读区（带 drop-zone 遮罩）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
 - PDF 本地渲染、文本选区、缩放、页码跳转、单页 / 连续滚动阅读模式。
 - 右侧页码滑轨（PageRail）：替代原生垂直滚动条（CSS 隐藏，水平滚动条保留），拖动 / 悬停时显示页码 tooltip；连续模式拖动直接驱动 scrollTop，单页模式按位置映射页码。
 - Cmd/Ctrl+G 跳页面板（PageJumpPanel）：手动输入页码回车跳转，跳转时阅读区中央闪现大数字页码闪卡（600ms 定时清除）；工具栏页码显示为按钮，点击同样打开跳页面板。
@@ -369,7 +369,7 @@ PdfViewer.tsx（协调层：UI + 组合 hooks）
 ├── useZoomAnchor                       # 缩放锚点（isZooming 抑制）
 ├── useSearchDomain                     # 跨 text item 短语搜索索引/高亮/导航（PDF 原始坐标）
 ├── useScrollPageSync                   # 滚动页码同步 + scrollTop 上报
-├── useTabRestore                       # tab 状态恢复 + pending 跳转
+├── useTabRestore                       # tab 状态恢复（keep-alive：仅 tab 首次打开时挂载恢复）+ pending 跳转（激活带回的同页 pending 直接清除）
 ├── pageNum / scale / viewMode          # 本组件持有的三要素状态
 ├── jumpOpen / flashPage                # Cmd/Ctrl+G 跳页面板与跳页闪卡（面板提交才闪，600ms 定时清除）
 ├── PageRail                            # 右侧页码滑轨（连续模式拖动直写 scrollTop，页码由 useScrollPageSync 停息重算收敛）

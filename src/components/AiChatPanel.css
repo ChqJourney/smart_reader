@@ -64,58 +64,6 @@
   color: #1f1f1f;
 }
 
-.llm-config-form {
-  padding: 16px;
-  border-bottom: 1px solid #e5e5e5;
-  background: #fafafa;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  flex-shrink: 0;
-}
-
-.llm-config-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 0.8rem;
-  color: #616161;
-  font-weight: 500;
-}
-
-.llm-config-form input {
-  padding: 8px 10px;
-  border: 1px solid #d1d1d1;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  background: #fff;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.llm-config-form input:focus {
-  outline: none;
-  border-color: #0078d4;
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
-}
-
-.llm-config-form button {
-  padding: 8px 16px;
-  background: #0078d4;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: 500;
-  transition: background 0.15s ease;
-}
-
-.llm-config-form button:hover {
-  background: #006cbe;
-}
-
 .ai-chat-messages {
   flex: 1;
   overflow: auto;
@@ -447,71 +395,10 @@
   font-style: italic;
 }
 
-.session-item-toggle {
-  font-size: 0.7rem;
-  color: #888;
-}
-
 .session-item-prompt {
   font-size: 0.8rem;
   color: #1f1f1f;
   word-break: break-word;
-}
-
-.session-item-messages {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #eee;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.session-message {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.session-message-label {
-  font-size: 0.75rem;
-  color: #888;
-  font-weight: 500;
-}
-
-.session-message-content {
-  font-size: 0.8rem;
-  color: #424242;
-  line-height: 1.5;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: #f8f8f8;
-}
-
-.session-message.user .session-message-content {
-  background: #e8f0fe;
-}
-
-.session-message-content.markdown p {
-  margin: 0 0 0.5em 0;
-}
-
-.session-message-content.markdown p:last-child {
-  margin-bottom: 0;
-}
-
-.session-message-content.markdown ul,
-.session-message-content.markdown ol {
-  margin: 0 0 0.5em 0;
-  padding-left: 1.2em;
-}
-
-.session-message-content.markdown code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  background: rgba(0, 0, 0, 0.05);
-  padding: 1px 3px;
-  border-radius: 3px;
-  font-size: 0.9em;
 }
 
 .streaming-cursor {
@@ -602,114 +489,6 @@
 .follow-up-input button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-.explain-list {
-  padding: 8px;
-}
-
-.explain-item {
-  padding: 10px 12px;
-  background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
-  margin-bottom: 8px;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.explain-item:hover {
-  background: #f8f8f8;
-  border-color: #0078d4;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
-}
-
-.explain-item.streaming {
-  border-color: #0078d4;
-}
-
-.explain-item.expanded {
-  background: #fafafa;
-}
-
-.explain-item-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-
-.explain-item-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.explain-item-page {
-  font-size: 0.75rem;
-  color: #757575;
-  font-weight: 500;
-}
-
-.explain-item-status {
-  font-size: 0.75rem;
-  color: #0078d4;
-  font-style: italic;
-}
-
-.explain-item-toggle {
-  font-size: 0.7rem;
-  color: #888;
-}
-
-.explain-item-source {
-  font-size: 0.8rem;
-  color: #1f1f1f;
-  margin-bottom: 6px;
-  word-break: break-word;
-}
-
-.explain-item-content {
-  font-size: 0.8rem;
-  color: #424242;
-  line-height: 1.5;
-  padding-top: 8px;
-  border-top: 1px solid #eee;
-  margin-top: 8px;
-}
-
-.explain-item-content.markdown p {
-  margin: 0 0 0.5em 0;
-}
-
-.explain-item-content.markdown p:last-child {
-  margin-bottom: 0;
-}
-
-.explain-item-content.markdown ul,
-.explain-item-content.markdown ol {
-  margin: 0 0 0.5em 0;
-  padding-left: 1.2em;
-}
-
-.explain-item-content.markdown code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  background: rgba(0, 0, 0, 0.05);
-  padding: 1px 3px;
-  border-radius: 3px;
-  font-size: 0.9em;
-}
-
-.explain-item-content.markdown a {
-  color: #0078d4;
-  text-decoration: none;
-}
-
-.explain-item-content.markdown a:hover {
-  text-decoration: underline;
 }
 
 .stash-item-actions {

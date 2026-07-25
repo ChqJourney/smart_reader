@@ -428,8 +428,14 @@ describe("PdfViewer continuous mode page jump", () => {
 
     expect(pageInput.textContent).toBe("1");
 
-    const nextButton = screen.getByLabelText("下一页");
-    const prevButton = screen.getByLabelText("上一页");
+    const nextButton = container.querySelector(
+      '.pdf-controls-center button[aria-label="下一页"]'
+    ) as HTMLButtonElement;
+    const prevButton = container.querySelector(
+      '.pdf-controls-center button[aria-label="上一页"]'
+    ) as HTMLButtonElement;
+    expect(nextButton).not.toBeNull();
+    expect(prevButton).not.toBeNull();
 
     fireEvent.click(nextButton);
     await waitFor(() => {

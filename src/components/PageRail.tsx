@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { pctToPage, scrollTopToPage } from "../utils/pageRail";
 import type { PageViewportInfo } from "../hooks/useViewportManager";
+import Icon from "./Icon";
 import "./PageRail.css";
 
 interface PageRailProps {
@@ -13,6 +14,9 @@ interface PageRailProps {
   pageViewportsRef: RefObject<Map<number, PageViewportInfo>>;
   scaleRef: RefObject<number>;
   goToPage: (page: number) => void;
+  viewerBodyRef: RefObject<HTMLDivElement | null>;
+  onPageUp: () => void;
+  onPageDown: () => void;
 }
 
 /**
@@ -24,6 +28,9 @@ interface PageRailProps {
  * - 单页模式：thumb 位置 = (pageNum - 1) / (numPages - 1)；拖动按 pct 映射
  *   页码调 goToPage。
  * thumb / tooltip 均通过 ref 直接写 DOM，避免滚动/拖动高频触发 React 渲染。
+ *
+ * 新增：滑轨上方提供上/下翻页按钮，行为与键盘 PageUp/PageDown 一致；
+ * 按钮与滑轨整体默认隐藏，鼠标靠近阅读区右边界时淡入显示。
  */
 export default function PageRail({
   viewMode,
@@ -33,6 +40,9 @@ export default function PageRail({
   pageViewportsRef,
   scaleRef,
   goToPage,
+  viewerBodyRef,
+  onPageUp,
+  onPageDown,
 }: PageRailProps) {
   const { t } = useTranslation();
   const railRef = useRef<HTMLDivElement>(null);
@@ -41,6 +51,60 @@ export default function PageRail({
   const thumbRef = useRef<HTMLDivElement>(null);
   const tipRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
+
+  // 整组控件的显隐：默认隐藏，靠近右边界、正在拖动或按钮聚焦时显示。
+  const [isVisible, setIsVisible] = useState(false);
+  const nearEdgeRef = useRef(false);
+  const focusedRef = useRef(false);
+
+  const updateVisible = useCallback(() => {
+    setIsVisible(
+      nearEdgeRef.current || draggingRef.current || focusedRef.current
+    );
+  }, []);
+
+  // 监听阅读区鼠标位置，靠近右边界时显示控件。
+  useEffect(() => {
+    const body = viewerBodyRef.current;
+    if (!body) return;
+
+    let raf = 0;
+    const THRESHOLD = 40;
+
+    const handleMove = (e: MouseEvent) => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const rect = body.getBoundingClientRect();
+        const near =
+          e.clientX >= rect.right - THRESHOLD &&
+          e.clientX <= rect.right &&
+          e.clientY >= rect.top &&
+          e.clientY <= rect.bottom;
+        if (near !== nearEdgeRef.current) {
+          nearEdgeRef.current = near;
+          updateVisible();
+        }
+      });
+    };
+
+    const handleLeave = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = 0;
+      if (nearEdgeRef.current) {
+        nearEdgeRef.current = false;
+        updateVisible();
+      }
+    };
+
+    body.addEventListener("mousemove", handleMove);
+    body.addEventListener("mouseleave", handleLeave);
+    return () => {
+      body.removeEventListener("mousemove", handleMove);
+      body.removeEventListener("mouseleave", handleLeave);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [viewerBodyRef, updateVisible]);
 
   // 非受控 DOM 写入辅助。
   const setThumb = useCallback((pct: number) => {
@@ -127,33 +191,85 @@ export default function PageRail({
   if (numPages <= 1) return null;
 
   return (
-    <div
-      ref={railRef}
-      className="page-rail"
-      role="slider"
-      aria-label={t("pdf.pageRail")}
-      aria-valuemin={1}
-      aria-valuemax={numPages}
-      aria-valuenow={pageNum}
-      tabIndex={-1}
-      onPointerDown={(e) => {
-        e.preventDefault();
-        draggingRef.current = true;
-        railRef.current?.classList.add("dragging");
-        railRef.current?.setPointerCapture(e.pointerId);
-        applyClientY(e.clientY);
-      }}
-      onPointerMove={(e) => {
-        if (draggingRef.current) applyClientY(e.clientY);
-      }}
-      onPointerUp={endDrag}
-      onPointerCancel={endDrag}
-    >
-      <div ref={trackRef} className="page-rail-track">
-        <div ref={fillRef} className="page-rail-fill" />
-        <div ref={thumbRef} className="page-rail-thumb" />
+    <div className={`page-rail-wrapper ${isVisible ? "visible" : ""}`}>
+      <div className="page-rail-buttons">
+        <button
+          type="button"
+          className="page-rail-btn"
+          onClick={onPageUp}
+          disabled={viewMode === "single" && pageNum <= 1}
+          aria-label={t("pdf.previousPage")}
+          title={t("pdf.previousPage")}
+          tabIndex={isVisible ? 0 : -1}
+          onPointerDown={(e) => e.stopPropagation()}
+          onFocus={() => {
+            focusedRef.current = true;
+            updateVisible();
+          }}
+          onBlur={() => {
+            focusedRef.current = false;
+            updateVisible();
+          }}
+        >
+          <Icon name="chevron-up" size={14} />
+        </button>
+        <button
+          type="button"
+          className="page-rail-btn"
+          onClick={onPageDown}
+          disabled={viewMode === "single" && pageNum >= numPages}
+          aria-label={t("pdf.nextPage")}
+          title={t("pdf.nextPage")}
+          tabIndex={isVisible ? 0 : -1}
+          onPointerDown={(e) => e.stopPropagation()}
+          onFocus={() => {
+            focusedRef.current = true;
+            updateVisible();
+          }}
+          onBlur={() => {
+            focusedRef.current = false;
+            updateVisible();
+          }}
+        >
+          <Icon name="chevron-down" size={14} />
+        </button>
       </div>
-      <div ref={tipRef} className="page-rail-tip" />
+
+      <div
+        ref={railRef}
+        className="page-rail"
+        role="slider"
+        aria-label={t("pdf.pageRail")}
+        aria-valuemin={1}
+        aria-valuemax={numPages}
+        aria-valuenow={pageNum}
+        tabIndex={-1}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          draggingRef.current = true;
+          railRef.current?.classList.add("dragging");
+          railRef.current?.setPointerCapture(e.pointerId);
+          updateVisible();
+          applyClientY(e.clientY);
+        }}
+        onPointerMove={(e) => {
+          if (draggingRef.current) applyClientY(e.clientY);
+        }}
+        onPointerUp={() => {
+          endDrag();
+          updateVisible();
+        }}
+        onPointerCancel={() => {
+          endDrag();
+          updateVisible();
+        }}
+      >
+        <div ref={trackRef} className="page-rail-track">
+          <div ref={fillRef} className="page-rail-fill" />
+          <div ref={thumbRef} className="page-rail-thumb" />
+        </div>
+        <div ref={tipRef} className="page-rail-tip" />
+      </div>
     </div>
   );
 }

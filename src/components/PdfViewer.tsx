@@ -233,6 +233,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
     const singleContainerRef = useRef<HTMLDivElement>(null);
     const continuousContainerRef = useRef<HTMLDivElement>(null);
+    const viewerBodyRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const scaleInputRef = useRef<HTMLInputElement>(null);
     const isJumpingRef = useRef(false);
@@ -353,6 +354,35 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       currentPageRef: pageNumRef,
       goToPageRef,
     });
+
+    // 与键盘 PageUp/PageDown 行为一致的翻页回调，也提供给右侧滑轨翻页按钮。
+    const goToPreviousScreen = useCallback(() => {
+      if (!pdf || numPages === 0) return;
+      if (viewMode === "single") {
+        setPageNum((p) => Math.max(1, p - 1));
+      } else {
+        const container = continuousContainerRef.current;
+        if (!container) return;
+        container.scrollBy({
+          top: -container.clientHeight * 0.9,
+          behavior: "smooth",
+        });
+      }
+    }, [pdf, numPages, viewMode]);
+
+    const goToNextScreen = useCallback(() => {
+      if (!pdf || numPages === 0) return;
+      if (viewMode === "single") {
+        setPageNum((p) => Math.min(numPages, p + 1));
+      } else {
+        const container = continuousContainerRef.current;
+        if (!container) return;
+        container.scrollBy({
+          top: container.clientHeight * 0.9,
+          behavior: "smooth",
+        });
+      }
+    }, [pdf, numPages, viewMode]);
 
     // Expose imperative goToPage for external triggers (e.g. annotation goto)
     useImperativeHandle(ref, () => ({
@@ -514,20 +544,18 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         if (isTyping) return;
 
         if (viewMode === "single") {
-          if (
-            e.key === "ArrowDown" ||
-            e.key === "ArrowRight" ||
-            e.key === "PageDown"
-          ) {
+          if (e.key === "ArrowDown" || e.key === "ArrowRight") {
             e.preventDefault();
             setPageNum((p) => Math.min(numPages, p + 1));
-          } else if (
-            e.key === "ArrowUp" ||
-            e.key === "ArrowLeft" ||
-            e.key === "PageUp"
-          ) {
+          } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
             e.preventDefault();
             setPageNum((p) => Math.max(1, p - 1));
+          } else if (e.key === "PageDown") {
+            e.preventDefault();
+            goToNextScreen();
+          } else if (e.key === "PageUp") {
+            e.preventDefault();
+            goToPreviousScreen();
           }
         } else {
           const container = continuousContainerRef.current;
@@ -541,16 +569,10 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
             container.scrollBy({ top: -SCROLL_STEP, behavior: "smooth" });
           } else if (e.key === "PageDown") {
             e.preventDefault();
-            container.scrollBy({
-              top: container.clientHeight * 0.9,
-              behavior: "smooth",
-            });
+            goToNextScreen();
           } else if (e.key === "PageUp") {
             e.preventDefault();
-            container.scrollBy({
-              top: -container.clientHeight * 0.9,
-              behavior: "smooth",
-            });
+            goToPreviousScreen();
           } else if (e.key === "Home") {
             e.preventDefault();
             container.scrollTo({ top: 0, behavior: "smooth" });
@@ -574,6 +596,8 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       searchMatches,
       isFocused,
       jumpOpen,
+      goToPreviousScreen,
+      goToNextScreen,
     ]);
 
     const zoomOut = useCallback(() => {
@@ -1145,7 +1169,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           </div>
         </div>
 
-        <div className="pdf-viewer-body">
+        <div className="pdf-viewer-body" ref={viewerBodyRef}>
           {outlineOpen && (
             <div className="pdf-outline-sidebar">
               <div className="pdf-outline-header">
@@ -1306,6 +1330,9 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
             pageViewportsRef={pageViewportsRef}
             scaleRef={scaleRef}
             goToPage={goToPage}
+            viewerBodyRef={viewerBodyRef}
+            onPageUp={goToPreviousScreen}
+            onPageDown={goToNextScreen}
           />
 
           {jumpOpen && numPages > 0 && (

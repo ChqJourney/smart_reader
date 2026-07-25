@@ -38,7 +38,10 @@ function createMockPdf(numPages = 5) {
   };
 }
 
-async function renderViewerAndWaitForPdf(isFocused?: boolean) {
+async function renderViewerAndWaitForPdf(
+  isFocused?: boolean,
+  viewMode: "single" | "continuous" = "single"
+) {
   mockGetDocument.mockReturnValue({
     promise: Promise.resolve(createMockPdf()),
   });
@@ -46,7 +49,7 @@ async function renderViewerAndWaitForPdf(isFocused?: boolean) {
     <PdfViewer
       tabId="tab-1"
       filePath="/fake/test.pdf"
-      initialState={{ viewMode: "single" }}
+      initialState={{ viewMode }}
       settings={DEFAULT_SETTINGS}
       {...(isFocused === undefined ? {} : { isFocused })}
     />
@@ -168,5 +171,91 @@ describe("PdfViewer 跳页面板（Cmd/Ctrl+G）", () => {
 
     fireEvent.keyDown(window, { key: "g", ctrlKey: true });
     expect(screen.queryByLabelText("跳转到页")).toBeNull();
+  });
+});
+
+describe("PdfViewer PageUp/PageDown 翻页", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(invoke).mockResolvedValue([1, 2, 3]);
+  });
+
+  it("单页模式 PageDown/PageUp 切换页码", async () => {
+    await renderViewerAndWaitForPdf();
+
+    fireEvent.keyDown(window, { key: "PageDown" });
+    await waitFor(() => {
+      expect((screen.getByLabelText("页码") as HTMLElement).textContent).toBe(
+        "2"
+      );
+    });
+
+    fireEvent.keyDown(window, { key: "PageUp" });
+    await waitFor(() => {
+      expect((screen.getByLabelText("页码") as HTMLElement).textContent).toBe(
+        "1"
+      );
+    });
+  });
+
+  it("单页模式 PageUp 在第一页不越界", async () => {
+    await renderViewerAndWaitForPdf();
+
+    fireEvent.keyDown(window, { key: "PageUp" });
+    await waitFor(() => {
+      expect((screen.getByLabelText("页码") as HTMLElement).textContent).toBe(
+        "1"
+      );
+    });
+  });
+
+  it("连续模式 PageDown/PageUp 滚动阅读区", async () => {
+    const { container } = await renderViewerAndWaitForPdf(undefined, "continuous");
+    const canvasContainer = container.querySelector(
+      ".pdf-canvas-container.continuous"
+    ) as HTMLDivElement;
+    // 给容器一个固定高度，使 scrollBy 的 top 不为 0
+    canvasContainer.style.height = "500px";
+    Object.defineProperty(canvasContainer, "clientHeight", {
+      value: 500,
+      configurable: true,
+    });
+    const scrollByMock = vi.fn();
+    Object.defineProperty(canvasContainer, "scrollBy", {
+      value: scrollByMock,
+      writable: true,
+      configurable: true,
+    });
+
+    fireEvent.keyDown(window, { key: "PageDown" });
+    await waitFor(() => {
+      expect(scrollByMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          top: expect.any(Number),
+          behavior: "smooth",
+        })
+      );
+    });
+    const downCall = scrollByMock.mock.calls[0][0] as unknown as {
+      top: number;
+      behavior: string;
+    };
+    expect(downCall.top).toBeGreaterThan(0);
+
+    scrollByMock.mockClear();
+    fireEvent.keyDown(window, { key: "PageUp" });
+    await waitFor(() => {
+      expect(scrollByMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          top: expect.any(Number),
+          behavior: "smooth",
+        })
+      );
+    });
+    const upCall = scrollByMock.mock.calls[0][0] as unknown as {
+      top: number;
+      behavior: string;
+    };
+    expect(upCall.top).toBeLessThan(0);
   });
 });

@@ -774,27 +774,59 @@ pub async fn cancel_chat_completions(
     Ok(())
 }
 
-/// Test connection with current settings. Sends a minimal request and
-/// reports success or a structured error.
+/// Parameters for testing a connection without persisting settings.
+/// When omitted, the backend falls back to the currently saved settings.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TestConnectionParams {
+    pub platform_id: String,
+    pub base_url: String,
+    pub model: String,
+    pub api_key: Option<String>,
+}
+
+/// Test connection with current settings or the provided parameters.
+/// Sends a minimal request and reports success or a structured error.
 #[tauri::command]
 pub async fn test_connection(
     app: tauri::AppHandle,
     state: tauri::State<'_, AppState>,
+    params: Option<TestConnectionParams>,
 ) -> Result<serde_json::Value, String> {
-    let base_dir = crate::paths::app_data_dir(&app)?;
-    let settings = tauri::async_runtime::spawn_blocking(move || {
-        crate::load_settings_from_disk(&base_dir)
-    })
-    .await
-    .map_err(|e| format!("Failed to load settings: {}", e))??;
+    let (_platform_id, base_url, model, api_key) = match params {
+        Some(p) => {
+            let api_key = if let Some(key) = p.api_key.filter(|k| !k.is_empty()) {
+                Some(key)
+            } else {
+                state
+                    .api_key_storage
+                    .retrieve(&p.platform_id)
+                    .map_err(|e| format!("Failed to read API key: {}", e))?
+            };
+            (p.platform_id, p.base_url, p.model, api_key)
+        }
+        None => {
+            let base_dir = crate::paths::app_data_dir(&app)?;
+            let settings = tauri::async_runtime::spawn_blocking(move || {
+                crate::load_settings_from_disk(&base_dir)
+            })
+            .await
+            .map_err(|e| format!("Failed to load settings: {}", e))??;
 
-    let base_url = settings.llm.base_url.trim_end_matches('/').to_string();
-    let model = settings.llm.model.clone();
-    let api_key = state
-        .api_key_storage
-        .retrieve(&settings.platform_id)
-        .map_err(|e| format!("Failed to read API key: {}", e))?;
+            let api_key = state
+                .api_key_storage
+                .retrieve(&settings.platform_id)
+                .map_err(|e| format!("Failed to read API key: {}", e))?;
+            (
+                settings.platform_id.clone(),
+                settings.llm.base_url.clone(),
+                settings.llm.model.clone(),
+                api_key,
+            )
+        }
+    };
 
+    let base_url = base_url.trim_end_matches('/').to_string();
     let api_key = match api_key {
         Some(k) => k,
         None => {

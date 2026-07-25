@@ -93,6 +93,9 @@ describe("SettingsModal", () => {
       if (command === "check_api_key") {
         return Promise.resolve(false);
       }
+      if (command === "test_connection") {
+        return Promise.resolve({ success: true, model: "deepseek-v4-flash" });
+      }
       return Promise.reject(
         new Error(`No mock handler for command: ${command}`)
       );
@@ -247,6 +250,53 @@ describe("SettingsModal", () => {
       hoverTranslate: false,
       logLevel: "warn",
     });
+  });
+
+  it("shows save error when onSave rejects", async () => {
+    const onSave = vi.fn().mockRejectedValue(new Error("keyring unavailable"));
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave,
+    });
+
+    fireEvent.click(screen.getByText("保存"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/保存失败.*keyring unavailable/i)).toBeInTheDocument();
+    });
+    expect(onSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("tests connection with current modal values without saving", async () => {
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    fireEvent.change(screen.getByLabelText("Model"), {
+      target: { value: "deepseek-v4-pro" },
+    });
+
+    fireEvent.click(screen.getByText("测试连接"));
+
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("test_connection", {
+        params: {
+          platformId: "deepseek",
+          baseUrl: "https://api.deepseek.com/v1",
+          model: "deepseek-v4-pro",
+          apiKey: "",
+        },
+      });
+    });
+    expect(mockInvoke).not.toHaveBeenCalledWith(
+      "save_settings",
+      expect.anything()
+    );
   });
 
   it("renders system prompt tabs and switches between translate and explain", () => {

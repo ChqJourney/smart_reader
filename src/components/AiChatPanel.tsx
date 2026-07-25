@@ -295,7 +295,7 @@ export default function AiChatPanel({
           <div className="ai-chat-input-area">
             <FollowUpInput
               session={activeSession}
-              disabled={activeSession.isStreaming}
+              sendDisabled={activeSession.isStreaming}
               onSend={(text) => onFollowUp(activeSession.id, text)}
               onInterrupt={() => onInterrupt?.(activeSession.id)}
             />
@@ -533,14 +533,14 @@ export default function AiChatPanel({
 
 interface FollowUpInputProps {
   session: InterpretationSession;
-  disabled: boolean;
+  sendDisabled: boolean;
   onSend: (text: string) => void;
   onInterrupt: () => void;
 }
 
 function FollowUpInput({
   session,
-  disabled,
+  sendDisabled,
   onSend,
   onInterrupt,
 }: FollowUpInputProps) {
@@ -550,7 +550,7 @@ function FollowUpInput({
 
   const handleSend = () => {
     const trimmed = text.trim();
-    if (!trimmed || disabled) return;
+    if (!trimmed || sendDisabled) return;
     onSend(trimmed);
     setText("");
   };
@@ -558,9 +558,9 @@ function FollowUpInput({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      if (isStreaming) {
-        onInterrupt();
-      } else {
+      // 生成期间忽略 Enter，避免用户准备下一条问题或误按时中断长答案。
+      // 需要停止可点击右侧“中止”按钮。
+      if (!isStreaming) {
         handleSend();
       }
     }
@@ -578,7 +578,6 @@ function FollowUpInput({
             : t("chat.followUpPlaceholder")
         }
         rows={2}
-        disabled={disabled}
       />
       <button
         onClick={isStreaming ? onInterrupt : handleSend}

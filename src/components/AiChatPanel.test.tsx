@@ -462,4 +462,34 @@ describe("AiChatPanel", () => {
     fireEvent.click(interruptBtn);
     expect(onInterrupt).toHaveBeenCalledWith("session-1");
   });
+
+  it("does not interrupt when pressing Enter in textarea while streaming", () => {
+    const onInterrupt = vi.fn();
+    const onFollowUp = vi.fn();
+    const sessions = [
+      makeSession({
+        id: "session-1",
+        isStreaming: true,
+        messages: [
+          makeMessage({ id: "msg-1", role: "user", content: "问题" }),
+          makeMessage({ id: "msg-2", role: "assistant", content: "" }),
+        ],
+      }),
+    ];
+
+    renderPanel({ sessions, onInterrupt, onFollowUp });
+
+    fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
+    fireEvent.click(screen.getByText(/问题/));
+
+    const input = screen.getByPlaceholderText(/生成中/);
+    expect(input).not.toBeDisabled();
+
+    fireEvent.change(input, { target: { value: "下一个问题" } });
+    fireEvent.keyDown(input, { key: "Enter", code: "Enter", shiftKey: false });
+
+    expect(onInterrupt).not.toHaveBeenCalled();
+    expect(onFollowUp).not.toHaveBeenCalled();
+    expect(input).toHaveValue("下一个问题");
+  });
 });

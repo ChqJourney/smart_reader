@@ -11,7 +11,6 @@ import {
   ThinkingMode,
   PlatformId,
   openDefaultAppsSettings,
-  saveSettings,
   checkApiKey,
   deleteApiKey,
 } from "../services/settings";
@@ -60,7 +59,7 @@ interface SettingsModalProps {
   open: boolean;
   initialSettings: AppSettings;
   onClose: () => void;
-  onSave: (settings: AppSettings) => void;
+  onSave: (settings: AppSettings) => Promise<void>;
   /** 重新运行首次启动配置向导（可选） */
   onRunWizard?: () => void;
 }
@@ -103,6 +102,7 @@ export default function SettingsModal({
     "idle" | "testing" | "success" | "error"
   >("idle");
   const [testResult, setTestResult] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   /**
    * Per-platform user-typed API key drafts (in-memory, not persisted).
    * The real key is never loaded from the backend; this only stores what
@@ -288,9 +288,14 @@ export default function SettingsModal({
 
   if (!open) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(settings);
+    setSaveError(null);
+    try {
+      await onSave(settings);
+    } catch (err) {
+      setSaveError(String(err));
+    }
   };
 
   const updateLlm = (patch: Partial<AppSettings["llm"]>) => {
@@ -343,20 +348,17 @@ export default function SettingsModal({
     }
   };
 
-  /** Test the LLM connection with current (saved) settings. */
+  /** Test the LLM connection with the current modal values (without saving). */
   const handleTestConnection = async () => {
-    // Save settings directly to backend (without closing the modal)
-    try {
-      await saveSettings(settings);
-    } catch (err) {
-      setTestState("error");
-      setTestResult(String(err));
-      return;
-    }
     setTestState("testing");
     setTestResult(null);
     try {
-      const result = await testConnection();
+      const result = await testConnection({
+        platformId: settings.platformId,
+        baseUrl: settings.llm.baseUrl,
+        model: settings.llm.model,
+        apiKey: settings.llm.apiKey,
+      });
       if (result.success) {
         setTestState("success");
         setTestResult(
@@ -1116,13 +1118,23 @@ export default function SettingsModal({
               {t("settings.resetAll")}
             </button>
           </div>
-          <div className="modal-actions">
-            <button type="button" onClick={onClose}>
-              {t("common.cancel")}
-            </button>
-            <button type="submit" form="settings-form">
-              {t("common.save")}
-            </button>
+          <div className="settings-modal-footer-right">
+            {saveError && (
+              <span className="settings-status-error settings-save-error">
+                {t("settings.saveFailed", {
+                  error: saveError,
+                  defaultValue: `保存失败：${saveError}`,
+                })}
+              </span>
+            )}
+            <div className="modal-actions">
+              <button type="button" onClick={onClose}>
+                {t("common.cancel")}
+              </button>
+              <button type="submit" form="settings-form">
+                {t("common.save")}
+              </button>
+            </div>
           </div>
         </div>
       </div>

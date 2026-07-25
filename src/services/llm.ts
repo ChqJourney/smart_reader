@@ -244,16 +244,32 @@ function errorToMessage(error: LlmError): string {
   }
 }
 
+export interface TestConnectionParams {
+  platformId: string;
+  baseUrl: string;
+  model: string;
+  apiKey?: string;
+}
+
 /**
- * Test the LLM connection with current settings.
+ * Test the LLM connection.
+ *
+ * - When `params` is omitted, the backend tests against the currently saved
+ *   settings (used by SetupWizard after saving).
+ * - When `params` is provided, the backend tests the given platform/baseUrl/model
+ *   without persisting anything. An empty `apiKey` falls back to the keyring key
+ *   for that platform.
+ *
  * Returns success or a structured error.
  */
-export async function testConnection(): Promise<{
+export async function testConnection(
+  params?: TestConnectionParams
+): Promise<{
   success: boolean;
   model: string;
   error?: LlmError;
 }> {
-  return invoke("test_connection");
+  return invoke("test_connection", { params });
 }
 
 export function buildSystemPrompt(

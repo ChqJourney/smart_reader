@@ -473,6 +473,7 @@ function App() {
       setSettingsOpen(false);
     } catch (err) {
       error(`[App] 保存设置失败: ${err}`);
+      throw err;
     }
   }, []);
 

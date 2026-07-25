@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.9.8] - 2026-07-25
+
 ### Added
 - 官网落地页（`landing/`）新增产品演示视频（explain / hero / persist / split-view），并重构工作流与价格方案展示区。
 

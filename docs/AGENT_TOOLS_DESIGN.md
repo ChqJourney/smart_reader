@@ -100,7 +100,7 @@
     └── 在已展开的解读记录下继续提问，追加 user/assistant 消息并流式输出
     │
     ▼
-[LLM 直接调用] 携带选中文本 + Prompt 生成回答
+[LLM 调用-后端代理] 携带选中文本 + Prompt 生成回答
     │
     ▼
 [答案生成] 流式回复（Markdown 渲染）
@@ -109,8 +109,6 @@
 超轻量版说明：
 
 - 不做 PDF 文本提取与 Clause 索引。
-- 不调用 Function Calling Tools。
-- AI 仅基于用户当前选中的文本片段或暂存区片段进行翻译、解读或自定义解读。
 - 翻译结果以浮层批注形式锚定在 PDF 页面上，可拖动、隐藏、删除，并按 PDF 文件 hash 持久化到 AppData。
 - 解读结果以条目形式展示在右侧面板，默认折叠，点击条目可跳转到 PDF 对应位置并高亮标记；支持多轮追问。
 - 选中文本可「加入暂存」，暂存片段在右侧面板汇聚，可编辑、删除、清空、跳转回原文，也可一次性发起自定义解读。
@@ -456,7 +454,7 @@ interface ClauseIndex {
 
 ## 6. Agent 调用流程
 
-> 本章节为完整目标架构。当前「超轻量版」的调用流程见 2.1 节：用户选中文本后直接调用 LLM，不经过 Tools。
+> 本章节为完整目标架构。当前「超轻量版」的调用流程见 2.1 节：用户选中文本后直接调用 LLM，不经过 Tools（但可选，设置面板中设置）。
 
 ### 6.1 标准问答流程
 
@@ -711,7 +709,7 @@ src-tauri/src/
 - `ExplainPopup.tsx`：解读标记点击后弹出的详情浮层。
 - `StashInterpretedPopup.tsx`：已解读暂存标记点击后弹出的浮层，支持查看解读会话或删除。
 - `PdfAnnotations.tsx`：按页渲染 markers 和各类 popup。
-- `AiChatPanel.tsx`：LLM 配置、暂存区、解读条目列表（默认折叠，点击跳转，支持追问）。
+- `AiChatPanel.tsx`：暂存区、解读条目列表（默认折叠，点击跳转，支持追问）。
 - `CustomInterpretModal.tsx`：自定义解读弹窗，输入 Prompt 后基于暂存区片段发起解读。
 - `Icon.tsx`：SVG 图标集合。
 - `services/llm.ts`：OpenAI 兼容流式请求、LLM 配置读写、Prompt 模板。
@@ -807,7 +805,7 @@ await invoke("verify_clause_index", { documentId });
 
 - [x] 是否确认采用本 Agent Tools 方案，放弃 RAG/向量索引？
 - [x] Clause 索引 LLM 复核采用手动触发（默认不自动执行，因消耗 Token）
-- [ ] 最大 Tool 调用轮数设为多少？（建议 5 轮）
+- [ ] 最大 Tool 调用轮数设为多少？（建议 20 轮）
 - [x] 多模态模型为可选项：用户未配置时，表格精确读取功能灰色不可用（如 gpt-4o、qwen-vl、glm-4v）
 - [x] 前端不显示 LLM 的 Tool 调用过程；仅在 Debug 模式下可见
 - [x] 超长 Clause 不分段，整个传给 LLM

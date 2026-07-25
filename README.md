@@ -146,7 +146,7 @@ cd src-tauri && cargo test
 ## 隐私说明
 
 - PDF 文件内容不上传云端，仅在本地读取和渲染。
-- 仅用户主动选中的文本片段会发送给用户配置的 LLM API。
+- 仅用户主动选中的文本片段会发送给用户配置的 LLM API,开启智能文档查询功能后，会增加标准中相关片段文本。
 - API Key 通过 Rust `keyring` crate 存入系统钥匙串；`settings.json` 中只保留空占位。钥匙串不可用时保存会明确报错，不回退明文存储。
 
 ## License

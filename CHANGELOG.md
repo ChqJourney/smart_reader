@@ -8,9 +8,13 @@
 
 ## [Unreleased]
 
+### Changed
+- PDF 多标签切换改为 keep-alive：所有 tab 的 PdfViewer 常驻挂载，切换仅隐藏 / 显示，canvas 位图、滚动位置、页码与工具栏状态全部保留，切换瞬时完成，不再闪「加载中」占位。
+
 ### Fixed
 - 修复 `load_pdf_data` / `save_pdf_data` 两个 Tauri 命令未校验路径白名单的安全问题：二者内部会对传入路径计算 SHA-256（即后端打开并读取该文件），此前缺少 `validate_pdf_access` 校验，webview 可借此探测任意本地文件（含非 PDF 敏感文件）的存在性与内容。现已与 `read_pdf_bytes` / `get_pdf_hash` 一样强制扩展名 + 白名单校验。
 - 修复设置页「模型设置」点击「更多设置」后不显示思考模式选项的问题。根因是旧版本 `settings.json` 中保存的 `model`（如 `gpt-4o-mini`）与新版本默认 `platformId`（`deepseek`）不匹配，导致 `findModel` 返回 `null`、展开区域被条件渲染过滤为空；现在加载设置时会自动把无效模型 ID 迁移为当前平台的默认模型并持久化。
+- 修复 LLM 流式回复中中文随机出现 `` 乱码的问题：HTTP chunk 边界可能切断多字节 UTF-8 字符，此前按 chunk 独立 `from_utf8_lossy` 解码会把前后半字符各替换为 U+FFFD、原始字节永久丢失；现改为字节级缓冲、按完整行（`\n` 结尾）统一解码。
 
 ## [0.9.8] - 2026-07-25
 

@@ -47,7 +47,7 @@ describe("settings service", () => {
         llm: {
           baseUrl: "https://custom.example.com",
           apiKey: "sk-test",
-          model: "gpt-4",
+          model: "deepseek-v4-flash",
         },
         targetLanguage: "English",
       }),
@@ -67,7 +67,7 @@ describe("settings service", () => {
         llm: {
           baseUrl: "https://api.openai.com/v1",
           apiKey: "sk-test",
-          model: "gpt-4o-mini",
+          model: "deepseek-v4-flash",
         },
         targetLanguage: "中文",
       }),
@@ -96,9 +96,12 @@ describe("settings service", () => {
     const { loadSettings } = await import("../services/settings");
     const settings = await loadSettings();
     expect(settings.llm.apiKey).toBe("legacy-key");
-    expect(settings.llm.model).toBe("legacy-model");
+    // legacy-model is not a valid DeepSeek model id, so it is migrated to the
+    // platform default.
+    expect(settings.llm.model).toBe("deepseek-v4-flash");
     expect(savedSettings).not.toBeNull();
     expect(savedSettings.llm.apiKey).toBe("legacy-key");
+    expect(savedSettings.llm.model).toBe("deepseek-v4-flash");
     expect(localStorage.getItem("standardread-llm-config")).toBeNull();
   });
 
@@ -118,6 +121,52 @@ describe("settings service", () => {
     expect(localStorage.getItem("standardread-llm-config")).not.toBeNull();
   });
 
+  it("migrates stale model id to platform default", async () => {
+    let savedSettings: any = null;
+    mockTauriInvoke({
+      load_settings: () => ({
+        llm: {
+          baseUrl: "https://api.openai.com/v1",
+          apiKey: "",
+          model: "gpt-4o-mini",
+        },
+        targetLanguage: "中文",
+      }),
+      check_api_key: () => true,
+      save_settings: (args) => {
+        savedSettings = args.settings;
+        return null;
+      },
+    });
+    const { loadSettings } = await import("../services/settings");
+    const settings = await loadSettings();
+    expect(settings.platformId).toBe("deepseek");
+    expect(settings.llm.model).toBe("deepseek-v4-flash");
+    expect(settings.llm.baseUrl).toBe("https://api.deepseek.com/v1");
+    expect(savedSettings).not.toBeNull();
+    expect(savedSettings.llm.model).toBe("deepseek-v4-flash");
+  });
+
+  it("keeps custom platform model unchanged", async () => {
+    mockTauriInvoke({
+      load_settings: () => ({
+        llm: {
+          baseUrl: "https://custom.example.com/v1",
+          apiKey: "",
+          model: "my-custom-model",
+        },
+        platformId: "custom",
+        targetLanguage: "中文",
+      }),
+      check_api_key: () => true,
+    });
+    const { loadSettings } = await import("../services/settings");
+    const settings = await loadSettings();
+    expect(settings.platformId).toBe("custom");
+    expect(settings.llm.model).toBe("my-custom-model");
+    expect(settings.llm.baseUrl).toBe("https://custom.example.com/v1");
+  });
+
   it("does not migrate legacy config when backend already has an api key", async () => {
     localStorage.setItem(
       "standardread-llm-config",
@@ -129,7 +178,7 @@ describe("settings service", () => {
         llm: {
           baseUrl: "https://api.example.com",
           apiKey: "",
-          model: "gpt-4",
+          model: "deepseek-v4-flash",
         },
         targetLanguage: "中文",
       }),

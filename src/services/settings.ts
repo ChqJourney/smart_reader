@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { error } from "./logs";
+import { PLATFORM_PRESETS } from "../data/platformPresets";
 
 export interface LlmConfig {
   baseUrl: string;
@@ -158,21 +159,60 @@ function isLogLevel(value: unknown): value is LogLevel {
   );
 }
 
+/**
+ * Ensure platformId and model are consistent with the current platform preset.
+ * - Unknown platform ids fall back to the default platform.
+ * - Models that no longer exist in the preset (deprecated ids, cross-platform
+ *   leftovers after an upgrade) are reset to the platform's default model and
+ *   base URL so the settings UI and LLM calls stay consistent.
+ * - Custom platforms are left untouched.
+ */
+function migrateModelForPlatform(settings: AppSettings): AppSettings {
+  let platformId = settings.platformId;
+  if (!PLATFORM_PRESETS[platformId]) {
+    platformId = DEFAULT_SETTINGS.platformId;
+  }
+
+  const preset = PLATFORM_PRESETS[platformId];
+  if (!preset || preset.models.length === 0) {
+    if (platformId === settings.platformId) {
+      return settings;
+    }
+    return { ...settings, platformId };
+  }
+
+  const modelExists = preset.models.some((m) => m.id === settings.llm.model);
+  if (modelExists && platformId === settings.platformId) {
+    return settings;
+  }
+
+  return {
+    ...settings,
+    platformId,
+    llm: {
+      ...settings.llm,
+      baseUrl: preset.baseUrl,
+      model: preset.defaultModelId,
+    },
+  };
+}
+
 async function mergeWithLegacy(base: AppSettings): Promise<AppSettings> {
   const legacy = loadLegacySettings();
-  if (!legacy) return base;
+  if (!legacy) return migrateModelForPlatform(base);
   const merged: AppSettings = {
     ...base,
     llm: { ...base.llm, ...legacy },
   };
+  const migrated = migrateModelForPlatform(merged);
   try {
-    await saveSettings(merged);
+    await saveSettings(migrated);
     localStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch {
     // Keep the legacy localStorage key if the backend save failed so the
     // API key is not lost; it will be retried on next load.
   }
-  return merged;
+  return migrated;
 }
 
 export async function loadSettings(): Promise<AppSettings> {
@@ -194,17 +234,23 @@ export async function loadSettings(): Promise<AppSettings> {
       const merged = hasBackendKey
         ? normalized
         : await mergeWithLegacy(normalized);
+      const final = migrateModelForPlatform(merged);
+      const needsMigrationSave = final.llm.model !== merged.llm.model;
 
-      if (layoutLegacy) {
+      if (needsMigrationSave || layoutLegacy) {
         try {
-          await saveSettings(merged);
-          clearLegacyRightPanelLayout();
+          await saveSettings(final);
+          if (layoutLegacy) {
+            clearLegacyRightPanelLayout();
+          }
         } catch {
-          // Keep the legacy localStorage key if the backend save failed so the
-          // layout is not lost; it will be retried on next load.
+          // Keep the legacy localStorage key if the layout migration failed so
+          // the layout is not lost. If only the model id was migrated, the
+          // in-memory settings are already consistent and will be retried when
+          // the user opens the settings modal.
         }
       }
-      return merged;
+      return final;
     }
   } catch (err) {
     error(`Failed to load settings: ${err}`);

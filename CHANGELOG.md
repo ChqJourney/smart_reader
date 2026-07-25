@@ -9,6 +9,7 @@
 ## [Unreleased]
 
 ### Fixed
+- 修复 `load_pdf_data` / `save_pdf_data` 两个 Tauri 命令未校验路径白名单的安全问题：二者内部会对传入路径计算 SHA-256（即后端打开并读取该文件），此前缺少 `validate_pdf_access` 校验，webview 可借此探测任意本地文件（含非 PDF 敏感文件）的存在性与内容。现已与 `read_pdf_bytes` / `get_pdf_hash` 一样强制扩展名 + 白名单校验。
 - 修复设置页「模型设置」点击「更多设置」后不显示思考模式选项的问题。根因是旧版本 `settings.json` 中保存的 `model`（如 `gpt-4o-mini`）与新版本默认 `platformId`（`deepseek`）不匹配，导致 `findModel` 返回 `null`、展开区域被条件渲染过滤为空；现在加载设置时会自动把无效模型 ID 迁移为当前平台的默认模型并持久化。
 
 ## [0.9.8] - 2026-07-25

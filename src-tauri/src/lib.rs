@@ -979,6 +979,9 @@ async fn load_pdf_data(
     state: tauri::State<'_, AppState>,
     file_path: String,
 ) -> Result<PdfAnnotationsFile, String> {
+    // The hash lookup below opens and reads the file, so enforce the same
+    // whitelist check as read_pdf_bytes / get_pdf_hash before any disk I/O.
+    validate_pdf_access(&state, &file_path)?;
     let cache = state.pdf_hash_cache.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let base_dir = paths::app_data_dir(&app)?;
@@ -995,6 +998,9 @@ async fn save_pdf_data(
     file_path: String,
     data: PdfAnnotationsFile,
 ) -> Result<(), String> {
+    // Same whitelist enforcement as load_pdf_data: annotations_path computes
+    // the SHA-256 of file_path, which reads the file from disk.
+    validate_pdf_access(&state, &file_path)?;
     let cache = state.pdf_hash_cache.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let base_dir = paths::app_data_dir(&app)?;

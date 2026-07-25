@@ -4,22 +4,11 @@ export const DIVIDER_WIDTH = 6;
 const MIN_PANEL_WIDTH = 240;
 const RIGHT_PANEL_MIN_WIDTH = 180;
 const RIGHT_PANEL_DEFAULT_FRACTION = 3 / 8;
-const RIGHT_PANEL_LAYOUT_KEY = "pdfAgent.rightPanelLayout";
+const LAYOUT_SAVE_DEBOUNCE_MS = 300;
 
-function loadRightPanelLayout(): { visible: boolean; width: number } {
-  try {
-    const raw = localStorage.getItem(RIGHT_PANEL_LAYOUT_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return {
-        visible: typeof parsed.visible === "boolean" ? parsed.visible : true,
-        width: typeof parsed.width === "number" ? parsed.width : 0,
-      };
-    }
-  } catch {
-    // ignore
-  }
-  return { visible: true, width: 0 };
+export interface RightPanelLayout {
+  visible: boolean;
+  width: number;
 }
 
 export interface UseRightPanelLayoutReturn {
@@ -37,13 +26,20 @@ export interface UseRightPanelLayoutReturn {
   rightPct: number;
 }
 
-export function useRightPanelLayout(): UseRightPanelLayoutReturn {
-  const rightPanelLayout = useMemo(() => loadRightPanelLayout(), []);
+export function useRightPanelLayout(
+  initialLayout: RightPanelLayout,
+  onLayoutChange: (layout: RightPanelLayout) => void
+): UseRightPanelLayoutReturn {
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialLayoutRef = useRef(initialLayout);
+  const rightPanelWidthRef = useRef(initialLayout.width);
+
   const [leftVisible, setLeftVisible] = useState(true);
-  const [rightVisible, setRightVisible] = useState(rightPanelLayout.visible);
+  const [rightVisible, setRightVisible] = useState(initialLayout.visible);
   const [rightPanelWidth, setRightPanelWidthInternal] = useState<number>(
-    rightPanelLayout.width
+    initialLayout.width
   );
+  rightPanelWidthRef.current = rightPanelWidth;
 
   const setRightPanelWidth = useCallback((width: number) => {
     setRightPanelWidthInternal(width);
@@ -52,9 +48,6 @@ export function useRightPanelLayout(): UseRightPanelLayoutReturn {
   const mainRef = useRef<HTMLElement>(null);
   const isDraggingRef = useRef(false);
 
-  // Measure the main container width in a layout effect and keep it in state.
-  // Reading DOM during render causes layout thrashing; using ResizeObserver +
-  // window resize avoids that.
   const [availableWidth, setAvailableWidth] = useState(() =>
     Math.max(0, window.innerWidth - DIVIDER_WIDTH)
   );
@@ -80,7 +73,7 @@ export function useRightPanelLayout(): UseRightPanelLayoutReturn {
     };
   }, []);
 
-  // Restore default right panel width if no persisted value exists
+  // Restore default right panel width if no persisted value exists.
   useEffect(() => {
     if (rightPanelWidth > 0) return;
     const availableWidth = Math.max(
@@ -96,20 +89,52 @@ export function useRightPanelLayout(): UseRightPanelLayoutReturn {
     );
   }, [rightPanelWidth]);
 
-  // Persist right panel width and visibility
+  // Sync external layout values when they change (e.g. settings loaded from
+  // the backend). Only apply real changes to avoid resetting user interaction.
+  useEffect(() => {
+    if (
+      initialLayoutRef.current.visible === initialLayout.visible &&
+      initialLayoutRef.current.width === initialLayout.width
+    ) {
+      return;
+    }
+    initialLayoutRef.current = initialLayout;
+    setRightVisible(initialLayout.visible);
+    if (initialLayout.width > 0) {
+      setRightPanelWidthInternal(initialLayout.width);
+    }
+  }, [initialLayout]);
+
+  // Notify the caller of visibility changes immediately. Only save when a
+  // real width has been resolved; width 0 means "use default" and should not
+  // be persisted yet. We read width from a ref so width changes do not double
+  // fire the callback (they are handled by the debounced effect below).
+  useEffect(() => {
+    if (rightPanelWidthRef.current <= 0) return;
+    onLayoutChange({
+      visible: rightVisible,
+      width: rightPanelWidthRef.current,
+    });
+  }, [rightVisible, onLayoutChange]);
+
+  // Debounce width changes so dragging does not hammer the backend.
   useEffect(() => {
     if (rightPanelWidth <= 0) return;
-    try {
-      localStorage.setItem(
-        RIGHT_PANEL_LAYOUT_KEY,
-        JSON.stringify({ visible: rightVisible, width: rightPanelWidth })
-      );
-    } catch {
-      // ignore
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
     }
-  }, [rightVisible, rightPanelWidth]);
+    saveTimerRef.current = setTimeout(() => {
+      onLayoutChange({ visible: rightVisible, width: rightPanelWidth });
+    }, LAYOUT_SAVE_DEBOUNCE_MS);
 
-  // Global mouse events for panel resizing
+    return () => {
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+      }
+    };
+  }, [rightPanelWidth, rightVisible, onLayoutChange]);
+
+  // Global mouse events for panel resizing.
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isDraggingRef.current || !mainRef.current) return;

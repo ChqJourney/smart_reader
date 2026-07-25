@@ -592,6 +592,13 @@ struct AppSettings {
     hover_translate: bool,
     #[serde(default = "default_log_level")]
     log_level: String,
+    /// Whether the right-side AI chat panel is visible.
+    #[serde(default = "default_right_panel_visible")]
+    right_panel_visible: bool,
+    /// Persisted width of the right-side panel in pixels. A value of 0 means
+    /// "not set, use default fraction".
+    #[serde(default = "default_right_panel_width")]
+    right_panel_width: u32,
 }
 
 fn default_platform_id() -> String {
@@ -618,6 +625,14 @@ fn default_log_level() -> String {
     "warn".to_string()
 }
 
+fn default_right_panel_visible() -> bool {
+    true
+}
+
+fn default_right_panel_width() -> u32 {
+    0
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -634,6 +649,8 @@ impl Default for AppSettings {
             system_prompts: SystemPrompts::default(),
             hover_translate: false,
             log_level: default_log_level(),
+            right_panel_visible: default_right_panel_visible(),
+            right_panel_width: default_right_panel_width(),
         }
     }
 }
@@ -1266,6 +1283,8 @@ mod tests {
             system_prompts: SystemPrompts::default(),
             hover_translate: false,
             log_level: "warn".to_string(),
+            right_panel_visible: true,
+            right_panel_width: 0,
         }
     }
 

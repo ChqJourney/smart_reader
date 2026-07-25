@@ -19,6 +19,7 @@ import { usePersistence } from "./hooks/usePersistence";
 import {
   useRightPanelLayout,
   DIVIDER_WIDTH,
+  type RightPanelLayout,
 } from "./hooks/useRightPanelLayout";
 import { useRecentFiles, type RecentFile } from "./hooks/useRecentFiles";
 import { useSplitView } from "./hooks/useSplitView";
@@ -45,11 +46,42 @@ const RIGHT_PANEL_SPLIT_MIN_WIDTH = 200;
 function App() {
   const { t } = useTranslation();
   const tabs = useTabs();
-  const layout = useRightPanelLayout();
-  const recentFiles = useRecentFiles();
-  const splitView = useSplitView();
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  const handleLayoutChange = useCallback(
+    (layout: RightPanelLayout) => {
+      if (!settingsLoaded) return;
+      setSettings((prev) => {
+        if (
+          prev.rightPanelVisible === layout.visible &&
+          prev.rightPanelWidth === layout.width
+        ) {
+          return prev;
+        }
+        const next: AppSettings = {
+          ...prev,
+          rightPanelVisible: layout.visible,
+          rightPanelWidth: layout.width,
+        };
+        saveSettings(next).catch((err) =>
+          error(`[App] 保存右侧面板布局失败: ${err}`)
+        );
+        return next;
+      });
+    },
+    [settingsLoaded]
+  );
+
+  const layout = useRightPanelLayout(
+    {
+      visible: settings.rightPanelVisible,
+      width: settings.rightPanelWidth,
+    },
+    handleLayoutChange
+  );
+  const recentFiles = useRecentFiles();
+  const splitView = useSplitView();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const dictionaryStatus = useDictionaryStatus();

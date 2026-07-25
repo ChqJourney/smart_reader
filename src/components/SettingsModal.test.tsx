@@ -56,6 +56,8 @@ const defaultSettings = {
   },
   hoverTranslate: false,
   logLevel: "warn" as const,
+  rightPanelVisible: true,
+  rightPanelWidth: 0,
 };
 
 function switchToFeaturePage() {
@@ -249,6 +251,8 @@ describe("SettingsModal", () => {
       systemPrompts: defaultSettings.systemPrompts,
       hoverTranslate: false,
       logLevel: "warn",
+      rightPanelVisible: true,
+      rightPanelWidth: 0,
     });
   });
 
@@ -264,7 +268,9 @@ describe("SettingsModal", () => {
     fireEvent.click(screen.getByText("保存"));
 
     await waitFor(() => {
-      expect(screen.getByText(/保存失败.*keyring unavailable/i)).toBeInTheDocument();
+      expect(
+        screen.getByText(/保存失败.*keyring unavailable/i)
+      ).toBeInTheDocument();
     });
     expect(onSave).toHaveBeenCalledTimes(1);
   });

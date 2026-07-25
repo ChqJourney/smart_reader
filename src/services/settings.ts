@@ -41,9 +41,49 @@ export interface AppSettings {
   systemPrompts: SystemPrompts;
   hoverTranslate: boolean;
   logLevel: LogLevel;
+  /** Whether the right-side AI chat panel is visible. */
+  rightPanelVisible: boolean;
+  /** Persisted width of the right-side panel in pixels. 0 means "use default fraction". */
+  rightPanelWidth: number;
 }
 
 const LEGACY_STORAGE_KEY = "standardread-llm-config";
+const LEGACY_RIGHT_PANEL_LAYOUT_KEY = "pdfAgent.rightPanelLayout";
+
+interface LegacyRightPanelLayout {
+  visible?: unknown;
+  width?: unknown;
+}
+
+function loadLegacyRightPanelLayout(): Partial<
+  Pick<AppSettings, "rightPanelVisible" | "rightPanelWidth">
+> | null {
+  try {
+    const raw = localStorage.getItem(LEGACY_RIGHT_PANEL_LAYOUT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as LegacyRightPanelLayout;
+    const result: Partial<
+      Pick<AppSettings, "rightPanelVisible" | "rightPanelWidth">
+    > = {};
+    if (typeof parsed.visible === "boolean") {
+      result.rightPanelVisible = parsed.visible;
+    }
+    if (typeof parsed.width === "number") {
+      result.rightPanelWidth = parsed.width;
+    }
+    return result;
+  } catch {
+    return null;
+  }
+}
+
+function clearLegacyRightPanelLayout(): void {
+  try {
+    localStorage.removeItem(LEGACY_RIGHT_PANEL_LAYOUT_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 const DEFAULT_SYSTEM_PROMPTS: SystemPrompts = {
   translate:
@@ -66,6 +106,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   systemPrompts: DEFAULT_SYSTEM_PROMPTS,
   hoverTranslate: false,
   logLevel: "warn",
+  rightPanelVisible: true,
+  rightPanelWidth: 0,
 };
 
 function isValidSettings(value: unknown): value is Partial<AppSettings> {
@@ -103,6 +145,9 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
     logLevel: isLogLevel(value.logLevel)
       ? value.logLevel
       : DEFAULT_SETTINGS.logLevel,
+    rightPanelVisible:
+      value.rightPanelVisible ?? DEFAULT_SETTINGS.rightPanelVisible,
+    rightPanelWidth: value.rightPanelWidth ?? DEFAULT_SETTINGS.rightPanelWidth,
   };
 }
 
@@ -131,25 +176,42 @@ async function mergeWithLegacy(base: AppSettings): Promise<AppSettings> {
 }
 
 export async function loadSettings(): Promise<AppSettings> {
+  const layoutLegacy = loadLegacyRightPanelLayout();
+
   try {
     const backend = await invoke<AppSettings>("load_settings");
     if (isValidSettings(backend)) {
-      const normalized = normalizeSettings(backend);
+      let normalized = normalizeSettings(backend);
+      if (layoutLegacy) {
+        normalized = { ...normalized, ...layoutLegacy };
+      }
       // Defense in depth: the backend already masks the API key, but never let
       // a plaintext key from any source leak into the rest of the frontend.
       normalized.llm.apiKey = "";
       // Only migrate a legacy localStorage key if no key is already configured
       // in secure storage.
       const hasBackendKey = await checkApiKey(normalized.platformId);
-      if (!hasBackendKey) {
-        return await mergeWithLegacy(normalized);
+      const merged = hasBackendKey
+        ? normalized
+        : await mergeWithLegacy(normalized);
+
+      if (layoutLegacy) {
+        try {
+          await saveSettings(merged);
+          clearLegacyRightPanelLayout();
+        } catch {
+          // Keep the legacy localStorage key if the backend save failed so the
+          // layout is not lost; it will be retried on next load.
+        }
       }
-      return normalized;
+      return merged;
     }
   } catch (err) {
     error(`Failed to load settings: ${err}`);
   }
-  return await mergeWithLegacy({ ...DEFAULT_SETTINGS });
+
+  const fallback = { ...DEFAULT_SETTINGS, ...(layoutLegacy ?? {}) };
+  return await mergeWithLegacy(fallback);
 }
 
 function loadLegacySettings(): Partial<LlmConfig> | null {

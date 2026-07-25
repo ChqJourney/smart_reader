@@ -21,6 +21,8 @@ const DEFAULT_SETTINGS = {
   },
   hoverTranslate: false,
   logLevel: "warn",
+  rightPanelVisible: true,
+  rightPanelWidth: 0,
 };
 
 describe("settings service", () => {
@@ -158,6 +160,47 @@ describe("settings service", () => {
     expect(settings.targetLanguage).toBe("中文");
   });
 
+  it("migrates legacy right panel layout from localStorage", async () => {
+    localStorage.setItem(
+      "pdfAgent.rightPanelLayout",
+      JSON.stringify({ visible: false, width: 123 })
+    );
+    let savedSettings: any = null;
+    mockTauriInvoke({
+      load_settings: () => ({ ...DEFAULT_SETTINGS }),
+      check_api_key: () => true,
+      save_settings: (args) => {
+        savedSettings = args.settings;
+        return null;
+      },
+    });
+    const { loadSettings } = await import("../services/settings");
+    const settings = await loadSettings();
+    expect(settings.rightPanelVisible).toBe(false);
+    expect(settings.rightPanelWidth).toBe(123);
+    expect(savedSettings).not.toBeNull();
+    expect(savedSettings.rightPanelVisible).toBe(false);
+    expect(savedSettings.rightPanelWidth).toBe(123);
+    expect(localStorage.getItem("pdfAgent.rightPanelLayout")).toBeNull();
+  });
+
+  it("keeps legacy right panel layout when migration save fails", async () => {
+    localStorage.setItem(
+      "pdfAgent.rightPanelLayout",
+      JSON.stringify({ visible: false, width: 123 })
+    );
+    mockTauriInvoke({
+      load_settings: () => ({ ...DEFAULT_SETTINGS }),
+      check_api_key: () => true,
+      save_settings: () => Promise.reject(new Error("disk full")),
+    });
+    const { loadSettings } = await import("../services/settings");
+    const settings = await loadSettings();
+    expect(settings.rightPanelVisible).toBe(false);
+    expect(settings.rightPanelWidth).toBe(123);
+    expect(localStorage.getItem("pdfAgent.rightPanelLayout")).not.toBeNull();
+  });
+
   it("saves settings via backend", async () => {
     let saved: any = null;
     mockTauriInvoke({
@@ -180,6 +223,8 @@ describe("settings service", () => {
       },
       hoverTranslate: true,
       logLevel: "warn",
+      rightPanelVisible: true,
+      rightPanelWidth: 0,
     };
     await saveSettings(settings);
     expect(saved).toEqual(settings);

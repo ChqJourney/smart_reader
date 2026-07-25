@@ -64,10 +64,47 @@ export default function AiChatPanel({
     new Set()
   );
 
+  const messagesRef = useRef<HTMLDivElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const programmaticScrollRef = useRef(false);
+
   const activeSession = useMemo(
     () => sessions.find((s) => s.id === activeSessionId) ?? null,
     [sessions, activeSessionId]
   );
+
+  // 解读生成期间自动滚动到底部；用户主动滚动后暂停，回到底部时恢复。
+  useEffect(() => {
+    if (!messagesRef.current || !autoScroll || !activeSession?.isStreaming)
+      return;
+    const el = messagesRef.current;
+    programmaticScrollRef.current = true;
+    el.scrollTop = el.scrollHeight;
+    const raf = requestAnimationFrame(() => {
+      programmaticScrollRef.current = false;
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [activeSession?.messages, activeSession?.isStreaming, autoScroll]);
+
+  const handleMessagesScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (programmaticScrollRef.current) return;
+    const el = e.currentTarget;
+    const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const nearBottom = distance < 32;
+    setAutoScroll(nearBottom);
+  };
+
+  // 将多轮工具调用记录合并为一条可折叠的摘要，保持会话框简洁。
+  const mergedDoneToolEvents = useMemo(() => {
+    if (!activeSession) return [];
+    return activeSession.messages
+      .filter(
+        (m) =>
+          m.role === "assistant" && m.id !== activeSession.streamingMessageId
+      )
+      .flatMap((m) => m.toolEvents || [])
+      .filter((e) => e.status === "done");
+  }, [activeSession]);
 
   // Enter chatbox when external code asks to expand a session (e.g. PDF marker click).
   // We only react to prop changes so that the user can navigate back without being
@@ -231,11 +268,30 @@ export default function AiChatPanel({
                 contextWindow={contextWindow}
               />
             )}
-          <div className="ai-chat-messages" role="log" aria-live="polite">
+          <div
+            ref={messagesRef}
+            className="ai-chat-messages"
+            role="log"
+            aria-live="polite"
+            onScroll={handleMessagesScroll}
+          >
             {activeSession.messages
               // 工具结果消息用于 LLM 上下文回放，UI 上只需通过 assistant
               // 消息上的 toolEvents 摘要感知，避免历史记录过于冗长。
-              .filter((message) => message.role !== "tool")
+              // 空内容的工具调用中间消息也隐藏，统一在底部显示合并摘要。
+              .filter((message) => {
+                if (message.role === "tool") return false;
+                if (message.role !== "assistant") return true;
+                const isCurrentStreaming =
+                  activeSession.isStreaming &&
+                  activeSession.streamingMessageId === message.id;
+                const hasVisibleContent =
+                  message.content.trim() !== "" || !!message.reasoningContent;
+                const hasRunningTools =
+                  isCurrentStreaming &&
+                  message.toolEvents?.some((e) => e.status === "running");
+                return hasVisibleContent || isCurrentStreaming || hasRunningTools;
+              })
               .map((message) => {
                 const isCurrentStreaming =
                   activeSession.isStreaming &&
@@ -266,12 +322,14 @@ export default function AiChatPanel({
                           done={thinkingDone || !isCurrentStreaming}
                         />
                       )}
-                      {message.toolEvents && message.toolEvents.length > 0 && (
-                        <ToolCallsIndicator
-                          toolEvents={message.toolEvents}
-                          isStreaming={isCurrentStreaming}
-                        />
-                      )}
+                      {isCurrentStreaming &&
+                        message.toolEvents &&
+                        message.toolEvents.length > 0 && (
+                          <ToolCallsIndicator
+                            toolEvents={message.toolEvents}
+                            isStreaming={isCurrentStreaming}
+                          />
+                        )}
                       {message.role === "assistant" &&
                       isCurrentStreaming &&
                       !message.content ? (
@@ -291,6 +349,14 @@ export default function AiChatPanel({
                   </div>
                 );
               })}
+            {mergedDoneToolEvents.length > 0 && (
+              <div className="ai-chat-tool-summary">
+                <ToolCallsIndicator
+                  toolEvents={mergedDoneToolEvents}
+                  isStreaming={false}
+                />
+              </div>
+            )}
           </div>
           <div className="ai-chat-input-area">
             <FollowUpInput

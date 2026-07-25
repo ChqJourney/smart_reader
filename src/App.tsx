@@ -742,6 +742,24 @@ function App() {
       if (!source) return;
       const targetTab = tabs.tabs.find((t) => t.fileHash === source.fileHash);
       if (!targetTab) return;
+
+      // 当前页码已经是目标页码时，不再重复滚动，避免轻微的位置偏差也触发跳转。
+      // 分屏下仍把焦点切到对应屏，方便后续操作跟随来源文档。
+      if (targetTab.pageNum === source.page) {
+        if (
+          splitView.isSplitView &&
+          targetTab.id === splitView.secondaryTabId
+        ) {
+          setFocusedViewer("secondary");
+        } else if (
+          splitView.isSplitView &&
+          targetTab.id === tabs.activeTabId
+        ) {
+          setFocusedViewer("primary");
+        }
+        return;
+      }
+
       if (splitView.isSplitView && targetTab.id === splitView.secondaryTabId) {
         tabs.gotoTabPage(targetTab.id, source.page, { activate: false });
         setFocusedViewer("secondary");

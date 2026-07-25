@@ -591,3 +591,9 @@
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+.ai-chat-tool-summary {
+  margin-top: 4px;
+  padding: 0 16px 8px;
+  flex-shrink: 0;
+}

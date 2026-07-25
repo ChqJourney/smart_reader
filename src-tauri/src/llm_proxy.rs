@@ -679,7 +679,10 @@ async fn pump_sse_stream<S, B, E>(
 {
     use futures_util::{FutureExt, StreamExt};
 
-    let mut buffer = String::new();
+    // 字节级缓冲：多字节 UTF-8 字符可能被 chunk 边界切断，必须等
+    // 完整行（以 '\n' 结尾）到齐后再解码，否则 from_utf8_lossy 会把
+    // 半个字符各替换成 U+FFFD，原始字节永久丢失（中文内容会乱码）。
+    let mut buffer: Vec<u8> = Vec::new();
     let mut tool_call_accumulators: Vec<ToolCallAcc> = Vec::new();
 
     loop {
@@ -703,19 +706,18 @@ async fn pump_sse_stream<S, B, E>(
 
         match next_item {
             Some(Ok(chunk)) => {
-                buffer.push_str(&String::from_utf8_lossy(chunk.as_ref()));
+                buffer.extend_from_slice(chunk.as_ref());
 
-                // Take ownership of buffer content to avoid borrow conflicts.
-                // Split into complete lines + remaining partial line.
-                let content = std::mem::take(&mut buffer);
-                let mut lines: Vec<&str> = content.split('\n').collect();
-                // The last element is the potentially incomplete line; put it back.
-                if let Some(remainder) = lines.pop() {
-                    buffer = remainder.to_string();
-                }
+                // 字节层切出完整行（含结尾 '\n'），残余部分留在 buffer
+                // 与后续 chunk 拼合。完整行必然字符边界对齐，此时解码安全。
+                let Some(last_newline) = buffer.iter().rposition(|&b| b == b'\n') else {
+                    continue;
+                };
+                let complete: Vec<u8> = buffer.drain(..=last_newline).collect();
+                let text = String::from_utf8_lossy(&complete);
 
                 let mut done = false;
-                for line in &lines {
+                for line in text.split('\n') {
                     match parse_sse_line(line, &mut tool_call_accumulators, on_event) {
                         Ok(should_continue) => {
                             if !should_continue {
@@ -744,7 +746,8 @@ async fn pump_sse_stream<S, B, E>(
             None => {
                 // Stream ended — process any remaining buffer
                 if !buffer.is_empty() {
-                    let _ = parse_sse_line(&buffer, &mut tool_call_accumulators, on_event);
+                    let text = String::from_utf8_lossy(&buffer);
+                    let _ = parse_sse_line(&text, &mut tool_call_accumulators, on_event);
                 }
                 // 未收到 [DONE]/finish_reason 而流直接结束时，残余 buffer
                 // 解析不会触发 flush，需兜底 flush，否则已累积的
@@ -1244,6 +1247,41 @@ mod tests {
             assert!(guard.iter().any(|e| matches!(
                 e,
                 StreamEvent::Chunk { content } if content == "hello"
+            )));
+            assert!(guard.iter().any(|e| matches!(e, StreamEvent::Done)));
+        });
+    }
+
+    /// 回归：多字节 UTF-8 字符被 chunk 边界切断时不得产生 U+FFFD 乱码。
+    /// 旧实现按 chunk 独立 from_utf8_lossy，会把半个汉字变成替换字符。
+    #[test]
+    fn pump_handles_multibyte_char_split_across_chunks() {
+        block_on(async {
+            let (channel, events) = test_channel();
+            let cancel_flag = Arc::new(AtomicBool::new(false));
+            // 「中」= E4 B8 AD，把它的 3 个字节切到两个 chunk（1+2）。
+            let full = "data: {\"choices\":[{\"delta\":{\"content\":\"中文\"}}]}\n\ndata: [DONE]\n\n";
+            let bytes = full.as_bytes();
+            let split_at = bytes
+                .windows(3)
+                .position(|w| w == "中".as_bytes())
+                .unwrap()
+                + 1;
+            let stream = futures_util::stream::iter(vec![
+                Ok::<_, String>(bytes[..split_at].to_vec()),
+                Ok::<_, String>(bytes[split_at..].to_vec()),
+            ]);
+
+            pump_sse_stream(stream, &cancel_flag, &channel).await;
+
+            let guard = events.lock().unwrap();
+            assert!(guard.iter().any(|e| matches!(
+                e,
+                StreamEvent::Chunk { content } if content == "中文"
+            )));
+            assert!(!guard.iter().any(|e| matches!(
+                e,
+                StreamEvent::Chunk { content } if content.contains('\u{FFFD}')
             )));
             assert!(guard.iter().any(|e| matches!(e, StreamEvent::Done)));
         });

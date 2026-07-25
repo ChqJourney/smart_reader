@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.9.10] - 2026-07-25
+
 ### Changed
 - PDF 多标签切换改为 keep-alive：所有 tab 的 PdfViewer 常驻挂载，切换仅隐藏 / 显示，canvas 位图、滚动位置、页码与工具栏状态全部保留，切换瞬时完成，不再闪「加载中」占位。
 

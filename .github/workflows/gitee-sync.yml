@@ -1,0 +1,62 @@
+# GitHub Release 正式发布（Publish）后，把更新资产同步到 Gitee 固定 release（tag: updater），
+# 作为国内备用更新源（updater endpoints 按序回退，见 tauri.conf.json）。
+# Draft 阶段不同步，避免用户先于人工冒烟收到更新推送。
+# 也支持手动 dispatch 补同步（输入 GitHub release tag）。
+
+name: Gitee Sync
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要同步的 GitHub release tag（如 v0.9.10）"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitee-sync
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  sync:
+    name: 同步更新资产到 Gitee
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Resolve tag
+        shell: bash
+        run: echo "TAG=${{ github.event.release.tag_name || github.event.inputs.tag }}" >> "$GITHUB_ENV"
+
+      # 脚本版本与发布 tag 保持一致
+      - name: Checkout released tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download updater assets from GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p assets
+          gh release download "$TAG" --dir assets \
+            -p "latest.json" -p "*.nsis.zip" -p "*.nsis.zip.sig"
+          ls -la assets
+
+      - name: Sync assets to Gitee release
+        env:
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: node scripts/sync-gitee-release.mjs assets

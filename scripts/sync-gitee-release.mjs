@@ -7,7 +7,7 @@
  *
  * 背景：Tauri v2 `createUpdaterArtifacts: true` 对 NSIS 直接签名 `-setup.exe`（不产 .nsis.zip），
  * 且 tauri-action 生成的 latest.json 里 url 是 API asset URL（无法取文件名），
- * 因此脚本通过「signature 字段 == base64(.sig 文件内容)」反查每个平台对应的更新包文件名。
+ * 因此脚本通过「signature 字段 == .sig 文件内容」反查每个平台对应的更新包文件名。
  *
  * 步骤：
  *   1. 解析 latest.json，按 signature 匹配 .sig 反查更新包文件名，改写 url 指向 Gitee 附件直链（文件名不变，签名无需重签）；
@@ -54,10 +54,16 @@ const sigFiles = files.filter((f) => f.endsWith(".sig"));
 const bundleNames = new Set();
 for (const [platform, info] of Object.entries(manifest.platforms ?? {})) {
   if (!info.url || !info.signature) continue;
-  const sigText = Buffer.from(info.signature, "base64").toString("utf8").trim();
-  const sigFile = sigFiles.find(
-    (f) => readFileSync(path.join(assetsDir, f), "utf8").trim() === sigText
-  );
+  // .sig 文件内容就是 base64 签名本身（与 signature 字段一致）；
+  // 兼容少数工具链存原始 minisign 文本的情况，此时 signature == base64(文件内容)
+  const expected = info.signature.trim();
+  const sigFile = sigFiles.find((f) => {
+    const content = readFileSync(path.join(assetsDir, f), "utf8").trim();
+    return (
+      content === expected ||
+      Buffer.from(expected, "base64").toString("utf8").trim() === content
+    );
+  });
   if (!sigFile) {
     fail(
       `平台 ${platform} 的 signature 在 ${assetsDir} 下找不到匹配的 .sig 文件`

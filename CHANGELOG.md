@@ -14,7 +14,7 @@
 - 自动更新新增 Gitee 备用源：updater endpoints 追加 Gitee 固定 release（`https://gitee.com/patrickchq/SpecReader/releases/download/updater/latest.json`），GitHub 不通时自动回退到 Gitee 检查更新；新增 `gitee-sync.yml` workflow，GitHub Release 发布（Publish）后自动把安装包、签名与改写下载地址后的 `latest.json` 同步到 Gitee 固定 release。
 
 ### Fixed
-- 修复 `gitee-sync` 同步失败：Tauri v2 对 NSIS 直接签名 `-setup.exe`（不产 `.nsis.zip`），且 `latest.json` 里的 url 是 API asset URL 无法取文件名，脚本改为按「signature 字段 == base64(.sig 内容)」反查更新包文件名；workflow 改为全量下载 release 资产，手动 dispatch 的 tag 输入自动补 `v` 前缀。
+- 修复 `gitee-sync` 同步失败：Tauri v2 对 NSIS 直接签名 `-setup.exe`（不产 `.nsis.zip`），且 `latest.json` 里的 url 是 API asset URL 无法取文件名，脚本改为按「signature 字段 == `.sig` 文件内容」反查更新包文件名；workflow 改为全量下载 release 资产、始终使用 master 上的同步脚本，手动 dispatch 的 tag 输入自动补 `v` 前缀。
 
 ## [0.9.10] - 2026-07-25
 

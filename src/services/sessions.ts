@@ -46,8 +46,6 @@ export interface InterpretationSession {
   lastPromptTokens?: number;
 }
 
-const LEGACY_STORAGE_KEY = "standardread-interpretation-sessions";
-
 function createMessage(
   role: "user" | "assistant",
   content: string
@@ -134,27 +132,6 @@ export function finishStreaming(
     streamingMessageId: undefined,
     updatedAt: Date.now(),
   };
-}
-
-// Legacy localStorage helpers used for one-time migration.
-export function loadSessionsFromLegacyStorage(): InterpretationSession[] {
-  try {
-    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed;
-  } catch {
-    return [];
-  }
-}
-
-export function clearLegacySessionsStorage(): void {
-  try {
-    localStorage.removeItem(LEGACY_STORAGE_KEY);
-  } catch {
-    // ignore
-  }
 }
 
 // Backend storage helpers

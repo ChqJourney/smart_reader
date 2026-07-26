@@ -67,7 +67,7 @@ Vitest 配置位于 `vite.config.ts`：
 - **services/**：`annotations`（CRUD 与持久化）、`settings`（默认值、后端 invoke、旧 localStorage 迁移）、`llm`（配置读写、Prompt 构建、SSE 流解析）、`sessions`（消息更新、流状态、删除）、`stash`（暂存片段增删改）、`pdfTools`（Agent Tools 三工具正常路径、白名单拒绝、页码越界、截断、搜索无命中、未知工具、非法 JSON、异常转错误文本、session dispose 幂等）、`pdfToolsRegistry`（打开 PDF 元数据同步、关闭 tab 授权失效、bytes 缓存命中与回退）、`dictionary`（词典状态与查询）。
 - **hooks/**：`usePersistence`（StrictMode 下 `handleFollowUp` 不双发、流式中断、annotation 删除、分屏隔离、关闭 Tab 资源清理；Agent Loop 工具调用→执行→收尾、消息落盘与追问回放、同参去重、达 `maxRounds` 强制无 tools 收尾、总开关关闭降级）、`useRecentFiles`（增删、置顶、配额、lastPage 回写）、`useSplitView`、`useTabs`、`useViewportManager`（viewport 预加载与就绪门控）、`useZoomAnchor`（缩放锚点捕获/恢复）、`useScrollPageSync`（滚动页码同步与换页死区）、`useTabRestore`（tab 状态恢复与 pending 跳转）、`useSearchDomain`（PDF 坐标索引与搜索导航）、`useDrag`（拖拽阈值与清理）、`useDictionaryStatus`（下载进度状态流转）。
 - **components/**：`PdfViewer` 拆分为 pageJump / state / zoom 三组测试（连续滚动跳转、tab 状态恢复、快速缩放回归）；`PdfPage`（wrapper 尺寸直驱、过期 scale 重算）；`SelectionToolbar`、`AnnotationMarker`（拖拽后不误触发点击）、`PdfAnnotations`（按页与 fileHash 过滤）、`AiChatPanel`（流式更新、中止）、`ToolCallsIndicator`、`SettingsModal`、`RecentFilesBar`、`CustomInterpretModal`、`CommentPopup`、`ExplainPopup`、`TranslatePopup`、`MarkdownRenderer`。
-- **utils/**：`coordinateConverter` / `zoomAnchor` / `fitToWidth` / `popupPosition` / `time` / `path` / `clipboard` 等纯函数基准测试。
+- **utils/**：`zoomAnchor` / `fitToWidth` / `popupPosition` / `time` / `path` / `clipboard` 等纯函数基准测试。
 - **App.test.tsx**：面板显隐切换、头部渲染、会话清理、悬停翻译开关集成（mock `PdfViewer` 避免加载 pdfjs-dist）。
 
 ### Mock 策略

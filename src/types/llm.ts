@@ -63,17 +63,3 @@ export type LlmError =
   | { kind: "invalidConfig"; field: string; detail: string }
   | { kind: "toolError"; toolName: string; detail: string }
   | { kind: "unknown"; status: number; body: string };
-
-/**
- * 流式事件（后端通过 Tauri Channel 推送给前端）
- *
- * 对应后端 StreamEvent 枚举，字段名 camelCase。
- */
-export type StreamEvent =
-  | { type: "chunk"; content: string }
-  | { type: "reasoningChunk"; content: string }
-  | { type: "toolCall"; name: string; args: string; callId: string }
-  | { type: "toolResult"; callId: string; summary: string }
-  | { type: "usage"; usage: TokenUsage }
-  | { type: "error"; error: LlmError }
-  | { type: "done" };

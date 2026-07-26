@@ -38,7 +38,7 @@ export async function checkForUpdate(): Promise<void> {
  */
 export type UpdateInfo = Update;
 
-export interface UpdateCheckResult {
+interface UpdateCheckResult {
   available: boolean;
   version?: string;
   currentVersion?: string;

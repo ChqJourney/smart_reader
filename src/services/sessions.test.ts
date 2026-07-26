@@ -7,7 +7,6 @@ import {
   updateMessageContent,
   finishStreaming,
   deleteSession,
-  loadSessionsFromLegacyStorage,
   loadSession,
 } from "./sessions";
 import { StashItem, StashSource } from "./stash";
@@ -17,8 +16,6 @@ const mockInvoke = vi.hoisted(() => vi.fn());
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: mockInvoke,
 }));
-
-const STORAGE_KEY = "standardread-interpretation-sessions";
 
 function makeSource(overrides: Partial<StashSource> = {}): StashSource {
   return {
@@ -190,31 +187,6 @@ describe("sessions service", () => {
       const result = deleteSession(sessions, "non-existent");
 
       expect(result).toEqual(sessions);
-    });
-  });
-
-  describe("persistence", () => {
-    it("loads sessions from localStorage", () => {
-      const session = createSession(
-        [makeStashItem("stash-1", "text")],
-        "initial"
-      );
-      localStorage.setItem(STORAGE_KEY, JSON.stringify([session]));
-
-      const loaded = loadSessionsFromLegacyStorage();
-
-      expect(loaded).toHaveLength(1);
-      expect(loaded[0].id).toBe(session.id);
-      expect(loaded[0].messages).toEqual(session.messages);
-    });
-
-    it("returns empty array when localStorage is empty", () => {
-      expect(loadSessionsFromLegacyStorage()).toEqual([]);
-    });
-
-    it("returns empty array when stored data is invalid", () => {
-      localStorage.setItem(STORAGE_KEY, "not-json");
-      expect(loadSessionsFromLegacyStorage()).toEqual([]);
     });
   });
 

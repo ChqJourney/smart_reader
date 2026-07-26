@@ -100,7 +100,7 @@ npm install
 │   │   ├── CommentPopup.tsx           # 批注浮层（拖动编辑、300ms 防抖保存、隐藏/删除）
 │   │   ├── StashInterpretedPopup.tsx  # 已解读暂存浮层
 │   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录、流式中止）
-│   │   ├── ContextWidget.tsx          # 会话上下文用量条（数据源 activeSession.lastPromptTokens；frozen 态为预留半成品）
+│   │   ├── ContextWidget.tsx          # 会话上下文用量条（数据源 activeSession.lastPromptTokens，已接入 AiChatPanel）
 │   │   ├── MarkdownRenderer.tsx       # react-markdown + gfm/math/katex，自定义 sanitize schema，公式解析失败降级纯文本
 │   │   ├── ThinkingIndicator.tsx      # 思考中/已思考 tokens 指示（可展开 reasoningContent）
 │   │   ├── SettingsModal.tsx          # 全局设置 Modal（左侧分页：模型设置 / 功能设置 / 系统设置 / 关于）
@@ -111,7 +111,6 @@ npm install
 │   │   ├── ToolCallsIndicator.tsx     # 工具调用状态指示器（解读流中展示）
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
 │   │   ├── ErrorBoundary.tsx          # 顶层错误边界
-│   │   ├── ErrorBanner.tsx            # 错误横幅（预留，当前未接入）
 │   │   └── Icon.tsx                   # SVG 图标组件
 │   ├── hooks/                         # 可复用状态逻辑
 │   │   ├── useTabs.ts                 # Tab 管理
@@ -138,7 +137,6 @@ npm install
 │   ├── types/
 │   │   └── llm.ts                     # LLM 相关类型（LlmProfile 等多 profile 类型为前瞻预留、未落地）
 │   ├── utils/                         # 纯函数工具
-│   │   ├── coordinateConverter.ts     # PDF↔wrapper↔screen 坐标转换
 │   │   ├── zoomAnchor.ts              # 缩放锚点几何计算
 │   │   ├── fitToWidth.ts              # 适合宽度 scale 计算
 │   │   ├── pageRail.ts                # 滑轨 pct↔页码映射、scrollTop→页码反查（viewport 缺失时按均高估算）
@@ -462,7 +460,7 @@ runSessionStream（usePersistence.ts）
   - `services/`：annotations / settings / llm（Channel 流桥接、Prompt 构建）/ sessions / stash / pdfTools / pdfToolsRegistry / updater / clipboard 等，覆盖 CRUD、invoke mock、错误转文本、白名单拒绝等路径。
   - `hooks/`：usePersistence（Agent loop 全流程、流式中断、tab 清理）、useViewportManager / useZoomAnchor / useScrollPageSync / useTabRestore / useSearchDomain（页码、缩放、恢复回归的重灾区）、useRecentFiles / useSplitView / useDrag 等。
   - `components/`：PdfViewer（pageJump / state）、PdfPage、AiChatPanel、SettingsModal、RecentFilesBar、SelectionToolbar、AnnotationMarker、ToolCallsIndicator、SetupWizard 等渲染与交互。
-  - `utils/`：coordinateConverter / zoomAnchor / fitToWidth / popupPosition / clipboard 等纯函数基准。
+  - `utils/`：zoomAnchor / fitToWidth / popupPosition / clipboard 等纯函数基准。
   - 完整清单直接看代码内 `*.test.*` 文件与 `TESTING.md`（含历史 bug 修复记录）。
 - Mock 策略：
   - `setup.ts` 中全局 mock `crypto.randomUUID`、`localStorage`、`matchMedia`、`IntersectionObserver`、`ResizeObserver`。
@@ -540,7 +538,7 @@ runSessionStream（usePersistence.ts）
 - 前端工具实现在 `src/services/pdfTools.ts`；任何错误都应捕获并转为 result 文本，不得向 loop 抛异常。
 - 授权与元数据在 `src/services/pdfToolsRegistry.ts`；`App.tsx` 通过 `syncOpenPdfs(tabs, getCachedBytes)` 同步当前打开 tab。修改注册表接口时需同步 `App.tsx` 调用点与 `pdfToolsRegistry.test.ts`。
 - Agent loop 在 `hooks/usePersistence.ts` 的 `runSessionStream`；修改轮次、去重、收尾逻辑时需同步 `usePersistence.test.tsx`。
-- UI 状态组件为 `components/ToolCallsIndicator.tsx`；样式在同名 `ToolCallsIndicator.css`。
+- UI 状态组件为 `components/ToolCallsIndicator.tsx`。
 - 相关 i18n key 在 `locales/zh-CN.json` / `en.json` 的 `tools.*` 与 `llm.toolsSystemAddendum` 段，修改后需两边同步。
 
 ## 11. 持续集成
@@ -580,7 +578,7 @@ cd src-tauri && cargo test
 
 ## 13. 版本信息
 
-- 前端版本：`0.9.5`
-- Tauri 应用版本：`0.9.5`
+- 前端版本：`0.9.11`
+- Tauri 应用版本：`0.9.11`
 - 产品名称：`SpecReader AI`
 - 应用标识：`com.photonee.specreader`

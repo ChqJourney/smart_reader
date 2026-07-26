@@ -1,6 +1,6 @@
 # SpecReader AI - 产品需求文档（PRD）
 
-> 版本：v0.9.5  
+> 版本：v0.9.11  
 > 状态：超轻量版已交付——多 Tab / 分屏对照、全文搜索、大纲导航、最近文件面板、悬停取词（ECDict）、选区翻译 / 解读 / 暂存、自定义解读与追问、Agent Tools 第一期（list_open_pdfs / read_pdf_page / search_in_pdf，经 Rust 后端代理 llm_proxy.rs 调 LLM，API Key 存系统钥匙串）、多平台预设（默认 deepseek）、自动更新、自定义标题栏、首次启动向导、i18n 框架（界面当前固定中文）；条款索引、引用追踪、术语表、测试清单、表格多模态、License 校验仍延后  
 > 目标：明确 MVP 及后续版本的功能边界、技术约束与商业化路径
 

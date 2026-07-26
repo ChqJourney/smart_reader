@@ -1,6 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import { error } from "./logs";
 import { PLATFORM_PRESETS } from "../data/platformPresets";
+import type { PlatformId } from "../data/platformPresets";
+
+// PlatformId 统一定义在 data/platformPresets.ts，这里 re-export 保持既有 import 路径可用。
+export type { PlatformId };
 
 export interface LlmConfig {
   baseUrl: string;
@@ -16,17 +20,6 @@ export interface SystemPrompts {
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
 
 export type ThinkingMode = "enabled" | "disabled" | "auto";
-
-export type PlatformId =
-  | "deepseek"
-  | "kimi"
-  | "bailian"
-  | "glm"
-  | "volcengine"
-  | "openrouter"
-  | "openai"
-  | "xiaomimimo"
-  | "custom";
 
 export interface AppSettings {
   llm: LlmConfig;

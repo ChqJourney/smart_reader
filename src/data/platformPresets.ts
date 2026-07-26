@@ -278,9 +278,6 @@ export const PLATFORM_PRESETS: Record<PlatformId, PlatformPreset> = {
 /** 平台选项列表（用于下拉选择） */
 export const PLATFORM_LIST: PlatformPreset[] = Object.values(PLATFORM_PRESETS);
 
-/** 默认平台 ID（新用户首次使用时的默认选择） */
-export const DEFAULT_PLATFORM_ID: PlatformId = "deepseek";
-
 /**
  * 根据 platformId 和 modelId 查找模型信息。
  * 自定义平台或未找到时返回 null。

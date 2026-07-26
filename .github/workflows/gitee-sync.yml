@@ -39,11 +39,9 @@ jobs:
           [[ "$TAG" != v* ]] && TAG="v$TAG"
           echo "TAG=$TAG" >> "$GITHUB_ENV"
 
-      # 脚本版本与发布 tag 保持一致
-      - name: Checkout released tag
+      # 同步脚本属于发布基础设施，始终用 master 最新版（不能 checkout 发布 tag——tag 里可能是旧脚本）
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: ${{ env.TAG }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

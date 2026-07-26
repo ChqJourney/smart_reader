@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.9.11] - 2026-07-26
+
 ### Added
 - 自动更新新增 Gitee 备用源：updater endpoints 追加 Gitee 固定 release（`https://gitee.com/patrickchq/SpecReader/releases/download/updater/latest.json`），GitHub 不通时自动回退到 Gitee 检查更新；新增 `gitee-sync.yml` workflow，GitHub Release 发布（Publish）后自动把安装包、签名与改写下载地址后的 `latest.json` 同步到 Gitee 固定 release。
 

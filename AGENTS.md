@@ -239,7 +239,7 @@ npm run tauri build -- --no-bundle
    - 在 Windows runner 用 `tauri-action` 构建 NSIS 安装包，自动生成 `.sig` 与 `latest.json`，创建 **Draft Release**（notes 取自 CHANGELOG 对应段落），并附加独立 exe `SpecReader AI v{version}.exe`。
 4. 下载 Draft Release 中的安装包人工冒烟测试，确认无误后在 Release 页面点击 Publish。发布后 `latest.json` 生效，客户端启动 3 秒后自动检查发现新版本并提示下载重启。
 
-> 更新源：updater endpoints 按序回退——首选 GitHub Release 的 `latest.json`，备用 Gitee 固定 release（`https://gitee.com/patrickchq/SpecReader/releases/download/updater/latest.json`，tag 固定为 `updater`，由人工保证存在）。GitHub Release 点 Publish 后 `.github/workflows/gitee-sync.yml` 自动触发（也可手动 dispatch 补同步）：下载 `latest.json` / `*.nsis.zip` / `*.nsis.zip.sig`，由 `scripts/sync-gitee-release.mjs` 把 `latest.json` 的下载地址改写为 Gitee 附件直链，再通过 Gitee API 先删旧附件后上传。依赖 GitHub Secret `GITEE_TOKEN`（Gitee 私人令牌，projects 权限）。
+> 更新源：updater endpoints 按序回退——首选 GitHub Release 的 `latest.json`，备用 Gitee 固定 release（`https://gitee.com/patrickchq/SpecReader/releases/download/updater/latest.json`，tag 固定为 `updater`，由人工保证存在）。GitHub Release 点 Publish 后 `.github/workflows/gitee-sync.yml` 自动触发（也可手动 dispatch 补同步，tag 可不带 `v` 前缀）：全量下载 release 资产，由 `scripts/sync-gitee-release.mjs` 按「signature == base64(.sig 内容)」反查更新包文件名（Tauri v2 NSIS 更新包是 `-setup.exe` + `.sig`，不产 `.nsis.zip`），把 `latest.json` 的下载地址改写为 Gitee 附件直链，再通过 Gitee API 先删旧附件后上传。依赖 GitHub Secret `GITEE_TOKEN`（Gitee 私人令牌，projects 权限）。
 
 > 注意：Tauri 更新包签名私钥保存在 `~/.tauri/specreader.key`，需配置为 GitHub Secret `TAURI_SIGNING_PRIVATE_KEY`。
 

@@ -31,9 +31,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      # 手动 dispatch 允许不带 v 前缀（如 0.9.11），统一补全为 v0.9.11
       - name: Resolve tag
         shell: bash
-        run: echo "TAG=${{ github.event.release.tag_name || github.event.inputs.tag }}" >> "$GITHUB_ENV"
+        run: |
+          TAG="${{ github.event.release.tag_name || github.event.inputs.tag }}"
+          [[ "$TAG" != v* ]] && TAG="v$TAG"
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
 
       # 脚本版本与发布 tag 保持一致
       - name: Checkout released tag
@@ -46,14 +50,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      # 全量下载（Tauri v2 NSIS 更新包是 -setup.exe + .sig，独立 exe 也会被带下来，脚本只挑 latest.json 引用的文件）
       - name: Download updater assets from GitHub release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p assets
-          gh release download "$TAG" --dir assets \
-            -p "latest.json" -p "*.nsis.zip" -p "*.nsis.zip.sig"
+          gh release download "$TAG" --dir assets --clobber
           ls -la assets
 
       - name: Sync assets to Gitee release

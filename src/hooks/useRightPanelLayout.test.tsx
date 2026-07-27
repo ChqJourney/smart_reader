@@ -82,6 +82,30 @@ describe("useRightPanelLayout", () => {
     );
   });
 
+  it("rounds fractional widths (backend persists right_panel_width as u32)", async () => {
+    const onLayoutChange = vi.fn();
+    const { result } = renderHook(() =>
+      useRightPanelLayout({ visible: true, width: 200 }, onLayoutChange)
+    );
+
+    act(() => {
+      result.current.setRightPanelWidth(522.75);
+    });
+
+    expect(result.current.rightPanelWidth).toBe(523);
+
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+
+    await waitFor(() =>
+      expect(onLayoutChange).toHaveBeenLastCalledWith({
+        visible: true,
+        width: 523,
+      })
+    );
+  });
+
   it("does not call onLayoutChange for zero width", () => {
     const onLayoutChange = vi.fn();
     renderHook(() =>

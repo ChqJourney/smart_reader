@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import Icon from "./Icon";
+import IconSelect from "./IconSelect";
 import {
   AppSettings,
   DEFAULT_SETTINGS,
@@ -90,6 +91,8 @@ export default function SettingsModal({
   const [showDownloadConfirm, setShowDownloadConfirm] = useState(false);
   const [downloadPending, setDownloadPending] = useState(false);
   const [showMoreSettings, setShowMoreSettings] = useState(false);
+  /** 关于页：应用标识默认隐藏，点击「更多信息」才展示 */
+  const [showMoreInfo, setShowMoreInfo] = useState(false);
   const [version, setVersion] = useState<string>("0.1.0");
   const [licenseText, setLicenseText] = useState<string | null>(null);
   const [currentPlatform, setCurrentPlatform] = useState<string | null>(null);
@@ -124,6 +127,7 @@ export default function SettingsModal({
     setShowDownloadConfirm(false);
     setDownloadPending(false);
     setShowMoreSettings(false);
+    setShowMoreInfo(false);
     setUpdateState("idle");
     setUpdateVersion(null);
     setUpdateErrorKind(null);
@@ -520,23 +524,18 @@ export default function SettingsModal({
                   {/* Platform selector */}
                   <label className="settings-field">
                     {t("settings.platform", { defaultValue: "平台" })}
-                    <select
+                    <IconSelect
                       value={settings.platformId}
-                      onChange={(e) =>
-                        handlePlatformChange(e.target.value as PlatformId)
-                      }
-                    >
-                      {PLATFORM_LIST.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.label}
-                          {platformsWithKey.has(p.id)
-                            ? t("settings.apiKeyConfigured", {
-                                defaultValue: "（已配置）",
-                              })
-                            : ""}
-                        </option>
-                      ))}
-                    </select>
+                      options={PLATFORM_LIST.map((p) => ({
+                        value: p.id,
+                        label: p.label,
+                        configured: platformsWithKey.has(p.id),
+                      }))}
+                      onChange={(v) => handlePlatformChange(v as PlatformId)}
+                      configuredTitle={t("settings.apiKeyConfigured", {
+                        defaultValue: "已配置",
+                      })}
+                    />
                   </label>
 
                   {/* Model dropdown (from platform preset) or free text (custom) */}
@@ -552,18 +551,13 @@ export default function SettingsModal({
                         placeholder="model-name"
                       />
                     ) : (
-                      <select
+                      <IconSelect
                         value={settings.llm.model}
-                        onChange={(e) => updateLlm({ model: e.target.value })}
-                      >
-                        {PLATFORM_PRESETS[settings.platformId].models.map(
-                          (m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.label}
-                            </option>
-                          )
-                        )}
-                      </select>
+                        options={PLATFORM_PRESETS[
+                          settings.platformId
+                        ].models.map((m) => ({ value: m.id, label: m.label }))}
+                        onChange={(v) => updateLlm({ model: v })}
+                      />
                     )}
                   </label>
 
@@ -991,11 +985,23 @@ export default function SettingsModal({
                         <dt>{t("settings.version")}</dt>
                         <dd>{version}</dd>
                       </div>
-                      <div>
-                        <dt>{t("settings.identifier")}</dt>
-                        <dd>com.photonee.specreader</dd>
-                      </div>
+                      {showMoreInfo && (
+                        <div>
+                          <dt>{t("settings.identifier")}</dt>
+                          <dd>com.photonee.specreader</dd>
+                        </div>
+                      )}
                     </dl>
+                    <button
+                      type="button"
+                      className="settings-text-btn settings-more-info-btn"
+                      onClick={() => setShowMoreInfo((v) => !v)}
+                      aria-expanded={showMoreInfo}
+                    >
+                      {showMoreInfo
+                        ? t("settings.lessInfo", { defaultValue: "收起" })
+                        : t("settings.moreInfo", { defaultValue: "更多信息" })}
+                    </button>
                   </section>
 
                   <section className="settings-section">

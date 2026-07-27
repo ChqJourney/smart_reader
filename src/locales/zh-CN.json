@@ -181,6 +181,8 @@
     "appInfo": "应用信息",
     "productName": "产品名称",
     "identifier": "应用标识",
+    "moreInfo": "更多信息",
+    "lessInfo": "收起",
     "license": "许可证",
     "licenseLoading": "正在加载许可证…",
     "licenseError": "无法加载许可证内容",

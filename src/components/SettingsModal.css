@@ -208,6 +208,10 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+.settings-more-info-btn {
+  margin-top: 10px;
+}
+
 .settings-license-text {
   width: 100%;
   min-height: 160px;

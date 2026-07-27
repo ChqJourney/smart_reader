@@ -888,7 +888,10 @@ describe("App", () => {
 
     const rightPanel = document.querySelector(".right-panel") as HTMLElement;
     await waitFor(() => {
-      expect(rightPanel.style.width).toBe("20%");
+      // 宽度统一取整为整数像素（后端按 u32 持久化），百分比允许 1px 取整误差
+      const pct = parseFloat(rightPanel.style.width);
+      expect(Number.isNaN(pct)).toBe(false);
+      expect(Math.abs(pct - 20)).toBeLessThan(0.1);
     });
 
     main.getBoundingClientRect = originalGetBoundingClientRect;

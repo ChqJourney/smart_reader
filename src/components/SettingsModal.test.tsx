@@ -125,7 +125,9 @@ describe("SettingsModal", () => {
       "https://api.deepseek.com/v1"
     );
     expect(screen.getByLabelText(/API 密钥/)).toHaveValue("");
-    expect(screen.getByLabelText("模型名称")).toHaveValue("deepseek-v4-flash");
+    expect(screen.getByLabelText("模型名称")).toHaveTextContent(
+      "DeepSeek V4 Flash（快速，便宜）"
+    );
   });
 
   it("uses check_api_key and never fetches plaintext api key", async () => {
@@ -226,9 +228,10 @@ describe("SettingsModal", () => {
       onSave,
     });
 
-    fireEvent.change(screen.getByLabelText("模型名称"), {
-      target: { value: "deepseek-v4-pro" },
-    });
+    fireEvent.click(screen.getByLabelText("模型名称"));
+    fireEvent.click(
+      screen.getByRole("option", { name: "DeepSeek V4 Pro（旗舰，最强）" })
+    );
 
     switchToFeaturePage();
     fireEvent.change(screen.getByLabelText("目标语言"), {
@@ -283,9 +286,10 @@ describe("SettingsModal", () => {
       onSave: vi.fn(),
     });
 
-    fireEvent.change(screen.getByLabelText("模型名称"), {
-      target: { value: "deepseek-v4-pro" },
-    });
+    fireEvent.click(screen.getByLabelText("模型名称"));
+    fireEvent.click(
+      screen.getByRole("option", { name: "DeepSeek V4 Pro（旗舰，最强）" })
+    );
 
     fireEvent.click(screen.getByText("测试连接"));
 
@@ -354,9 +358,10 @@ describe("SettingsModal", () => {
       onSave,
     });
 
-    fireEvent.change(screen.getByLabelText("模型名称"), {
-      target: { value: "deepseek-v4-pro" },
-    });
+    fireEvent.click(screen.getByLabelText("模型名称"));
+    fireEvent.click(
+      screen.getByRole("option", { name: "DeepSeek V4 Pro（旗舰，最强）" })
+    );
     fireEvent.click(screen.getByText("恢复全部默认"));
     fireEvent.click(screen.getByText("保存"));
 
@@ -508,6 +513,11 @@ describe("SettingsModal", () => {
 
     expect(screen.getByText("应用信息")).toBeInTheDocument();
     expect(screen.getByText("0.1.0")).toBeInTheDocument();
+    // 应用标识默认隐藏，点击「更多信息」才显示
+    expect(
+      screen.queryByText("com.photonee.specreader")
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("更多信息"));
     expect(screen.getByText("com.photonee.specreader")).toBeInTheDocument();
 
     // License text is loaded asynchronously.

@@ -111,6 +111,7 @@ npm install
 │   │   ├── ToolCallsIndicator.tsx     # 工具调用状态指示器（解读流中展示）
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
 │   │   ├── ErrorBoundary.tsx          # 顶层错误边界
+│   │   ├── IconSelect.tsx             # 自定义下拉选择器（已配置绿点 + 选中对勾，用于设置页平台/模型）
 │   │   └── Icon.tsx                   # SVG 图标组件
 │   ├── hooks/                         # 可复用状态逻辑
 │   │   ├── useTabs.ts                 # Tab 管理

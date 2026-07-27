@@ -36,14 +36,24 @@ export function useRightPanelLayout(
 
   const [leftVisible, setLeftVisible] = useState(true);
   const [rightVisible, setRightVisible] = useState(initialLayout.visible);
-  const [rightPanelWidth, setRightPanelWidthInternal] = useState<number>(
-    initialLayout.width
+  const [rightPanelWidth, setRightPanelWidthState] = useState<number>(
+    Math.round(initialLayout.width)
   );
   rightPanelWidthRef.current = rightPanelWidth;
 
-  const setRightPanelWidth = useCallback((width: number) => {
-    setRightPanelWidthInternal(width);
+  // 持久化到后端的 right_panel_width 是 u32：所有宽度写入统一取整。
+  // 否则窗口/拖拽产生小数宽度（如 522.75）后，save_settings 会因
+  // 反序列化失败而报「保存失败」。
+  const setRightPanelWidthInternal = useCallback((width: number) => {
+    setRightPanelWidthState(Math.round(width));
   }, []);
+
+  const setRightPanelWidth = useCallback(
+    (width: number) => {
+      setRightPanelWidthInternal(width);
+    },
+    [setRightPanelWidthInternal]
+  );
 
   const mainRef = useRef<HTMLElement>(null);
   const isDraggingRef = useRef(false);
@@ -87,7 +97,7 @@ export function useRightPanelLayout(
         RIGHT_PANEL_MIN_WIDTH
       )
     );
-  }, [rightPanelWidth]);
+  }, [rightPanelWidth, setRightPanelWidthInternal]);
 
   // Sync external layout values when they change (e.g. settings loaded from
   // the backend). Only apply real changes to avoid resetting user interaction.
@@ -103,7 +113,7 @@ export function useRightPanelLayout(
     if (initialLayout.width > 0) {
       setRightPanelWidthInternal(initialLayout.width);
     }
-  }, [initialLayout]);
+  }, [initialLayout, setRightPanelWidthInternal]);
 
   // Notify the caller of visibility changes immediately. Only save when a
   // real width has been resolved; width 0 means "use default" and should not
@@ -168,7 +178,7 @@ export function useRightPanelLayout(
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-  }, []);
+  }, [setRightPanelWidthInternal]);
 
   const startResize = useCallback(() => {
     if (!mainRef.current) return;

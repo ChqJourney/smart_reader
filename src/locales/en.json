@@ -181,6 +181,8 @@
     "appInfo": "App Info",
     "productName": "Product Name",
     "identifier": "App Identifier",
+    "moreInfo": "More info",
+    "lessInfo": "Show less",
     "license": "License",
     "licenseLoading": "Loading license…",
     "licenseError": "Unable to load license content",

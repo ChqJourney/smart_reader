@@ -1,0 +1,128 @@
+/* IconSelect — 带图标的自定义下拉选择器（已配置绿点 / 选中对勾）
+   外观对齐 SettingsModal 的原生 select（.settings-field select）。 */
+
+.icon-select {
+  position: relative;
+}
+
+.icon-select-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  height: 36px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  border: 1px solid #d1d1d1;
+  border-radius: 6px;
+  background: #fff;
+  color: #1f1f1f;
+  font-family: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.icon-select-trigger:hover {
+  border-color: #b1b1b1;
+}
+
+.icon-select-trigger:focus-visible,
+.icon-select.open .icon-select-trigger {
+  outline: none;
+  border-color: #0078d4;
+  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
+}
+
+.icon-select-trigger > svg {
+  flex-shrink: 0;
+  color: #616161;
+  transition: transform 0.15s ease;
+}
+
+.icon-select.open .icon-select-trigger > svg {
+  transform: rotate(180deg);
+}
+
+.icon-select-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 已配置绿点 */
+.icon-select-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #1a7f37;
+  flex-shrink: 0;
+}
+
+/* 选项内的绿点槽位：未配置也占位，保证 label 左对齐 */
+.icon-select-dot-slot {
+  display: inline-flex;
+  justify-content: center;
+  width: 8px;
+  flex-shrink: 0;
+}
+
+.icon-select-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #d1d1d1;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.icon-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #1f1f1f;
+  font-family: inherit;
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.icon-select-option:hover {
+  background: #f3f3f3;
+}
+
+.icon-select-option.selected {
+  background: #f0f7ff;
+  color: #0078d4;
+}
+
+.icon-select-option-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 选中项最右侧的绿色对勾 */
+.icon-select-check {
+  flex-shrink: 0;
+  color: #1a7f37;
+}

@@ -118,10 +118,10 @@ describe("PageRail 显隐与翻页按钮", () => {
       expect(body.querySelector(".page-rail-wrapper")).toHaveClass("visible");
     });
 
-    fireEvent.click(getByLabelText("上一页"));
+    fireEvent.click(getByLabelText(/上一页/));
     expect(onPageUp).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(getByLabelText("下一页"));
+    fireEvent.click(getByLabelText(/下一页/));
     expect(onPageDown).toHaveBeenCalledTimes(1);
   });
 
@@ -162,7 +162,7 @@ describe("PageRail 显隐与翻页按钮", () => {
       expect(body.querySelector(".page-rail-wrapper")).toHaveClass("visible");
     });
 
-    expect(getByLabelText("上一页")).toBeDisabled();
-    expect(getByLabelText("下一页")).not.toBeDisabled();
+    expect(getByLabelText(/上一页/)).toBeDisabled();
+    expect(getByLabelText(/下一页/)).not.toBeDisabled();
   });
 });

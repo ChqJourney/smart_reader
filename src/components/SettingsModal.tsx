@@ -20,7 +20,7 @@ import {
   findModel,
 } from "../data/platformPresets";
 import { testConnection } from "../services/llm";
-import type { LlmError } from "../types/llm";
+import { llmErrorToMessage } from "../services/llmError";
 import { useDictionaryStatus } from "../hooks/useDictionaryStatus";
 import { useModal } from "../hooks/useModal";
 import { error, openLogsDir } from "../services/logs";
@@ -95,7 +95,10 @@ export default function SettingsModal({
   const [currentPlatform, setCurrentPlatform] = useState<string | null>(null);
   const [updateState, setUpdateState] = useState<UpdateState>("idle");
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
-  const [updateError, setUpdateError] = useState<string | null>(null);
+  /** 更新失败的阶段：检查 or 安装。原始报错只进日志，UI 显示友好中文。 */
+  const [updateErrorKind, setUpdateErrorKind] = useState<
+    "check" | "install" | null
+  >(null);
   const [pendingUpdate, setPendingUpdate] = useState<UpdateInfo | null>(null);
   const dictionaryStatus = useDictionaryStatus();
   const [testState, setTestState] = useState<
@@ -123,7 +126,7 @@ export default function SettingsModal({
     setShowMoreSettings(false);
     setUpdateState("idle");
     setUpdateVersion(null);
-    setUpdateError(null);
+    setUpdateErrorKind(null);
     setPendingUpdate(null);
     setTestState("idle");
     setTestResult(null);
@@ -247,7 +250,7 @@ export default function SettingsModal({
 
   const handleCheckUpdate = useCallback(async () => {
     setUpdateState("checking");
-    setUpdateError(null);
+    setUpdateErrorKind(null);
     try {
       const result = await checkUpdateInfo();
       if (result.available && result.update) {
@@ -261,8 +264,10 @@ export default function SettingsModal({
       if (isNoPlatformUpdateError(err)) {
         setUpdateState("noPlatformUpdate");
       } else {
+        // 原始报错（常为英文）只进日志，UI 显示友好中文。
+        error(`[Settings] 检查更新失败: ${String(err)}`);
         setUpdateState("error");
-        setUpdateError(err instanceof Error ? err.message : String(err));
+        setUpdateErrorKind("check");
       }
     }
   }, []);
@@ -270,12 +275,13 @@ export default function SettingsModal({
   const handleUpgrade = useCallback(async () => {
     if (!pendingUpdate) return;
     setUpdateState("installing");
-    setUpdateError(null);
+    setUpdateErrorKind(null);
     try {
       await installUpdate(pendingUpdate);
     } catch (err) {
+      error(`[Settings] 安装更新失败: ${String(err)}`);
       setUpdateState("error");
-      setUpdateError(err instanceof Error ? err.message : String(err));
+      setUpdateErrorKind("install");
     }
   }, [pendingUpdate]);
 
@@ -294,7 +300,9 @@ export default function SettingsModal({
     try {
       await onSave(settings);
     } catch (err) {
-      setSaveError(String(err));
+      // 原始错误（如钥匙串 OS 报错）只进日志，UI 显示友好中文。
+      error(`[Settings] 保存设置失败: ${String(err)}`);
+      setSaveError(t("settings.saveFailed"));
     }
   };
 
@@ -369,7 +377,7 @@ export default function SettingsModal({
         );
       } else if (result.error) {
         setTestState("error");
-        setTestResult(formatLlmError(result.error));
+        setTestResult(llmErrorToMessage(result.error));
       } else {
         setTestState("error");
         setTestResult(
@@ -380,36 +388,9 @@ export default function SettingsModal({
       }
     } catch (err) {
       setTestState("error");
-      setTestResult(String(err));
-    }
-  };
-
-  const formatLlmError = (err: LlmError): string => {
-    switch (err.kind) {
-      case "network":
-        return t("settings.errorNetwork", { defaultValue: err.detail });
-      case "auth":
-        return t("settings.errorAuth", { defaultValue: err.detail });
-      case "modelNotFound":
-        return t("settings.errorModelNotFound", {
-          model: err.model,
-          defaultValue: err.detail,
-        });
-      case "rateLimit":
-        return t("settings.errorRateLimit", { defaultValue: err.detail });
-      case "contextLengthExceeded":
-        return t("settings.errorContextLength", { defaultValue: err.detail });
-      case "serverError":
-        return t("settings.errorServer", {
-          status: err.status,
-          defaultValue: err.detail,
-        });
-      default:
-        return "detail" in err
-          ? (err as { detail: string }).detail
-          : "body" in err
-            ? (err as { body: string }).body
-            : JSON.stringify(err);
+      // 原始错误进日志，UI 只给友好中文。
+      error(`[Settings] 测试连接失败: ${String(err)}`);
+      setTestResult(t("settings.testConnectionUnknown"));
     }
   };
 
@@ -531,9 +512,7 @@ export default function SettingsModal({
                         className="settings-text-btn"
                         onClick={onRunWizard}
                       >
-                        {t("settings.runWizard", {
-                          defaultValue: "运行配置向导",
-                        })}
+                        {t("settings.runWizard")}
                       </button>
                     </div>
                   )}
@@ -726,9 +705,7 @@ export default function SettingsModal({
                         }
                         return (
                           <label className="settings-field">
-                            {t("settings.thinkingMode", {
-                              defaultValue: "思考模式",
-                            })}
+                            {t("settings.thinkingMode")}
                             <select
                               value={settings.thinking}
                               onChange={(e) =>
@@ -739,19 +716,13 @@ export default function SettingsModal({
                               }
                             >
                               <option value="auto">
-                                {t("settings.thinkingAuto", {
-                                  defaultValue: "自动（模型默认）",
-                                })}
+                                {t("settings.thinkingAuto")}
                               </option>
                               <option value="enabled">
-                                {t("settings.thinkingEnabled", {
-                                  defaultValue: "开启（推理更深入，更慢）",
-                                })}
+                                {t("settings.thinkingEnabled")}
                               </option>
                               <option value="disabled">
-                                {t("settings.thinkingDisabled", {
-                                  defaultValue: "关闭（快速响应）",
-                                })}
+                                {t("settings.thinkingDisabled")}
                               </option>
                             </select>
                           </label>
@@ -839,15 +810,10 @@ export default function SettingsModal({
 
                   <section className="settings-section">
                     <div className="settings-section-title">
-                      {t("settings.agentTools", {
-                        defaultValue: "智能查阅文档",
-                      })}
+                      {t("settings.agentTools")}
                     </div>
                     <div className="settings-section-hint">
-                      {t("settings.agentToolsHint", {
-                        defaultValue:
-                          "允许 AI 在解读时自动查阅当前打开的 PDF 原文，用于核实引用的条款、表格或定义。",
-                      })}
+                      {t("settings.agentToolsHint")}
                     </div>
                     <label className="settings-toggle">
                       <input
@@ -860,15 +826,11 @@ export default function SettingsModal({
                           }))
                         }
                       />
-                      {t("settings.enableAgentTools", {
-                        defaultValue: "启用智能查阅文档",
-                      })}
+                      {t("settings.enableAgentTools")}
                     </label>
                     {settings.agentToolsEnabled && (
                       <label className="settings-field">
-                        {t("settings.maxToolRounds", {
-                          defaultValue: "最大工具调用次数",
-                        })}
+                        {t("settings.maxToolRounds")}
                         <input
                           type="number"
                           min={0}
@@ -885,10 +847,7 @@ export default function SettingsModal({
                           }
                         />
                         <p className="settings-field-hint">
-                          {t("settings.maxToolRoundsHint", {
-                            defaultValue:
-                              "0 表示使用默认值 20。AI 读取 PDF 内容时的最大调用轮次。",
-                          })}
+                          {t("settings.maxToolRoundsHint")}
                         </p>
                       </label>
                     )}
@@ -977,7 +936,7 @@ export default function SettingsModal({
                           ] as LogLevel[]
                         ).map((level) => (
                           <option key={level} value={level}>
-                            {level.toUpperCase()}
+                            {`${level.toUpperCase()}（${t(`settings.logLevelNames.${level}`)}）`}
                           </option>
                         ))}
                       </select>
@@ -1091,9 +1050,11 @@ export default function SettingsModal({
                         {t("settings.noUpdateForPlatform")}
                       </span>
                     )}
-                    {updateState === "error" && updateError && (
+                    {updateState === "error" && updateErrorKind && (
                       <span className="settings-status-error">
-                        {t("settings.updateError", { error: updateError })}
+                        {updateErrorKind === "install"
+                          ? t("settings.installUpdateError")
+                          : t("settings.updateError")}
                       </span>
                     )}
                   </section>
@@ -1121,10 +1082,7 @@ export default function SettingsModal({
           <div className="settings-modal-footer-right">
             {saveError && (
               <span className="settings-status-error settings-save-error">
-                {t("settings.saveFailed", {
-                  error: saveError,
-                  defaultValue: `保存失败：${saveError}`,
-                })}
+                {saveError}
               </span>
             )}
             <div className="modal-actions">

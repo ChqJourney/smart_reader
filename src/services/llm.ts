@@ -1,6 +1,7 @@
 import i18n from "i18next";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { info, warn } from "./logs";
+import { llmErrorToMessage } from "./llmError";
 import { LlmConfig, SystemPrompts } from "./settings";
 import type {
   ThinkingMode,
@@ -110,7 +111,7 @@ export async function* streamChatCompletion(
         if (msg.error) {
           enqueue({
             type: "error",
-            message: errorToMessage(msg.error),
+            message: llmErrorToMessage(msg.error),
             error: msg.error,
           });
         }
@@ -192,55 +193,11 @@ export async function* streamChatCompletion(
     );
     yield {
       type: "error",
-      message: i18n.t("llm.error.requestFailed", { message: String(err) }),
+      // 原始错误已写入上面的 warn 日志；UI 只给友好中文。
+      message: i18n.t("llm.error.requestFailed"),
     };
   } finally {
     options?.signal?.removeEventListener("abort", onAbort);
-  }
-}
-
-/** Convert a structured LlmError to a human-readable message. */
-function errorToMessage(error: LlmError): string {
-  switch (error.kind) {
-    case "network":
-      return i18n.t("llm.error.network", { defaultValue: error.detail });
-    case "auth":
-      return i18n.t("llm.error.auth", { defaultValue: error.detail });
-    case "modelNotFound":
-      return i18n.t("llm.error.modelNotFound", {
-        model: error.model,
-        defaultValue: error.detail,
-      });
-    case "rateLimit":
-      return i18n.t("llm.error.rateLimit", { defaultValue: error.detail });
-    case "contextLengthExceeded":
-      return i18n.t("llm.error.contextLengthExceeded", {
-        defaultValue: error.detail,
-      });
-    case "serverError":
-      return i18n.t("llm.error.serverError", {
-        status: error.status,
-        defaultValue: error.detail,
-      });
-    case "streamInterrupted":
-      return i18n.t("llm.error.streamInterrupted", {
-        defaultValue: "流式响应中断",
-      });
-    case "invalidConfig":
-      return i18n.t("llm.error.invalidConfig", {
-        field: error.field,
-        defaultValue: error.detail,
-      });
-    case "toolError":
-      return i18n.t("llm.error.toolError", {
-        toolName: error.toolName,
-        defaultValue: error.detail,
-      });
-    case "unknown":
-      return i18n.t("llm.error.apiError", {
-        status: error.status,
-        detail: error.body,
-      });
   }
 }
 
@@ -262,9 +219,7 @@ export interface TestConnectionParams {
  *
  * Returns success or a structured error.
  */
-export async function testConnection(
-  params?: TestConnectionParams
-): Promise<{
+export async function testConnection(params?: TestConnectionParams): Promise<{
   success: boolean;
   model: string;
   error?: LlmError;

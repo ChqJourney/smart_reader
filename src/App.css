@@ -336,3 +336,39 @@ body {
   background: #f0f0f0;
   color: #1f1f1f;
 }
+
+/* 并排对照首次轻引导气泡（仅首次打开第二个 PDF 时出现一次） */
+.split-coachmark {
+  position: fixed;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: #0078d4;
+  color: #fff;
+  border-radius: 8px;
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  /* 气泡本身不拦截点击（避免遮挡 tab 栏 / 工具栏），仅关闭按钮可点。 */
+  pointer-events: none;
+}
+
+.split-coachmark-close {
+  pointer-events: auto;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: #fff;
+  border-radius: 4px;
+  padding: 2px 10px;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.split-coachmark-close:hover {
+  background: rgba(255, 255, 255, 0.35);
+}

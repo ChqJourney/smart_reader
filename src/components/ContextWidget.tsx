@@ -34,12 +34,8 @@ export default function ContextWidget({
     return "context-widget-green";
   }, [percent]);
 
-  const tooltip = t("contextWidget.tooltip", {
-    percent,
-    currentTokens,
-    contextWindow,
-    defaultValue: `上下文已用 ${percent}%（${currentTokens} / ${contextWindow} tokens）`,
-  });
+  // 屏幕只显示百分比；tooltip 同样不暴露 token 字眼（目标用户非程序员）。
+  const tooltip = t("contextWidget.tooltip", { percent });
 
   return (
     <div className={`context-widget ${colorClass}`} title={tooltip}>

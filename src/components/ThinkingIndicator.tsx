@@ -20,15 +20,9 @@ export default function ThinkingIndicator({
 
   if (!reasoningContent && !isThinking) return null;
 
-  const tokenCount = Math.round(reasoningContent.length / 4); // rough estimate
-
-  const label = done
-    ? t("thinking.done", {
-        defaultValue: `已思考（约 ${tokenCount} tokens）`,
-      })
-    : t("thinking.thinking", {
-        defaultValue: `思考中...（约 ${tokenCount} tokens）`,
-      });
+  // 不向非程序员用户暴露 token 概念（且按字符估算对中文严重失真），
+  // 只显示状态；思考过程可通过「展开」查看。
+  const label = done ? t("thinking.done") : t("thinking.thinking");
 
   return (
     <div className={`thinking-indicator ${done ? "done" : ""}`}>
@@ -52,9 +46,7 @@ export default function ThinkingIndicator({
         {label}
         {done && (
           <span style={{ marginLeft: 4, fontSize: "0.7rem", opacity: 0.7 }}>
-            {expanded
-              ? t("thinking.collapse", { defaultValue: "收起" })
-              : t("thinking.expand", { defaultValue: "展开" })}
+            {expanded ? t("thinking.collapse") : t("thinking.expand")}
           </span>
         )}
       </span>

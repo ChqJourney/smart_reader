@@ -42,6 +42,8 @@ import "./App.css";
 
 const RIGHT_PANEL_SPLIT_FRACTION = 0.2;
 const RIGHT_PANEL_SPLIT_MIN_WIDTH = 200;
+/** 并排对照轻引导「已看过」标记的 localStorage 键。 */
+const SPLIT_COACHMARK_KEY = "specreader-split-coachmark-seen";
 
 function App() {
   const { t } = useTranslation();
@@ -820,6 +822,36 @@ function App() {
     };
   }, [secondaryTab]);
 
+  // 并排对照首次轻引导：第一次同时打开 ≥2 个 PDF 时显示一次，
+  // 点「知道了」或超时后写入 localStorage，之后不再打扰。
+  const [splitCoachmarkVisible, setSplitCoachmarkVisible] = useState(false);
+
+  const dismissSplitCoachmark = useCallback(() => {
+    setSplitCoachmarkVisible(false);
+    try {
+      localStorage.setItem(SPLIT_COACHMARK_KEY, "1");
+    } catch {
+      // ignore：无法持久化时下次会再提示一次，可接受。
+    }
+  }, []);
+
+  useEffect(() => {
+    if (splitCoachmarkVisible) return;
+    if (tabs.tabs.length < 2 || splitView.isSplitView) return;
+    try {
+      if (localStorage.getItem(SPLIT_COACHMARK_KEY)) return;
+    } catch {
+      return;
+    }
+    setSplitCoachmarkVisible(true);
+  }, [tabs.tabs.length, splitView.isSplitView, splitCoachmarkVisible]);
+
+  useEffect(() => {
+    if (!splitCoachmarkVisible) return;
+    const timer = setTimeout(dismissSplitCoachmark, 12000);
+    return () => clearTimeout(timer);
+  }, [splitCoachmarkVisible, dismissSplitCoachmark]);
+
   return (
     <div className="app">
       <TitleBar
@@ -894,6 +926,21 @@ function App() {
           )}
         </div>
       )}
+
+      {splitCoachmarkVisible &&
+        !splitView.isSplitView &&
+        tabs.tabs.length >= 2 && (
+          <div className="split-coachmark" role="status">
+            <span>{t("app.splitCoachmark")}</span>
+            <button
+              type="button"
+              className="split-coachmark-close"
+              onClick={dismissSplitCoachmark}
+            >
+              {t("common.gotIt")}
+            </button>
+          </div>
+        )}
 
       <main
         className="app-main"

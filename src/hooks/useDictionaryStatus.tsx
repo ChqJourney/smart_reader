@@ -64,9 +64,9 @@ export function DictionaryStatusProvider({
         refresh();
       } else if (p.status === "error") {
         setDownloading(false);
-        const message = p.message || t("dictionary.downloadFailed");
-        warn(`dictionaryDownloadFailed: ${message}`);
-        setError(message);
+        // 后端原始报错（常为英文）只进日志，UI 显示带下一步指引的友好中文。
+        warn(`dictionaryDownloadFailed: ${p.message ?? "unknown"}`);
+        setError(t("dictionary.downloadFailed"));
       }
     })
       .then((unlisten) => {
@@ -94,9 +94,9 @@ export function DictionaryStatusProvider({
     } catch (err) {
       setDownloading(false);
       warn(`dictionaryDownloadFailed: ${err}`);
-      setError(String(err));
+      setError(t("dictionary.downloadFailed"));
     }
-  }, []);
+  }, [t]);
 
   const value: UseDictionaryStatusResult = {
     status,

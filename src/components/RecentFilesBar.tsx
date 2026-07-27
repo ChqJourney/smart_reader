@@ -294,7 +294,7 @@ export default function RecentFilesBar({
         data-testid="recent-files-trigger"
         className={`recent-files-trigger${open ? " open" : ""}`}
         aria-label={t("recentFiles.title")}
-        title={t("recentFiles.title")}
+        title={t("recentFiles.triggerHint")}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => (open ? closePanel() : setOpen(true))}

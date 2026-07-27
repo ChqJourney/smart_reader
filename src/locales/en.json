@@ -10,7 +10,8 @@
     "showAiAssistant": "Show AI Assistant",
     "minimize": "Minimize",
     "toggleMaximize": "Maximize / Restore",
-    "close": "Close"
+    "close": "Close",
+    "splitCoachmark": "Want to read two PDFs side by side? Drag a tab into the reading area, or click \"Side by Side\" in the tab bar."
   },
   "tab": {
     "close": "Close Tab",
@@ -21,20 +22,20 @@
     "hidePanel": "Hide PDF Panel",
     "switchToContinuous": "Switch to Continuous",
     "switchToSingle": "Switch to Single Page",
-    "previousPage": "Previous Page",
-    "nextPage": "Next Page",
+    "previousPage": "Previous Page (PageUp)",
+    "nextPage": "Next Page (PageDown)",
     "pageNumber": "Page Number",
     "pageNumberHint": "Click to open the go-to-page panel (Ctrl/Cmd+G)",
     "fitToWidth": "Fit to Width",
     "zoomOut": "Zoom Out",
     "zoomIn": "Zoom In",
     "scale": "Zoom",
-    "scaleHint": "Enter a percentage (e.g. 150) or scale (e.g. 1.5) and press Enter",
+    "scaleHint": "Enter a percentage (e.g. 150) or scale (e.g. 1.5) and press Enter; or Ctrl+scroll to zoom",
     "loading": "Loading...",
     "loadingPdf": "Loading PDF...",
     "selectPdfToView": "Select a PDF to view",
     "toggleOutline": "Outline",
-    "toggleSearch": "Search",
+    "toggleSearch": "Search (Ctrl/Cmd+F)",
     "outlineTitle": "Outline",
     "closeOutline": "Close Outline",
     "searchPlaceholder": "Search PDF content",
@@ -102,6 +103,7 @@
   "recentFiles": {
     "title": "Recent Files",
     "trigger": "Recent",
+    "triggerHint": "Recently opened files (Ctrl/Cmd+Shift+O)",
     "empty": "Recently opened files will appear here",
     "noMatch": "No matching files",
     "searchPlaceholder": "Search file name or path…",
@@ -127,7 +129,7 @@
   },
   "settings": {
     "title": "Settings",
-    "description": "Configure the LLM API Key, feature options, and system information.",
+    "description": "Configure the LLM API key, feature options, and system information.",
     "pages": {
       "model": "Model Settings",
       "feature": "Feature Settings",
@@ -135,7 +137,7 @@
       "about": "About"
     },
     "llmApi": "LLM API Key",
-    "llmApiHint": "Model access information used for translation, interpretation, and custom Q&A.",
+    "llmApiHint": "Model access information used for translation, interpretation, and custom Q&A — i.e. the address, model name, and key below.",
     "moreSettings": "More settings",
     "hideMoreSettings": "Hide advanced settings",
     "platform": "Platform",
@@ -145,33 +147,34 @@
     "apiKeyConfigured": "Configured",
     "apiKeyPlaceholderConfigured": "Configured (type a new key to override)",
     "clearApiKey": "Clear",
-    "howToGetApiKey": "How to get an API Key?",
+    "howToGetApiKey": "How to get an API key?",
     "testConnection": "Test Connection",
     "testing": "Testing...",
     "testConnectionSuccess": "Connection succeeded, model: {{model}}",
     "testConnectionUnknown": "Connection failed, unknown error",
-    "errorNetwork": "{{defaultValue}}",
-    "errorAuth": "{{defaultValue}}",
-    "errorModelNotFound": "{{defaultValue}}",
-    "errorRateLimit": "{{defaultValue}}",
-    "errorContextLength": "{{defaultValue}}",
-    "errorServer": "{{defaultValue}}",
-    "saveFailed": "Save failed: {{error}}",
+    "runWizard": "Run Setup Wizard",
+    "saveFailed": "Save failed. Please try again. If it keeps happening, open the logs directory to troubleshoot.",
     "outputLanguage": "Output Language",
     "outputLanguageHint": "The default language used for translation and interpretation results.",
     "targetLanguage": "Target Language",
     "targetLanguagePlaceholder": "Chinese",
     "hoverTranslate": "Hover Translation",
-    "hoverTranslateHint": "Show translations from the local ECDICT dictionary when hovering over English words.",
+    "hoverTranslateHint": "Show translations from the local ECDICT English-Chinese dictionary when hovering over English words.",
     "enableHoverTranslate": "Enable Hover Translation",
     "agentTools": "Smart Document Lookup",
     "agentToolsHint": "Allow AI to automatically look up content in currently open PDFs during interpretation, to verify referenced clauses, tables, or definitions.",
     "enableAgentTools": "Enable Smart Document Lookup",
+    "maxToolRounds": "Max Tool Call Rounds",
+    "maxToolRoundsHint": "0 means the default of 20. Maximum rounds for the AI to read PDF content.",
+    "thinkingMode": "Thinking Mode",
+    "thinkingAuto": "Auto (model default)",
+    "thinkingEnabled": "Enabled (deeper reasoning, slower)",
+    "thinkingDisabled": "Disabled (faster responses)",
     "dictionaryReady": "Dictionary Ready",
     "downloadingProgress": "Downloading {{percent}}%",
     "downloadingProgressUnknown": "Downloaded {{size}}",
     "systemPrompts": "System Prompts",
-    "systemPromptsHint": "Control the AI's role and style in different scenarios. Supports the {targetLanguage} placeholder.",
+    "systemPromptsHint": "Control the AI's role and style in different scenarios. {targetLanguage} (single braces) is automatically replaced with the target language set above.",
     "promptAriaLabel": "{{action}} System Prompt",
     "characters": "characters",
     "version": "Version",
@@ -184,7 +187,14 @@
     "resetAll": "Reset All Defaults",
     "openLogs": "Open Logs Directory",
     "logLevel": "Log Level",
-    "logLevelHint": "Takes effect after restarting the app. Defaults to Warn in release builds.",
+    "logLevelHint": "For troubleshooting only; usually no need to change. Takes effect after restarting the app.",
+    "logLevelNames": {
+      "trace": "Trace",
+      "debug": "Debug",
+      "info": "Info",
+      "warn": "Warn",
+      "error": "Error"
+    },
     "defaultPdfReader": "Default PDF Reader",
     "defaultPdfReaderHint": "Open Windows default apps settings, find .pdf in the list and set SpecReader AI as the default.",
     "setAsDefaultPdfReader": "Set as Default PDF Reader",
@@ -197,7 +207,8 @@
     "upgradeNow": "Upgrade Now",
     "installingUpdate": "Downloading and installing update; the app will restart automatically…",
     "noUpdateForPlatform": "No update package is available for this system",
-    "updateError": "Update check failed: {{error}}",
+    "updateError": "Update check failed. Check your network connection and try again.",
+    "installUpdateError": "Failed to install the update. Please try again.",
     "downloadDictionaryTitle": "Download Offline Dictionary",
     "downloadDictionaryHint": "Hover translation requires downloading the ECDICT English-Chinese dictionary. The archive is about 200 MB and expands to about 700 MB. It will be saved to the local app data directory and only needs to be downloaded once.",
     "downloadNow": "Download Now",
@@ -209,7 +220,7 @@
   },
   "dictionary": {
     "querying": "Looking up…",
-    "downloadFailed": "Dictionary download failed"
+    "downloadFailed": "Dictionary download failed. Check your network connection and try again."
   },
   "errorBoundary": {
     "title": "An error occurred",
@@ -219,11 +230,19 @@
   },
   "llm": {
     "error": {
-      "apiKeyMissing": "API Key is not configured. Please configure the LLM API in Settings first.",
-      "apiError": "LLM API error ({{status}}): {{detail}}",
-      "streamReadError": "Unable to read LLM response stream.",
-      "llmApiError": "LLM API error: {{detail}}",
-      "requestFailed": "Request failed: {{message}}"
+      "network": "Unable to connect. Check your network connection and try again.",
+      "auth": "Invalid or unauthorized API key. Make sure the pasted key is complete, has no extra spaces, and is enabled in the platform console.",
+      "modelNotFound": "Model {{model}} does not exist or is unavailable. Check the model name in Settings.",
+      "rateLimit": "Too many requests, rate limited. Try again shortly; if this happens often, consider switching to a paid model.",
+      "contextLengthExceeded": "Content exceeds the model's context length. Select a shorter excerpt and try again.",
+      "serverError": "Service error ({{status}}). Try again later or switch to another platform.",
+      "streamInterrupted": "The response was interrupted. Please try again.",
+      "invalidConfig": "Configuration field {{field}} is invalid. Check your settings.",
+      "toolError": "Error while looking up the document ({{toolName}}). Please try again.",
+      "unknown": "Request failed. Please try again later.",
+      "apiKeyMissing": "API key is not configured. Go to Settings → Model Settings to fill it in.",
+      "requestFailed": "Request failed. Please try again later.",
+      "streamReadError": "Unable to read the model response stream. Please try again."
     },
     "prompts": {
       "explain": "The following excerpt comes from the standards document \"{{fileName}}\", page {{page}}. Explain this standard clause/paragraph in accessible {{targetLanguage}}, describing its requirements, significance, relationship to testing work, and any potentially related clauses:\n\n{{text}}",
@@ -269,6 +288,58 @@
     "hidePopup": "Hide comment box",
     "placeholder": "Type your comment…"
   },
+  "wizard": {
+    "title": "Welcome to SpecReader AI",
+    "subtitle": "Just three steps to configure the AI model and start translating and interpreting standards.",
+    "close": "Close",
+    "step1": "Choose Platform",
+    "step2": "Enter API Key",
+    "step3": "Test Connection",
+    "selectPlatformHint": "We recommend starting with DeepSeek: cheap, stable, and supports deep thinking. Cards below are sorted by ease of use.",
+    "configured": "Configured",
+    "enterKeyTitle": "Enter your {{platform}} API key",
+    "getApiKey": "Get an API key from {{platform}}",
+    "apiKey": "API Key",
+    "apiKeyPlaceholderKeep": "Leave empty to keep the saved key",
+    "keepExistingKey": "A key for this platform was detected. Leave it empty to keep using it — no need to paste again.",
+    "hintPrefix": "Tip: ",
+    "advancedTitle": "Advanced settings (usually no need to change)",
+    "thinkingLabel": "Deep thinking (more accurate, slightly slower)",
+    "agentToolsLabel": "Let AI verify clauses against the source (recommended)",
+    "targetLanguageLabel": "Target language for translation / interpretation",
+    "testDesc": "Click the button below and we will connect to {{platform}} with the key you entered to verify it.",
+    "testDescKeep": "Click the button below and we will connect to {{platform}} with your saved key to verify it.",
+    "testFailTitle": "Connection failed",
+    "testFailHint": "If the connection fails, check your key and network as suggested above, then try again.",
+    "skip": "Skip for now",
+    "back": "Back",
+    "next": "Next",
+    "startUsing": "Start Using",
+    "tag": {
+      "recommended": "Recommended",
+      "free": "Free but rate-limited",
+      "card": "Requires overseas credit card"
+    },
+    "blurb": {
+      "deepseek": "Chinese model, cheap and stable, supports deep thinking",
+      "kimi": "Chinese long-context model, good for large standards",
+      "bailian": "Alibaba Cloud Qwen, fast access in China",
+      "glm": "Zhipu GLM, offers free quota",
+      "volcengine": "Volcano Engine Doubao, Chinese model",
+      "openai": "Official OpenAI GPT, requires overseas credit card",
+      "openrouter": "Aggregates many overseas models, requires overseas credit card",
+      "xiaomimimo": "Xiaomi MiMo, 1M ultra-long context, fast access in China"
+    }
+  },
+  "thinking": {
+    "thinking": "Thinking deeply…",
+    "done": "Thinking complete",
+    "expand": "Expand",
+    "collapse": "Collapse"
+  },
+  "contextWidget": {
+    "tooltip": "Context usage: {{percent}}% used"
+  },
   "common": {
     "cancel": "Cancel",
     "save": "Save",
@@ -283,6 +354,7 @@
     "notice": "Notice",
     "sourceText": "Source Text",
     "errorPrefix": "[Error]",
-    "characters": "characters"
+    "characters": "characters",
+    "gotIt": "Got it"
   }
 }

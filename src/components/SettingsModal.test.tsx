@@ -121,11 +121,11 @@ describe("SettingsModal", () => {
       onClose: vi.fn(),
       onSave: vi.fn(),
     });
-    expect(screen.getByLabelText(/API Base URL/i)).toHaveValue(
+    expect(screen.getByLabelText(/API 地址/)).toHaveValue(
       "https://api.deepseek.com/v1"
     );
-    expect(screen.getByLabelText(/API Key/i)).toHaveValue("");
-    expect(screen.getByLabelText("Model")).toHaveValue("deepseek-v4-flash");
+    expect(screen.getByLabelText(/API 密钥/)).toHaveValue("");
+    expect(screen.getByLabelText("模型名称")).toHaveValue("deepseek-v4-flash");
   });
 
   it("uses check_api_key and never fetches plaintext api key", async () => {
@@ -226,7 +226,7 @@ describe("SettingsModal", () => {
       onSave,
     });
 
-    fireEvent.change(screen.getByLabelText("Model"), {
+    fireEvent.change(screen.getByLabelText("模型名称"), {
       target: { value: "deepseek-v4-pro" },
     });
 
@@ -268,10 +268,10 @@ describe("SettingsModal", () => {
     fireEvent.click(screen.getByText("保存"));
 
     await waitFor(() => {
-      expect(
-        screen.getByText(/保存失败.*keyring unavailable/i)
-      ).toBeInTheDocument();
+      expect(screen.getByText(/保存失败/)).toBeInTheDocument();
     });
+    // 原始报错（keyring unavailable）只进日志，不显示给用户。
+    expect(screen.queryByText(/keyring unavailable/i)).not.toBeInTheDocument();
     expect(onSave).toHaveBeenCalledTimes(1);
   });
 
@@ -283,7 +283,7 @@ describe("SettingsModal", () => {
       onSave: vi.fn(),
     });
 
-    fireEvent.change(screen.getByLabelText("Model"), {
+    fireEvent.change(screen.getByLabelText("模型名称"), {
       target: { value: "deepseek-v4-pro" },
     });
 
@@ -354,7 +354,7 @@ describe("SettingsModal", () => {
       onSave,
     });
 
-    fireEvent.change(screen.getByLabelText("Model"), {
+    fireEvent.change(screen.getByLabelText("模型名称"), {
       target: { value: "deepseek-v4-pro" },
     });
     fireEvent.click(screen.getByText("恢复全部默认"));
@@ -638,6 +638,8 @@ describe("SettingsModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /检查更新/i }));
 
-    await screen.findByText(/检查更新失败.*network error/i);
+    await screen.findByText(/检查更新失败/);
+    // 原始报错（network error）只进日志，不显示给用户。
+    expect(screen.queryByText(/network error/i)).not.toBeInTheDocument();
   });
 });

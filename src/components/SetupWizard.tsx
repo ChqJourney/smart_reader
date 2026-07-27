@@ -10,6 +10,7 @@ import {
 } from "../services/settings";
 import { PLATFORM_PRESETS } from "../data/platformPresets";
 import { testConnection } from "../services/llm";
+import { llmErrorToMessage } from "../services/llmError";
 import type { LlmError } from "../types/llm";
 import "./SetupWizard.css";
 
@@ -23,25 +24,12 @@ interface SetupWizardProps {
   onSkip: () => void;
 }
 
-/** 平台一句话简介（降低非编程用户的认知负担）。 */
-const PLATFORM_BLURB: Partial<Record<PlatformId, string>> = {
-  deepseek: "国产模型，便宜稳定，支持深度思考",
-  kimi: "国产长上下文模型，适合大段标准",
-  bailian: "阿里云通义千问，国内访问快",
-  glm: "智谱 GLM，提供免费额度",
-  volcengine: "火山引擎豆包，国产模型",
-  openai: "OpenAI 官方 GPT，需海外信用卡",
-  openrouter: "聚合多家海外模型，需海外信用卡",
-  xiaomimimo: "小米 MiMo，1M 超长上下文，国产访问快",
-};
-
 type TagKind = "recommended" | "free" | "card";
 
-function platformTag(id: PlatformId): { text: string; kind: TagKind } | null {
-  if (id === "deepseek") return { text: "推荐", kind: "recommended" };
-  if (id === "glm") return { text: "免费但限速", kind: "free" };
-  if (id === "openai" || id === "openrouter")
-    return { text: "需海外信用卡", kind: "card" };
+function platformTagKind(id: PlatformId): TagKind | null {
+  if (id === "deepseek") return "recommended";
+  if (id === "glm") return "free";
+  if (id === "openai" || id === "openrouter") return "card";
   return null;
 }
 
@@ -78,8 +66,9 @@ export default function SetupWizard({
   onSkip,
 }: SetupWizardProps) {
   const { t } = useTranslation();
-  const w = (key: string, def: string, opts?: Record<string, unknown>) =>
-    t(`wizard.${key}`, { defaultValue: def, ...(opts ?? {}) });
+  // 向导文案全部收编在 locales 的 wizard.* 段，此处不再保留 defaultValue 内联副本。
+  const w = (key: string, opts?: Record<string, unknown>) =>
+    t(`wizard.${key}`, opts ?? {});
 
   const [step, setStep] = useState<Step>(1);
   const [platformId, setPlatformId] = useState<PlatformId>(
@@ -131,51 +120,6 @@ export default function SetupWizard({
 
   // 当前选中平台是否已有密钥；是则第 2/3 步允许留空密钥。
   const hasExistingKey = existingKeys.has(platformId);
-
-  const describeError = (err: LlmError): string => {
-    switch (err.kind) {
-      case "auth":
-        return w(
-          "errorAuth",
-          "密钥无效或未授权。请确认粘贴的 Key 完整、未有多余空格，并已在平台后台启用。"
-        );
-      case "network":
-        return w("errorNetwork", "网络无法连接。请检查网络连接后重试。");
-      case "modelNotFound":
-        return w(
-          "errorModelNotFound",
-          "模型 {{model}} 不存在，请回到上一步重新选择该平台的模型。",
-          { model: err.model }
-        );
-      case "rateLimit":
-        return w(
-          "errorRateLimit",
-          "请求过于频繁被限流，请稍候片刻再试；若经常发生，建议更换为付费模型。"
-        );
-      case "contextLengthExceeded":
-        return w(
-          "errorContextLength",
-          "内容超出模型上下文长度，请减少所选片段长度后重试。"
-        );
-      case "serverError":
-        return w(
-          "errorServer",
-          "服务错误（{{status}}），请稍后重试或换用其他平台。",
-          {
-            status: err.status,
-          }
-        );
-      default: {
-        const detail =
-          "detail" in err
-            ? (err as { detail: string }).detail
-            : "body" in err
-              ? (err as { body: string }).body
-              : "未知错误";
-        return w("errorUnknown", "连接失败：{{detail}}", { detail });
-      }
-    }
-  };
 
   const selectPlatform = useCallback((id: PlatformId) => {
     setPlatformId(id);
@@ -251,33 +195,27 @@ export default function SetupWizard({
   }, [apiKey, buildSettings, onComplete]);
 
   const stepLabel = (n: Step): string => {
-    if (n === 1) return w("step1", "选择平台");
-    if (n === 2) return w("step2", "填入密钥");
-    return w("step3", "测试连接");
+    if (n === 1) return w("step1");
+    if (n === 2) return w("step2");
+    return w("step3");
   };
 
   if (!open) return null;
 
   return (
-    <div
-      className="modal-overlay"
-      role="dialog"
-      aria-label={w("title", "欢迎使用 SpecReader AI")}
-    >
+    <div className="modal-overlay" role="dialog" aria-label={w("title")}>
       <div className="modal-content wizard-content">
         <button
           type="button"
           className="wizard-close"
           onClick={onSkip}
-          aria-label={w("close", "关闭")}
+          aria-label={w("close")}
         >
           <Icon name="close" size={18} />
         </button>
 
-        <h3>{w("title", "欢迎使用 SpecReader AI")}</h3>
-        <p className="modal-hint">
-          {w("subtitle", "只需三步，配置好 AI 模型即可开始翻译与解读标准。")}
-        </p>
+        <h3>{w("title")}</h3>
+        <p className="modal-hint">{w("subtitle")}</p>
 
         {/* 步骤指示器 */}
         <ol className="wizard-steps">
@@ -298,16 +236,11 @@ export default function SetupWizard({
           {/* 步骤 1：选择平台 */}
           {step === 1 && (
             <div className="wizard-step">
-              <p className="wizard-lead">
-                {w(
-                  "selectPlatformHint",
-                  "我们推荐从 DeepSeek 开始：便宜、稳定、支持深度思考。下方卡片已按难易度排序。"
-                )}
-              </p>
+              <p className="wizard-lead">{w("selectPlatformHint")}</p>
               <div className="wizard-platforms">
                 {WIZARD_ORDER.map((id) => {
                   const p = PLATFORM_PRESETS[id];
-                  const tag = platformTag(id);
+                  const tagKind = platformTagKind(id);
                   return (
                     <button
                       type="button"
@@ -318,9 +251,9 @@ export default function SetupWizard({
                       onClick={() => selectPlatform(id)}
                       aria-pressed={platformId === id}
                     >
-                      {tag && (
-                        <span className={`wizard-tag ${tag.kind}`}>
-                          {tag.text}
+                      {tagKind && (
+                        <span className={`wizard-tag ${tagKind}`}>
+                          {w(`tag.${tagKind}`)}
                         </span>
                       )}
                       {platformId === id && (
@@ -331,11 +264,13 @@ export default function SetupWizard({
                       <span className="wizard-platform-name">
                         {p.label}
                         {existingKeys.has(id) && (
-                          <span className="wizard-configured">已配置</span>
+                          <span className="wizard-configured">
+                            {w("configured")}
+                          </span>
                         )}
                       </span>
                       <span className="wizard-platform-blurb">
-                        {PLATFORM_BLURB[id]}
+                        {w(`blurb.${id}`)}
                       </span>
                     </button>
                   );
@@ -348,9 +283,7 @@ export default function SetupWizard({
           {step === 2 && (
             <div className="wizard-step">
               <p className="wizard-lead">
-                {w("enterKeyTitle", "填入 {{platform}} 的 API Key", {
-                  platform: preset.label,
-                })}
+                {w("enterKeyTitle", { platform: preset.label })}
               </p>
               <a
                 className="wizard-getkey"
@@ -358,9 +291,7 @@ export default function SetupWizard({
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                {w("getApiKey", "前往 {{platform}} 获取密钥", {
-                  platform: preset.label,
-                })}
+                {w("getApiKey", { platform: preset.label })}
               </a>
               <input
                 type="password"
@@ -368,24 +299,19 @@ export default function SetupWizard({
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder={
-                  hasExistingKey
-                    ? w("apiKeyPlaceholderKeep", "留空则沿用已保存的密钥")
-                    : "sk-..."
+                  hasExistingKey ? w("apiKeyPlaceholderKeep") : "sk-..."
                 }
                 autoFocus
-                aria-label={w("apiKey", "API Key")}
+                aria-label={w("apiKey")}
               />
               {hasExistingKey && !apiKey.trim() && (
                 <p className="wizard-hint wizard-hint-keep">
-                  {w(
-                    "keepExistingKey",
-                    "已检测到该平台的密钥，留空将直接沿用，无需重新粘贴。"
-                  )}
+                  {w("keepExistingKey")}
                 </p>
               )}
               {preset.apiKeyHint && (
                 <p className="wizard-hint">
-                  {w("hintPrefix", "提示：")}
+                  {w("hintPrefix")}
                   {preset.apiKeyHint}
                 </p>
               )}
@@ -402,26 +328,24 @@ export default function SetupWizard({
                   size={16}
                   className={showAdvanced ? "rot" : ""}
                 />
-                {w("advancedTitle", "高级设置（一般无需修改）")}
+                {w("advancedTitle")}
               </button>
               {showAdvanced && (
                 <div className="wizard-advanced">
                   <label className="wizard-field">
-                    {w("thinkingLabel", "深度思考（更准确，但稍慢）")}
+                    {w("thinkingLabel")}
                     <select
                       value={thinking}
                       onChange={(e) =>
                         setThinking(e.target.value as ThinkingMode)
                       }
                     >
-                      <option value="auto">
-                        {w("thinkingAuto", "自动（模型默认）")}
-                      </option>
+                      <option value="auto">{t("settings.thinkingAuto")}</option>
                       <option value="enabled">
-                        {w("thinkingEnabled", "开启（推理更深入，更慢）")}
+                        {t("settings.thinkingEnabled")}
                       </option>
                       <option value="disabled">
-                        {w("thinkingDisabled", "关闭（快速响应）")}
+                        {t("settings.thinkingDisabled")}
                       </option>
                     </select>
                   </label>
@@ -431,15 +355,15 @@ export default function SetupWizard({
                       checked={agentToolsEnabled}
                       onChange={(e) => setAgentToolsEnabled(e.target.checked)}
                     />
-                    {w("agentToolsLabel", "让 AI 自动核对原文条款（推荐开启）")}
+                    {w("agentToolsLabel")}
                   </label>
                   <label className="wizard-field">
-                    {w("targetLanguageLabel", "翻译 / 解读目标语言")}
+                    {w("targetLanguageLabel")}
                     <input
                       type="text"
                       value={targetLanguage}
                       onChange={(e) => setTargetLanguage(e.target.value)}
-                      placeholder="中文"
+                      placeholder={t("settings.targetLanguagePlaceholder")}
                     />
                   </label>
                 </div>
@@ -455,9 +379,6 @@ export default function SetupWizard({
                   hasExistingKey && !apiKey.trim()
                     ? "testDescKeep"
                     : "testDesc",
-                  hasExistingKey && !apiKey.trim()
-                    ? "点击下方按钮，我们会用你已保存的密钥连接 {{platform}} 进行验证。"
-                    : "点击下方按钮，我们会用你填入的密钥连接 {{platform}} 进行验证。",
                   { platform: preset.label }
                 )}
               </p>
@@ -470,15 +391,15 @@ export default function SetupWizard({
                 }
               >
                 {testState === "testing"
-                  ? w("testing", "测试中...")
-                  : w("testButton", "测试连接")}
+                  ? t("settings.testing")
+                  : t("settings.testConnection")}
               </button>
 
               {testState === "success" && (
                 <div className="wizard-result ok">
                   <CheckMark />
                   <span>
-                    {w("testSuccess", "连接成功，模型：{{model}}", {
+                    {t("settings.testConnectionSuccess", {
                       model: testModel ?? preset.defaultModelId,
                     })}
                   </span>
@@ -486,17 +407,12 @@ export default function SetupWizard({
               )}
               {testState === "error" && testError && (
                 <div className="wizard-result err">
-                  <strong>{w("testFailTitle", "连接未成功")}</strong>
-                  <span>{describeError(testError)}</span>
+                  <strong>{w("testFailTitle")}</strong>
+                  <span>{llmErrorToMessage(testError)}</span>
                 </div>
               )}
               {testState !== "success" && testState !== "testing" && (
-                <p className="wizard-result-hint">
-                  {w(
-                    "testFailHint",
-                    "若连接失败，请按上方提示检查密钥与网络后重试。"
-                  )}
-                </p>
+                <p className="wizard-result-hint">{w("testFailHint")}</p>
               )}
             </div>
           )}
@@ -504,12 +420,12 @@ export default function SetupWizard({
 
         <div className="wizard-footer">
           <button type="button" className="wizard-link" onClick={onSkip}>
-            {w("skip", "暂不配置，直接进入")}
+            {w("skip")}
           </button>
           <div className="wizard-nav">
             {step > 1 && (
               <button type="button" onClick={goBack}>
-                {w("back", "上一步")}
+                {w("back")}
               </button>
             )}
             {step < 3 && (
@@ -519,7 +435,7 @@ export default function SetupWizard({
                 onClick={goNext}
                 disabled={step === 2 && !apiKey.trim() && !hasExistingKey}
               >
-                {w("next", "下一步")}
+                {w("next")}
               </button>
             )}
             {step === 3 && (
@@ -529,7 +445,7 @@ export default function SetupWizard({
                 onClick={handleStart}
                 disabled={testState !== "success"}
               >
-                {w("startUsing", "开始使用")}
+                {w("startUsing")}
               </button>
             )}
           </div>

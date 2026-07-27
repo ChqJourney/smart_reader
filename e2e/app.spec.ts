@@ -53,7 +53,7 @@ test.describe("App E2E", () => {
     const dialog = page.getByRole("dialog", { name: "设置" });
     await expect(dialog).toBeVisible();
     await expect(
-      page.getByPlaceholder("已配置（输入新 key 覆盖）")
+      page.getByPlaceholder("已配置（输入新密钥覆盖）")
     ).toBeVisible();
 
     await page.getByRole("button", { name: "取消" }).click();

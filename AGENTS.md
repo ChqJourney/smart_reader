@@ -16,7 +16,7 @@
 
 - 自定义标题栏（无边框窗口 `decorations: false`）：品牌区拖动 + 最近文件 / 打开 PDF / 设置 + 窗口控制按钮。
 - 首次启动配置向导（SetupWizard）：选平台 → 填 Key → 测试连接，全部平台未配置 Key 时才自动弹出，设置里可重跑。
-- 多 PDF Tab 同时打开（最多 10 个），单视图下所有 tab 的 PdfViewer **常驻挂载（keep-alive）**：切 tab 仅切换 `display:none`，canvas 位图 / 滚动位置 / 页码 / 工具栏状态全部保留，切换瞬时完成；隐藏 viewer 通过 `isActive` prop 冻结 IO 可见性上报与滚动页码同步，激活时带回的同页 `pendingGotoPage` 由 useTabRestore 直接清除不跳转。支持左右并排对照两份 PDF。进入并排的入口：拖拽非激活 tab 到阅读区（带 drop-zone 遮罩）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
+- 多 PDF Tab 同时打开（最多 10 个），单视图下所有 tab 的 PdfViewer **常驻挂载（keep-alive）**：切 tab 仅切换 `display:none`，canvas 位图 / 滚动位置 / 页码 / 工具栏状态全部保留，切换瞬时完成；隐藏 viewer 通过 `isActive` prop 冻结 IO 可见性上报与滚动页码同步，激活时带回的同页 `pendingGotoPage` 由 useTabRestore 直接清除不跳转。支持左右并排对照两份 PDF。进入并排的入口：拖拽非激活 tab 到阅读区（带 drop-zone 遮罩）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter。首次同时打开 ≥2 个 PDF 时显示一次性并排对照引导气泡（`.split-coachmark`，点「知道了」或 12 秒超时后写入 localStorage 不再复现；气泡本身 `pointer-events:none` 不遮挡操作）。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
 - PDF 本地渲染、文本选区、缩放、页码跳转、单页 / 连续滚动阅读模式。
 - 右侧页码滑轨（PageRail）：替代原生垂直滚动条（CSS 隐藏，水平滚动条保留），拖动 / 悬停时显示页码 tooltip；连续模式拖动直接驱动 scrollTop，单页模式按位置映射页码。
 - Cmd/Ctrl+G 跳页面板（PageJumpPanel）：手动输入页码回车跳转，跳转时阅读区中央闪现大数字页码闪卡（600ms 定时清除）；工具栏页码显示为按钮，点击同样打开跳页面板。
@@ -149,6 +149,7 @@ npm install
 │   │   ├── settings.ts                # 应用设置 CRUD、PlatformId 联合类型、checkApiKey/deleteApiKey
 │   │   ├── dictionary.ts              # ECDICT 本地词典查询与下载进度监听
 │   │   ├── llm.ts                     # streamChatCompletion（Channel 桥接后端代理）、Prompt 模板（i18n 化）
+│   │   ├── llmError.ts                # LlmError → 友好中文文案的唯一入口（原始报错只进日志，不进 UI）
 │   │   ├── pdfToolsRegistry.ts        # 当前打开 PDF 的轻量元数据注册表（Agent Tools 授权数据源）
 │   │   ├── pdfTools.ts                # Agent Tools 执行层（瞬态 ToolSession）
 │   │   ├── recentFiles.ts             # 最近文件 CRUD + 文件存在性检查
@@ -338,6 +339,7 @@ LLM 流量已整体改为 **Rust 后端代理**（`src-tauri/src/llm_proxy.rs`�
 - 后端从磁盘 settings 读 baseUrl / model、按 `platformId` 从钥匙串读 API Key，reqwest 流式 POST 后经 `tauri::ipc::Channel<StreamEvent>` 逐事件推给前端；SSE tool_call 片段按 `index` 累积，`finish_reason` 时一次性下发完整 toolCall。
 - **API Key 不暴露给 webview**：`load_settings` 返回前强制 `apiKey=""`，旧版明文 key 自动迁移进钥匙串后从磁盘清除；`save_settings` 收到非空 key 只写钥匙串，钥匙串不可用则拒绝保存。
 - Prompt 模板（`buildSelectionPrompt` 翻译/解读、`buildCustomInterpretPrompt` 自定义解读、`buildSystemPrompt`）仍在 `services/llm.ts`，已 i18n 化（走 `i18n.t`，模板文案在 locales JSON）；均接收 `targetLanguage` 参数。启用 Agent Tools 时 system prompt 追加 `llm.toolsSystemAddendum` 工具使用引导段（与用户可编辑 system prompt 解耦）。
+- 用户可见的 LLM 错误文案统一由 `services/llmError.ts` 的 `llmErrorToMessage()` 产出（配置向导 / 设置页 / 解读 / 翻译共用同一份友好中文，文案在 locales 的 `llm.error.*` 段）；后端原始报错（常为英文）只经 `services/logs.ts` 写日志，不进 UI。新增 LlmError kind 时需同步 `llmError.ts` 与两边 locales。
 - LLM 配置与目标语言通过 `services/settings.ts` 持久化到后端 AppData；首次启动时会从旧的 `localStorage` 键 `standardread-llm-config` 迁移一次。
 - 平台预设集中在 `src/data/platformPresets.ts`（8 个：`deepseek` / `kimi` / `bailian` / `glm` / `volcengine` / `openrouter` / `openai` / `custom`，含 `supportsTools` / `supportsThinking` / `contextWindow` / `apiKeyHelpUrl` 等字段）；`PlatformId` 联合类型在 `services/settings.ts` 有一份需与预设同步。默认平台 `deepseek`、默认模型 `deepseek-v4-flash`，默认目标语言为 `中文`。
 

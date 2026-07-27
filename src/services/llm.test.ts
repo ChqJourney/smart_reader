@@ -220,8 +220,9 @@ describe("llm service", () => {
       const events = await collectEvents(streamChatCompletion(sampleMessages));
       expect(events).toHaveLength(1);
       expect(events[0].type).toBe("error");
-      expect((events[0] as { message: string }).message).toContain(
-        "backend panic"
+      // 原始报错只进日志，UI 事件只携带友好中文（不泄漏后端英文原文）。
+      expect((events[0] as { message: string }).message).toBe(
+        "请求失败，请稍后重试。"
       );
     });
   });

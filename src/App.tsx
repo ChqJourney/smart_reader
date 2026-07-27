@@ -24,6 +24,7 @@ import {
 import { useRecentFiles, type RecentFile } from "./hooks/useRecentFiles";
 import { useSplitView } from "./hooks/useSplitView";
 import TitleBar from "./components/TitleBar";
+import TitleBarToggles from "./components/TitleBarToggles";
 import {
   AppSettings,
   DEFAULT_SETTINGS,
@@ -31,7 +32,11 @@ import {
   saveSettings,
   checkApiKey,
 } from "./services/settings";
-import { getContextWindow, PLATFORM_LIST } from "./data/platformPresets";
+import {
+  getContextWindow,
+  PLATFORM_LIST,
+  PLATFORM_PRESETS,
+} from "./data/platformPresets";
 import { copyToClipboard } from "./utils/clipboard";
 import { showMessage } from "./services/dialog";
 import { useDictionaryStatus } from "./hooks/useDictionaryStatus";
@@ -160,6 +165,57 @@ function App() {
 
   const hoverTranslateActive =
     settings.hoverTranslate && dictionaryStatus.status?.exists === true;
+
+  // 当前平台的 API Key 是否已配置（钥匙串），决定标题栏
+  // 智能查阅开关与平台/模型显示的可见性。
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
+
+  const refreshApiKeyConfigured = useCallback((platformId: string) => {
+    checkApiKey(platformId)
+      .then(setApiKeyConfigured)
+      .catch(() => setApiKeyConfigured(false));
+  }, []);
+
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    refreshApiKeyConfigured(settings.platformId);
+  }, [settingsLoaded, settings.platformId, refreshApiKeyConfigured]);
+
+  // 标题栏「平台 · 模型」纯展示文本：平台名去掉括号补充说明保持紧凑，
+  // 模型用 id（label 含说明文字，过长）。仅已配置 Key 时显示。
+  const modelDisplay = useMemo(() => {
+    if (!settingsLoaded || !apiKeyConfigured) return null;
+    const preset = PLATFORM_PRESETS[settings.platformId];
+    const platformLabel = (preset?.label ?? settings.platformId).split("（")[0];
+    const model = settings.llm.model;
+    return model ? `${platformLabel} · ${model}` : platformLabel;
+  }, [
+    settingsLoaded,
+    apiKeyConfigured,
+    settings.platformId,
+    settings.llm.model,
+  ]);
+
+  // 标题栏快捷开关：切换后立即持久化，失败仅记日志（与右侧面板布局同一策略）。
+  const handleToggleHoverTranslate = useCallback(() => {
+    setSettings((prev) => {
+      const next = { ...prev, hoverTranslate: !prev.hoverTranslate };
+      saveSettings(next).catch((err) =>
+        error(`[App] 保存悬停查词开关失败: ${err}`)
+      );
+      return next;
+    });
+  }, []);
+
+  const handleToggleAgentTools = useCallback(() => {
+    setSettings((prev) => {
+      const next = { ...prev, agentToolsEnabled: !prev.agentToolsEnabled };
+      saveSettings(next).catch((err) =>
+        error(`[App] 保存智能查阅开关失败: ${err}`)
+      );
+      return next;
+    });
+  }, []);
 
   const contextWindow = useMemo(
     () => getContextWindow(settings.platformId, settings.llm.model),
@@ -500,22 +556,31 @@ function App() {
     [handleViewerStateChange, splitView.secondaryTabId]
   );
 
-  const handleSaveSettings = useCallback(async (newSettings: AppSettings) => {
-    try {
-      await saveSettings(newSettings);
-      setSettings(newSettings);
-      setSettingsOpen(false);
-    } catch (err) {
-      error(`[App] 保存设置失败: ${err}`);
-      throw err;
-    }
-  }, []);
+  const handleSaveSettings = useCallback(
+    async (newSettings: AppSettings) => {
+      try {
+        await saveSettings(newSettings);
+        setSettings(newSettings);
+        setSettingsOpen(false);
+        // 设置页可能刚写入或删除了 Key，刷新标题栏可见性
+        refreshApiKeyConfigured(newSettings.platformId);
+      } catch (err) {
+        error(`[App] 保存设置失败: ${err}`);
+        throw err;
+      }
+    },
+    [refreshApiKeyConfigured]
+  );
 
   // 配置向导完成：保存并应用最终设置，关闭向导。
-  const handleWizardComplete = useCallback((finalSettings: AppSettings) => {
-    setSettings(finalSettings);
-    setWizardOpen(false);
-  }, []);
+  const handleWizardComplete = useCallback(
+    (finalSettings: AppSettings) => {
+      setSettings(finalSettings);
+      setWizardOpen(false);
+      refreshApiKeyConfigured(finalSettings.platformId);
+    },
+    [refreshApiKeyConfigured]
+  );
 
   // 配置向导跳过：未配置也能浏览 PDF，关闭向导即可。
   const handleWizardSkip = useCallback(() => {
@@ -866,6 +931,17 @@ function App() {
         }}
         onOpenPdf={handleOpenPdf}
         onOpenSettings={() => setSettingsOpen(true)}
+        quickToggles={
+          <TitleBarToggles
+            showHoverTranslate={dictionaryStatus.status?.exists === true}
+            hoverTranslateEnabled={settings.hoverTranslate}
+            onToggleHoverTranslate={handleToggleHoverTranslate}
+            showAgentTools={settingsLoaded && apiKeyConfigured}
+            agentToolsEnabled={settings.agentToolsEnabled}
+            onToggleAgentTools={handleToggleAgentTools}
+            modelDisplay={modelDisplay}
+          />
+        }
       />
 
       {tabs.tabs.length > 0 && (

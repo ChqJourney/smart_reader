@@ -13,6 +13,18 @@
     "close": "关闭",
     "splitCoachmark": "想对照阅读两份 PDF？拖拽标签到阅读区，或点击标签栏「并排对照」按钮。"
   },
+  "quickToggles": {
+    "hoverTranslate": "悬停查词",
+    "hoverTranslateOn": "悬停查词已开启，点击关闭",
+    "hoverTranslateOff": "悬停查词已关闭，点击开启",
+    "agentTools": "智能查阅",
+    "agentToolsOn": "智能文档查阅已开启，点击关闭",
+    "agentToolsOff": "智能文档查阅已关闭，点击开启",
+    "agentToolsConfirmTitle": "开启智能文档查阅",
+    "agentToolsConfirmBody": "开启后，AI 在解读时会自动翻阅当前打开的 PDF 原文进行核实，这会大幅增加 token 消耗与费用。确定要开启吗？",
+    "agentToolsConfirmOk": "开启",
+    "currentModel": "当前模型：{{model}}"
+  },
   "tab": {
     "close": "关闭标签页",
     "closeNamed": "关闭 {{fileName}}",

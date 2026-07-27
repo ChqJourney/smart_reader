@@ -14,7 +14,7 @@
 
 已实现能力：
 
-- 自定义标题栏（无边框窗口 `decorations: false`）：品牌区拖动 + 最近文件 / 打开 PDF / 设置 + 窗口控制按钮。
+- 自定义标题栏（无边框窗口 `decorations: false`）：品牌区拖动 + 最近文件 / 打开 PDF / 设置 + 窗口控制按钮；中部为快捷状态区（TitleBarToggles）：悬停查词开关（仅词典已下载可用时可见）、智能文档查阅开关（仅当前平台已配置 API Key 时可见，开启前弹确认框提示 token 消耗大增，portal 到 body 避开标题栏 backdrop-filter 的 fixed 包含块）、当前平台/模型纯展示（仅已配置 Key 时可见），切换即时持久化到 settings。
 - 首次启动配置向导（SetupWizard）：选平台 → 填 Key → 测试连接，全部平台未配置 Key 时才自动弹出，设置里可重跑。
 - 多 PDF Tab 同时打开（最多 10 个），单视图下所有 tab 的 PdfViewer **常驻挂载（keep-alive）**：切 tab 仅切换 `display:none`，canvas 位图 / 滚动位置 / 页码 / 工具栏状态全部保留，切换瞬时完成；隐藏 viewer 通过 `isActive` prop 冻结 IO 可见性上报与滚动页码同步，激活时带回的同页 `pendingGotoPage` 由 useTabRestore 直接清除不跳转。支持左右并排对照两份 PDF。进入并排的入口：拖拽非激活 tab 到阅读区（带 drop-zone 遮罩）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter。首次同时打开 ≥2 个 PDF 时显示一次性并排对照引导气泡（`.split-coachmark`，点「知道了」或 12 秒超时后写入 localStorage 不再复现；气泡本身 `pointer-events:none` 不遮挡操作）。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
 - PDF 本地渲染、文本选区、缩放、页码跳转、单页 / 连续滚动阅读模式。
@@ -105,7 +105,8 @@ npm install
 │   │   ├── ThinkingIndicator.tsx      # 思考中/已思考 tokens 指示（可展开 reasoningContent）
 │   │   ├── SettingsModal.tsx          # 全局设置 Modal（左侧分页：模型设置 / 功能设置 / 系统设置 / 关于）
 │   │   ├── SetupWizard.tsx            # 首次启动配置向导（选平台 → 填 Key → 测试连接）
-│   │   ├── TitleBar.tsx               # 自定义标题栏（data-tauri-drag-region + RecentFilesBar + 窗口控制）
+│   │   ├── TitleBar.tsx               # 自定义标题栏（data-tauri-drag-region + RecentFilesBar + 窗口控制 + quickToggles 中部插槽）
+│   │   ├── TitleBarToggles.tsx        # 标题栏中部快捷开关（悬停查词 / 智能查阅，含开启确认弹窗）与平台/模型显示
 │   │   ├── RecentFilesBar.tsx         # 最近文件：触发按钮 + 下拉面板（置顶/搜索/分屏打开）
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗
 │   │   ├── ToolCallsIndicator.tsx     # 工具调用状态指示器（解读流中展示）

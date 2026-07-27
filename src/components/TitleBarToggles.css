@@ -1,0 +1,194 @@
+/* ═════════════════════════════════════════════════════
+   TitleBarToggles — 标题栏中部的快捷状态开关与模型显示
+   设计语言与 TitleBar 一致：30px 高、7px 圆角、
+   slate 中性色 + blue-600 强调色、轻量 hover 反馈。
+   ═════════════════════════════════════════════════════ */
+
+.titlebar-toggles {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ── 当前平台 / 模型（纯展示） ───────────────────── */
+.titlebar-model-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #64748b; /* slate-500 */
+  background: rgba(100, 116, 139, 0.07);
+  border: 1px solid rgba(100, 116, 139, 0.1);
+  border-radius: 7px;
+  cursor: default;
+  max-width: 260px;
+  user-select: none;
+}
+
+.titlebar-model-display .icon {
+  color: #94a3b8; /* slate-400 */
+  flex-shrink: 0;
+}
+
+.titlebar-model-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── 开关按钮 ───────────────────────────────────── */
+.titlebar-toggle {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px 0 10px;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: #64748b; /* slate-500 */
+  background: transparent;
+  border: 1px solid rgba(100, 116, 139, 0.14);
+  border-radius: 7px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.1s ease;
+}
+
+.titlebar-toggle:hover {
+  background: rgba(100, 116, 139, 0.08);
+  color: #334155; /* slate-700 */
+}
+
+.titlebar-toggle:active {
+  transform: translateY(0.5px);
+}
+
+/* 开启态：与 .titlebar-open-btn 同一套蓝色 tinted 语言 */
+.titlebar-toggle.on {
+  color: #2563eb; /* blue-600 */
+  background: rgba(37, 99, 235, 0.08);
+  border-color: rgba(37, 99, 235, 0.2);
+}
+
+.titlebar-toggle.on:hover {
+  background: rgba(37, 99, 235, 0.13);
+  border-color: rgba(37, 99, 235, 0.3);
+  color: #1d4ed8; /* blue-700 */
+}
+
+.titlebar-toggle-label {
+  flex-shrink: 0;
+}
+
+/* ── 迷你 switch 指示 ───────────────────────────── */
+.titlebar-toggle-switch {
+  position: relative;
+  width: 24px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgba(100, 116, 139, 0.24);
+  transition: background 0.15s ease;
+}
+
+.titlebar-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+  transition: transform 0.15s ease;
+}
+
+.titlebar-toggle.on .titlebar-toggle-switch {
+  background: #2563eb; /* blue-600 */
+}
+
+.titlebar-toggle.on .titlebar-toggle-knob {
+  transform: translateX(10px);
+}
+
+/* ── 开启确认弹窗 ───────────────────────────────── */
+.titlebar-toggle-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.36);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+}
+
+.titlebar-toggle-modal {
+  width: 380px;
+  max-width: calc(100vw - 48px);
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 20px 22px 16px;
+  box-shadow:
+    0 12px 40px rgba(15, 23, 42, 0.18),
+    0 2px 8px rgba(15, 23, 42, 0.08);
+}
+
+.titlebar-toggle-modal h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #1e293b; /* slate-800 */
+}
+
+.titlebar-toggle-modal-body {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.65;
+  color: #475569; /* slate-600 */
+}
+
+.titlebar-toggle-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.titlebar-toggle-modal-actions button {
+  height: 30px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #475569;
+  background: rgba(100, 116, 139, 0.08);
+  border: none;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.titlebar-toggle-modal-actions button:hover {
+  background: rgba(100, 116, 139, 0.14);
+}
+
+.titlebar-toggle-modal-actions button.primary {
+  color: #ffffff;
+  background: #2563eb; /* blue-600 */
+}
+
+.titlebar-toggle-modal-actions button.primary:hover {
+  background: #1d4ed8; /* blue-700 */
+}

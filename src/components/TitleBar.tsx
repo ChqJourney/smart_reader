@@ -9,6 +9,8 @@ interface TitleBarProps {
   recentFiles: RecentFilesBarProps;
   onOpenPdf: () => void;
   onOpenSettings: () => void;
+  /** 标题栏中部的快捷开关 / 模型显示（TitleBarToggles），无可显示项时为 null */
+  quickToggles?: React.ReactNode;
 }
 
 // Window controls (min / max / close) are only meaningful inside the Tauri
@@ -28,6 +30,7 @@ export default function TitleBar({
   recentFiles,
   onOpenPdf,
   onOpenSettings,
+  quickToggles,
 }: TitleBarProps) {
   const { t } = useTranslation();
   const [maximized, setMaximized] = useState(false);
@@ -46,10 +49,15 @@ export default function TitleBar({
         const unlisten = win.onResized(async () => {
           if (mountedRef.current) setMaximized(await win.isMaximized());
         });
-        return () => { mountedRef.current = false; void unlisten.then((fn) => fn?.()); };
+        return () => {
+          mountedRef.current = false;
+          void unlisten.then((fn) => fn?.());
+        };
       })
       .catch(() => {});
-    return () => { mountedRef.current = false; };
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
   const handleMinimize = useCallback(
@@ -57,21 +65,24 @@ export default function TitleBar({
     []
   );
   const handleToggleMaximize = useCallback(
-    () => withWindow((win) =>
-      maximized ? win.unmaximize() : win.toggleMaximize()
-    ),
+    () =>
+      withWindow((win) =>
+        maximized ? win.unmaximize() : win.toggleMaximize()
+      ),
     [maximized]
   );
-  const handleClose = useCallback(
-    () => withWindow((win) => win.close()),
-    []
-  );
+  const handleClose = useCallback(() => withWindow((win) => win.close()), []);
 
   return (
     <div className="titlebar">
       {/* ── Brand (draggable) ─────────────────────────── */}
       <div className="titlebar-brand" data-tauri-drag-region>
-        <img src="/logo.svg" alt="" className="titlebar-logo-img" draggable={false} />
+        <img
+          src="/logo.svg"
+          alt=""
+          className="titlebar-logo-img"
+          draggable={false}
+        />
         <span className="titlebar-brand-name">SpecReader AI</span>
       </div>
 
@@ -82,6 +93,12 @@ export default function TitleBar({
       <div className="titlebar-center">
         <RecentFilesBar {...recentFiles} />
       </div>
+
+      {/* ── Spacer (drag region) ─────────────────────── */}
+      <div className="titlebar-spacer" data-tauri-drag-region />
+
+      {/* ── Quick toggles / model display (centered) ── */}
+      {quickToggles}
 
       {/* ── Spacer (drag region) ─────────────────────── */}
       <div className="titlebar-spacer" data-tauri-drag-region />

@@ -13,6 +13,18 @@
     "close": "Close",
     "splitCoachmark": "Want to read two PDFs side by side? Drag a tab into the reading area, or click \"Side by Side\" in the tab bar."
   },
+  "quickToggles": {
+    "hoverTranslate": "Hover Lookup",
+    "hoverTranslateOn": "Hover dictionary lookup is on, click to turn off",
+    "hoverTranslateOff": "Hover dictionary lookup is off, click to turn on",
+    "agentTools": "Smart Lookup",
+    "agentToolsOn": "Smart document lookup is on, click to turn off",
+    "agentToolsOff": "Smart document lookup is off, click to turn on",
+    "agentToolsConfirmTitle": "Enable Smart Document Lookup",
+    "agentToolsConfirmBody": "When enabled, the AI will automatically consult the currently open PDFs while interpreting, which significantly increases token usage and cost. Enable it?",
+    "agentToolsConfirmOk": "Enable",
+    "currentModel": "Current model: {{model}}"
+  },
   "tab": {
     "close": "Close Tab",
     "closeNamed": "Close {{fileName}}",

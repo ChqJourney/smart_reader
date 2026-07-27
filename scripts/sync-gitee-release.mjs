@@ -21,6 +21,7 @@
  */
 
 import { readFileSync, writeFileSync, readdirSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 const GITEE_REPO = process.env.GITEE_REPO ?? "patrickchq/SpecReader";
@@ -132,18 +133,41 @@ for (const a of stale) {
   console.log(`[gitee] 已删除旧附件 ${a.name}`);
 }
 
+// 上传附件走 curl 而不是 fetch：Node 内置 fetch(undici) 的 headersTimeout 默认 300s，
+// CI 上慢速上传 -setup.exe 时服务器迟迟不回响应头，会触发 UND_ERR_HEADERS_TIMEOUT（实测约 5 分钟超时）。
+// curl 由 GitHub runner 预装，--retry 处理偶发网络抖动，且无响应头超时限制。
+function giteeUpload(releaseId, filePath, name) {
+  const out = execFileSync(
+    "curl",
+    [
+      "-sS",
+      "--connect-timeout",
+      "30",
+      "--retry",
+      "3",
+      "--retry-all-errors",
+      "--retry-delay",
+      "5",
+      "-H",
+      `Authorization: token ${token}`,
+      "-F",
+      `file=@${filePath};filename=${name}`,
+      `${API_BASE}/repos/${GITEE_REPO}/releases/${releaseId}/attach_files`,
+      "-w",
+      "\n%{http_code}",
+    ],
+    { encoding: "utf8", timeout: 30 * 60 * 1000, stdio: ["ignore", "pipe", "inherit"] }
+  );
+  const lines = out.trimEnd().split("\n");
+  const status = Number(lines.pop());
+  if (status < 200 || status >= 300) {
+    throw new Error(`Gitee 上传 ${name} 失败：HTTP ${status} ${lines.join("\n").slice(0, 300)}`);
+  }
+}
+
 // 上传新附件
 for (const name of uploadFiles) {
-  const form = new FormData();
-  form.append(
-    "file",
-    new Blob([readFileSync(path.join(assetsDir, name))]),
-    name
-  );
-  await giteeApi(`/repos/${GITEE_REPO}/releases/${release.id}/attach_files`, {
-    method: "POST",
-    body: form,
-  });
+  giteeUpload(release.id, path.join(assetsDir, name), name);
   console.log(`[gitee] 已上传 ${name}`);
 }
 

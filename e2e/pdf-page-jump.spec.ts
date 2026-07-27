@@ -300,11 +300,14 @@ test.describe("PDF jump panel and page rail", () => {
     const total = parseInt(infoText.match(/\/\s*(\d+)/)![1], 10);
     expect(total).toBeGreaterThan(1);
 
-    // 拖到滑轨最底部 → 最后一页；拖动中 tooltip 可见
+    // 拖到滑轨最底部 → 最后一页；拖动开始后 tooltip 可见
     const box = (await rail.boundingBox())!;
     await page.mouse.move(box.x + box.width / 2, box.y + 10);
+    // 滑轨控件组默认 pointer-events:none，鼠标靠近右边界经 rAF + React
+    // 渲染后才加 .visible 变为可交互；未等可见就按下会让 pointerdown 落空。
+    await expect(page.locator(".page-rail-wrapper")).toHaveClass(/visible/);
     await page.mouse.down();
-    await expect(page.locator(".page-rail-tip")).toBeVisible();
+    await expect(rail).toHaveClass(/dragging/);
     await page.mouse.move(box.x + box.width / 2, box.y + box.height, {
       steps: 10,
     });
@@ -316,7 +319,9 @@ test.describe("PDF jump panel and page rail", () => {
 
     // 拖回顶部 → 第 1 页
     await page.mouse.move(box.x + box.width / 2, box.y + box.height - 10);
+    await expect(page.locator(".page-rail-wrapper")).toHaveClass(/visible/);
     await page.mouse.down();
+    await expect(rail).toHaveClass(/dragging/);
     await page.mouse.move(box.x + box.width / 2, box.y, { steps: 10 });
     await page.mouse.up();
     await page.waitForTimeout(JUMP_SETTLE_TIMEOUT);

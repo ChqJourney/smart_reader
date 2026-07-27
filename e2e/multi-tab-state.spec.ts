@@ -247,13 +247,18 @@ test.describe("Multi-tab state isolation", () => {
       if (c) c.scrollTop = 0;
     });
     await page.waitForTimeout(500);
-    const overlay = page.locator(".pdf-selection-overlay").first();
+    // scope 到可见面板：keep-alive 下非激活 tab 的 overlay 也在 DOM 中。
+    const overlay = activePanel(page).locator(".pdf-selection-overlay").first();
     await expect(overlay).toBeVisible();
-    await overlay.click({ position: { x: 467, y: 540 } });
-    await page.waitForTimeout(200);
-
-    // The selection toolbar should appear in the first tab.
-    await expect(page.getByRole("button", { name: /加入暂存/i })).toBeVisible();
+    // 跳页后回滚到顶部，第 1 页要重新挂载并异步加载文本（shouldRender），
+    // webkit 上较慢；重试点击直到选区产生、工具条出现。
+    await expect(async () => {
+      await overlay.click({ position: { x: 467, y: 540 } });
+      // The selection toolbar should appear in the first tab.
+      await expect(page.getByRole("button", { name: /加入暂存/i })).toBeVisible(
+        { timeout: 1500 }
+      );
+    }).toPass({ timeout: 15000 });
 
     // Switch to the second tab; it should still be on page 3 (not reset to 1).
     await page

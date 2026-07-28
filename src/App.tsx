@@ -6,6 +6,7 @@ import PdfViewer, {
   PdfViewerHandle,
   PdfViewerState,
 } from "./components/PdfViewer";
+import { HibernatedPlaceholder } from "./components/HibernatedPlaceholder";
 import SelectionToolbar from "./components/SelectionToolbar";
 import AiChatPanel from "./components/AiChatPanel";
 import SettingsModal from "./components/SettingsModal";
@@ -14,7 +15,7 @@ import Icon from "./components/Icon";
 import { StashItem } from "./services/stash";
 import { InterpretationSession } from "./services/sessions";
 import { SelectionAction } from "./services/llm";
-import { useTabs } from "./hooks/useTabs";
+import { useTabs, type HibernationContext } from "./hooks/useTabs";
 import { usePersistence } from "./hooks/usePersistence";
 import {
   useRightPanelLayout,
@@ -52,7 +53,17 @@ const SPLIT_COACHMARK_KEY = "specreader-split-coachmark-seen";
 
 function App() {
   const { t } = useTranslation();
-  const tabs = useTabs();
+  // 休眠决策所需的跨 hook 上下文（secondary 在 useSplitView、流式会话在
+  // usePersistence，均晚于 useTabs 实例化）：ref 回填 + 稳定 getter 打破循环依赖。
+  const hibernationCtxRef = useRef<HibernationContext>({
+    secondaryTabId: null,
+    streamingTabIds: new Set(),
+  });
+  const getHibernationContext = useCallback(
+    () => hibernationCtxRef.current,
+    []
+  );
+  const tabs = useTabs({ getHibernationContext });
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -110,6 +121,34 @@ function App() {
       (filePath) => pdfCacheRef.current.get(filePath)
     );
   }, [tabs.tabs]);
+
+  // 休眠释放字节缓存：某 filePath 没有任何存活（非休眠）tab 引用时，
+  // 从 pdfCacheRef 删除（同一路径多 tab 共享一份，仍有存活引用则保留）。
+  // 唤醒时由 usePdfDocument 回退 read_pdf_bytes 读盘后重新填入。
+  useEffect(() => {
+    const alivePaths = new Set(
+      tabs.tabs.filter((t) => !t.hibernated).map((t) => t.filePath)
+    );
+    for (const path of Array.from(pdfCacheRef.current.keys())) {
+      if (!alivePaths.has(path)) {
+        pdfCacheRef.current.delete(path);
+      }
+    }
+  }, [tabs.tabs]);
+
+  // 休眠时顺手回写阅读页码到最近文件（与关闭 tab 时一致），
+  // 休眠 tab 即使意外丢失也能从最近文件恢复页码。
+  const prevTabsForHibernateRef = useRef(tabs.tabs);
+  useEffect(() => {
+    const prev = prevTabsForHibernateRef.current;
+    for (const tab of tabs.tabs) {
+      const wasAlive = prev.some((t) => t.id === tab.id && !t.hibernated);
+      if (tab.hibernated && wasAlive && tab.pageNum) {
+        recentFiles.updateLastPage(tab.filePath, tab.pageNum);
+      }
+    }
+    prevTabsForHibernateRef.current = tabs.tabs;
+  }, [tabs.tabs, recentFiles]);
 
   useEffect(() => {
     let cancelled = false;
@@ -264,6 +303,22 @@ function App() {
     abortSessionsForTab: persistenceAbortSessionsForTab,
     setStashes: persistenceSetStashes,
   } = persistence;
+
+  // 回填休眠决策上下文：有进行中流式会话的 tab 不做休眠候选（§7.3），
+  // 分屏 secondary 可见即存活（§7.1）。
+  useEffect(() => {
+    const streamingTabIds = new Set<string>();
+    for (const session of persistence.sessions) {
+      if (!session.isStreaming) continue;
+      for (const stash of session.sources) {
+        streamingTabIds.add(stash.source.tabId);
+      }
+    }
+    hibernationCtxRef.current = {
+      secondaryTabId: splitView.secondaryTabId,
+      streamingTabIds,
+    };
+  }, [persistence.sessions, splitView.secondaryTabId]);
   // tabs 根对象随阅读状态（页码/滚动）高频变化；onStateChange 每次渲染都传
   // 给 PdfViewer，用稳定别名避免该 prop 随 tab 状态抖动。
   const { handleViewerStateChange } = tabs;
@@ -424,6 +479,8 @@ function App() {
       const draggedTabId = e.dataTransfer.getData("text/plain");
       if (!draggedTabId || draggedTabId === tabs.activeTabId) return;
       if (!tabs.tabs.some((t) => t.id === draggedTabId)) return;
+      // 目标 tab 可能处于休眠：先唤醒（不激活），viewer 重新挂载走冷启动恢复
+      tabs.wakeTab(draggedTabId);
       splitView.enterSplitView(draggedTabId);
     },
     [tabs, splitView, resetDragOver]
@@ -434,6 +491,7 @@ function App() {
     const activeIndex = tabs.tabs.findIndex((t) => t.id === tabs.activeTabId);
     const nextTab = tabs.tabs[(activeIndex + 1) % tabs.tabs.length];
     if (!nextTab || nextTab.id === tabs.activeTabId) return;
+    tabs.wakeTab(nextTab.id);
     splitView.enterSplitView(nextTab.id);
   }, [tabs, splitView]);
 
@@ -627,6 +685,7 @@ function App() {
       }
       // openPdfByPath 会激活目标 tab；先把主视图切回原 tab，再将其设为副屏
       tabs.handleTabClick(primaryId);
+      tabs.wakeTab(tab.id);
       splitView.enterSplitView(tab.id);
       setFocusedViewer("secondary");
     },
@@ -1198,37 +1257,45 @@ function App() {
                           : undefined
                     }
                   >
-                    <PdfViewer
-                      ref={isActiveTab ? pdfViewerRef : undefined}
-                      tabId={tab.id}
-                      filePath={tab.filePath}
-                      fileHash={tab.fileHash}
-                      isActive={isActiveTab}
-                      cachedBytes={pdfCacheRef.current.get(tab.filePath)}
-                      onPdfLoaded={handlePdfLoaded}
-                      onSelection={handleSelection}
-                      onToggleVisibility={
-                        isActiveTab ? layout.toggleLeft : undefined
-                      }
-                      initialState={{
-                        pageNum: tab.pageNum,
-                        scale: tab.scale,
-                        viewMode: tab.viewMode,
-                        scrollTop: tab.scrollTop,
-                        pendingGotoPage: tab.pendingGotoPage,
-                      }}
-                      onStateChange={tabs.handleViewerStateChange}
-                      annotations={
-                        persistence.annotationsByHash[tab.fileHash || ""]
-                      }
-                      highlightedAnnotationId={tab.highlightedAnnotationId}
-                      onAnnotationUpdate={persistence.handleAnnotationUpdate}
-                      onAnnotationDelete={persistence.handleAnnotationDelete}
-                      onExplainClick={handleExplainClick}
-                      onClearPendingGotoPage={tabs.clearTabPendingGotoPage}
-                      hoverTranslate={hoverTranslateActive}
-                      settings={settings}
-                    />
+                    {tab.hibernated ? (
+                      // 休眠 tab：viewer 已卸载（pdfjs document / canvas 位图 /
+                      // 全页 DOM 随 unmount 释放），占位仅保持 key 稳定。
+                      // 唤醒 = activateTab 复位 hibernated → PdfViewer 重新挂载，
+                      // 走现有冷启动恢复路径（useTabRestore）。
+                      <HibernatedPlaceholder fileName={tab.fileName} />
+                    ) : (
+                      <PdfViewer
+                        ref={isActiveTab ? pdfViewerRef : undefined}
+                        tabId={tab.id}
+                        filePath={tab.filePath}
+                        fileHash={tab.fileHash}
+                        isActive={isActiveTab}
+                        cachedBytes={pdfCacheRef.current.get(tab.filePath)}
+                        onPdfLoaded={handlePdfLoaded}
+                        onSelection={handleSelection}
+                        onToggleVisibility={
+                          isActiveTab ? layout.toggleLeft : undefined
+                        }
+                        initialState={{
+                          pageNum: tab.pageNum,
+                          scale: tab.scale,
+                          viewMode: tab.viewMode,
+                          scrollTop: tab.scrollTop,
+                          pendingGotoPage: tab.pendingGotoPage,
+                        }}
+                        onStateChange={tabs.handleViewerStateChange}
+                        annotations={
+                          persistence.annotationsByHash[tab.fileHash || ""]
+                        }
+                        highlightedAnnotationId={tab.highlightedAnnotationId}
+                        onAnnotationUpdate={persistence.handleAnnotationUpdate}
+                        onAnnotationDelete={persistence.handleAnnotationDelete}
+                        onExplainClick={handleExplainClick}
+                        onClearPendingGotoPage={tabs.clearTabPendingGotoPage}
+                        hoverTranslate={hoverTranslateActive}
+                        settings={settings}
+                      />
+                    )}
                   </div>
                 );
               })

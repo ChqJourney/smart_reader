@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useTabs } from "./useTabs";
 
@@ -31,6 +31,8 @@ function setupMockInvoke() {
           return Promise.resolve(undefined);
         case "get_pdf_hash":
           return Promise.resolve(`hash-${args?.filePath}`);
+        case "get_pdf_file_size":
+          return Promise.resolve(1024 * 1024); // 1MB
         default:
           return Promise.reject(
             new Error(`No mock handler for command: ${command}`)
@@ -89,6 +91,8 @@ describe("useTabs", () => {
             return Promise.resolve(undefined);
           case "get_pdf_hash":
             return hashPromise.then(() => `hash-${args?.filePath}`);
+          case "get_pdf_file_size":
+            return Promise.resolve(1024 * 1024);
           default:
             return Promise.reject(
               new Error(`No mock handler for command: ${command}`)
@@ -108,7 +112,7 @@ describe("useTabs", () => {
       expect(result.current.tabs).toHaveLength(1);
     });
     expect(tab1).toEqual(tab2);
-    expect(mockInvoke).toHaveBeenCalledTimes(2); // authorize + hash only once each path
+    expect(mockInvoke).toHaveBeenCalledTimes(3); // authorize + hash + size only once each path
   });
 
   it("counts authorize and hash calls correctly for concurrent same-path opens", async () => {
@@ -125,6 +129,8 @@ describe("useTabs", () => {
             return Promise.resolve(undefined);
           case "get_pdf_hash":
             return hashPromise.then(() => `hash-${args?.filePath}`);
+          case "get_pdf_file_size":
+            return Promise.resolve(1024 * 1024);
           default:
             return Promise.reject(
               new Error(`No mock handler for command: ${command}`)
@@ -146,8 +152,12 @@ describe("useTabs", () => {
     const hashCalls = mockInvoke.mock.calls.filter(
       ([cmd]) => cmd === "get_pdf_hash"
     );
+    const sizeCalls = mockInvoke.mock.calls.filter(
+      ([cmd]) => cmd === "get_pdf_file_size"
+    );
     expect(authorizeCalls).toHaveLength(1);
     expect(hashCalls).toHaveLength(1);
+    expect(sizeCalls).toHaveLength(1);
   });
 
   it("stores and clears per-tab selection", async () => {
@@ -398,5 +408,284 @@ describe("useTabs", () => {
     rerender();
 
     expect(result.current).toBe(first);
+  });
+});
+
+describe("useTabs 休眠（hibernation）", () => {
+  const MB = 1024 * 1024;
+  // jsdom UA 不含 windows/mac → 走默认字节预算 400MB（×2 系数记账）。
+  const FILE_SIZE = 100 * MB; // 每个文件记账 200MB，3 个文件即超预算
+  let now: number;
+
+  function mockFileSize(size: number) {
+    mockInvoke.mockImplementation(
+      (command: string, args?: Record<string, any>) => {
+        switch (command) {
+          case "authorize_pdf_path":
+            return Promise.resolve(undefined);
+          case "get_pdf_hash":
+            return Promise.resolve(`hash-${args?.filePath}`);
+          case "get_pdf_file_size":
+            return Promise.resolve(size);
+          default:
+            return Promise.reject(
+              new Error(`No mock handler for command: ${command}`)
+            );
+        }
+      }
+    );
+  }
+
+  async function openPath(result: any, path: string) {
+    let tab: any;
+    await act(async () => {
+      tab = await result.current.openPdfByPath(path);
+    });
+    return tab;
+  }
+
+  beforeEach(() => {
+    now = 1_000_000_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    mockFileSize(FILE_SIZE);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("addTab 超预算时休眠最久未激活的隐藏 tab 并清空其选区", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    const tabA = await openPath(result, "/test/a.pdf");
+    act(() => {
+      result.current.setTabSelection(tabA!.id, {
+        text: "s",
+        x: 0,
+        y: 0,
+        pdfX: 0,
+        pdfY: 0,
+        page: 1,
+      });
+      result.current.handleViewerStateChange(
+        { pageNum: 3, scale: 1.5, viewMode: "continuous" },
+        tabA!.id
+      );
+    });
+
+    now += 10 * 60 * 1000;
+    await openPath(result, "/test/b.pdf");
+    // a+b 记账 400MB，未超预算，不休眠
+    expect(result.current.tabs.every((t) => !t.hibernated)).toBe(true);
+
+    now += 10 * 60 * 1000;
+    await openPath(result, "/test/c.pdf");
+
+    const tabs = result.current.tabs;
+    expect(tabs).toHaveLength(3);
+    expect(tabs[0].hibernated).toBe(true); // a 最久未激活
+    expect(tabs[0].selection).toBeNull();
+    expect(tabs[1].hibernated).toBeFalsy();
+    expect(tabs[2].hibernated).toBeFalsy();
+    expect(result.current.activeTab?.filePath).toBe("/test/c.pdf");
+  });
+
+  it("5 分钟保护窗口内的 tab 不可休眠，超预算放行", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    await openPath(result, "/test/a.pdf");
+    await openPath(result, "/test/b.pdf");
+    await openPath(result, "/test/c.pdf"); // 600MB 超预算，但全部在保护窗口内
+
+    expect(result.current.tabs).toHaveLength(3);
+    expect(result.current.tabs.every((t) => !t.hibernated)).toBe(true);
+  });
+
+  it("activateTab 唤醒休眠 tab：hibernated 复位与 pendingGotoPage 同拍设置，并按预算休眠他人", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    const tabA = await openPath(result, "/test/a.pdf");
+    act(() => {
+      result.current.handleViewerStateChange(
+        { pageNum: 3, scale: 1.5, viewMode: "continuous" },
+        tabA!.id
+      );
+    });
+    now += 10 * 60 * 1000;
+    await openPath(result, "/test/b.pdf");
+    now += 10 * 60 * 1000;
+    await openPath(result, "/test/c.pdf");
+    expect(result.current.tabs[0].hibernated).toBe(true);
+
+    now += 10 * 60 * 1000;
+    act(() => {
+      result.current.handleTabClick(tabA!.id);
+    });
+
+    const tabs = result.current.tabs;
+    const woken = tabs.find((t) => t.id === tabA!.id)!;
+    expect(result.current.activeTabId).toBe(tabA!.id);
+    expect(woken.hibernated).toBe(false);
+    // 复位与 pendingGotoPage 同一次 setTabs 完成，挂载时 initialState 已就绪
+    expect(woken.pendingGotoPage).toBe(3);
+    // 唤醒后 a+b+c 记账 600MB 超预算 → b 成为最久未激活的候选被休眠
+    expect(tabs[1].hibernated).toBe(true);
+    expect(tabs[2].hibernated).toBeFalsy();
+  });
+
+  it("wakeTab 唤醒但不激活（分屏副屏场景）", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    const tabA = await openPath(result, "/test/a.pdf");
+    now += 10 * 60 * 1000;
+    await openPath(result, "/test/b.pdf");
+    now += 10 * 60 * 1000;
+    const tabC = await openPath(result, "/test/c.pdf");
+    expect(result.current.tabs[0].hibernated).toBe(true);
+
+    now += 10 * 60 * 1000;
+    act(() => {
+      result.current.wakeTab(tabA!.id);
+    });
+
+    const woken = result.current.tabs.find((t) => t.id === tabA!.id)!;
+    expect(woken.hibernated).toBe(false);
+    expect(woken.pendingGotoPage).toBe(1);
+    // 不激活：active 仍是 c
+    expect(result.current.activeTabId).toBe(tabC!.id);
+  });
+
+  it("注入上下文：流式会话中的 tab 与分屏 secondary 受保护", async () => {
+    const ctx = {
+      current: {
+        secondaryTabId: null as string | null,
+        streamingTabIds: new Set<string>(),
+      },
+    };
+    const { result } = renderHook(() =>
+      useTabs({ getHibernationContext: () => ctx.current })
+    );
+
+    const tabA = await openPath(result, "/test/a.pdf");
+    now += 10 * 60 * 1000;
+    const tabB = await openPath(result, "/test/b.pdf");
+    // a 有流式会话、b 是分屏 secondary
+    ctx.current.streamingTabIds = new Set([tabA!.id]);
+    ctx.current.secondaryTabId = tabB!.id;
+
+    now += 10 * 60 * 1000;
+    await openPath(result, "/test/c.pdf");
+
+    // 唯一可选候选是 c 之外…… a/b 均受保护，候选耗尽放行
+    expect(result.current.tabs.every((t) => !t.hibernated)).toBe(true);
+
+    // 撤掉保护后再次超预算：a 最老被休眠
+    ctx.current.streamingTabIds = new Set();
+    ctx.current.secondaryTabId = null;
+    now += 10 * 60 * 1000;
+    await openPath(result, "/test/d.pdf");
+    expect(result.current.tabs[0].hibernated).toBe(true);
+  });
+
+  it("关闭非活跃的休眠 tab：直接删记录", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    const tabA = await openPath(result, "/test/a.pdf");
+    now += 10 * 60 * 1000;
+    await openPath(result, "/test/b.pdf");
+    now += 10 * 60 * 1000;
+    await openPath(result, "/test/c.pdf");
+    expect(result.current.tabs[0].hibernated).toBe(true);
+
+    const onClose = vi.fn();
+    act(() => {
+      result.current.handleCloseTab(
+        { stopPropagation: vi.fn() } as any,
+        tabA!.id,
+        onClose
+      );
+    });
+    expect(onClose).toHaveBeenCalled();
+    expect(result.current.tabs).toHaveLength(2);
+    expect(result.current.tabs.map((t) => t.id)).not.toContain(tabA!.id);
+  });
+
+  it("关闭活跃 tab 时顶替的休眠 tab 被唤醒", async () => {
+    mockFileSize(300 * MB); // 单文件记账 600MB，两个存活即超预算
+    const { result } = renderHook(() => useTabs());
+
+    await openPath(result, "/test/a.pdf");
+    now += 10 * 60 * 1000;
+    const tabB = await openPath(result, "/test/b.pdf"); // a 是 active 受保护，暂不休眠
+    act(() => {
+      result.current.handleViewerStateChange(
+        { pageNum: 7, scale: 1.5, viewMode: "continuous" },
+        tabB!.id
+      );
+    });
+    now += 10 * 60 * 1000;
+    const tabC = await openPath(result, "/test/c.pdf"); // a 被休眠
+    now += 10 * 60 * 1000;
+    const tabD = await openPath(result, "/test/d.pdf"); // b 被休眠（c 是 active 受保护）
+
+    expect(result.current.tabs.map((t) => !!t.hibernated)).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ]);
+    expect(result.current.activeTabId).toBe(tabD!.id);
+
+    // 先关掉非活跃的 c，使休眠的 b 成为 active d 的前一个 tab
+    act(() => {
+      result.current.handleCloseTab(
+        { stopPropagation: vi.fn() } as any,
+        tabC!.id
+      );
+    });
+    expect(result.current.activeTabId).toBe(tabD!.id);
+
+    act(() => {
+      result.current.handleCloseTab(
+        { stopPropagation: vi.fn() } as any,
+        tabD!.id
+      );
+    });
+
+    // 按索引顶替激活的 b 处于休眠：同拍唤醒并恢复页码
+    expect(result.current.activeTabId).toBe(tabB!.id);
+    expect(result.current.activeTab?.hibernated).toBe(false);
+    expect(result.current.activeTab?.pendingGotoPage).toBe(7);
+  });
+
+  it("存活 viewer 数超 15 时即使字节充足也休眠", async () => {
+    mockFileSize(1 * MB);
+    const { result } = renderHook(() => useTabs());
+
+    for (let i = 0; i < 16; i++) {
+      now += 10 * 60 * 1000;
+      await openPath(result, `/test/f${i}.pdf`);
+    }
+
+    const alive = result.current.tabs.filter((t) => !t.hibernated);
+    expect(alive.length).toBeLessThanOrEqual(15);
+    expect(result.current.tabs[0].hibernated).toBe(true);
+  });
+
+  it("100 个 tab 硬上限兜底：拒绝继续打开", async () => {
+    mockFileSize(1 * MB);
+    const { result } = renderHook(() => useTabs());
+
+    for (let i = 0; i < 100; i++) {
+      await openPath(result, `/test/f${i}.pdf`);
+    }
+    expect(result.current.tabs).toHaveLength(100);
+
+    let overflow: any;
+    await act(async () => {
+      overflow = await result.current.openPdfByPath("/test/overflow.pdf");
+    });
+    expect(overflow).toBeNull();
+    expect(result.current.tabs).toHaveLength(100);
   });
 });

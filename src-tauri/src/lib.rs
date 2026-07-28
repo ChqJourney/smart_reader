@@ -223,6 +223,7 @@ pub fn run() {
             open_logs_dir,
             open_default_apps_settings,
             get_pdf_hash,
+            get_pdf_file_size,
             authorize_pdf_path,
             take_pending_open_pdfs,
             load_pdf_data,
@@ -397,6 +398,25 @@ async fn get_pdf_hash(
     tauri::async_runtime::spawn_blocking(move || compute_pdf_hash_cached(&cache, &file_path))
         .await
         .map_err(|e| format!("Task failed: {}", e))?
+}
+
+/// Returns the file size in bytes without reading file contents. Used by the
+/// frontend memory budget to account for a tab before its bytes are loaded.
+#[tauri::command]
+async fn get_pdf_file_size(
+    state: tauri::State<'_, AppState>,
+    file_path: String,
+) -> Result<u64, String> {
+    validate_pdf_access(&state, &file_path)?;
+    tauri::async_runtime::spawn_blocking(move || pdf_file_size(&file_path))
+        .await
+        .map_err(|e| format!("Task failed: {}", e))?
+}
+
+fn pdf_file_size(file_path: &str) -> Result<u64, String> {
+    std::fs::metadata(file_path)
+        .map(|m| m.len())
+        .map_err(|e| format!("Failed to stat PDF file: {}", e))
 }
 
 fn compute_pdf_hash(file_path: &str) -> Result<String, String> {
@@ -1367,6 +1387,20 @@ mod tests {
 
     fn test_hash_cache() -> Arc<Mutex<HashMap<PathBuf, CachedHash>>> {
         Arc::new(Mutex::new(HashMap::new()))
+    }
+
+    #[test]
+    fn pdf_file_size_reports_metadata_len() {
+        let pdf_dir = tempfile::tempdir().unwrap();
+        let pdf_path = pdf_dir.path().join("test.pdf");
+        let content = b"pdf content with some bytes";
+        std::fs::write(&pdf_path, content).unwrap();
+
+        let size = pdf_file_size(pdf_path.to_str().unwrap()).unwrap();
+        assert_eq!(size, content.len() as u64);
+
+        let missing = pdf_dir.path().join("missing.pdf");
+        assert!(pdf_file_size(missing.to_str().unwrap()).is_err());
     }
 
     #[test]

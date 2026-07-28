@@ -284,9 +284,6 @@
     "callList": "列出打开的文档",
     "callUnknown": "未知工具 {{name}}"
   },
-  "tabs": {
-    "maxTabsHint": "最多只能同时打开 {{maxTabs}} 个 PDF 文件。请先关闭部分标签。"
-  },
   "confirm": {
     "deleteTitle": "确认删除",
     "deleteExplainBody": "确定要删除这条解读吗？原文标记和右侧面板的解读记录将一并删除。"

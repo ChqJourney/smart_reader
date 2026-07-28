@@ -16,7 +16,7 @@
 
 - 自定义标题栏（无边框窗口 `decorations: false`）：品牌区拖动 + 最近文件 / 打开 PDF / 设置 + 窗口控制按钮；中部为快捷状态区（TitleBarToggles）：悬停查词开关（仅词典已下载可用时可见）、智能文档查阅开关（仅当前平台已配置 API Key 时可见，开启前弹确认框提示 token 消耗大增，portal 到 body 避开标题栏 backdrop-filter 的 fixed 包含块）、当前平台/模型纯展示（仅已配置 Key 时可见），切换即时持久化到 settings。
 - 首次启动配置向导（SetupWizard）：选平台 → 填 Key → 测试连接，全部平台未配置 Key 时才自动弹出，设置里可重跑。
-- 多 PDF Tab 同时打开（最多 10 个），单视图下所有 tab 的 PdfViewer **常驻挂载（keep-alive）**：切 tab 仅切换 `display:none`，canvas 位图 / 滚动位置 / 页码 / 工具栏状态全部保留，切换瞬时完成；隐藏 viewer 通过 `isActive` prop 冻结 IO 可见性上报与滚动页码同步，激活时带回的同页 `pendingGotoPage` 由 useTabRestore 直接清除不跳转。支持左右并排对照两份 PDF。进入并排的入口：拖拽非激活 tab 到阅读区（带 drop-zone 遮罩）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter。首次同时打开 ≥2 个 PDF 时显示一次性并排对照引导气泡（`.split-coachmark`，点「知道了」或 12 秒超时后写入 localStorage 不再复现；气泡本身 `pointer-events:none` 不遮挡操作）。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
+- 多 PDF Tab 同时打开（数量不设固定上限，由内存预算调度休眠，见下），单视图下存活 tab 的 PdfViewer **常驻挂载（keep-alive）**：切 tab 仅切换 `display:none`，canvas 位图 / 滚动位置 / 页码 / 工具栏状态全部保留，切换瞬时完成；隐藏 viewer 通过 `isActive` prop 冻结 IO 可见性上报与滚动页码同步，激活时带回的同页 `pendingGotoPage` 由 useTabRestore 直接清除不跳转。**Tab 休眠（hibernation）**：打开新 tab 时若预测超预算（字节预算 = Σ存活文件大小×2，macOS 400MB / Windows 800MB；或存活 viewer 数 > 15，`services/memoryBudget.ts`），自动休眠最久未激活的隐藏 tab——卸载其 viewer、释放 `pdfCacheRef` 字节缓存，tab 外壳与状态记录（pageNum / scale / viewMode / scrollTop / fileSize / lastActivatedAt）保留；active / 分屏 secondary / 5 分钟内激活过 / 有流式会话 / 共享路径的 tab 受保护，候选耗尽仍超预算则放行。唤醒透明：激活休眠 tab 时同拍复位 `hibernated` + `pendingGotoPage`，viewer 重新挂载走现有冷启动恢复路径（useTabRestore），唤醒同样会按预算顶替休眠他人；另有纯防御性硬上限 100 个 tab。支持左右并排对照两份 PDF。进入并排的入口：拖拽非激活 tab 到阅读区（带 drop-zone 遮罩）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter（目标 tab 休眠时先经 `wakeTab` 唤醒）。首次同时打开 ≥2 个 PDF 时显示一次性并排对照引导气泡（`.split-coachmark`，点「知道了」或 12 秒超时后写入 localStorage 不再复现；气泡本身 `pointer-events:none` 不遮挡操作）。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
 - PDF 本地渲染、文本选区、缩放、页码跳转、单页 / 连续滚动阅读模式。
 - 右侧页码滑轨（PageRail）：替代原生垂直滚动条（CSS 隐藏，水平滚动条保留），拖动 / 悬停时显示页码 tooltip；连续模式拖动直接驱动 scrollTop，单页模式按位置映射页码。
 - Cmd/Ctrl+G 跳页面板（PageJumpPanel）：手动输入页码回车跳转，跳转时阅读区中央闪现大数字页码闪卡（600ms 定时清除）；工具栏页码显示为按钮，点击同样打开跳页面板。
@@ -111,6 +111,7 @@ npm install
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗
 │   │   ├── ToolCallsIndicator.tsx     # 工具调用状态指示器（解读流中展示）
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
+│   │   ├── HibernatedPlaceholder.tsx  # 休眠 tab 在 keep-alive 树里的占位（空 div，保持 key 稳定）
 │   │   ├── ErrorBoundary.tsx          # 顶层错误边界
 │   │   ├── IconSelect.tsx             # 自定义下拉选择器（已配置绿点 + 选中对勾，用于设置页平台/模型）
 │   │   └── Icon.tsx                   # SVG 图标组件
@@ -149,6 +150,7 @@ npm install
 │   ├── services/                      # 业务逻辑与 Tauri 命令封装
 │   │   ├── annotations.ts             # Annotation 类型（含 "comment"）+ CRUD + 持久化调用
 │   │   ├── settings.ts                # 应用设置 CRUD、PlatformId 联合类型、checkApiKey/deleteApiKey
+│   │   ├── memoryBudget.ts            # Tab 休眠内存预算：字节/存活数双预算线、按 filePath 去重记账、LRU 候选选择（纯函数）
 │   │   ├── dictionary.ts              # ECDICT 本地词典查询与下载进度监听
 │   │   ├── llm.ts                     # streamChatCompletion（Channel 桥接后端代理）、Prompt 模板（i18n 化）
 │   │   ├── llmError.ts                # LlmError → 友好中文文案的唯一入口（原始报错只进日志，不进 UI）
@@ -183,7 +185,8 @@ npm install
 │   ├── pdf-large-doc.spec.ts          # 大文档 fit 不偏移 / 深度缩放页码稳定 / 快速切 tab 恢复
 │   ├── pdf-page-jump.spec.ts          # 连续滚动页码跳转 / Cmd+G 跳页面板 / 右侧滑轨拖动
 │   ├── pdf-rapid-zoom.spec.ts         # 快速缩放回归
-│   └── pdf-selection-translate.spec.ts # 选区翻译流程
+│   ├── pdf-selection-translate.spec.ts # 选区翻译流程
+│   └── pdf-tab-budget.spec.ts         # Tab 休眠/唤醒回归 + per-tab 内存成本测量（init script 拨快假时间越过 5 分钟保护窗口）
 ├── scripts/                           # 辅助脚本
 │   ├── gen-sample-pdf.mjs             # 生成测试 PDF
 │   ├── gen-sample-short-pdf.mjs       # 生成短页测试 PDF
@@ -288,6 +291,7 @@ cd src-tauri && cargo test
 
 - `read_pdf_bytes(filePath: string)`：读取 PDF 原始字节。
 - `get_pdf_hash(filePath: string)`：计算 PDF SHA-256 hash。
+- `get_pdf_file_size(filePath: string)`：返回文件字节数（fs metadata，不读内容），供内存预算在加载字节前记账。
 - `load_pdf_data(filePath: string)`：加载 `<AppData>/SpecReader/annotations/{hash}.json`。
 - `save_pdf_data(filePath: string, data: PdfData)`：保存批注与会话引用。
 - `load_session(sessionId: string)`：加载单个会话 JSON。
@@ -349,7 +353,7 @@ LLM 流量已整体改为 **Rust 后端代理**（`src-tauri/src/llm_proxy.rs`�
 
 ```
 App.tsx（编排层，具体状态已下沉到 hooks）
-├── useTabs：tabs / activeTabId / secondaryTabId   # PDF Tab 状态（单视图 + 并排视图）
+├── useTabs：tabs / activeTabId / secondaryTabId   # PDF Tab 状态（单视图 + 并排视图）+ 休眠调度（addTab 唯一触发点、activateTab/wakeTab/gotoTabPage/关tab顶替时唤醒，`getHibernationContext` 由 App 以 ref 回填 secondary 与流式会话信息）
 ├── usePersistence：annotations / sessions / stashes / selection
 ├── useRightPanelLayout：rightVisible / rightPanelWidth
 ├── useRecentFiles：recentFiles
@@ -475,19 +479,20 @@ runSessionStream（usePersistence.ts）
 
 ### 8.2 E2E 测试
 
-- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 6 个 spec：
+- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 7 个 spec：
   - `app.spec.ts`：主布局、顶部最近文件入口、设置 Modal、面板显隐。
   - `pdf-page-jump.spec.ts`：连续滚动模式下页码跳转正确性、Cmd/Ctrl+G 跳页面板（输入回车跳转 + 闪卡）、右侧滑轨拖动跳页，使用 mock 的 Tauri `invoke` 返回 PDF 字节。
   - `multi-tab-state.spec.ts`：多 tab 页码/批注隔离、关闭 tab 后状态保持。
   - `pdf-large-doc.spec.ts`：>50 页大文档回归——适合宽度不横向偏移、深度缩放页码不抖动、快速切换 tab 恢复页码（fixtures 含 `gen-sample-long-pdf.mjs` 生成的 60 页 PDF）。
   - `pdf-rapid-zoom.spec.ts`：快速缩放回归。
   - `pdf-selection-translate.spec.ts`：选区翻译流程。
+  - `pdf-tab-budget.spec.ts`：Tab 休眠/唤醒回归（字节预算与存活 viewer 数两条预算线、唤醒后页码恢复）+ per-tab 内存成本测量；init script 在每次 `get_pdf_hash` 时拨快假时间 6 分钟，越过 5 分钟休眠保护窗口。
 - 单实例与文件关联需在打包后的安装包上手动验证，E2E 较难覆盖。
 
 ### 8.3 后端测试
 
 - `src-tauri/src/lib.rs` 包含 `#[cfg(test)]` 模块。
-- 覆盖：hash 计算、annotation 路径确定性、批注持久化往返、旧格式兼容、会话 CRUD、session id 路径穿越防护、PDF 路径授权、原子文件写入、最近文件 pinned/lastPage 字段兼容、`check_files_exist` 存在性判断、`check_dictionary` / `lookup_word` 非阻塞 I/O。
+- 覆盖：hash 计算、文件大小 metadata 读取、annotation 路径确定性、批注持久化往返、旧格式兼容、会话 CRUD、session id 路径穿越防护、PDF 路径授权、原子文件写入、最近文件 pinned/lastPage 字段兼容、`check_files_exist` 存在性判断、`check_dictionary` / `lookup_word` 非阻塞 I/O。
 - `src-tauri/src/secure_storage.rs` 包含 `MemoryStorage` 测试实现，覆盖 API Key 钥匙串存取、失败降级。
 - 纯逻辑与 `tauri::AppHandle` 解耦，便于测试。
 
@@ -576,6 +581,7 @@ cd src-tauri && cargo test
 
 - `docs/PRD.md`：产品需求、MVP 范围、数据模型。
 - `docs/AGENT_TOOLS_DESIGN.md`：完整目标架构（Tools、Clause 索引、术语表、测试清单、表格多模态读取）。
+- `docs/TAB_HIBERNATION_DESIGN.md`：Tab 休眠设计（取消固定个数上限、双预算线、LRU 候选选择、唤醒恢复路径）。
 - `docs/LLM_PLATFORM_COMPATIBILITY.md`：各 LLM 平台 OpenAI 兼容性调研（平台预设参考）。
 - `TESTING.md`：详细测试说明与已发现的 bug 修复记录。
 - `README.md`：快速开始与项目简介。

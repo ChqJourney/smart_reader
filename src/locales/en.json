@@ -284,9 +284,6 @@
     "callList": "List open documents",
     "callUnknown": "Unknown tool {{name}}"
   },
-  "tabs": {
-    "maxTabsHint": "You can open up to {{maxTabs}} PDF files at the same time. Please close some tabs first."
-  },
   "confirm": {
     "deleteTitle": "Confirm Delete",
     "deleteExplainBody": "Are you sure you want to delete this interpretation? The source marker and the interpretation record in the right panel will be deleted together."

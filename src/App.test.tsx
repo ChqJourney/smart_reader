@@ -206,6 +206,8 @@ function setupMockInvoke(
           return Promise.resolve({ annotations: [], sessionIds: [] });
         case "get_pdf_hash":
           return Promise.resolve(`hash-${args?.filePath}`);
+        case "get_pdf_file_size":
+          return Promise.resolve(1024 * 1024);
         case "load_session":
           return Promise.resolve(null);
         case "load_settings":
@@ -658,6 +660,9 @@ describe("App", () => {
         }
         if (command === "get_pdf_hash") {
           return Promise.resolve(`hash-${args?.filePath}`);
+        }
+        if (command === "get_pdf_file_size") {
+          return Promise.resolve(1024 * 1024);
         }
         if (command === "load_settings") {
           return Promise.resolve({ ...DEFAULT_SETTINGS });

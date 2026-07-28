@@ -68,6 +68,11 @@ export async function getPdfHash(filePath: string): Promise<string> {
   return await invoke<string>("get_pdf_hash", { filePath });
 }
 
+/** 文件字节数（fs metadata，不读内容），供内存预算在加载字节前记账。 */
+export async function getPdfFileSize(filePath: string): Promise<number> {
+  return await invoke<number>("get_pdf_file_size", { filePath });
+}
+
 export function createAnnotation(
   type: "translate" | "explain" | "stash" | "comment",
   text: string,

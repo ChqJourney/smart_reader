@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { StashItem } from "../services/stash";
 import { InterpretationSession } from "../services/sessions";
 import { copyToClipboard } from "../utils/clipboard";
+import { buildShareMarkdown, exportSessionMarkdown } from "../services/share";
 import { error } from "../services/logs";
 import Icon from "./Icon";
 import MarkdownRenderer from "./MarkdownRenderer";
@@ -75,6 +76,9 @@ export default function AiChatPanel({
   const [sessionScope, setSessionScope] = useState<"current" | "all">(
     "current"
   );
+  // 分享下拉菜单开合
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const shareMenuRef = useRef<HTMLDivElement>(null);
 
   const messagesRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
@@ -208,6 +212,35 @@ export default function AiChatPanel({
     );
   };
 
+  // 分享菜单打开时，点击菜单外任意处关闭
+  useEffect(() => {
+    if (!shareMenuOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (
+        shareMenuRef.current &&
+        !shareMenuRef.current.contains(e.target as Node)
+      ) {
+        setShareMenuOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [shareMenuOpen]);
+
+  const handleShareCopy = () => {
+    if (!activeSession) return;
+    setShareMenuOpen(false);
+    void copyToClipboard(buildShareMarkdown(activeSession)).catch((err) =>
+      error(`Failed to copy share markdown: ${err}`)
+    );
+  };
+
+  const handleShareExport = () => {
+    if (!activeSession) return;
+    setShareMenuOpen(false);
+    void exportSessionMarkdown(activeSession);
+  };
+
   const listedSessions =
     sessionScope === "all" && allSessions ? allSessions : sessions;
   const sortedSessions = useMemo(
@@ -335,6 +368,27 @@ export default function AiChatPanel({
               >
                 <Icon name="copy" size={16} />
               </button>
+              <div className="session-share" ref={shareMenuRef}>
+                <button
+                  onClick={() => setShareMenuOpen((v) => !v)}
+                  className="icon-btn session-share-btn"
+                  aria-label={t("share.share")}
+                  title={t("share.share")}
+                  aria-expanded={shareMenuOpen}
+                >
+                  <Icon name="share" size={16} />
+                </button>
+                {shareMenuOpen && (
+                  <div className="session-share-menu" role="menu">
+                    <button role="menuitem" onClick={handleShareCopy}>
+                      {t("share.copyMarkdown")}
+                    </button>
+                    <button role="menuitem" onClick={handleShareExport}>
+                      {t("share.exportMarkdown")}
+                    </button>
+                  </div>
+                )}
+              </div>
               {onDeleteSession && (
                 <button
                   onClick={() => onDeleteSession(activeSession.id)}

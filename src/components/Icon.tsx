@@ -41,7 +41,8 @@ export type IconName =
   | "maximize"
   | "restore"
   | "copy"
-  | "comment";
+  | "comment"
+  | "share";
 
 interface IconProps {
   name: IconName;
@@ -698,6 +699,41 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinejoin="round"
+      />
+    </>
+  ),
+  share: (
+    <>
+      <circle
+        cx="5"
+        cy="10"
+        r="2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <circle
+        cx="14.5"
+        cy="4.5"
+        r="2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <circle
+        cx="14.5"
+        cy="15.5"
+        r="2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M6.8 8.9l6-3.3M6.8 11.1l6 3.3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
       />
     </>
   ),

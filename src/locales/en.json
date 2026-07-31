@@ -73,6 +73,14 @@
     "copyAll": "Copy all",
     "copyMessage": "Copy"
   },
+  "share": {
+    "share": "Share",
+    "copyMarkdown": "Copy Markdown",
+    "exportMarkdown": "Export Markdown file",
+    "defaultTitle": "Standard Interpretation",
+    "sourceRef": "—— {{fileName}} · P.{{page}}",
+    "followUpLine": "**Follow-up**: {{content}}"
+  },
   "stash": {
     "tabLabel": "Stash ({{count}})",
     "add": "Add to Stash",

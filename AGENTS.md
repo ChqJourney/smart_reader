@@ -27,6 +27,7 @@
 - 解读生成蓝色标记（生成中带呼吸态），点击标记打开 InterpretPopup 内联展示解读结果（流式/错误态、原文折叠、查看解读/重新解读/删除）；右侧面板展示可点击跳转的解读记录（页码+类型徽章+LLM 一句话摘要，支持「当前文档/全部文档」过滤与面板内删除会话），支持多轮追问。
 - 自定义解读：把多个暂存片段一次性发给 LLM。暂存区按钮常驻显示片段数量并直达弹窗；解读要求弹窗内置可勾选片段清单（默认全选）与解读方式预设下拉（选中即把预定义 prompt 填入输入框，可继续编辑，手动编辑后回到「自由提问」，模板文案在 locales 的 `customInterpret.presets.*` 段），仅能通过「取消」/「发送」关闭；暂存不落盘为有意设计。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
+- 解读 / 自定义解读会话可分享：会话头部「分享」下拉支持复制结构化 Markdown 到剪贴板或导出 .md 文件（原文片段以引用块 + 来源行展示，跳过模板 prompt / tool 消息 / 思考内容，见 `services/share.ts`）。
 - 最近文件下拉面板：置顶常用标准、按文件名/路径搜索、显示目录/相对时间/上次读到的页码、失效文件置灰、单条移除与两段式清空、从列表直接在分屏打开对照（快捷键 Ctrl/Cmd+Shift+O 开合面板）。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
 - 解读 / 自定义解读 / 追问时启用 **Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文（`list_open_pdfs`、`read_pdf_page`、`search_in_pdf`），辅助验证条款引用与跨页内容。
@@ -157,6 +158,7 @@ npm install
 │   │   ├── pdfTools.ts                # Agent Tools 执行层（瞬态 ToolSession）
 │   │   ├── recentFiles.ts             # 最近文件 CRUD + 文件存在性检查
 │   │   ├── sessions.ts                # 解读会话数据结构与管理
+│   │   ├── share.ts                   # 会话分享：buildShareMarkdown 纯函数（引用块原文+来源行+正文）+ 导出 .md
 │   │   ├── stash.ts                   # 暂存片段数据结构与管理
 │   │   ├── selection.ts               # SelectionState 类型
 │   │   ├── dialog.ts                  # plugin-dialog 确认/消息框封装
@@ -300,6 +302,7 @@ cd src-tauri && cargo test
 - `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 悬停翻译开关 + 日志级别）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表（`RecentFile` 含 `pinned` 置顶与 `lastPage` 阅读页码字段，旧数据通过 `#[serde(default)]` 兼容）。
 - `check_files_exist(paths: string[])`：批量检查文件是否仍存在于磁盘，最近文件面板用它置灰已移动/删除的条目。
+- `export_text_file(file_path: string, content: string)`：把用户经系统保存对话框选定的任意路径写入文本文件（解读分享导出 .md 使用，原子写入，不走 PDF 授权白名单）。
 - `open_path(path: string)`：仅允许打开 `http://` / `https://` URL，禁止本地文件路径与目录。
 - `open_logs_dir()`：打开应用日志目录，供用户导出排查。
 - `check_dictionary()`：检查本地 ECDICT 词典是否存在及大小。

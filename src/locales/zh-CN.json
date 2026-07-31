@@ -73,6 +73,14 @@
     "copyAll": "复制全部",
     "copyMessage": "复制"
   },
+  "share": {
+    "share": "分享",
+    "copyMarkdown": "复制 Markdown",
+    "exportMarkdown": "导出 Markdown 文件",
+    "defaultTitle": "标准解读",
+    "sourceRef": "—— {{fileName}} · P.{{page}}",
+    "followUpLine": "**追问**：{{content}}"
+  },
   "stash": {
     "tabLabel": "暂存区 ({{count}})",
     "add": "加入暂存",

@@ -238,6 +238,7 @@ pub fn run() {
             load_recent_files,
             save_recent_files,
             check_files_exist,
+            export_text_file,
             check_dictionary,
             download_dictionary,
             lookup_word,
@@ -329,6 +330,26 @@ async fn authorize_pdf_path(
     }
     state.authorize_path(std::path::Path::new(&file_path));
     Ok(())
+}
+
+/// 导出用户可见文本文件（如分享出去的解读 Markdown）到系统保存对话框选定的
+/// 任意路径。与批注/会话写入不同，该路径由用户显式选择，不走 PDF 授权白名单。
+#[tauri::command]
+fn export_text_file(file_path: String, content: String) -> Result<(), String> {
+    export_text_file_core(&file_path, &content)
+}
+
+fn export_text_file_core(file_path: &str, content: &str) -> Result<(), String> {
+    let path = PathBuf::from(file_path);
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            return Err(format!(
+                "Export directory does not exist: {}",
+                parent.display()
+            ));
+        }
+    }
+    atomic_write(&path, content.as_bytes()).map_err(|e| format!("Failed to export file: {}", e))
 }
 
 #[cfg(test)]
@@ -1702,6 +1723,27 @@ mod tests {
         assert!(validate_open_url("file:///etc/passwd").is_err());
         assert!(validate_open_url("/path/to/file.pdf").is_err());
         assert!(validate_open_url("../settings.json").is_err());
+    }
+
+    #[test]
+    fn export_text_file_writes_content_to_user_selected_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("分享 解读.md");
+
+        export_text_file_core(path.to_str().unwrap(), "# 标题\n\n正文").unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "# 标题\n\n正文");
+        assert!(!path.with_extension("tmp").exists());
+    }
+
+    #[test]
+    fn export_text_file_rejects_missing_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("no-such-dir").join("out.md");
+
+        let result = export_text_file_core(path.to_str().unwrap(), "content");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
     }
 
     // H-2: atomic file writes.

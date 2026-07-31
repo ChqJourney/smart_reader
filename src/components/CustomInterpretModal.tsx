@@ -1,7 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useModal } from "../hooks/useModal";
 import { StashItem } from "../services/stash";
+import IconSelect from "./IconSelect";
 import "./CustomInterpretModal.css";
 
 interface CustomInterpretModalProps {
@@ -15,6 +16,15 @@ interface CustomInterpretModalProps {
 
 const TEXT_TRUNCATE_LEN = 100;
 
+/** 预定义解读方式（模板文案在 locales 的 customInterpret.presets.* 段） */
+const PRESET_IDS = [
+  "summarize",
+  "testRequirements",
+  "clauseRelations",
+  "terminology",
+  "complianceChecklist",
+] as const;
+
 export default function CustomInterpretModal({
   stashes,
   initialSelectedIds,
@@ -23,6 +33,8 @@ export default function CustomInterpretModal({
 }: CustomInterpretModalProps) {
   const { t } = useTranslation();
   const [prompt, setPrompt] = useState("");
+  // 当前选中的解读方式预设；手动编辑 prompt 后回到 "custom"（自由提问）。
+  const [presetId, setPresetId] = useState<string>("custom");
   // 进入弹窗即完成「选择模式」：默认全选（或沿用面板选择模式的勾选），
   // 用户在清单上直接调整，不必先回面板勾选。
   const [selectedIds, setSelectedIds] = useState<Set<string>>(
@@ -34,6 +46,14 @@ export default function CustomInterpretModal({
     onClose,
     closeOnEscape: false,
   });
+
+  // useModal 的焦点陷阱会把焦点移到弹窗内 DOM 序第一个可聚焦元素（清单首个
+  // checkbox），覆盖 textarea 的 autoFocus，导致弹窗打开后直接打字无反应。
+  // 此 effect 在其之后运行，把焦点强制放回输入框。
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
 
   const toggleSelected = (id: string) => {
     setSelectedIds((prev) => {
@@ -52,8 +72,20 @@ export default function CustomInterpretModal({
     setPrompt("");
   };
 
+  const handlePresetChange = (id: string) => {
+    setPresetId(id);
+    if (id === "custom") return;
+    setPrompt(t(`customInterpret.presets.${id}.prompt`));
+  };
+
+  const handlePromptChange = (value: string) => {
+    setPrompt(value);
+    setPresetId("custom");
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    // isComposing：中文输入法组词中按 Enter 是确认候选词，不应触发发送。
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       handleSubmit();
     }
@@ -97,9 +129,26 @@ export default function CustomInterpretModal({
             );
           })}
         </div>
+        <div className="modal-preset-row">
+          <span className="modal-preset-label">
+            {t("customInterpret.presetLabel")}
+          </span>
+          <IconSelect
+            value={presetId}
+            options={[
+              { value: "custom", label: t("customInterpret.presets.custom") },
+              ...PRESET_IDS.map((id) => ({
+                value: id,
+                label: t(`customInterpret.presets.${id}.label`),
+              })),
+            ]}
+            onChange={handlePresetChange}
+          />
+        </div>
         <textarea
+          ref={textareaRef}
           value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
+          onChange={(e) => handlePromptChange(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder={t("customInterpret.placeholder")}
           rows={4}

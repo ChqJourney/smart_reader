@@ -103,7 +103,31 @@
     "titleWithCount": "自定义解读（{{count}} 个片段）",
     "hint": "基于 {{count}} 个选中片段进行解读，可在下方清单中勾选调整",
     "placeholder": "输入你的解读要求...",
-    "selectionHint": "将所选内容加入暂存，并与其他暂存片段一起发起自定义解读"
+    "selectionHint": "将所选内容加入暂存，并与其他暂存片段一起发起自定义解读",
+    "presetLabel": "解读方式",
+    "presets": {
+      "custom": "自由提问",
+      "summarize": {
+        "label": "总结要点",
+        "prompt": "请总结选中片段的核心内容，按要点逐条列出。"
+      },
+      "testRequirements": {
+        "label": "提炼测试要求与判定准则",
+        "prompt": "请从选中片段中提炼所有可执行的测试要求及其判定准则，按条款逐条列出，并注明原文出处。"
+      },
+      "clauseRelations": {
+        "label": "梳理条款逻辑关系",
+        "prompt": "请梳理选中片段中各条款之间的逻辑关系（如引用、例外、优先级），并说明实际执行时的影响。"
+      },
+      "terminology": {
+        "label": "解释关键术语",
+        "prompt": "请解释选中片段中的关键术语和定义，并结合上下文说明其在符合性判定中的作用。"
+      },
+      "complianceChecklist": {
+        "label": "生成符合性检查要点",
+        "prompt": "请基于选中片段生成一份符合性检查要点清单，用于核查产品或流程是否满足标准要求。"
+      }
+    }
   },
   "translate": {
     "title": "翻译",

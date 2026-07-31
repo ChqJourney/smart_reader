@@ -89,6 +89,24 @@
   word-break: break-word;
 }
 
+.modal-preset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.modal-preset-label {
+  font-size: 0.85rem;
+  color: #424242;
+  flex-shrink: 0;
+}
+
+.modal-preset-row .icon-select {
+  flex: 1;
+  min-width: 0;
+}
+
 .modal-content textarea {
   width: 100%;
   padding: 10px 12px;

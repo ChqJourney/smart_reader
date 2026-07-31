@@ -219,4 +219,88 @@ describe("CustomInterpretModal", () => {
 
     expect(onSubmit).toHaveBeenCalledWith("追问", stashes);
   });
+
+  it("focuses the prompt textarea on open (not the first checkbox)", () => {
+    render(
+      <CustomInterpretModal
+        stashes={[makeStash("stash-1", "text")]}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(document.activeElement).toBe(
+      screen.getByPlaceholderText(/输入你的解读要求/)
+    );
+  });
+
+  it("does not submit on Enter while IME composition is active", () => {
+    const onSubmit = vi.fn();
+    const stashes = [makeStash("stash-1", "text")];
+    render(
+      <CustomInterpretModal
+        stashes={stashes}
+        onSubmit={onSubmit}
+        onClose={vi.fn()}
+      />
+    );
+
+    const input = screen.getByPlaceholderText(/输入你的解读要求/);
+    fireEvent.change(input, { target: { value: "请分析" } });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  it("fills the textarea with the preset prompt when a preset is selected", () => {
+    const onSubmit = vi.fn();
+    const stashes = [makeStash("stash-1", "text")];
+    render(
+      <CustomInterpretModal
+        stashes={stashes}
+        onSubmit={onSubmit}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "自由提问" }));
+    fireEvent.click(
+      screen.getByRole("option", { name: "提炼测试要求与判定准则" })
+    );
+
+    const input = screen.getByPlaceholderText(/输入你的解读要求/);
+    expect(input).toHaveValue(
+      "请从选中片段中提炼所有可执行的测试要求及其判定准则，按条款逐条列出，并注明原文出处。"
+    );
+
+    // 预设填入后可直接发送
+    fireEvent.click(screen.getByRole("button", { name: /发送/i }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      "请从选中片段中提炼所有可执行的测试要求及其判定准则，按条款逐条列出，并注明原文出处。",
+      stashes
+    );
+  });
+
+  it("flips the select back to custom when the preset text is edited", () => {
+    render(
+      <CustomInterpretModal
+        stashes={[makeStash("stash-1", "text")]}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "自由提问" }));
+    fireEvent.click(screen.getByRole("option", { name: "总结要点" }));
+    expect(
+      screen.getByRole("button", { name: "总结要点" })
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/输入你的解读要求/), {
+      target: { value: "改过的要求" },
+    });
+    expect(
+      screen.getByRole("button", { name: "自由提问" })
+    ).toBeInTheDocument();
+  });
 });

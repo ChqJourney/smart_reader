@@ -103,7 +103,31 @@
     "titleWithCount": "Custom Interpret ({{count}} snippets)",
     "hint": "Interpret based on {{count}} selected snippets; adjust the selection in the checklist below",
     "placeholder": "Enter your interpretation request...",
-    "selectionHint": "Stash the selection and start a custom interpretation together with other stashed snippets"
+    "selectionHint": "Stash the selection and start a custom interpretation together with other stashed snippets",
+    "presetLabel": "Interpretation mode",
+    "presets": {
+      "custom": "Free-form question",
+      "summarize": {
+        "label": "Summarize key points",
+        "prompt": "Summarize the core content of the selected snippets as a list of key points."
+      },
+      "testRequirements": {
+        "label": "Extract test requirements & criteria",
+        "prompt": "Extract all actionable test requirements and their acceptance criteria from the selected snippets, listed clause by clause with references to the source text."
+      },
+      "clauseRelations": {
+        "label": "Map clause relationships",
+        "prompt": "Map the logical relationships between the clauses in the selected snippets (e.g. references, exceptions, precedence) and explain their practical impact."
+      },
+      "terminology": {
+        "label": "Explain key terminology",
+        "prompt": "Explain the key terms and definitions in the selected snippets, and describe their role in conformity assessment based on the context."
+      },
+      "complianceChecklist": {
+        "label": "Generate compliance checklist",
+        "prompt": "Generate a compliance checklist based on the selected snippets for verifying whether a product or process meets the standard's requirements."
+      }
+    }
   },
   "translate": {
     "title": "Translate",

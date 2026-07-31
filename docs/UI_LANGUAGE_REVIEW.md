@@ -7,13 +7,13 @@
 
 ## 总评
 
-| 维度 | 评分 | 说明 |
-|---|---|---|
-| 领域术语（标准/条款/解读/翻译） | ✅ 优秀 | 完全贴合工程师语言，无 jargon |
-| 日常操作文案（打开/搜索/暂存/批注） | ✅ 良好 | 中文清晰、有 placeholder 引导 |
-| 配置环节术语 | ⚠️ 较差 | `Model`/`API Base URL`/`API Key` 三个英文裸标签 |
-| 错误反馈 | ❌ 差 | 设置页把英文原始报错直接透传显示 |
-| 交互可发现性（快捷键/窗口控制） | ⚠️ 一般 | 部分快捷键无 UI 提示 |
+| 维度                                | 评分    | 说明                                            |
+| ----------------------------------- | ------- | ----------------------------------------------- |
+| 领域术语（标准/条款/解读/翻译）     | ✅ 优秀 | 完全贴合工程师语言，无 jargon                   |
+| 日常操作文案（打开/搜索/暂存/批注） | ✅ 良好 | 中文清晰、有 placeholder 引导                   |
+| 配置环节术语                        | ⚠️ 较差 | `Model`/`API Base URL`/`API Key` 三个英文裸标签 |
+| 错误反馈                            | ❌ 差   | 设置页把英文原始报错直接透传显示                |
+| 交互可发现性（快捷键/窗口控制）     | ⚠️ 一般 | 部分快捷键无 UI 提示                            |
 
 **一句话结论**：产品方向正确（首次配置向导体验很好），但「设置页」和「错误提示」两处没有复用向导的「友好中文 + 操作指引」风格，是当前最大的非程序员友好度短板。
 
@@ -25,12 +25,12 @@
 
 源码 `zh-CN.json` 实测值：
 
-| Key | 当前显示 | 建议改为 | 理由 |
-|---|---|---|---|
-| `settings.apiBaseUrl` | `API Base URL` | `API 地址（接口地址）` | 工程师不知 "Base URL" 是何物 |
-| `settings.model` | `Model` | `模型名称` | 纯英文单词最刺眼 |
-| `settings.apiKey` | `API Key` | `API 密钥` | "Key" 程序员黑话 |
-| `settings.llmApi` | `大模型API KEY` | `大模型 API 密钥` | 大小写混排不专业 |
+| Key                   | 当前显示        | 建议改为               | 理由                         |
+| --------------------- | --------------- | ---------------------- | ---------------------------- |
+| `settings.apiBaseUrl` | `API Base URL`  | `API 地址（接口地址）` | 工程师不知 "Base URL" 是何物 |
+| `settings.model`      | `Model`         | `模型名称`             | 纯英文单词最刺眼             |
+| `settings.apiKey`     | `API Key`       | `API 密钥`             | "Key" 程序员黑话             |
+| `settings.llmApi`     | `大模型API KEY` | `大模型 API 密钥`      | 大小写混排不专业             |
 
 > 对比：首次向导里 `wizard.apiKey` 同样显示 `API Key`，应一并统一。
 
@@ -80,6 +80,7 @@
 矛盾点：同名错误在 `SetupWizard.describeError()` 里**已写成友好中文**（"密钥无效或未授权…" / "网络无法连接…"）。同一类错误，向导友好、设置页却抛英文原始信息，**两处不一致，且设置页反而更糟**。
 
 其他透传点：
+
 - `SettingsModal` 兜底 `JSON.stringify(err)` 可能把整段 JSON 抛给用户。
 - `TranslatePopup` 直接 `setError(message)` 显示上游错误字符串。
 
@@ -99,14 +100,14 @@
 
 ### 🟡 P1 — 快捷键不可见
 
-| 快捷键 | 功能 | UI 是否告知 |
-|---|---|---|
-| Ctrl/Cmd+G | 跳页 | ✅ 有提示（好） |
-| Alt+Enter | 最近文件并排打开 | ✅ 有提示（好） |
-| Ctrl/Cmd+F | 搜索 | ❌ 搜索框仅占位符"搜索 PDF 内容" |
-| Ctrl/Cmd+Shift+O | 最近文件面板 | ❌ 触发按钮无标注 |
-| Ctrl+滚轮 | 缩放 | ❌ 无提示 |
-| PageUp/PageDown | 翻页 | ❌ 无提示 |
+| 快捷键           | 功能             | UI 是否告知                      |
+| ---------------- | ---------------- | -------------------------------- |
+| Ctrl/Cmd+G       | 跳页             | ✅ 有提示（好）                  |
+| Alt+Enter        | 最近文件并排打开 | ✅ 有提示（好）                  |
+| Ctrl/Cmd+F       | 搜索             | ❌ 搜索框仅占位符"搜索 PDF 内容" |
+| Ctrl/Cmd+Shift+O | 最近文件面板     | ❌ 触发按钮无标注                |
+| Ctrl+滚轮        | 缩放             | ❌ 无提示                        |
+| PageUp/PageDown  | 翻页             | ❌ 无提示                        |
 
 > 建议：搜索框 placeholder 加「（Ctrl/Cmd+F）」；缩放、翻页等在首次使用或帮助里说明；保持"hover tooltip 告知"的现有好做法推广到所有入口。
 
@@ -133,18 +134,13 @@
 ## 六、整改优先级（给开发者）
 
 **P0（立即改，影响核心可用性）**
+
 1. 设置页 `Model` / `API Base URL` / `API Key` 三标签汉化（及 `大模型API KEY` 大小写统一）。
 2. 错误透传改为友好中文（复用 `SetupWizard.describeError` 文案，原始报错入日志不显示）。
 
-**P1**
-3. `tokens` / 日志级别 汉化或隐藏到高级区。
-4. 把 `SetupWizard` 等缺失文本收编进 `zh-CN.json`。
-5. 关键失败（更新 / 词典下载）给明确下一步反馈。
+**P1** 3. `tokens` / 日志级别 汉化或隐藏到高级区。4. 把 `SetupWizard` 等缺失文本收编进 `zh-CN.json`。5. 关键失败（更新 / 词典下载）给明确下一步反馈。
 
-**P2**
-6. 快捷键在 UI 可见化（搜索框、缩放、翻页）。
-7. 窗口控制按钮加 tooltip。
-8. 复杂交互（并排对照）首次轻引导。
+**P2** 6. 快捷键在 UI 可见化（搜索框、缩放、翻页）。7. 窗口控制按钮加 tooltip。8. 复杂交互（并排对照）首次轻引导。
 
 ---
 
@@ -159,26 +155,26 @@
 
 ## 七、复核核实结果（2026-07-27，对照源码逐条验证）
 
-| 报告论断 | 结论 | 证据 |
-|---|---|---|
-| 设置页 `API Base URL` / `Model` / `API Key` / `大模型API KEY` 裸标签 | ✅ 属实 | `src/locales/zh-CN.json:142-144,137` |
-| 向导 `wizard.apiKey` 同样显示 `API Key` | ⚠️ 部分属实 | `wizard.apiKey` 仅作输入框 aria-label（`SetupWizard.tsx:376`）；用户可见的 `API Key` 出现在第 2 步标题「填入 {{platform}} 的 API Key」（`SetupWizard.tsx:351`）。结论不变，应一并汉化 |
-| 思考指示器暴露 `tokens` | ✅ 属实 | `ThinkingIndicator.tsx:26-31`，defaultValue 内联，locale 无 `thinking.*` |
-| 上下文 Widget 暴露 `tokens` | ⚠️ 需补充 | `ContextWidget.tsx:52` 屏幕上只显示 `NN%`；`tokens` 字眼仅在悬停 tooltip（`ContextWidget.tsx:37-42`）。危害比报告描述的略小 |
-| 日志级别全大写英文 + 「Release 默认 Warn」 | ✅ 属实 | `SettingsModal.tsx:980`、`zh-CN.json:187` |
-| 6 个错误 key 值为 `{{defaultValue}}`，设置页透传原始报错 | ✅ 属实 | `zh-CN.json:153-158`、`SettingsModal.tsx:387-414`（i18next 会把 `err.detail` 插值进 `{{defaultValue}}` 原样返回） |
-| `SettingsModal` 兜底 `JSON.stringify(err)` | ✅ 属实 | `SettingsModal.tsx:408-412` |
-| 向导 `describeError` 已是友好中文，两处不一致 | ✅ 属实 | `SetupWizard.tsx:135-178` |
-| `TranslatePopup` 直接显示上游错误字符串 | ✅ 属实 | `TranslatePopup.tsx:106,173` |
-| `wizard.*` / `thinking.*` / `contextWidget.*` 未进语言包 | ✅ 属实 | `zh-CN.json` 全文无这些前缀 |
-| `settings.thinkingMode` / `maxToolRounds` 仅在组件 defaultValue | ✅ 属实 | `SettingsModal.tsx:729-755,869-891`，locale 中确无这些 key |
-| 启动自动更新检查失败仅记日志 | ✅ 属实 | `App.tsx:144-149`（但见八-2：手动检查路径不同） |
-| 词典下载失败仅一句话 | ✅ 属实 | `zh-CN.json:212`「词典下载失败」 |
-| 退出落盘 3 秒超时仅日志 | ✅ 属实 | `App.tsx:477`（3000ms race 超时后放弃等待） |
-| 快捷键提示：跳页 ✅ / Alt+Enter ✅ / 搜索框 ❌ / 最近文件触发钮 ❌ / Ctrl+滚轮 ❌ / PageUp·Down ❌ | ✅ 属实 | `zh-CN.json:27,114,40`；`RecentFilesBar.tsx:296-297`（title 仅「最近打开的文件」）；缩放按钮 title 仅「缩小/放大」 |
-| 窗口控制按钮 aria-label / tooltip「需确认」 | ✅ 已确认，无需整改 | `TitleBar.tsx:119-136` 三个按钮均有 `aria-label` + `title`，且文案已中文化（`zh-CN.json:11-13`） |
-| 「更多设置」折叠思考模式 / 最大工具调用次数 | ⚠️ 需修正 | 「更多设置」内只有思考模式（`SettingsModal.tsx:711-761`）；最大工具调用次数在「智能查阅文档」开启后常驻显示（`SettingsModal.tsx:867-893`），不在折叠区内 |
-| 带示例的缩放 placeholder 范式 | ✅ 属实 | `zh-CN.json:32` |
+| 报告论断                                                                                           | 结论                | 证据                                                                                                                                                                                  |
+| -------------------------------------------------------------------------------------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 设置页 `API Base URL` / `Model` / `API Key` / `大模型API KEY` 裸标签                               | ✅ 属实             | `src/locales/zh-CN.json:142-144,137`                                                                                                                                                  |
+| 向导 `wizard.apiKey` 同样显示 `API Key`                                                            | ⚠️ 部分属实         | `wizard.apiKey` 仅作输入框 aria-label（`SetupWizard.tsx:376`）；用户可见的 `API Key` 出现在第 2 步标题「填入 {{platform}} 的 API Key」（`SetupWizard.tsx:351`）。结论不变，应一并汉化 |
+| 思考指示器暴露 `tokens`                                                                            | ✅ 属实             | `ThinkingIndicator.tsx:26-31`，defaultValue 内联，locale 无 `thinking.*`                                                                                                              |
+| 上下文 Widget 暴露 `tokens`                                                                        | ⚠️ 需补充           | `ContextWidget.tsx:52` 屏幕上只显示 `NN%`；`tokens` 字眼仅在悬停 tooltip（`ContextWidget.tsx:37-42`）。危害比报告描述的略小                                                           |
+| 日志级别全大写英文 + 「Release 默认 Warn」                                                         | ✅ 属实             | `SettingsModal.tsx:980`、`zh-CN.json:187`                                                                                                                                             |
+| 6 个错误 key 值为 `{{defaultValue}}`，设置页透传原始报错                                           | ✅ 属实             | `zh-CN.json:153-158`、`SettingsModal.tsx:387-414`（i18next 会把 `err.detail` 插值进 `{{defaultValue}}` 原样返回）                                                                     |
+| `SettingsModal` 兜底 `JSON.stringify(err)`                                                         | ✅ 属实             | `SettingsModal.tsx:408-412`                                                                                                                                                           |
+| 向导 `describeError` 已是友好中文，两处不一致                                                      | ✅ 属实             | `SetupWizard.tsx:135-178`                                                                                                                                                             |
+| `TranslatePopup` 直接显示上游错误字符串                                                            | ✅ 属实             | `TranslatePopup.tsx:106,173`                                                                                                                                                          |
+| `wizard.*` / `thinking.*` / `contextWidget.*` 未进语言包                                           | ✅ 属实             | `zh-CN.json` 全文无这些前缀                                                                                                                                                           |
+| `settings.thinkingMode` / `maxToolRounds` 仅在组件 defaultValue                                    | ✅ 属实             | `SettingsModal.tsx:729-755,869-891`，locale 中确无这些 key                                                                                                                            |
+| 启动自动更新检查失败仅记日志                                                                       | ✅ 属实             | `App.tsx:144-149`（但见八-2：手动检查路径不同）                                                                                                                                       |
+| 词典下载失败仅一句话                                                                               | ✅ 属实             | `zh-CN.json:212`「词典下载失败」                                                                                                                                                      |
+| 退出落盘 3 秒超时仅日志                                                                            | ✅ 属实             | `App.tsx:477`（3000ms race 超时后放弃等待）                                                                                                                                           |
+| 快捷键提示：跳页 ✅ / Alt+Enter ✅ / 搜索框 ❌ / 最近文件触发钮 ❌ / Ctrl+滚轮 ❌ / PageUp·Down ❌ | ✅ 属实             | `zh-CN.json:27,114,40`；`RecentFilesBar.tsx:296-297`（title 仅「最近打开的文件」）；缩放按钮 title 仅「缩小/放大」                                                                    |
+| 窗口控制按钮 aria-label / tooltip「需确认」                                                        | ✅ 已确认，无需整改 | `TitleBar.tsx:119-136` 三个按钮均有 `aria-label` + `title`，且文案已中文化（`zh-CN.json:11-13`）                                                                                      |
+| 「更多设置」折叠思考模式 / 最大工具调用次数                                                        | ⚠️ 需修正           | 「更多设置」内只有思考模式（`SettingsModal.tsx:711-761`）；最大工具调用次数在「智能查阅文档」开启后常驻显示（`SettingsModal.tsx:867-893`），不在折叠区内                              |
+| 带示例的缩放 placeholder 范式                                                                      | ✅ 属实             | `zh-CN.json:32`                                                                                                                                                                       |
 
 ---
 

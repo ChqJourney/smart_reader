@@ -55,9 +55,30 @@ function makeOptions() {
     width: 800,
     height: 600,
   });
-  const page1 = makeWrapper({ top: 0, bottom: 300, left: 0, right: 800, width: 800, height: 300 });
-  const page2 = makeWrapper({ top: 324, bottom: 624, left: 0, right: 800, width: 800, height: 300 });
-  const page3 = makeWrapper({ top: 648, bottom: 948, left: 0, right: 800, width: 800, height: 300 });
+  const page1 = makeWrapper({
+    top: 0,
+    bottom: 300,
+    left: 0,
+    right: 800,
+    width: 800,
+    height: 300,
+  });
+  const page2 = makeWrapper({
+    top: 324,
+    bottom: 624,
+    left: 0,
+    right: 800,
+    width: 800,
+    height: 300,
+  });
+  const page3 = makeWrapper({
+    top: 648,
+    bottom: 948,
+    left: 0,
+    right: 800,
+    width: 800,
+    height: 300,
+  });
   const pageWrapperRefs = {
     current: [page1, page2, page3],
   } as React.MutableRefObject<(HTMLDivElement | null)[]>;
@@ -92,10 +113,12 @@ describe("useZoomAnchor", () => {
     // requestAnimationFrame fires sync-ish by default in jsdom; we want the
     // restore effect's rAF callback to run inside act() so the test can
     // observe onRestored without flakiness.
-    vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb: FrameRequestCallback) => {
-      cb(0);
-      return 0;
-    });
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation(
+      (cb: FrameRequestCallback) => {
+        cb(0);
+        return 0;
+      }
+    );
   });
 
   afterEach(() => {
@@ -124,16 +147,37 @@ describe("useZoomAnchor", () => {
     // negative-ish region by giving it a small bottom and page2 starting at 0.
     const c = base.continuousContainerRef.current!;
     (page1 as any).getBoundingClientRect = () => ({
-      top: -300, bottom: 0, left: 0, right: 800, width: 800, height: 300,
-      x: 0, y: -300, toJSON: () => ({}),
+      top: -300,
+      bottom: 0,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 300,
+      x: 0,
+      y: -300,
+      toJSON: () => ({}),
     });
     (page2 as any).getBoundingClientRect = () => ({
-      top: 0, bottom: 300, left: 0, right: 800, width: 800, height: 300,
-      x: 0, y: 0, toJSON: () => ({}),
+      top: 0,
+      bottom: 300,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 300,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
     });
     (c as any).getBoundingClientRect = () => ({
-      top: 0, bottom: 600, left: 0, right: 800, width: 800, height: 600,
-      x: 0, y: 0, toJSON: () => ({}),
+      top: 0,
+      bottom: 600,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
     });
 
     const { result } = renderHook(() => useZoomAnchor(base));
@@ -238,18 +282,39 @@ describe("useZoomAnchor", () => {
     //   = (page2 top relative to container) + 76
     //   = 0 + 76 = 76 (since page2.top=0 in container coords, newPageTopScroll = 0 + container.scrollTop).
     (page2 as any).getBoundingClientRect = () => ({
-      top: 0, bottom: 300, left: 0, right: 800, width: 800, height: 300,
-      x: 0, y: 0, toJSON: () => ({}),
+      top: 0,
+      bottom: 300,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 300,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
     });
     (container as any).getBoundingClientRect = () => ({
-      top: 0, bottom: 600, left: 0, right: 800, width: 800, height: 600,
-      x: 0, y: 0, toJSON: () => ({}),
+      top: 0,
+      bottom: 600,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
     });
     // Force page2 to be the anchor: make page1 fully above viewport top.
     const page1 = base.pageWrapperRefs.current[0]!;
     (page1 as any).getBoundingClientRect = () => ({
-      top: -300, bottom: 0, left: 0, right: 800, width: 800, height: 300,
-      x: 0, y: -300, toJSON: () => ({}),
+      top: -300,
+      bottom: 0,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 300,
+      x: 0,
+      y: -300,
+      toJSON: () => ({}),
     });
 
     // viewportsForScale starts MISMATCHED (old scale), then a new viewport map
@@ -361,13 +426,27 @@ describe("useZoomAnchor", () => {
     // Converting with the STALE viewportsForScale (1.0, mid-zoom-burst) would
     // yield 76 / 1.0 and mis-restore by 38px.
     (page2 as any).getBoundingClientRect = () => ({
-      top: -76, bottom: 224, left: 0, right: 800, width: 800, height: 300,
-      x: 0, y: -76, toJSON: () => ({}),
+      top: -76,
+      bottom: 224,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 300,
+      x: 0,
+      y: -76,
+      toJSON: () => ({}),
     });
     const page1 = base.pageWrapperRefs.current[0]!;
     (page1 as any).getBoundingClientRect = () => ({
-      top: -376, bottom: -76, left: 0, right: 800, width: 800, height: 300,
-      x: 0, y: -376, toJSON: () => ({}),
+      top: -376,
+      bottom: -76,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 300,
+      x: 0,
+      y: -376,
+      toJSON: () => ({}),
     });
 
     const { result, rerender } = renderHook(

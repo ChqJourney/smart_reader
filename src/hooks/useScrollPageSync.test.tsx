@@ -64,9 +64,7 @@ describe("useScrollPageSync", () => {
   it("does not attach a scroll listener in single mode", () => {
     const { base, container } = makeOptions();
     const addSpy = vi.spyOn(container, "addEventListener");
-    renderHook(() =>
-      useScrollPageSync({ ...base, viewMode: "single" })
-    );
+    renderHook(() => useScrollPageSync({ ...base, viewMode: "single" }));
     // In single mode the effect returns early before addEventListener.
     expect(addSpy).not.toHaveBeenCalledWith("scroll", expect.any(Function));
   });
@@ -93,12 +91,26 @@ describe("useScrollPageSync", () => {
     // Scroll so page2's top (324) is closest to viewport top (0): shift
     // page1 fully above and page2 to top=0.
     (page1 as any).getBoundingClientRect = () => ({
-      top: -300, bottom: 0, left: 0, right: 800, width: 800, height: 300,
-      x: 0, y: -300, toJSON: () => ({}),
+      top: -300,
+      bottom: 0,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 300,
+      x: 0,
+      y: -300,
+      toJSON: () => ({}),
     });
     (page2 as any).getBoundingClientRect = () => ({
-      top: 0, bottom: 300, left: 0, right: 800, width: 800, height: 300,
-      x: 0, y: 0, toJSON: () => ({}),
+      top: 0,
+      bottom: 300,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 300,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
     });
 
     // Dispatch a scroll event; the effect's listener reads live geometry.
@@ -146,12 +158,26 @@ describe("useScrollPageSync", () => {
     // is a few px closer than page1's. The dead zone must keep page 1.
     const { base, container, page1, page2 } = makeOptions();
     (page1 as any).getBoundingClientRect = () => ({
-      top: -6, bottom: 294, left: 0, right: 800, width: 800, height: 300,
-      x: 0, y: -6, toJSON: () => ({}),
+      top: -6,
+      bottom: 294,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 300,
+      x: 0,
+      y: -6,
+      toJSON: () => ({}),
     });
     (page2 as any).getBoundingClientRect = () => ({
-      top: 2, bottom: 302, left: 0, right: 800, width: 800, height: 300,
-      x: 0, y: 2, toJSON: () => ({}),
+      top: 2,
+      bottom: 302,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 300,
+      x: 0,
+      y: 2,
+      toJSON: () => ({}),
     });
     renderHook(() => useScrollPageSync(base));
 
@@ -165,12 +191,26 @@ describe("useScrollPageSync", () => {
   it("switches pages once the challenger beats the current page by more than the margin", () => {
     const { base, container, page1, page2 } = makeOptions();
     (page1 as any).getBoundingClientRect = () => ({
-      top: -20, bottom: 280, left: 0, right: 800, width: 800, height: 300,
-      x: 0, y: -20, toJSON: () => ({}),
+      top: -20,
+      bottom: 280,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 300,
+      x: 0,
+      y: -20,
+      toJSON: () => ({}),
     });
     (page2 as any).getBoundingClientRect = () => ({
-      top: 2, bottom: 302, left: 0, right: 800, width: 800, height: 300,
-      x: 0, y: 2, toJSON: () => ({}),
+      top: 2,
+      bottom: 302,
+      left: 0,
+      right: 800,
+      width: 800,
+      height: 300,
+      x: 0,
+      y: 2,
+      toJSON: () => ({}),
     });
     renderHook(() => useScrollPageSync(base));
 

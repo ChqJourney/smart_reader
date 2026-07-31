@@ -218,12 +218,7 @@ export function useZoomAnchor(
         anchorViewportOffsetPx: clientY - containerRect.top,
       };
     },
-    [
-      viewMode,
-      continuousContainerRef,
-      pageWrapperRefs,
-      captureZoomAnchor,
-    ]
+    [viewMode, continuousContainerRef, pageWrapperRefs, captureZoomAnchor]
   );
 
   const zoomTo = useCallback(

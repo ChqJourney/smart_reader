@@ -156,12 +156,18 @@ function giteeUpload(releaseId, filePath, name) {
       "-w",
       "\n%{http_code}",
     ],
-    { encoding: "utf8", timeout: 30 * 60 * 1000, stdio: ["ignore", "pipe", "inherit"] }
+    {
+      encoding: "utf8",
+      timeout: 30 * 60 * 1000,
+      stdio: ["ignore", "pipe", "inherit"],
+    }
   );
   const lines = out.trimEnd().split("\n");
   const status = Number(lines.pop());
   if (status < 200 || status >= 300) {
-    throw new Error(`Gitee 上传 ${name} 失败：HTTP ${status} ${lines.join("\n").slice(0, 300)}`);
+    throw new Error(
+      `Gitee 上传 ${name} 失败：HTTP ${status} ${lines.join("\n").slice(0, 300)}`
+    );
   }
 }
 

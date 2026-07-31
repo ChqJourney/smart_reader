@@ -107,7 +107,9 @@
    * 视频懒加载：滚动进入视口（提前 400px）才设置 src 开始缓冲。
    */
   function initDemoMedia() {
-    const placeholders = document.querySelectorAll(".demo-placeholder[data-demo]");
+    const placeholders = document.querySelectorAll(
+      ".demo-placeholder[data-demo]"
+    );
     if (!placeholders.length || !window.IntersectionObserver) return;
 
     const reduceMotion = window.matchMedia(

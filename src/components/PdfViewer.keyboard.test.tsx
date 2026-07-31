@@ -210,7 +210,10 @@ describe("PdfViewer PageUp/PageDown 翻页", () => {
   });
 
   it("连续模式 PageDown/PageUp 滚动阅读区", async () => {
-    const { container } = await renderViewerAndWaitForPdf(undefined, "continuous");
+    const { container } = await renderViewerAndWaitForPdf(
+      undefined,
+      "continuous"
+    );
     const canvasContainer = container.querySelector(
       ".pdf-canvas-container.continuous"
     ) as HTMLDivElement;

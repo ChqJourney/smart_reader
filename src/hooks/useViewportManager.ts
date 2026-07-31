@@ -168,16 +168,22 @@ export function useViewportManager(
       // scroll-driven re-trigger would cancel the batch and discard every
       // already-fetched entry (docs/REFACTOR_REVIEW_2026-07-17.md P3).
       const settled = await Promise.all(
-        Array.from(pages, async (i): Promise<[number, PageViewportInfo] | null> => {
-          try {
-            const page = await pdf.getPage(i);
-            const vp = page.getViewport({ scale: batchScale });
-            return [i, { width: vp.width, height: vp.height, scale: batchScale }];
-          } catch (err) {
-            logError(`Failed to get viewport for page ${i}: ${err}`);
-            return null;
+        Array.from(
+          pages,
+          async (i): Promise<[number, PageViewportInfo] | null> => {
+            try {
+              const page = await pdf.getPage(i);
+              const vp = page.getViewport({ scale: batchScale });
+              return [
+                i,
+                { width: vp.width, height: vp.height, scale: batchScale },
+              ];
+            } catch (err) {
+              logError(`Failed to get viewport for page ${i}: ${err}`);
+              return null;
+            }
           }
-        })
+        )
       );
       // CRITICAL: bail out if a newer scale change cancelled this batch.
       // Without this, a slow load for an old scale would still write stale
@@ -198,7 +204,11 @@ export function useViewportManager(
             // stability lets memoized PdfPage children skip re-renders, and
             // returning `prev` for a fully unchanged batch avoids a viewer-wide
             // render per IO-driven preload (docs/REFACTOR_REVIEW_2026-07-17.md P2).
-            if (!old || old.width !== info.width || old.height !== info.height) {
+            if (
+              !old ||
+              old.width !== info.width ||
+              old.height !== info.height
+            ) {
               map.set(i, info);
               changed = true;
             }
@@ -378,12 +388,9 @@ export function useViewportManager(
   >(new Map());
   const setPageWrapperRef = useCallback((page: number) => {
     if (!pageWrapperRefCallbacks.current.has(page)) {
-      pageWrapperRefCallbacks.current.set(
-        page,
-        (el: HTMLDivElement | null) => {
-          pageWrapperRefs.current[page - 1] = el;
-        }
-      );
+      pageWrapperRefCallbacks.current.set(page, (el: HTMLDivElement | null) => {
+        pageWrapperRefs.current[page - 1] = el;
+      });
     }
     return pageWrapperRefCallbacks.current.get(page)!;
   }, []);

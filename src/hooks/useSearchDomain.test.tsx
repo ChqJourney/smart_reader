@@ -150,7 +150,13 @@ describe("useSearchDomain", () => {
     ]);
     const goToPageRef = { current: vi.fn() as ((p: number) => void) | null };
     const currentPageRef = { current: 1 };
-    const { result, rerender } = renderSearch(pdf, 1, 1, goToPageRef, currentPageRef);
+    const { result, rerender } = renderSearch(
+      pdf,
+      1,
+      1,
+      goToPageRef,
+      currentPageRef
+    );
 
     act(() => {
       result.current.setSearchOpen(true);
@@ -174,7 +180,13 @@ describe("useSearchDomain", () => {
     ]);
     const goToPageRef = { current: vi.fn() as ((p: number) => void) | null };
     const currentPageRef = { current: 1 };
-    const { result, rerender } = renderSearch(pdf, 1, 1, goToPageRef, currentPageRef);
+    const { result, rerender } = renderSearch(
+      pdf,
+      1,
+      1,
+      goToPageRef,
+      currentPageRef
+    );
 
     act(() => {
       result.current.setSearchOpen(true);
@@ -201,7 +213,13 @@ describe("useSearchDomain", () => {
     const goToPage1 = vi.fn();
     const goToPageRef = { current: goToPage1 as ((p: number) => void) | null };
     const currentPageRef = { current: 1 };
-    const { result, rerender } = renderSearch(pdf, 1, 1, goToPageRef, currentPageRef);
+    const { result, rerender } = renderSearch(
+      pdf,
+      1,
+      1,
+      goToPageRef,
+      currentPageRef
+    );
 
     act(() => {
       result.current.setSearchOpen(true);

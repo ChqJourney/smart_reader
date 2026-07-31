@@ -4,6 +4,7 @@
 > 关联：`src/hooks/useTabs.ts`（休眠调度）、`src/services/memoryBudget.ts`（预算记账）、`src/App.tsx`（pdfCacheRef / keep-alive / HibernatedPlaceholder）、`src/hooks/usePdfDocument.ts`、`src/hooks/useTabRestore.ts`
 >
 > 实施偏差（与下文设计稿的差异）：
+>
 > 1. 设计假设「文件大小在 addTab 读 bytes 时已知」，实际 addTab 只读 hash 不读字节——新增后端命令 `get_pdf_file_size`（fs metadata）在 addTab 时取得 fileSize；
 > 2. `useTabs` 通过 `getHibernationContext` 注入 getter 获取 secondaryTabId / 流式会话 tab（App 以 ref 回填，避免 useTabs → usePersistence 循环依赖）；`usePersistence` 未改动——流式 tab 由 App 从已暴露的 `persistence.sessions` 直接推导（设计稿 §10 中「暴露查询」一项随之取消）；
 > 3. 100 硬上限为纯防御（拒绝 + 记日志），`tabs.maxTabsHint` i18n key 已按设计删除。
@@ -12,11 +13,11 @@
 
 当前 `useTabs.ts` 用 `MAX_TABS = 10` 硬限制同时打开的 PDF 数量。这个限制保护的是三处随 tab 数线性增长的资源：
 
-| 资源 | 位置 | 量级 |
-| --- | --- | --- |
-| PDF 原始字节缓存（无上限、无淘汰） | `App.tsx` `pdfCacheRef` | 每 tab ≈ 2×文件大小（cache 一份 + pdfjs 一份） |
-| 常驻 pdfjs `PDFDocumentProxy` + 冻结保留的视口 canvas 位图 | `usePdfDocument.ts` / `PdfViewer.tsx` keep-alive | 每 tab 数 MB ~ 数十 MB |
-| 连续模式全页 DOM + 每页一个 IntersectionObserver | `PdfViewer.tsx` / `PdfPage.tsx` | O(N × 总页数) 个 DOM 节点与 observer |
+| 资源                                                       | 位置                                             | 量级                                           |
+| ---------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------- |
+| PDF 原始字节缓存（无上限、无淘汰）                         | `App.tsx` `pdfCacheRef`                          | 每 tab ≈ 2×文件大小（cache 一份 + pdfjs 一份） |
+| 常驻 pdfjs `PDFDocumentProxy` + 冻结保留的视口 canvas 位图 | `usePdfDocument.ts` / `PdfViewer.tsx` keep-alive | 每 tab 数 MB ~ 数十 MB                         |
+| 连续模式全页 DOM + 每页一个 IntersectionObserver           | `PdfViewer.tsx` / `PdfPage.tsx`                  | O(N × 总页数) 个 DOM 节点与 observer           |
 
 超过 WebView 内存上限后不是「打不开」，而是整个 app 被系统杀掉（macOS WKWebView jetsam / Windows WebView2 OOM），所有 tab 的进行中工作一起丢失。
 
@@ -144,7 +145,7 @@ tabs.tabs.map((tab) => (
 
 ### 6.2 唤醒延迟预算
 
-典型标准 PDF（10~30MB）：读盘 + `getDocument` + 首屏渲染 ≈ 100~500ms，与「从最近文件重开」体感一致，可接受。不需要为唤醒做专门的预热/预取（保持简单，实测不达标再说）。
+典型标准 PDF（10~~30MB）：读盘 + `getDocument` + 首屏渲染 ≈ 100~~500ms，与「从最近文件重开」体感一致，可接受。不需要为唤醒做专门的预热/预取（保持简单，实测不达标再说）。
 
 ## 7. 边界与交互
 
@@ -190,13 +191,13 @@ tabs.tabs.map((tab) => (
 
 ### 9.2 验收指标
 
-| 指标 | 目标 | 测量 |
-| --- | --- | --- |
-| 记账值（Σ文件大小×2） | 永远 ≤ BYTE_BUDGET（单文件超限放行除外） | 单测断言 + 日志 |
-| 存活 viewer 数 | 永远 ≤ ALIVE_VIEWER_BUDGET | 单测断言 |
-| 唤醒延迟（激活休眠 tab → 首屏可交互） | 典型 < 500ms，10MB 文件 < 1s | e2e 计时 |
-| 唤醒后状态保真 | pageNum / scale / viewMode / scrollTop 与休眠前一致 | 单测（useTabs 层）+ e2e |
-| 开 50 个 tab 后切活跃 tab | < 150ms，无感知卡顿 | e2e + 手动 soak |
+| 指标                                  | 目标                                                | 测量                    |
+| ------------------------------------- | --------------------------------------------------- | ----------------------- |
+| 记账值（Σ文件大小×2）                 | 永远 ≤ BYTE_BUDGET（单文件超限放行除外）            | 单测断言 + 日志         |
+| 存活 viewer 数                        | 永远 ≤ ALIVE_VIEWER_BUDGET                          | 单测断言                |
+| 唤醒延迟（激活休眠 tab → 首屏可交互） | 典型 < 500ms，10MB 文件 < 1s                        | e2e 计时                |
+| 唤醒后状态保真                        | pageNum / scale / viewMode / scrollTop 与休眠前一致 | 单测（useTabs 层）+ e2e |
+| 开 50 个 tab 后切活跃 tab             | < 150ms，无感知卡顿                                 | e2e + 手动 soak         |
 
 ### 9.3 测试要点
 
@@ -207,17 +208,17 @@ tabs.tabs.map((tab) => (
 
 ## 10. 改动点清单
 
-| 文件 | 改动 |
-| --- | --- |
-| `src/services/memoryBudget.ts`（新增） | 预算常量、记账、LRU 候选选择（纯函数） |
-| `src/services/memoryBudget.test.ts`（新增） | 上述单测 |
-| `src/hooks/useTabs.ts` | 删 MAX_TABS；`PdfTab` 加 `hibernated` / `fileSize` / `lastActivatedAt`；addTab 接入预算检查与休眠执行；activateTab 唤醒复位；保留 100 硬上限 |
-| `src/App.tsx` | keep-alive map 增加 hibernated 分支；休眠时清理 pdfCacheRef 对应条目；唤醒路径复用预算检查 |
-| `src/hooks/usePersistence.ts` | 暴露「tab 是否有流式会话」查询（供候选过滤） |
-| `src/components/HibernatedPlaceholder.tsx`（新增，可选） | 占位空组件 |
-| `src/locales/zh-CN.json` / `en.json` | 删除 `tabs.maxTabsHint` |
-| `e2e/pdf-tab-budget.spec.ts`（新增） | 测量 + 休眠/唤醒回归 |
-| `AGENTS.md` | 更新「最多 10 个 tab」相关描述为休眠机制 |
+| 文件                                                     | 改动                                                                                                                                         |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/services/memoryBudget.ts`（新增）                   | 预算常量、记账、LRU 候选选择（纯函数）                                                                                                       |
+| `src/services/memoryBudget.test.ts`（新增）              | 上述单测                                                                                                                                     |
+| `src/hooks/useTabs.ts`                                   | 删 MAX_TABS；`PdfTab` 加 `hibernated` / `fileSize` / `lastActivatedAt`；addTab 接入预算检查与休眠执行；activateTab 唤醒复位；保留 100 硬上限 |
+| `src/App.tsx`                                            | keep-alive map 增加 hibernated 分支；休眠时清理 pdfCacheRef 对应条目；唤醒路径复用预算检查                                                   |
+| `src/hooks/usePersistence.ts`                            | 暴露「tab 是否有流式会话」查询（供候选过滤）                                                                                                 |
+| `src/components/HibernatedPlaceholder.tsx`（新增，可选） | 占位空组件                                                                                                                                   |
+| `src/locales/zh-CN.json` / `en.json`                     | 删除 `tabs.maxTabsHint`                                                                                                                      |
+| `e2e/pdf-tab-budget.spec.ts`（新增）                     | 测量 + 休眠/唤醒回归                                                                                                                         |
+| `AGENTS.md`                                              | 更新「最多 10 个 tab」相关描述为休眠机制                                                                                                     |
 
 `usePdfDocument.ts` / `useTabRestore.ts` / `PdfViewer.tsx` **零改动**——这是本方案的核心论据：唤醒完全复用现有冷启动恢复路径。
 

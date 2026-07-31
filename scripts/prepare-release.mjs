@@ -31,7 +31,7 @@ if (md.includes(`## [${version}]`)) {
 
 const lines = md.split("\n");
 const unreleasedIdx = lines.findIndex((line) =>
-  /^## \[Unreleased\][ \t]*$/.test(line),
+  /^## \[Unreleased\][ \t]*$/.test(line)
 );
 if (unreleasedIdx === -1) {
   console.error("CHANGELOG.md 中找不到 '## [Unreleased]' 段落标题");
@@ -52,7 +52,7 @@ const notes = lines
   .trim();
 if (!notes) {
   console.error(
-    `CHANGELOG.md 的 [Unreleased] 段落为空，请先记录 v${version} 的变更内容再发布`,
+    `CHANGELOG.md 的 [Unreleased] 段落为空，请先记录 v${version} 的变更内容再发布`
   );
   process.exit(1);
 }

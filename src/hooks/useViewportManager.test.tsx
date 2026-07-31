@@ -20,7 +20,10 @@ function makePage(baseHeight: number) {
   };
 }
 
-function makePdf(numPages: number, heightFn: (p: number) => number = () => 300) {
+function makePdf(
+  numPages: number,
+  heightFn: (p: number) => number = () => 300
+) {
   const pages = Array.from({ length: numPages }, (_, i) =>
     makePage(heightFn(i + 1))
   );
@@ -416,7 +419,11 @@ describe("useViewportManager", () => {
 
   it("reportViewportLoaded drops results computed for a stale scale", async () => {
     const pdf = makePdf(100);
-    const { result, rerender } = renderViewport({ pdf, numPages: 100, pageNum: 1 });
+    const { result, rerender } = renderViewport({
+      pdf,
+      numPages: 100,
+      pageNum: 1,
+    });
 
     await waitFor(() => expect(result.current.isReady).toBe(true));
 

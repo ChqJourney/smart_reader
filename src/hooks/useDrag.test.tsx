@@ -32,7 +32,10 @@ describe("useDrag", () => {
     render(<DragHost onMove={onMove} threshold={2} />);
 
     fireEvent.mouseDown(screen.getByTestId("drag"), { clientX: 0, clientY: 0 });
-    fireEvent.mouseMove(screen.getByTestId("drag"), { clientX: 10, clientY: 20 });
+    fireEvent.mouseMove(screen.getByTestId("drag"), {
+      clientX: 10,
+      clientY: 20,
+    });
 
     expect(onMove).toHaveBeenCalledWith(10, 20);
   });
@@ -53,8 +56,14 @@ describe("useDrag", () => {
     render(<DragHost onMove={onMove} threshold={2} />);
 
     fireEvent.mouseDown(screen.getByTestId("drag"), { clientX: 0, clientY: 0 });
-    fireEvent.mouseMove(screen.getByTestId("drag"), { clientX: 10, clientY: 0 });
-    fireEvent.mouseMove(screen.getByTestId("drag"), { clientX: 13, clientY: 4 });
+    fireEvent.mouseMove(screen.getByTestId("drag"), {
+      clientX: 10,
+      clientY: 0,
+    });
+    fireEvent.mouseMove(screen.getByTestId("drag"), {
+      clientX: 13,
+      clientY: 4,
+    });
 
     expect(onMove).toHaveBeenNthCalledWith(1, 10, 0);
     expect(onMove).toHaveBeenNthCalledWith(2, 3, 4);
@@ -80,9 +89,15 @@ describe("useDrag", () => {
     render(<DragHost onMove={onMove} threshold={2} />);
 
     fireEvent.mouseDown(screen.getByTestId("drag"), { clientX: 0, clientY: 0 });
-    fireEvent.mouseMove(screen.getByTestId("drag"), { clientX: 10, clientY: 10 });
+    fireEvent.mouseMove(screen.getByTestId("drag"), {
+      clientX: 10,
+      clientY: 10,
+    });
     fireEvent.mouseUp(screen.getByTestId("drag"), { clientX: 10, clientY: 10 });
-    fireEvent.mouseMove(screen.getByTestId("drag"), { clientX: 50, clientY: 50 });
+    fireEvent.mouseMove(screen.getByTestId("drag"), {
+      clientX: 50,
+      clientY: 50,
+    });
 
     expect(onMove).toHaveBeenCalledTimes(1);
   });
@@ -92,7 +107,10 @@ describe("useDrag", () => {
     render(<DragHost onMove={onMove} enabled={false} threshold={2} />);
 
     fireEvent.mouseDown(screen.getByTestId("drag"), { clientX: 0, clientY: 0 });
-    fireEvent.mouseMove(screen.getByTestId("drag"), { clientX: 10, clientY: 10 });
+    fireEvent.mouseMove(screen.getByTestId("drag"), {
+      clientX: 10,
+      clientY: 10,
+    });
 
     expect(onMove).not.toHaveBeenCalled();
   });
@@ -106,7 +124,10 @@ describe("useDrag", () => {
 
     fireEvent.mouseDown(screen.getByTestId("drag"), { clientX: 0, clientY: 0 });
     // Cursor moves onto the sibling element — outside the drag handle.
-    fireEvent.mouseMove(screen.getByTestId("outside"), { clientX: 15, clientY: 5 });
+    fireEvent.mouseMove(screen.getByTestId("outside"), {
+      clientX: 15,
+      clientY: 5,
+    });
 
     expect(onMove).toHaveBeenCalledWith(15, 5);
   });
@@ -120,7 +141,9 @@ describe("useDrag", () => {
 
     // After unmount, dispatching a window mousemove should not call onMove.
     act(() => {
-      window.dispatchEvent(new MouseEvent("mousemove", { clientX: 99, clientY: 99 }));
+      window.dispatchEvent(
+        new MouseEvent("mousemove", { clientX: 99, clientY: 99 })
+      );
     });
     expect(onMove).not.toHaveBeenCalled();
   });

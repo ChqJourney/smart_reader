@@ -34,7 +34,9 @@ const PAGE_TEXT_LIMIT = 8000;
 export function beginToolSession(): ToolSession {
   const docs = new Map<string, LoadedDoc>();
 
-  const loadDoc = async (fileHash: string): Promise<pdfjsLib.PDFDocumentProxy> => {
+  const loadDoc = async (
+    fileHash: string
+  ): Promise<pdfjsLib.PDFDocumentProxy> => {
     const existing = docs.get(fileHash);
     if (existing) return existing.pdf;
 
@@ -55,7 +57,10 @@ export function beginToolSession(): ToolSession {
     return pdf;
   };
 
-  const getPageText = async (fileHash: string, pageNumber: number): Promise<string> => {
+  const getPageText = async (
+    fileHash: string,
+    pageNumber: number
+  ): Promise<string> => {
     const loaded = docs.get(fileHash);
     if (!loaded) {
       await loadDoc(fileHash);
@@ -174,7 +179,11 @@ export function beginToolSession(): ToolSession {
           const pdf = await loadDoc(fileHash);
           const lowerQuery = query.toLowerCase();
           const results: { page: number; snippet: string }[] = [];
-          for (let i = 1; i <= pdf.numPages && results.length < maxResults; i++) {
+          for (
+            let i = 1;
+            i <= pdf.numPages && results.length < maxResults;
+            i++
+          ) {
             const text = await getPageText(fileHash, i);
             const lowerText = text.toLowerCase();
             const idx = lowerText.indexOf(lowerQuery);

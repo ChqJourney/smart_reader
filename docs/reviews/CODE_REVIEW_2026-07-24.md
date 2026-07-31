@@ -216,23 +216,13 @@
 ## 9. 建议的修复批次
 
 **P0（数据安全 + 核心闭环，均低成本）**
+
 1. 阻断「加载失败覆盖写回」（§1-1）+ 后端损坏文件备份。
 2. 退出/关 tab flush + CommentPopup unmount 提交 + 退出回写 lastPage（§1-2）。
 3. LLM 取消挂死修复 + `None` 分支补 flush_tool_calls（§1-4）。
 4. 暂存片段持久化（或至少 UI 明示不持久）（§1-6）。
 5. 保存设置失败弹提示（§8）。
 
-**P1（日常体验）**
-6. useTabs/usePersistence/useRightPanelLayout 返回值 useMemo + App 回调依赖稳定字段（§1-3）；流式合批 + MarkdownRenderer memo（§3）。
-7. canvas outputScale 上限（§3）。
-8. 分屏键盘双响应 + Ctrl+F 劫持（§1-5）。
-9. 删除规范统一（X=关闭、trash=删除、translate/comment 接确认流）；SelectionToolbar clamp + Esc（§6）。
-10. 搜索文本缓存（§3）；isStreaming 陈旧状态自愈（§5）；ContextWidget 口径修正 + thinking 参数门控（§4）。
+**P1（日常体验）** 6. useTabs/usePersistence/useRightPanelLayout 返回值 useMemo + App 回调依赖稳定字段（§1-3）；流式合批 + MarkdownRenderer memo（§3）。7. canvas outputScale 上限（§3）。8. 分屏键盘双响应 + Ctrl+F 劫持（§1-5）。9. 删除规范统一（X=关闭、trash=删除、translate/comment 接确认流）；SelectionToolbar clamp + Esc（§6）。10. 搜索文本缓存（§3）；isStreaming 陈旧状态自愈（§5）；ContextWidget 口径修正 + thinking 参数门控（§4）。
 
-**P2（规范与收口）**
-11. i18n：60 个 defaultValue 落盘、SetupWizard 硬编码清零、后端错误改代码+前端映射（§7）。
-12. AI 结果复制/批量复制/导出 Markdown；错误文案收敛为单一格式化函数；翻译重试；引用页码可点击（§8）。
-13. usePersistence 拆分、App 三段 JSX 提取、分屏逻辑下沉（§2）。
-14. 设置加载与钥匙串解耦、旧目录迁移加固、词典并发保护（§5）。
-15. pdfCacheRef LRU、共享 IntersectionObserver、Vite 分包（§3）。
-16. AGENTS.md 同步（ErrorBanner/ContextWidget/平台数/ToolCallsIndicator.css）（§2/§4）。
+**P2（规范与收口）** 11. i18n：60 个 defaultValue 落盘、SetupWizard 硬编码清零、后端错误改代码+前端映射（§7）。12. AI 结果复制/批量复制/导出 Markdown；错误文案收敛为单一格式化函数；翻译重试；引用页码可点击（§8）。13. usePersistence 拆分、App 三段 JSX 提取、分屏逻辑下沉（§2）。14. 设置加载与钥匙串解耦、旧目录迁移加固、词典并发保护（§5）。15. pdfCacheRef LRU、共享 IntersectionObserver、Vite 分包（§3）。16. AGENTS.md 同步（ErrorBanner/ContextWidget/平台数/ToolCallsIndicator.css）（§2/§4）。

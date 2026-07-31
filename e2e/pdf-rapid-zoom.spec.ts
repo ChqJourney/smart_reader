@@ -20,11 +20,16 @@ async function setupTauriMock(
         invoke: async (cmd: string) => {
           if (cmd === "plugin:dialog|open") return returnPath;
           if (cmd === "read_pdf_bytes") return arrayBuffer;
-          if (cmd === "load_pdf_data") return { annotations: [], sessionIds: [] };
+          if (cmd === "load_pdf_data")
+            return { annotations: [], sessionIds: [] };
           if (cmd === "save_pdf_data") return undefined;
           if (cmd === "load_settings")
             return {
-              llm: { baseUrl: "https://api.openai.com/v1", apiKey: "", model: "gpt-4o-mini" },
+              llm: {
+                baseUrl: "https://api.openai.com/v1",
+                apiKey: "",
+                model: "gpt-4o-mini",
+              },
               targetLanguage: "中文",
             };
           if (cmd === "load_recent_files") return [];

@@ -144,7 +144,10 @@ export default function TranslatePopup({
       className={`translate-popup ${isDragging ? "dragging" : ""}`}
       style={{ left: adjustedPosition.x, top: adjustedPosition.y }}
     >
-      <div className="translate-popup-header" onMouseDown={dragHandlers.onMouseDown}>
+      <div
+        className="translate-popup-header"
+        onMouseDown={dragHandlers.onMouseDown}
+      >
         <span className="translate-popup-title">
           <Icon name="translate" size={14} />
           {t("translate.title")}

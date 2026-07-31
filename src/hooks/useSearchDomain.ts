@@ -61,7 +61,8 @@ function needsSeparator(previous: TextItemPosition, current: TextItemPosition) {
   if (previous.hasEOL) return true;
 
   const verticalDelta = Math.abs(current.y - previous.y);
-  if (verticalDelta > Math.max(previous.height, current.height) / 2) return true;
+  if (verticalDelta > Math.max(previous.height, current.height) / 2)
+    return true;
 
   const horizontalGap = current.x - (previous.x + previous.width);
   return horizontalGap > Math.max(1, previous.charWidth / 4);
@@ -105,7 +106,8 @@ function buildPageTextIndex(
       charWidth: textItem.width / itemText.length,
       hasEOL: textItem.hasEOL,
     };
-    if (previousPosition && needsSeparator(previousPosition, position)) text += " ";
+    if (previousPosition && needsSeparator(previousPosition, position))
+      text += " ";
     const start = text.length;
     text += itemText;
     indexedItems.push({

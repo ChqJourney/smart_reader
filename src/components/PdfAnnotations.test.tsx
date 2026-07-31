@@ -35,9 +35,11 @@ function renderPdfAnnotations(
       pageNum={props.pageNum}
       scale={props.scale ?? 1}
       fileHash={props.fileHash ?? "hash-a"}
+      sessions={props.sessions}
       onUpdate={props.onUpdate ?? vi.fn()}
       onDelete={props.onDelete ?? vi.fn()}
       onExplainClick={props.onExplainClick ?? vi.fn()}
+      onReinterpret={props.onReinterpret}
       settings={props.settings ?? DEFAULT_SETTINGS}
     />
   );
@@ -71,6 +73,68 @@ describe("PdfAnnotations", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /查看解读/i }));
     expect(onExplainClick).toHaveBeenCalledWith("1");
+  });
+
+  it("shows inline result and calls onReinterpret for linked session", () => {
+    const onReinterpret = vi.fn();
+    renderPdfAnnotations({
+      annotations: [
+        makeAnnotation("1", "explain", 1, { sessionId: "session-1" }),
+      ],
+      pageNum: 1,
+      sessions: [
+        {
+          id: "session-1",
+          sources: [],
+          messages: [
+            { id: "m1", role: "user", content: "请解读", createdAt: 1 },
+            {
+              id: "m2",
+              role: "assistant",
+              content: "内联解读结果",
+              createdAt: 2,
+            },
+          ],
+          isStreaming: false,
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      ],
+      onReinterpret,
+    });
+
+    fireEvent.click(screen.getByLabelText(/解读/i));
+
+    expect(screen.getByText(/内联解读结果/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /重新解读/i }));
+    expect(onReinterpret).toHaveBeenCalledWith("session-1");
+  });
+
+  it("marks the marker as pending while the linked session is streaming", () => {
+    const { container } = renderPdfAnnotations({
+      annotations: [
+        makeAnnotation("1", "explain", 1, { sessionId: "session-1" }),
+      ],
+      pageNum: 1,
+      sessions: [
+        {
+          id: "session-1",
+          sources: [],
+          messages: [
+            { id: "m1", role: "user", content: "请解读", createdAt: 1 },
+            { id: "m2", role: "assistant", content: "", createdAt: 2 },
+          ],
+          isStreaming: true,
+          streamingMessageId: "m2",
+          createdAt: 1,
+          updatedAt: 2,
+        },
+      ],
+    });
+
+    expect(
+      container.querySelector(".annotation-marker.pending")
+    ).toBeInTheDocument();
   });
 
   it("calls onDelete from explain popup", () => {

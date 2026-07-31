@@ -8,6 +8,7 @@ interface SelectionToolbarProps {
   selection: { text: string; x: number; y: number } | null;
   onAction: (action: SelectionAction, text: string) => void;
   onAddToStash?: (text: string) => void;
+  onCustomInterpret?: (text: string) => void;
   onCopy?: (text: string) => void;
   onAddComment?: (text: string) => void;
   onDismiss: () => void;
@@ -17,6 +18,7 @@ export default function SelectionToolbar({
   selection,
   onAction,
   onAddToStash,
+  onCustomInterpret,
   onCopy,
   onAddComment,
   onDismiss,
@@ -57,6 +59,13 @@ export default function SelectionToolbar({
   const handleAddToStashClick = () => {
     if (selection?.text) {
       onAddToStash?.(selection.text);
+      onDismiss();
+    }
+  };
+
+  const handleCustomInterpretClick = () => {
+    if (selection?.text) {
+      onCustomInterpret?.(selection.text);
       onDismiss();
     }
   };
@@ -110,6 +119,17 @@ export default function SelectionToolbar({
         <Icon name="explain" size={16} />
         <span>{t("action.explain")}</span>
       </button>
+      {onCustomInterpret && (
+        <button
+          className="icon-btn"
+          onClick={handleCustomInterpretClick}
+          aria-label={t("customInterpret.title")}
+          title={t("customInterpret.selectionHint")}
+        >
+          <Icon name="chat" size={16} />
+          <span>{t("customInterpret.title")}</span>
+        </button>
+      )}
       <button
         className="icon-btn"
         onClick={() => handleClick("translate")}

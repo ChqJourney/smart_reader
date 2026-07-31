@@ -83,7 +83,7 @@ describe("AiChatPanel", () => {
         sessions={[]}
         onRemoveStash={vi.fn()}
         onClearStashes={vi.fn()}
-        onCustomInterpret={vi.fn()}
+        onOpenCustomInterpret={vi.fn()}
         onFollowUp={vi.fn()}
         {...props}
       />
@@ -168,55 +168,36 @@ describe("AiChatPanel", () => {
     expect(onClearStashes).toHaveBeenCalled();
   });
 
-  it("opens custom interpret modal", () => {
-    renderPanel({ stashes: [makeStash("stash-1", "text")] });
-
-    fireEvent.click(screen.getByRole("button", { name: /自定义解读/i }));
-
-    expect(
-      screen.getByRole("heading", { name: /自定义解读/i })
-    ).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/输入你的解读要求/)).toBeInTheDocument();
-  });
-
-  it("calls onCustomInterpret with all stashes when not in selection mode", () => {
-    const onCustomInterpret = vi.fn();
+  it("opens custom interpret modal with select-all semantics when not in selection mode", () => {
+    const onOpenCustomInterpret = vi.fn();
     const stashes = [makeStash("stash-1", "text")];
 
-    renderPanel({
-      stashes,
-      onCustomInterpret,
-    });
+    renderPanel({ stashes, onOpenCustomInterpret });
 
-    fireEvent.click(screen.getByRole("button", { name: /自定义解读/i }));
-    fireEvent.change(screen.getByPlaceholderText(/输入你的解读要求/), {
-      target: { value: "请分析关系" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /发送/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "自定义解读（1 个片段）" })
+    );
 
-    expect(onCustomInterpret).toHaveBeenCalledWith("请分析关系", stashes);
+    expect(onOpenCustomInterpret).toHaveBeenCalledWith(null);
   });
 
-  it("sends only selected stashes in selection mode", () => {
-    const onCustomInterpret = vi.fn();
+  it("passes selected stash ids in selection mode", () => {
+    const onOpenCustomInterpret = vi.fn();
     const stashes = [
       makeStash("stash-1", "first excerpt"),
       makeStash("stash-2", "second excerpt"),
     ];
 
-    renderPanel({ stashes, onCustomInterpret });
+    renderPanel({ stashes, onOpenCustomInterpret });
 
     fireEvent.click(screen.getByRole("button", { name: "选择" }));
     fireEvent.click(screen.getByText("first excerpt"));
 
-    fireEvent.click(screen.getByRole("button", { name: "自定义解读 (1)" }));
-    expect(screen.getByText(/基于 1 个选中片段/)).toBeInTheDocument();
-    fireEvent.change(screen.getByPlaceholderText(/输入你的解读要求/), {
-      target: { value: "请分析关系" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /发送/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "自定义解读（1 个片段）" })
+    );
 
-    expect(onCustomInterpret).toHaveBeenCalledWith("请分析关系", [stashes[0]]);
+    expect(onOpenCustomInterpret).toHaveBeenCalledWith(new Set(["stash-1"]));
   });
 
   it("disables custom interpret button when selection mode has nothing selected", () => {
@@ -225,7 +206,7 @@ describe("AiChatPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "选择" }));
 
     expect(
-      screen.getByRole("button", { name: "自定义解读 (0)" })
+      screen.getByRole("button", { name: "自定义解读（0 个片段）" })
     ).toBeDisabled();
   });
 
@@ -239,24 +220,24 @@ describe("AiChatPanel", () => {
     fireEvent.click(checkbox);
     expect(checkbox).toBeChecked();
     expect(
-      screen.getByRole("button", { name: "自定义解读 (1)" })
+      screen.getByRole("button", { name: "自定义解读（1 个片段）" })
     ).toBeEnabled();
 
     fireEvent.click(checkbox);
     expect(checkbox).not.toBeChecked();
     expect(
-      screen.getByRole("button", { name: "自定义解读 (0)" })
+      screen.getByRole("button", { name: "自定义解读（0 个片段）" })
     ).toBeDisabled();
   });
 
   it("exits selection mode and restores select-all behavior", () => {
-    const onCustomInterpret = vi.fn();
+    const onOpenCustomInterpret = vi.fn();
     const stashes = [
       makeStash("stash-1", "first excerpt"),
       makeStash("stash-2", "second excerpt"),
     ];
 
-    renderPanel({ stashes, onCustomInterpret });
+    renderPanel({ stashes, onOpenCustomInterpret });
 
     fireEvent.click(screen.getByRole("button", { name: "选择" }));
     fireEvent.click(screen.getByText("first excerpt"));
@@ -264,13 +245,11 @@ describe("AiChatPanel", () => {
 
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "自定义解读" }));
-    fireEvent.change(screen.getByPlaceholderText(/输入你的解读要求/), {
-      target: { value: "请分析" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: /发送/i }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "自定义解读（2 个片段）" })
+    );
 
-    expect(onCustomInterpret).toHaveBeenCalledWith("请分析", stashes);
+    expect(onOpenCustomInterpret).toHaveBeenCalledWith(null);
   });
 
   it("renders sessions in interpretation tab", () => {
@@ -280,7 +259,58 @@ describe("AiChatPanel", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
 
-    expect(screen.getByText(/请解读/)).toBeInTheDocument();
+    // 页码徽章 + 类型徽章 + 无 summary 时回退显示来源片段摘要
+    expect(screen.getByText("p.3")).toBeInTheDocument();
+    expect(screen.getByText("解读")).toBeInTheDocument();
+    expect(screen.getByText(/source text/)).toBeInTheDocument();
+  });
+
+  it("renders LLM summary and custom type badge when present", () => {
+    const sessions = [
+      makeSession({
+        id: "session-1",
+        action: "custom",
+        summary: "8.1 与 8.2 条款差异分析",
+      }),
+    ];
+
+    renderPanel({ sessions });
+
+    fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
+
+    expect(screen.getByText("自定义解读")).toBeInTheDocument();
+    expect(screen.getByText("8.1 与 8.2 条款差异分析")).toBeInTheDocument();
+    // 有 summary 时不再回退显示来源片段原文
+    expect(screen.queryByText(/source text/)).not.toBeInTheDocument();
+  });
+
+  it("calls onDeleteSession from the list item without entering chatbox", () => {
+    const onDeleteSession = vi.fn();
+    const sessions = [makeSession({ id: "session-1" })];
+
+    renderPanel({ sessions, onDeleteSession });
+
+    fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
+    fireEvent.click(screen.getByRole("button", { name: /删除解读记录/i }));
+
+    expect(onDeleteSession).toHaveBeenCalledWith("session-1");
+    // 删除按钮 stopPropagation：不应进入会话详情
+    expect(
+      screen.queryByRole("button", { name: /返回解读记录/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it("calls onDeleteSession from the chatbox header", () => {
+    const onDeleteSession = vi.fn();
+    const sessions = [makeSession({ id: "session-1" })];
+
+    renderPanel({ sessions, onDeleteSession });
+
+    fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
+    fireEvent.click(screen.getByText(/source text/));
+    fireEvent.click(screen.getByRole("button", { name: /删除解读记录/i }));
+
+    expect(onDeleteSession).toHaveBeenCalledWith("session-1");
   });
 
   it("enters full-screen chatbox when clicking a session", () => {
@@ -297,7 +327,7 @@ describe("AiChatPanel", () => {
     renderPanel({ sessions });
 
     fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
-    fireEvent.click(screen.getByText(/问题/));
+    fireEvent.click(screen.getByText(/source text/));
 
     expect(screen.getByText(/回答/)).toBeInTheDocument();
     expect(
@@ -323,7 +353,7 @@ describe("AiChatPanel", () => {
     renderPanel({ sessions, onGotoSession });
 
     fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
-    fireEvent.click(screen.getByText(/问题/));
+    fireEvent.click(screen.getByText(/source text/));
 
     expect(onGotoSession).toHaveBeenCalledTimes(1);
     expect(onGotoSession).toHaveBeenCalledWith(sessions[0]);
@@ -344,7 +374,7 @@ describe("AiChatPanel", () => {
     renderPanel({ sessions });
 
     fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
-    fireEvent.click(screen.getByText(/问题/));
+    fireEvent.click(screen.getByText(/source text/));
     expect(screen.getByText(/回答/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /返回解读记录/i }));
@@ -374,7 +404,7 @@ describe("AiChatPanel", () => {
         expandedSessionId="session-1"
         onRemoveStash={vi.fn()}
         onClearStashes={vi.fn()}
-        onCustomInterpret={vi.fn()}
+        onOpenCustomInterpret={vi.fn()}
         onFollowUp={vi.fn()}
       />
     );
@@ -405,13 +435,68 @@ describe("AiChatPanel", () => {
         sessions={[]}
         onRemoveStash={vi.fn()}
         onClearStashes={vi.fn()}
-        onCustomInterpret={vi.fn()}
+        onOpenCustomInterpret={vi.fn()}
         onFollowUp={vi.fn()}
       />
     );
 
     expect(screen.queryByText(/问题/)).not.toBeInTheDocument();
     expect(screen.getByRole("tab", { name: /解读记录/i })).toBeInTheDocument();
+  });
+
+  it("filters sessions by current/all scope", () => {
+    const current = makeSession({ id: "session-1", summary: "当前文档的解读" });
+    const other = makeSession({
+      id: "session-2",
+      summary: "另一文档的解读",
+      sources: [
+        makeStash("stash-9", "other", {
+          source: makeSource({ fileName: "other.pdf", page: 7 }),
+        }),
+      ],
+    });
+
+    renderPanel({ sessions: [current], allSessions: [current, other] });
+
+    fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
+
+    expect(screen.getByText("当前文档的解读")).toBeInTheDocument();
+    expect(screen.queryByText("另一文档的解读")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "全部文档" }));
+
+    expect(screen.getByText("另一文档的解读")).toBeInTheDocument();
+    // 从「全部」视图可以进入非当前文档的会话详情
+    fireEvent.click(screen.getByText("另一文档的解读"));
+    expect(
+      screen.getByRole("button", { name: /返回解读记录/i })
+    ).toBeInTheDocument();
+  });
+
+  it("collapses long first user message and shows source cards", () => {
+    const longPrompt = "模板提示词".repeat(60);
+    const sessions = [
+      makeSession({
+        id: "session-1",
+        messages: [
+          makeMessage({ id: "msg-1", role: "user", content: longPrompt }),
+          makeMessage({ id: "msg-2", role: "assistant", content: "回答" }),
+        ],
+      }),
+    ];
+
+    renderPanel({ sessions });
+
+    fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
+    fireEvent.click(screen.getByText(/source text/));
+
+    // 来源片段卡片（点击跳原文）
+    const sourceCard = screen.getByRole("button", { name: /file\.pdf/ });
+    expect(sourceCard).toBeInTheDocument();
+    // 长 prompt 默认折叠，展开后可见全文
+    expect(screen.queryByText(longPrompt)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "展开" }));
+    expect(screen.getByText(longPrompt)).toBeInTheDocument();
   });
 
   it("calls onFollowUp when submitting follow-up", () => {
@@ -429,7 +514,7 @@ describe("AiChatPanel", () => {
     renderPanel({ sessions, onFollowUp });
 
     fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
-    fireEvent.click(screen.getByText(/问题/));
+    fireEvent.click(screen.getByText(/source text/));
 
     const input = screen.getByPlaceholderText(/继续追问/);
     fireEvent.change(input, { target: { value: "追问内容" } });
@@ -454,7 +539,7 @@ describe("AiChatPanel", () => {
     renderPanel({ sessions, onInterrupt });
 
     fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
-    fireEvent.click(screen.getByText(/问题/));
+    fireEvent.click(screen.getByText(/source text/));
 
     const interruptBtn = screen.getByRole("button", { name: /中止/i });
     expect(interruptBtn).toBeInTheDocument();
@@ -480,7 +565,7 @@ describe("AiChatPanel", () => {
     renderPanel({ sessions, onInterrupt, onFollowUp });
 
     fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
-    fireEvent.click(screen.getByText(/问题/));
+    fireEvent.click(screen.getByText(/source text/));
 
     const input = screen.getByPlaceholderText(/生成中/);
     expect(input).not.toBeDisabled();

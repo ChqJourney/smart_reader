@@ -562,6 +562,9 @@ struct InterpretationSession {
     frozen: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     frozen_reason: Option<String>,
+    /// LLM-generated one-line summary shown in the session list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    summary: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -1291,6 +1294,7 @@ mod tests {
             last_prompt_tokens: None,
             frozen: None,
             frozen_reason: None,
+            summary: None,
         }
     }
 

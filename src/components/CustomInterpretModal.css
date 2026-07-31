@@ -29,6 +29,66 @@
   margin-bottom: 12px;
 }
 
+.modal-stash-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.modal-stash-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.modal-stash-item:hover {
+  border-color: #0078d4;
+}
+
+.modal-stash-item.selected {
+  border-color: #0078d4;
+  background: #f5f9ff;
+}
+
+.modal-stash-item input[type="checkbox"] {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin: 2px 0 0;
+  accent-color: #0078d4;
+  cursor: pointer;
+}
+
+.modal-stash-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.modal-stash-source {
+  font-size: 0.75rem;
+  color: #757575;
+  font-weight: 500;
+}
+
+.modal-stash-text {
+  font-size: 0.8rem;
+  color: #1f1f1f;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
 .modal-content textarea {
   width: 100%;
   padding: 10px 12px;

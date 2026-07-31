@@ -44,6 +44,8 @@ export interface InterpretationSession {
   updatedAt: number;
   /** Last prompt_tokens from the most recent LLM call (for ContextWidget) */
   lastPromptTokens?: number;
+  /** LLM 生成的一句话摘要，用于会话列表展示 */
+  summary?: string;
 }
 
 function createMessage(

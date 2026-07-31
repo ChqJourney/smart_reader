@@ -12,6 +12,7 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import * as pdfjsLib from "pdfjs-dist";
 import { Annotation } from "../services/annotations";
+import { InterpretationSession } from "../services/sessions";
 import { AppSettings } from "../services/settings";
 import { error as logError } from "../services/logs";
 import Icon from "./Icon";
@@ -83,12 +84,16 @@ interface PdfViewerProps {
   onClearPendingGotoPage?: (tabId: string) => void;
   annotations?: Annotation[];
   highlightedAnnotationId?: string | null;
+  /** 已加载的解读会话：转发给批注层做内联结果与生成中态 */
+  sessions?: InterpretationSession[];
   onAnnotationUpdate?: (
     id: string,
     patch: Partial<Omit<Annotation, "id">>
   ) => void;
   onAnnotationDelete?: (id: string) => void;
   onExplainClick?: (tabId: string, id: string) => void;
+  /** 重新解读指定会话（标记弹层入口） */
+  onReinterpret?: (sessionId: string) => void;
   hoverTranslate?: boolean;
   settings: AppSettings;
   /**
@@ -185,9 +190,11 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       onClearPendingGotoPage,
       annotations,
       highlightedAnnotationId,
+      sessions,
       onAnnotationUpdate,
       onAnnotationDelete,
       onExplainClick,
+      onReinterpret,
       hoverTranslate,
       settings,
       isFocused = true,
@@ -1255,9 +1262,11 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                   onViewportLoaded={reportViewportLoaded}
                   annotations={annotations}
                   highlightedAnnotationId={highlightedAnnotationId}
+                  sessions={sessions}
                   onAnnotationUpdate={onAnnotationUpdate}
                   onAnnotationDelete={onAnnotationDelete}
                   onExplainClick={handleExplainClick}
+                  onReinterpret={onReinterpret}
                   hoverTranslate={hoverTranslate}
                   settings={settings}
                   searchHighlights={searchHighlightsByPage.get(pageNum)}
@@ -1279,9 +1288,11 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                     onViewportLoaded={reportViewportLoaded}
                     annotations={annotations}
                     highlightedAnnotationId={highlightedAnnotationId}
+                    sessions={sessions}
                     onAnnotationUpdate={onAnnotationUpdate}
                     onAnnotationDelete={onAnnotationDelete}
                     onExplainClick={handleExplainClick}
+                    onReinterpret={onReinterpret}
                     hoverTranslate={hoverTranslate}
                     settings={settings}
                     containerRef={setPageWrapperRef(p)}

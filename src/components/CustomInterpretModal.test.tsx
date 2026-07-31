@@ -1,29 +1,66 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import CustomInterpretModal from "../components/CustomInterpretModal";
+import { StashItem, StashSource } from "../services/stash";
+
+function makeSource(overrides: Partial<StashSource> = {}): StashSource {
+  return {
+    tabId: "tab-1",
+    fileName: "file.pdf",
+    filePath: "/path/to/file.pdf",
+    fileHash: "hash-file",
+    page: 3,
+    pdfX: 100,
+    pdfY: 200,
+    ...overrides,
+  };
+}
+
+function makeStash(
+  id: string,
+  text: string,
+  overrides: Partial<StashItem> = {}
+): StashItem {
+  return {
+    id,
+    source: makeSource(),
+    text,
+    createdAt: 1000,
+    ...overrides,
+  };
+}
 
 describe("CustomInterpretModal", () => {
-  it("renders prompt input and action buttons", () => {
+  it("renders stash checklist, prompt input and action buttons", () => {
+    const stashes = [
+      makeStash("stash-1", "first excerpt"),
+      makeStash("stash-2", "second excerpt"),
+    ];
     render(
       <CustomInterpretModal
-        stashCount={2}
+        stashes={stashes}
         onSubmit={vi.fn()}
         onClose={vi.fn()}
       />
     );
 
     expect(screen.getByText(/自定义解读/)).toBeInTheDocument();
+    // 默认全选
     expect(screen.getByText(/基于 2 个选中片段/)).toBeInTheDocument();
+    expect(screen.getByText(/first excerpt/)).toBeInTheDocument();
+    expect(screen.getByText(/second excerpt/)).toBeInTheDocument();
+    expect(screen.getAllByRole("checkbox")).toHaveLength(2);
     expect(screen.getByPlaceholderText(/输入你的解读要求/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /发送/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /取消/i })).toBeInTheDocument();
   });
 
-  it("calls onSubmit with trimmed prompt and clears input", () => {
+  it("calls onSubmit with trimmed prompt and all stashes by default", () => {
     const onSubmit = vi.fn();
+    const stashes = [makeStash("stash-1", "text")];
     render(
       <CustomInterpretModal
-        stashCount={1}
+        stashes={stashes}
         onSubmit={onSubmit}
         onClose={vi.fn()}
       />
@@ -33,14 +70,83 @@ describe("CustomInterpretModal", () => {
     fireEvent.change(input, { target: { value: "  请分析关系  " } });
     fireEvent.click(screen.getByRole("button", { name: /发送/i }));
 
-    expect(onSubmit).toHaveBeenCalledWith("请分析关系");
+    expect(onSubmit).toHaveBeenCalledWith("请分析关系", stashes);
+  });
+
+  it("submits only checked stashes after unchecking", () => {
+    const onSubmit = vi.fn();
+    const stashes = [
+      makeStash("stash-1", "first excerpt"),
+      makeStash("stash-2", "second excerpt"),
+    ];
+    render(
+      <CustomInterpretModal
+        stashes={stashes}
+        onSubmit={onSubmit}
+        onClose={vi.fn()}
+      />
+    );
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[1]);
+    expect(screen.getByText(/基于 1 个选中片段/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/输入你的解读要求/), {
+      target: { value: "请分析" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /发送/i }));
+
+    expect(onSubmit).toHaveBeenCalledWith("请分析", [stashes[0]]);
+  });
+
+  it("honors initialSelectedIds over select-all", () => {
+    const onSubmit = vi.fn();
+    const stashes = [
+      makeStash("stash-1", "first excerpt"),
+      makeStash("stash-2", "second excerpt"),
+    ];
+    render(
+      <CustomInterpretModal
+        stashes={stashes}
+        initialSelectedIds={new Set(["stash-2"])}
+        onSubmit={onSubmit}
+        onClose={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText(/基于 1 个选中片段/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByPlaceholderText(/输入你的解读要求/), {
+      target: { value: "请分析" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /发送/i }));
+
+    expect(onSubmit).toHaveBeenCalledWith("请分析", [stashes[1]]);
+  });
+
+  it("disables submit when nothing is selected", () => {
+    const stashes = [makeStash("stash-1", "text")];
+    render(
+      <CustomInterpretModal
+        stashes={stashes}
+        onSubmit={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.change(screen.getByPlaceholderText(/输入你的解读要求/), {
+      target: { value: "请分析" },
+    });
+
+    expect(screen.getByRole("button", { name: /发送/i })).toBeDisabled();
   });
 
   it("does not submit when prompt is empty", () => {
     const onSubmit = vi.fn();
     render(
       <CustomInterpretModal
-        stashCount={1}
+        stashes={[makeStash("stash-1", "text")]}
         onSubmit={onSubmit}
         onClose={vi.fn()}
       />
@@ -55,7 +161,7 @@ describe("CustomInterpretModal", () => {
     const onClose = vi.fn();
     render(
       <CustomInterpretModal
-        stashCount={1}
+        stashes={[makeStash("stash-1", "text")]}
         onSubmit={vi.fn()}
         onClose={onClose}
       />
@@ -70,7 +176,7 @@ describe("CustomInterpretModal", () => {
     const onClose = vi.fn();
     const { container } = render(
       <CustomInterpretModal
-        stashCount={1}
+        stashes={[makeStash("stash-1", "text")]}
         onSubmit={vi.fn()}
         onClose={onClose}
       />
@@ -85,7 +191,7 @@ describe("CustomInterpretModal", () => {
     const onClose = vi.fn();
     render(
       <CustomInterpretModal
-        stashCount={1}
+        stashes={[makeStash("stash-1", "text")]}
         onSubmit={vi.fn()}
         onClose={onClose}
       />
@@ -98,9 +204,10 @@ describe("CustomInterpretModal", () => {
 
   it("submits on Enter key", () => {
     const onSubmit = vi.fn();
+    const stashes = [makeStash("stash-1", "text")];
     render(
       <CustomInterpretModal
-        stashCount={1}
+        stashes={stashes}
         onSubmit={onSubmit}
         onClose={vi.fn()}
       />
@@ -110,6 +217,6 @@ describe("CustomInterpretModal", () => {
     fireEvent.change(input, { target: { value: "追问" } });
     fireEvent.keyDown(input, { key: "Enter" });
 
-    expect(onSubmit).toHaveBeenCalledWith("追问");
+    expect(onSubmit).toHaveBeenCalledWith("追问", stashes);
   });
 });

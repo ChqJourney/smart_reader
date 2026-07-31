@@ -22,10 +22,10 @@
 - Cmd/Ctrl+G 跳页面板（PageJumpPanel）：手动输入页码回车跳转，跳转时阅读区中央闪现大数字页码闪卡（600ms 定时清除）；工具栏页码显示为按钮，点击同样打开跳页面板。
 - 全文搜索（Ctrl / Cmd + F，支持跨 text item 短语匹配，结果逐页高亮、Enter / Shift+Enter 前后跳转）。
 - 大纲 / 目录导航面板（PDF 自带 outline 时可用，点击跳转章节）。
-- 选中文本后浮动工具条：加入暂存、解读、翻译、复制、批注（comment 浮层，可拖动编辑）。
+- 选中文本后浮动工具条：加入暂存、解读、自定义解读（暂存所选并直达弹窗）、翻译、复制、批注（comment 浮层，可拖动编辑）。
 - 翻译生成可拖动 / 隐藏 / 删除的浮层批注。
-- 解读生成蓝色标记，并在右侧面板展示可点击跳转的解读记录，支持多轮追问。
-- 自定义解读：把多个暂存片段一次性发给 LLM。暂存区支持选择模式勾选部分片段（未进入选择模式时默认全选）；解读要求弹窗仅能通过「取消」/「发送」关闭。
+- 解读生成蓝色标记（生成中带呼吸态），点击标记打开 InterpretPopup 内联展示解读结果（流式/错误态、原文折叠、查看解读/重新解读/删除）；右侧面板展示可点击跳转的解读记录（页码+类型徽章+LLM 一句话摘要，支持「当前文档/全部文档」过滤与面板内删除会话），支持多轮追问。
+- 自定义解读：把多个暂存片段一次性发给 LLM。暂存区按钮常驻显示片段数量并直达弹窗；解读要求弹窗内置可勾选片段清单（默认全选），仅能通过「取消」/「发送」关闭；暂存不落盘为有意设计。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
 - 最近文件下拉面板：置顶常用标准、按文件名/路径搜索、显示目录/相对时间/上次读到的页码、失效文件置灰、单条移除与两段式清空、从列表直接在分屏打开对照（快捷键 Ctrl/Cmd+Shift+O 开合面板）。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
@@ -94,12 +94,11 @@ npm install
 │   │   ├── PageJumpPanel.tsx          # Cmd/Ctrl+G 跳页面板（输入页码回车跳转）
 │   │   ├── PdfAnnotations.tsx         # 按页渲染 markers 与 popup
 │   │   ├── AnnotationMarker.tsx       # 可拖动的翻译/解读/暂存/批注标记
-│   │   ├── SelectionToolbar.tsx       # 选区上方浮动工具条（暂存/解读/翻译/复制/批注）
+│   │   ├── SelectionToolbar.tsx       # 选区上方浮动工具条（暂存/解读/自定义解读/翻译/复制/批注）
 │   │   ├── TranslatePopup.tsx         # 翻译浮层
-│   │   ├── ExplainPopup.tsx           # 解读详情浮层
+│   │   ├── InterpretPopup.tsx         # 解读结果内联浮层（解读/已解读暂存标记共用，流式/错误态、原文折叠、重新解读）
 │   │   ├── CommentPopup.tsx           # 批注浮层（拖动编辑、300ms 防抖保存、隐藏/删除）
-│   │   ├── StashInterpretedPopup.tsx  # 已解读暂存浮层
-│   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录、流式中止）
+│   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录（页码/类型徽章/LLM 摘要/范围过滤/会话删除）、流式中止）
 │   │   ├── ContextWidget.tsx          # 会话上下文用量条（数据源 activeSession.lastPromptTokens，已接入 AiChatPanel）
 │   │   ├── MarkdownRenderer.tsx       # react-markdown + gfm/math/katex，自定义 sanitize schema，公式解析失败降级纯文本
 │   │   ├── ThinkingIndicator.tsx      # 思考中/已思考 tokens 指示（可展开 reasoningContent）
@@ -108,7 +107,7 @@ npm install
 │   │   ├── TitleBar.tsx               # 自定义标题栏（data-tauri-drag-region + RecentFilesBar + 窗口控制 + quickToggles 中部插槽）
 │   │   ├── TitleBarToggles.tsx        # 标题栏中部快捷开关（悬停查词 / 智能查阅，含开启确认弹窗）与平台/模型显示
 │   │   ├── RecentFilesBar.tsx         # 最近文件：触发按钮 + 下拉面板（置顶/搜索/分屏打开）
-│   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗
+│   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗（片段勾选清单，App 层统一渲染）
 │   │   ├── ToolCallsIndicator.tsx     # 工具调用状态指示器（解读流中展示）
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
 │   │   ├── HibernatedPlaceholder.tsx  # 休眠 tab 在 keep-alive 树里的占位（空 div，保持 key 稳定）
@@ -354,7 +353,7 @@ LLM 流量已整体改为 **Rust 后端代理**（`src-tauri/src/llm_proxy.rs`�
 ```
 App.tsx（编排层，具体状态已下沉到 hooks）
 ├── useTabs：tabs / activeTabId / secondaryTabId   # PDF Tab 状态（单视图 + 并排视图）+ 休眠调度（addTab 唯一触发点、activateTab/wakeTab/gotoTabPage/关tab顶替时唤醒，`getHibernationContext` 由 App 以 ref 回填 secondary 与流式会话信息）
-├── usePersistence：annotations / sessions / stashes / selection
+├── usePersistence：annotations / sessions / stashes / selection（首轮成功收尾后 fire-and-forget 生成 `session.summary`（`summary-{id}` 流、thinking disabled）；`handleDeleteSession` 连带删除 PDF 标记与磁盘会话；`handleReinterpretSession` 沿用 sources+首条 prompt 另起新会话并重映射批注）
 ├── useRightPanelLayout：rightVisible / rightPanelWidth
 ├── useRecentFiles：recentFiles
 ├── useSplitView：splitPct                         # 并排视图左右面板比例
@@ -385,8 +384,8 @@ PdfViewer.tsx（协调层：UI + 组合 hooks）
 └── PdfPage                             # 单页渲染组件；悬停取词（useWordLookup + WordTooltip）已下沉到 PdfPage
 
 AiChatPanel.tsx
-├── expandedId / expandedStashIds
-└── 检测到 isStreaming 会话时启动流；展示最终 assistant 消息上的 `toolEvents`
+├── expandedId / expandedStashIds / sessionScope（「当前文档/全部文档」过滤）
+└── 检测到 isStreaming 会话时启动流；展示最终 assistant 消息上的 `toolEvents`；长 user 消息折叠 + 来源片段卡片（可跳原文）；assistant 气泡 hover 复制 / 头部复制全部 / 删除会话
 
 ToolCallsIndicator.tsx
 └── 工具调用状态指示器：running / done / 折叠明细
@@ -537,7 +536,7 @@ runSessionStream（usePersistence.ts）
 
 - 双栏宽度、最小宽度、默认比例等常量在 `App.tsx` 顶部：
   - `MIN_PANEL_WIDTH = 240`
-  - `RIGHT_PANEL_MIN_WIDTH = 180`
+  - `RIGHT_PANEL_MIN_WIDTH = 280`
   - `RIGHT_PANEL_DEFAULT_FRACTION = 3 / 8`
 - 连续滚动相关常量（padding、spacing）同时在 `PdfViewer.tsx` 与 CSS 中定义，修改时需两边同步。
 

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 export const DIVIDER_WIDTH = 6;
 const MIN_PANEL_WIDTH = 240;
-const RIGHT_PANEL_MIN_WIDTH = 180;
+// 会话形态（聊天气泡）在过窄宽度下不可用，最小宽度按会话详情可用宽度定。
+const RIGHT_PANEL_MIN_WIDTH = 280;
 const RIGHT_PANEL_DEFAULT_FRACTION = 3 / 8;
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
 

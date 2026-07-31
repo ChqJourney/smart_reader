@@ -69,7 +69,9 @@
     "userLabel": "You",
     "aiLabel": "AI",
     "generatingPlaceholder": "Generating…",
-    "followUpPlaceholder": "Ask a follow-up..."
+    "followUpPlaceholder": "Ask a follow-up...",
+    "copyAll": "Copy all",
+    "copyMessage": "Copy"
   },
   "stash": {
     "tabLabel": "Stash ({{count}})",
@@ -88,13 +90,20 @@
     "emptyHint": "Select content in the PDF, click Explain to generate an interpretation, or add it to Stash first and use Custom Interpret.",
     "streamingStatus": "Interpreting…",
     "backToList": "Back to Interpretations",
-    "viewSession": "View Interpretation"
+    "viewSession": "View Interpretation",
+    "delete": "Delete interpretation",
+    "typeExplain": "Explain",
+    "typeCustom": "Custom",
+    "scopeCurrent": "Current",
+    "scopeAll": "All documents",
+    "gotoSource": "Go to source"
   },
   "customInterpret": {
     "title": "Custom Interpret",
-    "titleWithCount": "Custom Interpret ({{count}})",
-    "hint": "Interpret based on {{count}} selected snippets",
-    "placeholder": "Enter your interpretation request..."
+    "titleWithCount": "Custom Interpret ({{count}} snippets)",
+    "hint": "Interpret based on {{count}} selected snippets; adjust the selection in the checklist below",
+    "placeholder": "Enter your interpretation request...",
+    "selectionHint": "Stash the selection and start a custom interpretation together with other stashed snippets"
   },
   "translate": {
     "title": "Translate",
@@ -103,7 +112,9 @@
   },
   "explain": {
     "title": "Explain",
-    "popupLabel": "Explanation Marker"
+    "popupLabel": "Explanation Marker",
+    "loading": "Interpreting…",
+    "reinterpret": "Re-interpret"
   },
   "marker": {
     "stash": "Stash",
@@ -267,7 +278,8 @@
     "toolsSystemAddendum": "You can use tools to look up content in currently open PDFs. When the excerpt refers to other clause numbers, tables, or definitions and accurate interpretation requires it, use search_in_pdf / read_pdf_page to check the source before answering. Cite sources as (page N) in your answer. Do not fabricate clauses that were not found.",
     "toolLimitFinalInstruction": "Document lookup tool calls have reached this session limit ({{maxRounds}} rounds). Do not request more tools; answer naturally and completely using only the user's excerpts and the tool results already provided above. If the available information is still insufficient, say what needs manual verification.",
     "toolResultContext": "The following completed document lookup result is available as answer context:\n{{content}}",
-    "toolLimitReachedFallback": "The document lookup limit has been reached for this response. Please continue from the lookup records already shown in the panel and the source excerpt; if more clause checks are needed, raise the maximum tool call setting and start the interpretation again."
+    "toolLimitReachedFallback": "The document lookup limit has been reached for this response. Please continue from the lookup records already shown in the panel and the source excerpt; if more clause checks are needed, raise the maximum tool call setting and start the interpretation again.",
+    "summarizePrompt": "Summarize the following standards-document interpretation session as a one-line title (max 60 characters) in {{targetLanguage}}. Output only the title itself, no quotes, no explanation:\n\nUser request:\n{{request}}\n\nAnswer:\n{{answer}}"
   },
   "tools": {
     "status": {
@@ -286,7 +298,8 @@
   },
   "confirm": {
     "deleteTitle": "Confirm Delete",
-    "deleteExplainBody": "Are you sure you want to delete this interpretation? The source marker and the interpretation record in the right panel will be deleted together."
+    "deleteExplainBody": "Are you sure you want to delete this interpretation? The source marker and the interpretation record in the right panel will be deleted together.",
+    "deleteSessionBody": "Are you sure you want to delete this interpretation record? The corresponding markers on the PDF will be deleted together."
   },
   "action": {
     "translate": "Translate",

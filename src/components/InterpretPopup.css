@@ -1,7 +1,7 @@
-.explain-popup {
+.interpret-popup {
   position: absolute;
   z-index: 21;
-  width: 280px;
+  width: 340px;
   display: flex;
   flex-direction: column;
   background: rgba(255, 255, 255, 0.98);
@@ -12,6 +12,7 @@
   transform: translate(-50%, 12px);
 }
 
+/* 复用 explain-popup 的头部 / 底部结构样式（类名保留 explain-popup-*） */
 .explain-popup-header {
   display: flex;
   align-items: center;
@@ -59,21 +60,67 @@
   color: #1f1f1f;
 }
 
-.explain-popup-body {
+.interpret-popup-body {
   padding: 10px 12px;
-  max-height: 200px;
+  max-height: 320px;
   overflow: auto;
 }
 
-.explain-popup-label {
+.interpret-popup-result {
+  font-size: 0.8rem;
+  color: #333;
+  line-height: 1.5;
+  margin-bottom: 8px;
+}
+
+.interpret-popup-result .markdown-content {
+  font-size: 0.8rem;
+}
+
+.interpret-popup-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 0;
+  color: #757575;
+  font-size: 0.8rem;
+}
+
+.interpret-popup-loading.with-content {
+  justify-content: flex-start;
+  padding: 8px 0 0;
+}
+
+.interpret-popup-error {
+  color: #c42b1c;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.interpret-popup-source-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  margin-left: -6px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
   font-size: 0.7rem;
   color: #888;
-  margin-bottom: 4px;
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
 
+.interpret-popup-source-toggle:hover {
+  background: #f0f0f0;
+  color: #424242;
+}
+
 .explain-popup-source {
+  margin-top: 4px;
   font-size: 0.8rem;
   color: #333;
   line-height: 1.5;
@@ -102,9 +149,14 @@
     border-color 0.15s ease;
 }
 
-.explain-popup-footer button:hover {
+.explain-popup-footer button:hover:not(:disabled) {
   background: #e8e8e8;
   border-color: #d1d1d1;
+}
+
+.explain-popup-footer button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .explain-popup-footer button.danger {
@@ -116,4 +168,21 @@
 .explain-popup-footer button.danger:hover {
   background: #a82418;
   border-color: #a82418;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(0, 120, 212, 0.2);
+  border-top-color: #0078d4;
+  border-radius: 50%;
+  animation: spinner-rotate 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
 }

@@ -94,6 +94,8 @@ export interface UsePersistenceReturn {
     patch: Partial<Omit<Annotation, "id">>
   ) => void;
   handleAnnotationDelete: (id: string) => Promise<void>;
+  handleDeleteSession: (sessionId: string) => Promise<void>;
+  handleReinterpretSession: (sessionId: string) => void;
   handleUpdateStash: (id: string, text: string) => void;
   findSessionIdByAnnotationId: (id: string) => string | undefined;
   abortSessionsForTab: (
@@ -898,6 +900,47 @@ export function usePersistence({
         );
       };
 
+      // 首轮成功收尾后生成一句话摘要（fire-and-forget）：供会话列表展示。
+      // 不走 agent loop、不带工具；失败仅记日志，下次成功收尾时重试。
+      const maybeGenerateSummary = (finalContent: string) => {
+        const current = sessionRef.current;
+        if (current.summary) return;
+        const firstUser = current.messages.find((m) => m.role === "user");
+        const truncate = (text: string, max: number) =>
+          text.length > max ? text.slice(0, max) : text;
+        let acc = "";
+        void streaming.run(
+          `summary-${current.id}`,
+          [
+            {
+              role: "user",
+              content: i18n.t("llm.summarizePrompt", {
+                targetLanguage: currentSettings.targetLanguage,
+                request: truncate(firstUser?.content ?? "", 1500),
+                answer: truncate(finalContent, 1500),
+              }),
+            },
+          ],
+          {
+            onChunk: (_chunk, accumulated) => {
+              acc = accumulated;
+            },
+            onDone: () => {
+              const summary = acc.trim();
+              if (!summary) return;
+              setSessions((prev) =>
+                prev.map((s) => (s.id === current.id ? { ...s, summary } : s))
+              );
+            },
+            onError: (message) => {
+              warn(`Session summary generation failed: ${message}`);
+            },
+          },
+          // 摘要是机械任务，关闭思考模式以缩短延迟。
+          { thinking: "disabled" }
+        );
+      };
+
       const runAgentLoop = async () => {
         let messages = buildApiMessages();
         const seenCalls = new Map<string, string>();
@@ -984,6 +1027,7 @@ export function usePersistence({
                 );
               }
               finishStreaming();
+              maybeGenerateSummary(content);
               return;
             }
 
@@ -1455,6 +1499,75 @@ export function usePersistence({
     [annotationsByHash, setAnnotationsByHash]
   );
 
+  // 从右侧面板按 session 删除：中止进行中的流、删除会话（含磁盘文件），
+  // 并连带删除 PDF 上关联该 session 的所有标记（explain 标记与已解读暂存
+  // 标记都带 sessionId），保证面板与页面两处一致。
+  const handleDeleteSession = useCallback(
+    async (sessionId: string) => {
+      const session = sessions.find((s) => s.id === sessionId);
+      if (!session) return;
+      const confirmed = await showConfirm(
+        i18n.t("confirm.deleteTitle"),
+        i18n.t("confirm.deleteSessionBody")
+      );
+      if (!confirmed) return;
+      if (session.streamingMessageId) {
+        handleInterruptSession(sessionId);
+      }
+      setSessions((prev) => deleteSession(prev, sessionId));
+      try {
+        await deleteSessionOnDisk(sessionId);
+      } catch (err) {
+        error(`deleteSessionOnDisk failed: ${err}`);
+      }
+      setAnnotationsByHash((prev) => {
+        const next: Record<string, Annotation[]> = {};
+        for (const [hash, list] of Object.entries(prev)) {
+          next[hash] = list.filter((a) => a.sessionId !== sessionId);
+        }
+        return next;
+      });
+    },
+    [sessions, handleInterruptSession, setAnnotationsByHash]
+  );
+
+  // 重新解读：沿用旧会话的来源片段与首条请求另起新会话并立即开始流式；
+  // 旧会话删除（含磁盘），关联标记重新指向新会话，列表摘要沿用。
+  // 流式中的会话不允许重跑（入口已禁用，这里防御）。
+  const handleReinterpretSession = useCallback(
+    (sessionId: string) => {
+      const session = sessions.find((s) => s.id === sessionId);
+      if (!session || session.isStreaming) return;
+      const firstUser = session.messages.find((m) => m.role === "user");
+      if (!firstUser) return;
+
+      const { sessionId: newSessionId } = startSessionFromStashes(
+        firstUser.content,
+        session.sources,
+        session.action ?? "explain"
+      );
+
+      setSessions((prev) => {
+        const removed = deleteSession(prev, sessionId);
+        if (!session.summary) return removed;
+        return removed.map((s) =>
+          s.id === newSessionId ? { ...s, summary: session.summary } : s
+        );
+      });
+      void deleteSessionOnDisk(sessionId);
+      setAnnotationsByHash((prev) => {
+        const next: Record<string, Annotation[]> = {};
+        for (const [hash, list] of Object.entries(prev)) {
+          next[hash] = list.map((a) =>
+            a.sessionId === sessionId ? { ...a, sessionId: newSessionId } : a
+          );
+        }
+        return next;
+      });
+    },
+    [sessions, startSessionFromStashes, setAnnotationsByHash]
+  );
+
   // When a tab is closed, abort its streaming sessions but KEEP the sessions
   // and annotations in state (and on disk) so they can be restored when the
   // PDF is reopened. Only streaming is interrupted; no data is deleted.
@@ -1516,6 +1629,8 @@ export function usePersistence({
       handleSessionUpdate,
       handleAnnotationUpdate,
       handleAnnotationDelete,
+      handleDeleteSession,
+      handleReinterpretSession,
       handleUpdateStash,
       findSessionIdByAnnotationId,
       abortSessionsForTab,
@@ -1543,6 +1658,8 @@ export function usePersistence({
       handleSessionUpdate,
       handleAnnotationUpdate,
       handleAnnotationDelete,
+      handleDeleteSession,
+      handleReinterpretSession,
       handleUpdateStash,
       findSessionIdByAnnotationId,
       abortSessionsForTab,

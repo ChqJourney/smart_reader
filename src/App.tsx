@@ -9,6 +9,7 @@ import PdfViewer, {
 import { HibernatedPlaceholder } from "./components/HibernatedPlaceholder";
 import SelectionToolbar from "./components/SelectionToolbar";
 import AiChatPanel from "./components/AiChatPanel";
+import CustomInterpretModal from "./components/CustomInterpretModal";
 import SettingsModal from "./components/SettingsModal";
 import SetupWizard from "./components/SetupWizard";
 import Icon from "./components/Icon";
@@ -299,6 +300,7 @@ function App() {
   const {
     handleAddToStash: persistenceHandleAddToStash,
     handleSelectionAction: persistenceHandleSelectionAction,
+    handleCustomInterpret: persistenceHandleCustomInterpret,
     handleAddComment: persistenceHandleAddComment,
     abortSessionsForTab: persistenceAbortSessionsForTab,
     setStashes: persistenceSetStashes,
@@ -804,6 +806,33 @@ function App() {
     [focusedSelection, focusedTab, persistenceHandleAddToStash, tabs]
   );
 
+  // 自定义解读弹窗由 App 层统一渲染（选区工具条直达与面板按钮两个入口共用），
+  // 候选片段为当前可见 tab 的暂存；preselected 记录面板选择模式的勾选。
+  const [customInterpretOpen, setCustomInterpretOpen] = useState(false);
+  const [customInterpretPreselected, setCustomInterpretPreselected] =
+    useState<Set<string> | null>(null);
+
+  const handleOpenCustomInterpret = useCallback(
+    (preselectedIds: Set<string> | null) => {
+      setCustomInterpretPreselected(preselectedIds);
+      setCustomInterpretOpen(true);
+    },
+    []
+  );
+
+  // 选区工具条「自定义解读」直达：暂存当前选区并立即打开解读要求弹窗，
+  // 弹窗清单含全部暂存片段（含刚加入的这条），默认全选。
+  const handleCustomInterpretFromSelection = useCallback(
+    (text: string) => {
+      if (!focusedSelection || !focusedTab) return;
+      persistenceHandleAddToStash(focusedSelection, text);
+      tabs.clearTabSelection(focusedTab.id);
+      setCustomInterpretPreselected(null);
+      setCustomInterpretOpen(true);
+    },
+    [focusedSelection, focusedTab, persistenceHandleAddToStash, tabs]
+  );
+
   const handleSelectionAction = useCallback(
     (action: SelectionAction, text: string) => {
       if (!focusedSelection || !focusedTab) return;
@@ -1116,12 +1145,14 @@ function App() {
                 initialState={activeTabInitialState}
                 onStateChange={tabs.handleViewerStateChange}
                 annotations={persistence.visibleTabAnnotations}
+                sessions={persistence.sessions}
                 highlightedAnnotationId={
                   tabs.activeTab?.highlightedAnnotationId
                 }
                 onAnnotationUpdate={persistence.handleAnnotationUpdate}
                 onAnnotationDelete={persistence.handleAnnotationDelete}
                 onExplainClick={handleExplainClick}
+                onReinterpret={persistence.handleReinterpretSession}
                 onClearPendingGotoPage={tabs.clearTabPendingGotoPage}
                 hoverTranslate={hoverTranslateActive}
                 settings={settings}
@@ -1158,10 +1189,12 @@ function App() {
                 initialState={secondaryTabInitialState}
                 onStateChange={handleSecondaryViewerStateChange}
                 annotations={persistence.visibleTabAnnotations}
+                sessions={persistence.sessions}
                 highlightedAnnotationId={secondaryTab?.highlightedAnnotationId}
                 onAnnotationUpdate={persistence.handleAnnotationUpdate}
                 onAnnotationDelete={persistence.handleAnnotationDelete}
                 onExplainClick={handleExplainClick}
+                onReinterpret={persistence.handleReinterpretSession}
                 onClearPendingGotoPage={tabs.clearTabPendingGotoPage}
                 hoverTranslate={hoverTranslateActive}
                 settings={settings}
@@ -1179,19 +1212,19 @@ function App() {
                   <AiChatPanel
                     stashes={persistence.visibleTabStashes}
                     sessions={persistence.visibleTabSessions}
+                    allSessions={persistence.sessions}
                     expandedSessionId={persistence.findSessionIdByAnnotationId(
                       tabs.activeTab?.highlightedAnnotationId ?? ""
                     )}
                     onRemoveStash={persistence.handleRemoveStash}
                     onUpdateStash={persistence.handleUpdateStash}
                     onClearStashes={persistence.handleClearStashes}
-                    onCustomInterpret={(prompt, selectedStashes) =>
-                      persistence.handleCustomInterpret(prompt, selectedStashes)
-                    }
+                    onOpenCustomInterpret={handleOpenCustomInterpret}
                     onGotoStash={handleGotoStash}
                     onGotoSession={handleGotoSession}
                     onFollowUp={persistence.handleFollowUp}
                     onInterrupt={persistence.handleInterruptSession}
+                    onDeleteSession={persistence.handleDeleteSession}
                     onToggleVisibility={layout.toggleRight}
                     contextWindow={contextWindow}
                   />
@@ -1288,9 +1321,11 @@ function App() {
                           persistence.annotationsByHash[tab.fileHash || ""]
                         }
                         highlightedAnnotationId={tab.highlightedAnnotationId}
+                        sessions={persistence.sessions}
                         onAnnotationUpdate={persistence.handleAnnotationUpdate}
                         onAnnotationDelete={persistence.handleAnnotationDelete}
                         onExplainClick={handleExplainClick}
+                        onReinterpret={persistence.handleReinterpretSession}
                         onClearPendingGotoPage={tabs.clearTabPendingGotoPage}
                         hoverTranslate={hoverTranslateActive}
                         settings={settings}
@@ -1319,19 +1354,19 @@ function App() {
                 <AiChatPanel
                   stashes={persistence.visibleTabStashes}
                   sessions={persistence.visibleTabSessions}
+                  allSessions={persistence.sessions}
                   expandedSessionId={persistence.findSessionIdByAnnotationId(
                     tabs.activeTab?.highlightedAnnotationId ?? ""
                   )}
                   onRemoveStash={persistence.handleRemoveStash}
                   onUpdateStash={persistence.handleUpdateStash}
                   onClearStashes={persistence.handleClearStashes}
-                  onCustomInterpret={(prompt, selectedStashes) =>
-                    persistence.handleCustomInterpret(prompt, selectedStashes)
-                  }
+                  onOpenCustomInterpret={handleOpenCustomInterpret}
                   onGotoStash={handleGotoStash}
                   onGotoSession={handleGotoSession}
                   onFollowUp={persistence.handleFollowUp}
                   onInterrupt={persistence.handleInterruptSession}
+                  onDeleteSession={persistence.handleDeleteSession}
                   onToggleVisibility={layout.toggleRight}
                   contextWindow={contextWindow}
                 />
@@ -1362,19 +1397,19 @@ function App() {
                 <AiChatPanel
                   stashes={persistence.visibleTabStashes}
                   sessions={persistence.visibleTabSessions}
+                  allSessions={persistence.sessions}
                   expandedSessionId={persistence.findSessionIdByAnnotationId(
                     tabs.activeTab?.highlightedAnnotationId ?? ""
                   )}
                   onRemoveStash={persistence.handleRemoveStash}
                   onUpdateStash={persistence.handleUpdateStash}
                   onClearStashes={persistence.handleClearStashes}
-                  onCustomInterpret={(prompt, selectedStashes) =>
-                    persistence.handleCustomInterpret(prompt, selectedStashes)
-                  }
+                  onOpenCustomInterpret={handleOpenCustomInterpret}
                   onGotoStash={handleGotoStash}
                   onGotoSession={handleGotoSession}
                   onFollowUp={persistence.handleFollowUp}
                   onInterrupt={persistence.handleInterruptSession}
+                  onDeleteSession={persistence.handleDeleteSession}
                   onToggleVisibility={layout.toggleRight}
                   contextWindow={contextWindow}
                 />
@@ -1413,6 +1448,7 @@ function App() {
         selection={focusedSelection}
         onAction={handleSelectionAction}
         onAddToStash={handleAddToStash}
+        onCustomInterpret={handleCustomInterpretFromSelection}
         onCopy={handleCopy}
         onAddComment={handleAddComment}
         onDismiss={() => {
@@ -1421,6 +1457,21 @@ function App() {
           }
         }}
       />
+      {customInterpretOpen && (
+        <CustomInterpretModal
+          stashes={persistence.visibleTabStashes}
+          initialSelectedIds={customInterpretPreselected}
+          onSubmit={(prompt, selected) => {
+            persistenceHandleCustomInterpret(prompt, selected);
+            setCustomInterpretOpen(false);
+            setCustomInterpretPreselected(null);
+          }}
+          onClose={() => {
+            setCustomInterpretOpen(false);
+            setCustomInterpretPreselected(null);
+          }}
+        />
+      )}
     </div>
   );
 }

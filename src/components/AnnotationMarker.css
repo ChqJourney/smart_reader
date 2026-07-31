@@ -89,3 +89,19 @@
   stroke: #fff;
   stroke-width: 0.5;
 }
+
+/* 生成中：关联解读会话流式输出期间的呼吸态，与 highlighted 的脉冲区分
+   （透明度呼吸而非扩散环，避免与「刚跳转高亮」混淆）。 */
+.annotation-marker.pending {
+  animation: marker-breathe 1.2s ease-in-out infinite;
+}
+
+@keyframes marker-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}

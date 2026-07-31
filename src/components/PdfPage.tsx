@@ -1,16 +1,10 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useCallback,
-  memo,
-} from "react";
+import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import * as pdfjsLib from "pdfjs-dist";
 import type { TextItem as PdfjsTextItem } from "pdfjs-dist/types/src/display/api";
 import type { PageViewportInfo } from "./PdfViewer";
 import { Annotation } from "../services/annotations";
+import { InterpretationSession } from "../services/sessions";
 import { AppSettings } from "../services/settings";
 import { error } from "../services/logs";
 import PdfAnnotations from "./PdfAnnotations";
@@ -92,12 +86,16 @@ interface PdfPageProps {
   onVisibilityChange?: (pageNum: number, ratio: number) => void;
   annotations?: Annotation[];
   highlightedAnnotationId?: string | null;
+  /** 已加载的解读会话：转发给 PdfAnnotations 做内联结果与生成中态 */
+  sessions?: InterpretationSession[];
   onAnnotationUpdate?: (
     id: string,
     patch: Partial<Omit<Annotation, "id">>
   ) => void;
   onAnnotationDelete?: (id: string) => void;
   onExplainClick?: (id: string) => void;
+  /** 重新解读指定会话（标记弹层入口） */
+  onReinterpret?: (sessionId: string) => void;
   hoverTranslate?: boolean;
   settings: AppSettings;
   containerRef?: React.Ref<HTMLDivElement>;
@@ -118,9 +116,11 @@ function PdfPage({
   onVisibilityChange,
   annotations,
   highlightedAnnotationId,
+  sessions,
   onAnnotationUpdate,
   onAnnotationDelete,
   onExplainClick,
+  onReinterpret,
   hoverTranslate,
   settings,
   containerRef,
@@ -735,9 +735,11 @@ function PdfPage({
         fileHash={fileHash || ""}
         fileName={fileName}
         highlightedId={highlightedAnnotationId}
+        sessions={sessions}
         onUpdate={onAnnotationUpdate || (() => {})}
         onDelete={onAnnotationDelete || (() => {})}
         onExplainClick={onExplainClick || (() => {})}
+        onReinterpret={onReinterpret}
         settings={settings}
       />
       {tooltip.visible && (

@@ -469,7 +469,7 @@ describe("App", () => {
 
     await openPdf();
     triggerPdfSelection();
-    fireEvent.click(screen.getByRole("button", { name: /解读/i }));
+    fireEvent.click(screen.getByRole("button", { name: "解读" }));
 
     await waitFor(() => {
       expect(
@@ -483,7 +483,7 @@ describe("App", () => {
 
     await openPdf("/test/file.pdf");
     triggerPdfSelection();
-    fireEvent.click(screen.getByRole("button", { name: /解读/i }));
+    fireEvent.click(screen.getByRole("button", { name: "解读" }));
 
     await waitFor(() => {
       expect(
@@ -700,7 +700,7 @@ describe("App", () => {
         screen.getByRole("tab", { name: /解读记录 \(1\)/i })
       ).toBeInTheDocument();
     });
-    expect(screen.getByText(/请解读/i)).toBeInTheDocument();
+    expect(screen.getByText(/selected text/i)).toBeInTheDocument();
   });
 
   it("still removes annotation when session cleanup fails", async () => {
@@ -708,7 +708,7 @@ describe("App", () => {
 
     await openPdf("/test/file.pdf");
     triggerPdfSelection();
-    fireEvent.click(screen.getByRole("button", { name: /解读/i }));
+    fireEvent.click(screen.getByRole("button", { name: "解读" }));
 
     await waitFor(() => {
       expect(
@@ -752,7 +752,7 @@ describe("App", () => {
 
     vi.mocked(confirm).mockResolvedValue(true);
 
-    fireEvent.click(screen.getByRole("button", { name: /删除解读/i }));
+    fireEvent.click(screen.getByRole("button", { name: "删除解读" }));
 
     await waitFor(() => {
       expect(

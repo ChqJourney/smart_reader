@@ -2,8 +2,9 @@ import { useTranslation } from "react-i18next";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StashItem } from "../services/stash";
 import { InterpretationSession } from "../services/sessions";
+import { copyToClipboard } from "../utils/clipboard";
+import { error } from "../services/logs";
 import Icon from "./Icon";
-import CustomInterpretModal from "./CustomInterpretModal";
 import MarkdownRenderer from "./MarkdownRenderer";
 import ThinkingIndicator from "./ThinkingIndicator";
 import ToolCallsIndicator from "./ToolCallsIndicator";
@@ -12,17 +13,23 @@ import "./AiChatPanel.css";
 
 interface AiChatPanelProps {
   stashes: StashItem[];
+  /** 当前可见 tab 的会话（默认列表范围） */
   sessions: InterpretationSession[];
+  /** 全部已加载会话：sessions tab 的「全部」过滤视图使用 */
+  allSessions?: InterpretationSession[];
   expandedSessionId?: string | null;
   onRemoveStash: (id: string) => void;
   onUpdateStash?: (id: string, text: string) => void;
   onClearStashes: () => void;
-  /** 自定义解读：stashes 为实际参与解读的片段（选择模式下为选中子集，否则为全部） */
-  onCustomInterpret: (prompt: string, stashes: StashItem[]) => void;
+  /** 打开自定义解读弹窗（弹窗由 App 层统一渲染，内置片段勾选清单）。
+   *  preselectedIds 为面板选择模式下的勾选项；null 表示默认全选。 */
+  onOpenCustomInterpret: (preselectedIds: Set<string> | null) => void;
   onGotoStash?: (stash: StashItem) => void;
   onGotoSession?: (session: InterpretationSession) => void;
   onFollowUp: (sessionId: string, prompt: string) => void;
   onInterrupt?: (sessionId: string) => void;
+  /** 面板内删除会话（连带删除 PDF 上的对应标记） */
+  onDeleteSession?: (sessionId: string) => void;
   onToggleVisibility?: () => void;
   /** Context window size in tokens (for ContextWidget) */
   contextWindow?: number;
@@ -33,15 +40,17 @@ type Tab = "stash" | "sessions";
 export default function AiChatPanel({
   stashes,
   sessions,
+  allSessions,
   expandedSessionId,
   onRemoveStash,
   onUpdateStash,
   onClearStashes,
-  onCustomInterpret,
+  onOpenCustomInterpret,
   onGotoStash,
   onGotoSession,
   onFollowUp,
   onInterrupt,
+  onDeleteSession,
   onToggleVisibility,
   contextWindow = 128000,
 }: AiChatPanelProps) {
@@ -57,20 +66,28 @@ export default function AiChatPanel({
   );
   const [editingStashId, setEditingStashId] = useState<string | null>(null);
   const [editText, setEditText] = useState("");
-  const [showModal, setShowModal] = useState(false);
-  // 暂存选择模式：进入后点击片段勾选/取消，未进入时自定义解读默认全选
+  // 暂存选择模式：进入后点击片段勾选/取消；未进入时自定义解读默认全选
   const [selectingStashes, setSelectingStashes] = useState(false);
   const [selectedStashIds, setSelectedStashIds] = useState<Set<string>>(
     new Set()
+  );
+  // 会话列表范围：当前可见文档 / 全部已加载会话（跨文档找回解读用）
+  const [sessionScope, setSessionScope] = useState<"current" | "all">(
+    "current"
   );
 
   const messagesRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const programmaticScrollRef = useRef(false);
 
+  // 会话查找合并「当前 + 全部」：从「全部」视图点进的会话可能不属于
+  // 当前可见 tab，仅在 sessions 里找会落空并退回列表。
   const activeSession = useMemo(
-    () => sessions.find((s) => s.id === activeSessionId) ?? null,
-    [sessions, activeSessionId]
+    () =>
+      (allSessions ?? sessions).find((s) => s.id === activeSessionId) ??
+      sessions.find((s) => s.id === activeSessionId) ??
+      null,
+    [sessions, allSessions, activeSessionId]
   );
 
   // 解读生成期间自动滚动到底部；用户主动滚动后暂停，回到底部时恢复。
@@ -153,8 +170,10 @@ export default function AiChatPanel({
     () => stashes.filter((s) => selectedStashIds.has(s.id)),
     [stashes, selectedStashIds]
   );
-  // 未进入选择模式时，自定义解读默认全选
-  const interpretTargets = selectingStashes ? selectedStashes : stashes;
+  // 未进入选择模式时，自定义解读默认全选；按钮常驻显示参与片段数量
+  const interpretCount = selectingStashes
+    ? selectedStashes.length
+    : stashes.length;
 
   const enterSessionChatbox = (session: InterpretationSession) => {
     setActiveSessionId(session.id);
@@ -168,9 +187,32 @@ export default function AiChatPanel({
     onGotoStash?.(stash);
   };
 
+  // 首条 user 消息 id：首条是模板拼装的 prompt（折叠 + 来源片段卡片），
+  // 其余 user 消息是用户手写的追问，原样展示。
+  const activeFirstUserMessageId = useMemo(
+    () => activeSession?.messages.find((m) => m.role === "user")?.id ?? null,
+    [activeSession]
+  );
+
+  const copyActiveSessionTranscript = () => {
+    if (!activeSession) return;
+    const transcript = activeSession.messages
+      .filter((m) => m.role !== "tool" && m.content.trim() !== "")
+      .map(
+        (m) =>
+          `${m.role === "user" ? t("chat.userLabel") : t("chat.aiLabel")}：\n${m.content}`
+      )
+      .join("\n\n");
+    void copyToClipboard(transcript).catch((err) =>
+      error(`Failed to copy transcript: ${err}`)
+    );
+  };
+
+  const listedSessions =
+    sessionScope === "all" && allSessions ? allSessions : sessions;
   const sortedSessions = useMemo(
-    () => [...sessions].sort((a, b) => b.createdAt - a.createdAt),
-    [sessions]
+    () => [...listedSessions].sort((a, b) => b.createdAt - a.createdAt),
+    [listedSessions]
   );
 
   const truncate = (text: string, max: number) =>
@@ -219,10 +261,14 @@ export default function AiChatPanel({
     setEditText("");
   };
 
-  const renderHeader = (children: React.ReactNode) => (
+  const renderHeader = (
+    children: React.ReactNode,
+    extraActions?: React.ReactNode
+  ) => (
     <div className="ai-chat-header">
       <div className="ai-chat-title">{children}</div>
       <div className="ai-chat-header-actions">
+        {extraActions}
         {onToggleVisibility && (
           <button
             onClick={onToggleVisibility}
@@ -242,6 +288,16 @@ export default function AiChatPanel({
       .map((s) => `${s.source.fileName} p.${s.source.page}`)
       .join(" · ");
 
+  // 页码徽章：来源页去重排序后取前 3 个，如 p.3·7·12
+  const renderSessionPages = (session: InterpretationSession) => {
+    const pages = [...new Set(session.sources.map((s) => s.source.page))].sort(
+      (a, b) => a - b
+    );
+    if (pages.length === 0) return "";
+    const shown = pages.slice(0, 3).join("·");
+    return `p.${shown}${pages.length > 3 ? "…" : ""}`;
+  };
+
   return (
     <div className="ai-chat-panel">
       {activeSession ? (
@@ -259,6 +315,36 @@ export default function AiChatPanel({
               <span className="ai-chat-back-title">
                 {renderSessionSource(activeSession)}
               </span>
+            </>,
+            <>
+              {activeSession.sources.length > 0 && (
+                <button
+                  onClick={() => handleGotoStash(activeSession.sources[0])}
+                  className="icon-btn session-goto-source-btn"
+                  aria-label={t("session.gotoSource")}
+                  title={t("session.gotoSource")}
+                >
+                  <Icon name="bookmark" size={16} />
+                </button>
+              )}
+              <button
+                onClick={copyActiveSessionTranscript}
+                className="icon-btn session-copy-btn"
+                aria-label={t("chat.copyAll")}
+                title={t("chat.copyAll")}
+              >
+                <Icon name="copy" size={16} />
+              </button>
+              {onDeleteSession && (
+                <button
+                  onClick={() => onDeleteSession(activeSession.id)}
+                  className="icon-btn session-delete-btn"
+                  aria-label={t("session.delete")}
+                  title={t("session.delete")}
+                >
+                  <Icon name="close" size={16} />
+                </button>
+              )}
             </>
           )}
           {activeSession.lastPromptTokens != null &&
@@ -290,7 +376,9 @@ export default function AiChatPanel({
                 const hasRunningTools =
                   isCurrentStreaming &&
                   message.toolEvents?.some((e) => e.status === "running");
-                return hasVisibleContent || isCurrentStreaming || hasRunningTools;
+                return (
+                  hasVisibleContent || isCurrentStreaming || hasRunningTools
+                );
               })
               .map((message) => {
                 const isCurrentStreaming =
@@ -342,9 +430,31 @@ export default function AiChatPanel({
                             </span>
                           </span>
                         ) : null
+                      ) : message.role === "user" ? (
+                        <UserMessageContent
+                          content={message.content}
+                          isFirst={message.id === activeFirstUserMessageId}
+                          sources={activeSession.sources}
+                          onGotoStash={onGotoStash}
+                        />
                       ) : (
                         <MarkdownRenderer content={message.content} />
                       )}
+                      {message.role === "assistant" &&
+                        message.content.trim() !== "" && (
+                          <button
+                            className="ai-chat-copy-btn"
+                            onClick={() =>
+                              void copyToClipboard(message.content).catch(
+                                (err) => error(`Failed to copy message: ${err}`)
+                              )
+                            }
+                            aria-label={t("chat.copyMessage")}
+                            title={t("chat.copyMessage")}
+                          >
+                            <Icon name="copy" size={12} />
+                          </button>
+                        )}
                     </div>
                   </div>
                 );
@@ -525,14 +635,20 @@ export default function AiChatPanel({
                   </button>
                   <button
                     className="primary"
-                    onClick={() => setShowModal(true)}
-                    disabled={interpretTargets.length === 0}
+                    onClick={() => {
+                      // 弹窗内置勾选清单：把当前勾选（或全选语义 null）交给弹窗，
+                      // 面板的选择模式随即退出，后续调整都在弹窗内完成。
+                      onOpenCustomInterpret(
+                        selectingStashes ? selectedStashIds : null
+                      );
+                      setSelectingStashes(false);
+                      setSelectedStashIds(new Set());
+                    }}
+                    disabled={interpretCount === 0}
                   >
-                    {selectingStashes
-                      ? t("customInterpret.titleWithCount", {
-                          count: selectedStashIds.size,
-                        })
-                      : t("customInterpret.title")}
+                    {t("customInterpret.titleWithCount", {
+                      count: interpretCount,
+                    })}
                   </button>
                 </div>
               )}
@@ -540,60 +656,159 @@ export default function AiChatPanel({
           )}
 
           {activeTab === "sessions" && (
-            <div className="ai-chat-content session-list" role="tabpanel">
-              {sortedSessions.length === 0 && (
-                <p className="ai-chat-placeholder">{t("session.emptyHint")}</p>
-              )}
-              {sortedSessions.map((session) => {
-                const lastUserMessage = [...session.messages]
-                  .reverse()
-                  .find((m) => m.role === "user");
-                return (
-                  <div
-                    key={session.id}
-                    className={`session-item ${session.isStreaming ? "streaming" : ""}`}
-                    onClick={() => {
-                      onGotoSession?.(session);
-                      enterSessionChatbox(session);
-                    }}
+            <>
+              {allSessions && (
+                <div className="session-scope-toggle" role="group">
+                  <button
+                    className={sessionScope === "current" ? "active" : ""}
+                    onClick={() => setSessionScope("current")}
                   >
-                    <div className="session-item-header">
-                      <div className="session-item-meta">
-                        <span className="session-item-source">
-                          {renderSessionSource(session)}
-                        </span>
-                        {session.isStreaming && (
-                          <span className="session-item-status">
-                            {t("session.streamingStatus")}
+                    {t("session.scopeCurrent")}
+                  </button>
+                  <button
+                    className={sessionScope === "all" ? "active" : ""}
+                    onClick={() => setSessionScope("all")}
+                  >
+                    {t("session.scopeAll")}
+                  </button>
+                </div>
+              )}
+              <div className="ai-chat-content session-list" role="tabpanel">
+                {sortedSessions.length === 0 && (
+                  <p className="ai-chat-placeholder">
+                    {t("session.emptyHint")}
+                  </p>
+                )}
+                {sortedSessions.map((session) => {
+                  const isCustom = session.action === "custom";
+                  // 旧会话没有 LLM summary 时，回退显示首个片段的原文摘要。
+                  const fallbackSummary = truncate(
+                    session.sources[0]?.text ?? "",
+                    80
+                  );
+                  return (
+                    <div
+                      key={session.id}
+                      className={`session-item ${session.isStreaming ? "streaming" : ""}`}
+                      onClick={() => {
+                        onGotoSession?.(session);
+                        enterSessionChatbox(session);
+                      }}
+                    >
+                      <div className="session-item-header">
+                        <div className="session-item-meta">
+                          <span className="session-item-page">
+                            {renderSessionPages(session)}
                           </span>
+                          <span
+                            className={`session-item-type ${isCustom ? "custom" : "explain"}`}
+                          >
+                            {isCustom
+                              ? t("session.typeCustom")
+                              : t("session.typeExplain")}
+                          </span>
+                          {session.isStreaming && (
+                            <span className="session-item-status">
+                              {t("session.streamingStatus")}
+                            </span>
+                          )}
+                        </div>
+                        {onDeleteSession && (
+                          <button
+                            className="icon-btn session-item-delete"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDeleteSession(session.id);
+                            }}
+                            aria-label={t("session.delete")}
+                            title={t("session.delete")}
+                          >
+                            <Icon name="close" size={12} />
+                          </button>
                         )}
                       </div>
+                      <div className="session-item-summary">
+                        {session.summary ?? fallbackSummary}
+                      </div>
+                      <div className="session-item-source">
+                        {renderSessionSource(session)}
+                      </div>
                     </div>
-                    <div className="session-item-prompt">
-                      {truncate(lastUserMessage?.content ?? "", 80)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </>
       )}
-
-      {showModal && (
-        <CustomInterpretModal
-          stashCount={interpretTargets.length}
-          onSubmit={(prompt) => {
-            onCustomInterpret(prompt, interpretTargets);
-            setShowModal(false);
-            setSelectingStashes(false);
-            setSelectedStashIds(new Set());
-            setActiveTab("sessions");
-          }}
-          onClose={() => setShowModal(false)}
-        />
-      )}
     </div>
+  );
+}
+
+const USER_MSG_COLLAPSE_THRESHOLD = 240;
+const USER_MSG_COLLAPSE_LEN = 120;
+const SOURCE_CARD_TEXT_LEN = 60;
+
+/**
+ * user 消息内容：首条是模板拼装的 prompt（含片段原文），默认折叠为摘要并
+ * 带来源片段卡片（点击跳原文）；追问消息是用户手写短文本，原样展示。
+ */
+function UserMessageContent({
+  content,
+  isFirst,
+  sources,
+  onGotoStash,
+}: {
+  content: string;
+  isFirst: boolean;
+  sources: StashItem[];
+  onGotoStash?: (stash: StashItem) => void;
+}) {
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const needsCollapse = content.length > USER_MSG_COLLAPSE_THRESHOLD;
+  const shown =
+    needsCollapse && !expanded
+      ? content.slice(0, USER_MSG_COLLAPSE_LEN) + "…"
+      : content;
+  return (
+    <>
+      {isFirst && sources.length > 0 && (
+        <div className="ai-chat-source-cards">
+          {sources.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className="ai-chat-source-card"
+              onClick={() => onGotoStash?.(s)}
+              title={s.text}
+            >
+              <span className="ai-chat-source-card-meta">
+                {t("stash.source", {
+                  fileName: s.source.fileName,
+                  page: s.source.page,
+                })}
+              </span>
+              <span className="ai-chat-source-card-text">
+                {s.text.length > SOURCE_CARD_TEXT_LEN
+                  ? s.text.slice(0, SOURCE_CARD_TEXT_LEN) + "…"
+                  : s.text}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+      <MarkdownRenderer content={shown} />
+      {needsCollapse && (
+        <button
+          type="button"
+          className="ai-chat-msg-expand"
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? t("common.collapse") : t("common.expand")}
+        </button>
+      )}
+    </>
   );
 }
 

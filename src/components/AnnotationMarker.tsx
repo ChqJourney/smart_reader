@@ -42,6 +42,8 @@ interface AnnotationMarkerProps {
   annotation: Annotation;
   scale: number;
   highlighted?: boolean;
+  /** 关联解读会话流式进行中：标记显示「生成中」呼吸态 */
+  pending?: boolean;
   onClick: () => void;
   onMove: (deltaX: number, deltaY: number) => void;
 }
@@ -50,6 +52,7 @@ export default function AnnotationMarker({
   annotation,
   scale,
   highlighted,
+  pending,
   onClick,
   onMove,
 }: AnnotationMarkerProps) {
@@ -88,10 +91,10 @@ export default function AnnotationMarker({
   const className = isStash
     ? `annotation-marker stash ${highlighted ? "highlighted" : ""} ${
         isInterpretedStash ? "interpreted" : ""
-      }`
+      } ${pending ? "pending" : ""}`
     : `annotation-marker ${annotation.type} ${highlighted ? "highlighted" : ""} ${
         isDragging ? "dragging" : ""
-      }`;
+      } ${pending ? "pending" : ""}`;
 
   const label = isStash
     ? isInterpretedStash

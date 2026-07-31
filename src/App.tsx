@@ -867,20 +867,27 @@ function App() {
 
   const handleGotoStash = useCallback(
     (stash: StashItem) => {
+      // source.tabId 可能是持久化会话里的旧 id（tab 重开/应用重启后失效），
+      // 与 handleGotoSession 对齐：先按 id 匹配、再按 fileHash 兜底解析到
+      // 当前打开的 tab；文件未打开时不做任何跳转。
+      const targetTab =
+        tabs.tabs.find((t) => t.id === stash.source.tabId) ??
+        tabs.tabs.find(
+          (t) => t.fileHash && t.fileHash === stash.source.fileHash
+        );
+      if (!targetTab) return;
+
       // 分屏下跳转到副屏 tab 用不激活版本，避免副屏被提升为 active
       // 导致两个面板渲染同一 PDF（塌缩）。
-      if (
-        splitView.isSplitView &&
-        stash.source.tabId === splitView.secondaryTabId
-      ) {
-        tabs.gotoTabPage(stash.source.tabId, stash.source.page, {
+      if (splitView.isSplitView && targetTab.id === splitView.secondaryTabId) {
+        tabs.gotoTabPage(targetTab.id, stash.source.page, {
           activate: false,
         });
         setFocusedViewer("secondary");
         return;
       }
-      tabs.gotoTabPage(stash.source.tabId, stash.source.page);
-      if (splitView.isSplitView && stash.source.tabId === tabs.activeTabId) {
+      tabs.gotoTabPage(targetTab.id, stash.source.page);
+      if (splitView.isSplitView && targetTab.id === tabs.activeTabId) {
         setFocusedViewer("primary");
       }
     },

@@ -434,6 +434,10 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
   const gotoTabPage = useCallback(
     (tabId: string, page: number, options?: { activate?: boolean }) => {
       const activate = options?.activate !== false;
+      // 防御：调用方可能传入持久化数据里的旧 tabId（如已落盘会话的
+      // sources），目标 tab 不存在时绝不能动 activeTabId——否则 keep-alive
+      // 树里所有 viewer 都因 isActive=false 被隐藏，阅读区整体消失。
+      if (!tabsRef.current.some((t) => t.id === tabId)) return;
       // activate=false 用于分屏下跳转到副屏 tab：只跳页不激活，
       // 否则副屏会被提升为 active，导致两个面板渲染同一 PDF（塌缩）。
       if (activate) {

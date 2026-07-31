@@ -257,6 +257,29 @@ describe("useTabs", () => {
     expect(result.current.activeTab?.pendingGotoPage).toBeUndefined();
   });
 
+  it("ignores gotoTabPage with an unknown tabId and keeps activeTabId intact", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    let tabId: string;
+    await act(async () => {
+      const tab = await result.current.openPdfByPath("/test/file.pdf");
+      tabId = tab!.id;
+    });
+
+    act(() => {
+      // 持久化会话 sources 里的旧 tabId（tab 重开/重启后失效）：不得把
+      // activeTabId 置为不存在的 id，否则 keep-alive 树里所有 viewer 都因
+      // isActive=false 被隐藏，阅读区整体消失。
+      result.current.gotoTabPage("stale-tab-id", 3);
+    });
+
+    expect(result.current.activeTabId).toBe(tabId!);
+    expect(result.current.activeTab?.pageNum).not.toBe(3);
+    // openPdfByPath 激活时会把 pendingGotoPage 置为 1，不得被这次无效
+    // 跳转改写为目标页码。
+    expect(result.current.activeTab?.pendingGotoPage).toBe(1);
+  });
+
   it("sets pendingGotoPage from saved pageNum when activating a tab", async () => {
     const { result } = renderHook(() => useTabs());
 

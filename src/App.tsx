@@ -14,7 +14,7 @@ import SettingsModal from "./components/SettingsModal";
 import SetupWizard from "./components/SetupWizard";
 import Icon from "./components/Icon";
 import { StashItem } from "./services/stash";
-import { InterpretationSession } from "./services/sessions";
+import { InterpretationSession, SessionSortMode } from "./services/sessions";
 import { SelectionAction } from "./services/llm";
 import { useTabs, type HibernationContext } from "./hooks/useTabs";
 import { usePersistence } from "./hooks/usePersistence";
@@ -252,6 +252,17 @@ function App() {
       const next = { ...prev, agentToolsEnabled: !prev.agentToolsEnabled };
       saveSettings(next).catch((err) =>
         error(`[App] 保存智能查阅开关失败: ${err}`)
+      );
+      return next;
+    });
+  }, []);
+
+  // 解读记录排序方式：切换后立即持久化（与快捷开关同一策略）
+  const handleSessionSortModeChange = useCallback((mode: SessionSortMode) => {
+    setSettings((prev) => {
+      const next = { ...prev, sessionSortMode: mode };
+      saveSettings(next).catch((err) =>
+        error(`[App] 保存解读记录排序方式失败: ${err}`)
       );
       return next;
     });
@@ -1234,6 +1245,8 @@ function App() {
                     onDeleteSession={persistence.handleDeleteSession}
                     onToggleVisibility={layout.toggleRight}
                     contextWindow={contextWindow}
+                    sessionSortMode={settings.sessionSortMode}
+                    onSessionSortModeChange={handleSessionSortModeChange}
                   />
                 </div>
               </>
@@ -1376,6 +1389,8 @@ function App() {
                   onDeleteSession={persistence.handleDeleteSession}
                   onToggleVisibility={layout.toggleRight}
                   contextWindow={contextWindow}
+                  sessionSortMode={settings.sessionSortMode}
+                  onSessionSortModeChange={handleSessionSortModeChange}
                 />
               </div>
             ) : (
@@ -1419,6 +1434,8 @@ function App() {
                   onDeleteSession={persistence.handleDeleteSession}
                   onToggleVisibility={layout.toggleRight}
                   contextWindow={contextWindow}
+                  sessionSortMode={settings.sessionSortMode}
+                  onSessionSortModeChange={handleSessionSortModeChange}
                 />
               </div>
             ) : (

@@ -657,16 +657,20 @@
   flex-shrink: 0;
 }
 
-/* sessions tab 顶部「当前文档 / 全部文档」过滤开关 */
-.session-scope-toggle {
+/* sessions 列表顶部工具行：范围切换按钮（左）+ 排序下拉（右） */
+.session-list-toolbar {
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
   padding: 8px 12px 0;
   flex-shrink: 0;
 }
 
-.session-scope-toggle button {
-  flex: 1;
+/* 「当前文档 / 全部文档」单按钮切换：显示当前范围，点击互换 */
+.session-scope-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 5px 10px;
   background: #f3f3f3;
   border: 1px solid #e5e5e5;
@@ -680,16 +684,35 @@
     border-color 0.15s ease;
 }
 
-.session-scope-toggle button:hover {
+.session-scope-switch:hover {
   background: #e8e8e8;
   color: #1f1f1f;
 }
 
-.session-scope-toggle button.active {
+.session-scope-switch.active {
   background: #e8f0fe;
   border-color: #0078d4;
   color: #0078d4;
   font-weight: 500;
+}
+
+/* 排序下拉：复用 IconSelect，压缩到与范围切换按钮同高 */
+.session-sort-select {
+  margin-left: auto;
+  width: 104px;
+  flex-shrink: 0;
+}
+
+.session-sort-select .icon-select-trigger {
+  height: 27px;
+  padding: 4px 8px;
+  gap: 4px;
+  font-size: 0.75rem;
+}
+
+.session-sort-select .icon-select-option {
+  padding: 6px 8px;
+  font-size: 0.75rem;
 }
 
 /* 消息气泡内复制按钮：hover 消息时浮现 */

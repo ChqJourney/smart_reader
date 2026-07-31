@@ -8,6 +8,7 @@ import {
   finishStreaming,
   deleteSession,
   loadSession,
+  sortSessions,
 } from "./sessions";
 import { StashItem, StashSource } from "./stash";
 
@@ -243,6 +244,88 @@ describe("sessions service", () => {
       const result = await loadSession("session-1");
 
       expect(result).toBeNull();
+    });
+  });
+
+  describe("sortSessions", () => {
+    function makeSession(
+      id: string,
+      pages: number[],
+      createdAt: number,
+      updatedAt: number
+    ): InterpretationSession {
+      return {
+        ...createSession(
+          pages.map((page, i) => ({
+            ...makeStashItem(`${id}-stash-${i}`, `text ${page}`),
+            source: makeSource({ page }),
+          })),
+          "prompt"
+        ),
+        id,
+        createdAt,
+        updatedAt,
+      };
+    }
+
+    it("sorts by updatedAt desc in recentActivity mode", () => {
+      const sessions = [
+        makeSession("old", [1], 100, 100),
+        makeSession("new", [2], 200, 300),
+        makeSession("mid", [3], 300, 200),
+      ];
+
+      const result = sortSessions(sessions, "recentActivity");
+
+      expect(result.map((s) => s.id)).toEqual(["new", "mid", "old"]);
+    });
+
+    it("sorts by createdAt desc in createdAt mode", () => {
+      const sessions = [
+        makeSession("a", [1], 100, 900),
+        makeSession("b", [2], 300, 100),
+        makeSession("c", [3], 200, 500),
+      ];
+
+      const result = sortSessions(sessions, "createdAt");
+
+      expect(result.map((s) => s.id)).toEqual(["b", "c", "a"]);
+    });
+
+    it("sorts by minimum source page asc in page mode", () => {
+      const sessions = [
+        makeSession("p12", [12], 100, 100),
+        makeSession("p3", [7, 3], 200, 200),
+        makeSession("p7", [7], 300, 300),
+      ];
+
+      const result = sortSessions(sessions, "page");
+
+      expect(result.map((s) => s.id)).toEqual(["p3", "p7", "p12"]);
+    });
+
+    it("breaks page ties by createdAt desc and puts sourceless sessions last", () => {
+      const sessions = [
+        makeSession("older", [5], 100, 100),
+        makeSession("no-source", [], 300, 300),
+        makeSession("newer", [5], 200, 200),
+      ];
+
+      const result = sortSessions(sessions, "page");
+
+      expect(result.map((s) => s.id)).toEqual(["newer", "older", "no-source"]);
+    });
+
+    it("does not mutate the input array", () => {
+      const sessions = [
+        makeSession("a", [2], 100, 100),
+        makeSession("b", [1], 200, 200),
+      ];
+
+      const result = sortSessions(sessions, "page");
+
+      expect(result).not.toBe(sessions);
+      expect(sessions.map((s) => s.id)).toEqual(["a", "b"]);
     });
   });
 });

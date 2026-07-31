@@ -24,7 +24,7 @@
 - 大纲 / 目录导航面板（PDF 自带 outline 时可用，点击跳转章节）。
 - 选中文本后浮动工具条：加入暂存、解读、自定义解读（暂存所选并直达弹窗）、翻译、复制、批注（comment 浮层，可拖动编辑）。
 - 翻译生成可拖动 / 隐藏 / 删除的浮层批注。
-- 解读生成蓝色标记（生成中带呼吸态），点击标记打开 InterpretPopup 内联展示解读结果（流式/错误态、原文折叠、查看解读/重新解读/删除）；右侧面板展示可点击跳转的解读记录（页码+类型徽章+LLM 一句话摘要，支持「当前文档/全部文档」过滤与面板内删除会话），支持多轮追问。
+- 解读生成蓝色标记（生成中带呼吸态），点击标记打开 InterpretPopup 内联展示解读结果（流式/错误态、原文折叠、查看解读/重新解读/删除）；右侧面板展示可点击跳转的解读记录（页码+类型徽章+LLM 一句话摘要，支持「当前文档/全部文档」过滤、排序下拉（最近活动/创建时间/按页码，按页码仅当前文档范围可选，选择持久化到 settings）与面板内删除会话），支持多轮追问。
 - 自定义解读：把多个暂存片段一次性发给 LLM。暂存区按钮常驻显示片段数量并直达弹窗；解读要求弹窗内置可勾选片段清单（默认全选）与解读方式预设下拉（选中即把预定义 prompt 填入输入框，可继续编辑，手动编辑后回到「自由提问」，模板文案在 locales 的 `customInterpret.presets.*` 段），仅能通过「取消」/「发送」关闭；暂存不落盘为有意设计。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
 - 解读 / 自定义解读会话可分享：会话头部「分享」下拉支持复制结构化 Markdown 到剪贴板或导出 .md 文件（原文片段以引用块 + 来源行展示，跳过模板 prompt / tool 消息 / 思考内容，见 `services/share.ts`）。
@@ -99,7 +99,7 @@ npm install
 │   │   ├── TranslatePopup.tsx         # 翻译浮层
 │   │   ├── InterpretPopup.tsx         # 解读结果内联浮层（解读/已解读暂存标记共用，流式/错误态、原文折叠、重新解读）
 │   │   ├── CommentPopup.tsx           # 批注浮层（拖动编辑、300ms 防抖保存、隐藏/删除）
-│   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录（页码/类型徽章/LLM 摘要/范围过滤/会话删除）、流式中止）
+│   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录（页码/类型徽章/LLM 摘要/范围过滤/排序下拉/会话删除）、流式中止）
 │   │   ├── ContextWidget.tsx          # 会话上下文用量条（数据源 activeSession.lastPromptTokens，已接入 AiChatPanel）
 │   │   ├── MarkdownRenderer.tsx       # react-markdown + gfm/math/katex，自定义 sanitize schema，公式解析失败降级纯文本
 │   │   ├── ThinkingIndicator.tsx      # 思考中/已思考 tokens 指示（可展开 reasoningContent）
@@ -157,7 +157,7 @@ npm install
 │   │   ├── pdfToolsRegistry.ts        # 当前打开 PDF 的轻量元数据注册表（Agent Tools 授权数据源）
 │   │   ├── pdfTools.ts                # Agent Tools 执行层（瞬态 ToolSession）
 │   │   ├── recentFiles.ts             # 最近文件 CRUD + 文件存在性检查
-│   │   ├── sessions.ts                # 解读会话数据结构与管理
+│   │   ├── sessions.ts                # 解读会话数据结构与管理 + sortSessions 列表排序（纯函数）
 │   │   ├── share.ts                   # 会话分享：buildShareMarkdown 纯函数（引用块原文+来源行+正文）+ 导出 .md
 │   │   ├── stash.ts                   # 暂存片段数据结构与管理
 │   │   ├── selection.ts               # SelectionState 类型
@@ -299,7 +299,7 @@ cd src-tauri && cargo test
 - `save_session(session: InterpretationSession)`：保存会话 JSON。
 - `delete_session(sessionId: string)`：删除会话文件。
 - `authorize_pdf_path(filePath: string)`：将用户通过对话框选择的 PDF 路径加入后端授权白名单，`read_pdf_bytes` / `get_pdf_hash` 会校验该白名单。
-- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 悬停翻译开关 + 日志级别）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
+- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 悬停翻译开关 + 日志级别 + 解读记录排序方式）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表（`RecentFile` 含 `pinned` 置顶与 `lastPage` 阅读页码字段，旧数据通过 `#[serde(default)]` 兼容）。
 - `check_files_exist(paths: string[])`：批量检查文件是否仍存在于磁盘，最近文件面板用它置灰已移动/删除的条目。
 - `export_text_file(file_path: string, content: string)`：把用户经系统保存对话框选定的任意路径写入文本文件（解读分享导出 .md 使用，原子写入，不走 PDF 授权白名单）。
@@ -331,7 +331,7 @@ cd src-tauri && cargo test
     │   └── ecdict.sqlite.extract/ # 解压临时目录
     ├── logs/
     │   └── app.log                # 应用运行日志（默认 Warn 级别，可在设置中调整，保留最近 3 个文件各 10 MB）
-    ├── settings.json              # LLM 平台/模型 + 目标语言 + Agent Tools 开关 + 悬停翻译开关 + 日志级别
+    ├── settings.json              # LLM 平台/模型 + 目标语言 + Agent Tools 开关 + 悬停翻译开关 + 日志级别 + 解读记录排序方式
     └── recent_files.json          # 最近打开文件列表
 ```
 
@@ -387,7 +387,7 @@ PdfViewer.tsx（协调层：UI + 组合 hooks）
 └── PdfPage                             # 单页渲染组件；悬停取词（useWordLookup + WordTooltip）已下沉到 PdfPage
 
 AiChatPanel.tsx
-├── expandedId / expandedStashIds / sessionScope（「当前文档/全部文档」过滤）
+├── expandedId / expandedStashIds / sessionScope（「当前文档/全部文档」过滤）/ sortMode（排序方式，受控于 App 的 settings.sessionSortMode）
 └── 检测到 isStreaming 会话时启动流；展示最终 assistant 消息上的 `toolEvents`；长 user 消息折叠 + 来源片段卡片（可跳原文）；assistant 气泡 hover 复制 / 头部复制全部 / 删除会话
 
 ToolCallsIndicator.tsx

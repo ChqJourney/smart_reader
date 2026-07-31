@@ -58,6 +58,7 @@ const defaultSettings = {
   logLevel: "warn" as const,
   rightPanelVisible: true,
   rightPanelWidth: 0,
+  sessionSortMode: "recentActivity" as const,
 };
 
 function switchToFeaturePage() {
@@ -256,6 +257,7 @@ describe("SettingsModal", () => {
       logLevel: "warn",
       rightPanelVisible: true,
       rightPanelWidth: 0,
+      sessionSortMode: "recentActivity",
     });
   });
 

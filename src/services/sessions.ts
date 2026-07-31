@@ -6,6 +6,14 @@ import type { LlmError, TokenUsage, ToolCall } from "../types/llm";
 
 export type SessionAction = SelectionAction | "custom";
 
+/**
+ * 解读记录列表排序方式：
+ * - recentActivity：按 updatedAt 降序（追问/流式更新会刷新，默认）
+ * - createdAt：按创建时间降序
+ * - page：按来源片段最小页码升序（仅「当前文档」范围下可选）
+ */
+export type SessionSortMode = "recentActivity" | "createdAt" | "page";
+
 export interface ToolEvent {
   name: string;
   summary: string;
@@ -123,6 +131,39 @@ export function deleteSession(
   id: string
 ): InterpretationSession[] {
   return sessions.filter((s) => s.id !== id);
+}
+
+/** 页码排序键：来源片段的最小页码；无来源（旧数据）排最后。 */
+function minSourcePage(session: InterpretationSession): number {
+  let min = Infinity;
+  for (const stash of session.sources) {
+    if (stash.source.page < min) min = stash.source.page;
+  }
+  return min;
+}
+
+/** 返回按指定方式排序的新数组，不修改入参。 */
+export function sortSessions(
+  sessions: InterpretationSession[],
+  mode: SessionSortMode
+): InterpretationSession[] {
+  const sorted = [...sessions];
+  switch (mode) {
+    case "page":
+      // 页码相同的并列项按创建时间降序，保证顺序稳定可预期
+      sorted.sort(
+        (a, b) =>
+          minSourcePage(a) - minSourcePage(b) || b.createdAt - a.createdAt
+      );
+      break;
+    case "createdAt":
+      sorted.sort((a, b) => b.createdAt - a.createdAt);
+      break;
+    case "recentActivity":
+      sorted.sort((a, b) => b.updatedAt - a.updatedAt);
+      break;
+  }
+  return sorted;
 }
 
 export function finishStreaming(

@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS = {
   logLevel: "warn",
   rightPanelVisible: true,
   rightPanelWidth: 0,
+  sessionSortMode: "recentActivity",
 };
 
 describe("settings service", () => {
@@ -77,6 +78,36 @@ describe("settings service", () => {
     const settings = await loadSettings();
     expect(settings.systemPrompts.translate).toContain("翻译助手");
     expect(settings.systemPrompts.explain).toContain("阅读助手");
+  });
+
+  it("fills default session sort mode when backend returns old format", async () => {
+    mockTauriInvoke({
+      load_settings: () => ({
+        llm: {
+          baseUrl: "https://api.deepseek.com/v1",
+          apiKey: "",
+          model: "deepseek-v4-flash",
+        },
+        targetLanguage: "中文",
+      }),
+      check_api_key: () => true,
+    });
+    const { loadSettings } = await import("../services/settings");
+    const settings = await loadSettings();
+    expect(settings.sessionSortMode).toBe("recentActivity");
+  });
+
+  it("drops unknown session sort mode values from backend", async () => {
+    mockTauriInvoke({
+      load_settings: () => ({
+        ...DEFAULT_SETTINGS,
+        sessionSortMode: "bogus",
+      }),
+      check_api_key: () => true,
+    });
+    const { loadSettings } = await import("../services/settings");
+    const settings = await loadSettings();
+    expect(settings.sessionSortMode).toBe("recentActivity");
   });
 
   it("migrates legacy localStorage config when backend has no api key", async () => {
@@ -274,6 +305,7 @@ describe("settings service", () => {
       logLevel: "warn",
       rightPanelVisible: true,
       rightPanelWidth: 0,
+      sessionSortMode: "recentActivity",
     };
     await saveSettings(settings);
     expect(saved).toEqual(settings);

@@ -104,7 +104,14 @@
     "typeCustom": "Custom",
     "scopeCurrent": "Current",
     "scopeAll": "All documents",
-    "gotoSource": "Go to source"
+    "scopeSwitch": "Click to switch document scope",
+    "gotoSource": "Go to source",
+    "sort": {
+      "label": "Sort by",
+      "recentActivity": "Recent activity",
+      "createdAt": "Created time",
+      "page": "By page"
+    }
   },
   "customInterpret": {
     "title": "Custom Interpret",

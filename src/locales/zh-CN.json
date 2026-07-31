@@ -104,7 +104,14 @@
     "typeCustom": "自定义解读",
     "scopeCurrent": "当前文档",
     "scopeAll": "全部文档",
-    "gotoSource": "跳转原文"
+    "scopeSwitch": "点击切换文档范围",
+    "gotoSource": "跳转原文",
+    "sort": {
+      "label": "排序方式",
+      "recentActivity": "最近活动",
+      "createdAt": "创建时间",
+      "page": "按页码"
+    }
   },
   "customInterpret": {
     "title": "自定义解读",

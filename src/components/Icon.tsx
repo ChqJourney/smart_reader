@@ -42,7 +42,8 @@ export type IconName =
   | "restore"
   | "copy"
   | "comment"
-  | "share";
+  | "share"
+  | "swap";
 
 interface IconProps {
   name: IconName;
@@ -734,6 +735,26 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
+      />
+    </>
+  ),
+  swap: (
+    <>
+      <path
+        d="M3 7h11M11 4l3 3-3 3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M17 13H6M9 16l-3-3 3-3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
       />
     </>
   ),

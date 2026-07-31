@@ -1,11 +1,16 @@
 import { useTranslation } from "react-i18next";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { StashItem } from "../services/stash";
-import { InterpretationSession } from "../services/sessions";
+import {
+  InterpretationSession,
+  SessionSortMode,
+  sortSessions,
+} from "../services/sessions";
 import { copyToClipboard } from "../utils/clipboard";
 import { buildShareMarkdown, exportSessionMarkdown } from "../services/share";
 import { error } from "../services/logs";
 import Icon from "./Icon";
+import IconSelect from "./IconSelect";
 import MarkdownRenderer from "./MarkdownRenderer";
 import ThinkingIndicator from "./ThinkingIndicator";
 import ToolCallsIndicator from "./ToolCallsIndicator";
@@ -34,6 +39,9 @@ interface AiChatPanelProps {
   onToggleVisibility?: () => void;
   /** Context window size in tokens (for ContextWidget) */
   contextWindow?: number;
+  /** 解读记录排序方式（由 App 持久化到 settings；缺省时组件内部自持） */
+  sessionSortMode?: SessionSortMode;
+  onSessionSortModeChange?: (mode: SessionSortMode) => void;
 }
 
 type Tab = "stash" | "sessions";
@@ -54,6 +62,8 @@ export default function AiChatPanel({
   onDeleteSession,
   onToggleVisibility,
   contextWindow = 128000,
+  sessionSortMode,
+  onSessionSortModeChange,
 }: AiChatPanelProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>(
@@ -76,6 +86,14 @@ export default function AiChatPanel({
   const [sessionScope, setSessionScope] = useState<"current" | "all">(
     "current"
   );
+  // 排序方式：优先受控于 App（持久化到 settings），未接时组件内部自持（测试场景）
+  const [localSortMode, setLocalSortMode] =
+    useState<SessionSortMode>("recentActivity");
+  const sortMode = sessionSortMode ?? localSortMode;
+  const handleSortModeChange = (mode: SessionSortMode) => {
+    setLocalSortMode(mode);
+    onSessionSortModeChange?.(mode);
+  };
   // 分享下拉菜单开合
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const shareMenuRef = useRef<HTMLDivElement>(null);
@@ -243,9 +261,27 @@ export default function AiChatPanel({
 
   const listedSessions =
     sessionScope === "all" && allSessions ? allSessions : sessions;
+  // 跨文档的「全部文档」范围下页码排序没有意义，回退到最近活动；
+  // 不落盘，切回「当前文档」后恢复用户原选择。
+  const effectiveSortMode: SessionSortMode =
+    sessionScope === "all" && sortMode === "page" ? "recentActivity" : sortMode;
   const sortedSessions = useMemo(
-    () => [...listedSessions].sort((a, b) => b.createdAt - a.createdAt),
-    [listedSessions]
+    () => sortSessions(listedSessions, effectiveSortMode),
+    [listedSessions, effectiveSortMode]
+  );
+  const sortOptions = useMemo(
+    () =>
+      (
+        [
+          ["recentActivity", t("session.sort.recentActivity")],
+          ["createdAt", t("session.sort.createdAt")],
+          // 页码排序仅在「当前文档」范围下提供
+          ...(sessionScope === "current"
+            ? [["page", t("session.sort.page")] as const]
+            : []),
+        ] as const
+      ).map(([value, label]) => ({ value, label })),
+    [t, sessionScope]
   );
 
   const truncate = (text: string, max: number) =>
@@ -711,22 +747,35 @@ export default function AiChatPanel({
 
           {activeTab === "sessions" && (
             <>
-              {allSessions && (
-                <div className="session-scope-toggle" role="group">
+              <div className="session-list-toolbar">
+                {allSessions && (
                   <button
-                    className={sessionScope === "current" ? "active" : ""}
-                    onClick={() => setSessionScope("current")}
+                    type="button"
+                    className={`session-scope-switch${sessionScope === "all" ? " active" : ""}`}
+                    onClick={() =>
+                      setSessionScope(
+                        sessionScope === "current" ? "all" : "current"
+                      )
+                    }
+                    title={t("session.scopeSwitch")}
                   >
-                    {t("session.scopeCurrent")}
+                    <Icon name="swap" size={13} />
+                    {sessionScope === "current"
+                      ? t("session.scopeCurrent")
+                      : t("session.scopeAll")}
                   </button>
-                  <button
-                    className={sessionScope === "all" ? "active" : ""}
-                    onClick={() => setSessionScope("all")}
-                  >
-                    {t("session.scopeAll")}
-                  </button>
+                )}
+                <div
+                  className="session-sort-select"
+                  title={t("session.sort.label")}
+                >
+                  <IconSelect
+                    value={effectiveSortMode}
+                    options={sortOptions}
+                    onChange={(v) => handleSortModeChange(v as SessionSortMode)}
+                  />
                 </div>
-              )}
+              </div>
               <div className="ai-chat-content session-list" role="tabpanel">
                 {sortedSessions.length === 0 && (
                   <p className="ai-chat-placeholder">

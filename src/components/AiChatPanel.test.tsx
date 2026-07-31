@@ -463,7 +463,7 @@ describe("AiChatPanel", () => {
     expect(screen.getByText("当前文档的解读")).toBeInTheDocument();
     expect(screen.queryByText("另一文档的解读")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "全部文档" }));
+    fireEvent.click(screen.getByRole("button", { name: "当前文档" }));
 
     expect(screen.getByText("另一文档的解读")).toBeInTheDocument();
     // 从「全部」视图可以进入非当前文档的会话详情
@@ -576,5 +576,121 @@ describe("AiChatPanel", () => {
     expect(onInterrupt).not.toHaveBeenCalled();
     expect(onFollowUp).not.toHaveBeenCalled();
     expect(input).toHaveValue("下一个问题");
+  });
+
+  describe("session sort", () => {
+    const sessionItemTexts = (container: HTMLElement) =>
+      Array.from(container.querySelectorAll(".session-item")).map(
+        (el) => el.textContent ?? ""
+      );
+
+    it("sorts sessions by recent activity by default", () => {
+      const sessions = [
+        makeSession({ id: "s1", summary: "最旧活动", updatedAt: 100 }),
+        makeSession({ id: "s2", summary: "最新活动", updatedAt: 300 }),
+        makeSession({ id: "s3", summary: "中间活动", updatedAt: 200 }),
+      ];
+
+      const { container } = renderPanel({ sessions });
+
+      const texts = sessionItemTexts(container);
+      expect(texts[0]).toContain("最新活动");
+      expect(texts[1]).toContain("中间活动");
+      expect(texts[2]).toContain("最旧活动");
+    });
+
+    it("reorders by created time and notifies change", () => {
+      const onSessionSortModeChange = vi.fn();
+      const sessions = [
+        makeSession({
+          id: "s1",
+          summary: "后创建",
+          createdAt: 300,
+          updatedAt: 100,
+        }),
+        makeSession({
+          id: "s2",
+          summary: "先创建",
+          createdAt: 100,
+          updatedAt: 300,
+        }),
+      ];
+
+      const { container } = renderPanel({
+        sessions,
+        onSessionSortModeChange,
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "最近活动" }));
+      fireEvent.click(screen.getByRole("option", { name: "创建时间" }));
+
+      expect(onSessionSortModeChange).toHaveBeenCalledWith("createdAt");
+      const texts = sessionItemTexts(container);
+      expect(texts[0]).toContain("后创建");
+      expect(texts[1]).toContain("先创建");
+    });
+
+    it("reorders by minimum source page", () => {
+      const sessions = [
+        makeSession({
+          id: "s1",
+          summary: "第十二页",
+          sources: [
+            makeStash("stash-1", "p12", { source: makeSource({ page: 12 }) }),
+          ],
+        }),
+        makeSession({
+          id: "s2",
+          summary: "第三页",
+          sources: [
+            makeStash("stash-2", "p3", { source: makeSource({ page: 3 }) }),
+            makeStash("stash-3", "p7", { source: makeSource({ page: 7 }) }),
+          ],
+        }),
+      ];
+
+      const { container } = renderPanel({ sessions });
+
+      fireEvent.click(screen.getByRole("button", { name: "最近活动" }));
+      fireEvent.click(screen.getByRole("option", { name: "按页码" }));
+
+      const texts = sessionItemTexts(container);
+      expect(texts[0]).toContain("第三页");
+      expect(texts[1]).toContain("第十二页");
+    });
+
+    it("hides page option and falls back to recent activity in all-documents scope", () => {
+      const current = makeSession({
+        id: "s1",
+        summary: "当前文档解读",
+        updatedAt: 100,
+      });
+      const other = makeSession({
+        id: "s2",
+        summary: "另一文档解读",
+        updatedAt: 200,
+        sources: [
+          makeStash("stash-9", "other", {
+            source: makeSource({ fileName: "other.pdf", page: 7 }),
+          }),
+        ],
+      });
+
+      const { container } = renderPanel({
+        sessions: [current],
+        allSessions: [current, other],
+        sessionSortMode: "page",
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "当前文档" }));
+
+      // 排序下拉回退显示「最近活动」，且选项中不再提供「按页码」
+      const trigger = screen.getByRole("button", { name: "最近活动" });
+      fireEvent.click(trigger);
+      expect(screen.queryByRole("option", { name: "按页码" })).toBeNull();
+      // 另一文档的解读 updatedAt 更新，排在最前
+      const items = container.querySelectorAll(".session-item");
+      expect(items[0].textContent).toContain("另一文档解读");
+    });
   });
 });

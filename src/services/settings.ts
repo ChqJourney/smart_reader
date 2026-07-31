@@ -2,6 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { error } from "./logs";
 import { PLATFORM_PRESETS } from "../data/platformPresets";
 import type { PlatformId } from "../data/platformPresets";
+import type { SessionSortMode } from "./sessions";
 
 // PlatformId 统一定义在 data/platformPresets.ts，这里 re-export 保持既有 import 路径可用。
 export type { PlatformId };
@@ -39,6 +40,8 @@ export interface AppSettings {
   rightPanelVisible: boolean;
   /** Persisted width of the right-side panel in pixels. 0 means "use default fraction". */
   rightPanelWidth: number;
+  /** 解读记录列表排序方式 */
+  sessionSortMode: SessionSortMode;
 }
 
 const LEGACY_STORAGE_KEY = "standardread-llm-config";
@@ -102,6 +105,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   logLevel: "warn",
   rightPanelVisible: true,
   rightPanelWidth: 0,
+  sessionSortMode: "recentActivity",
 };
 
 function isValidSettings(value: unknown): value is Partial<AppSettings> {
@@ -142,7 +146,17 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
     rightPanelVisible:
       value.rightPanelVisible ?? DEFAULT_SETTINGS.rightPanelVisible,
     rightPanelWidth: value.rightPanelWidth ?? DEFAULT_SETTINGS.rightPanelWidth,
+    sessionSortMode: isSessionSortMode(value.sessionSortMode)
+      ? value.sessionSortMode
+      : DEFAULT_SETTINGS.sessionSortMode,
   };
+}
+
+function isSessionSortMode(value: unknown): value is SessionSortMode {
+  return (
+    typeof value === "string" &&
+    ["recentActivity", "createdAt", "page"].includes(value)
+  );
 }
 
 function isLogLevel(value: unknown): value is LogLevel {

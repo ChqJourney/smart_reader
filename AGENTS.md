@@ -586,7 +586,7 @@ cd src-tauri && cargo test
 - `docs/TAB_HIBERNATION_DESIGN.md`：Tab 休眠设计（取消固定个数上限、双预算线、LRU 候选选择、唤醒恢复路径）。
 - `docs/LLM_PLATFORM_COMPATIBILITY.md`：各 LLM 平台 OpenAI 兼容性调研（平台预设参考）。
 - `TESTING.md`：详细测试说明与已发现的 bug 修复记录。
-- `README.md`：快速开始与项目简介。
+- `README.md`：快速开始与项目简介（英文主文档，中文版为 `README.zh-CN.md`）。
 
 ## 13. 版本信息
 

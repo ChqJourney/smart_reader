@@ -1,154 +1,158 @@
 # SpecReader AI
 
-面向检测认证工程师的桌面端 AI 助手，用于降低阅读、理解和执行各类标准 PDF 文件时的认知与智力开销。
+**English** | [中文](./README.zh-CN.md)
 
-👉 [查看产品演示页](https://chqjourney.github.io/smart_reader/) | [下载最新版](https://github.com/ChqJourney/smart_reader/releases)
+A desktop AI assistant for testing & certification engineers, designed to reduce the cognitive load of reading, understanding, and applying technical standards in PDF form (IEC / ISO / EN / GB / UL / ASTM / IEEE).
 
-## 技术栈
+👉 [Product demo page](https://chqjourney.github.io/smart_reader/) | [Download the latest release](https://github.com/ChqJourney/smart_reader/releases)
 
-- **桌面框架**：Tauri 2.0（Rust 后端 + Web 前端）
-- **前端**：React 18 + TypeScript 5.6 + Vite 6
-- **PDF 渲染**：pdfjs-dist 4.8
-- **Markdown 渲染**：react-markdown
-- **AI 调用**：OpenAI 兼容 API，经 Rust 后端代理转发，API Key 存系统钥匙串、不进入 webview；多平台预设（DeepSeek / Kimi / 百炼 / GLM / 火山引擎 / OpenRouter / OpenAI / 自定义），默认平台 DeepSeek、默认模型 deepseek-v4-flash
+## Tech Stack
 
-## 开发环境要求
+- **Desktop framework**: Tauri 2.0 (Rust backend + Web frontend)
+- **Frontend**: React 18 + TypeScript 5.6 + Vite 6
+- **PDF rendering**: pdfjs-dist 4.8
+- **Markdown rendering**: react-markdown
+- **AI integration**: OpenAI-compatible APIs, proxied through the Rust backend — API keys live in the system keychain and never enter the webview. Presets for DeepSeek / Kimi / Bailian / GLM / Volcengine / OpenRouter / OpenAI / custom endpoints (default: DeepSeek, model `deepseek-v4-flash`)
+
+## Requirements
 
 - Node.js >= 18
 - Rust >= 1.77.2
-- Tauri CLI（可选，项目内已有 `@tauri-apps/cli`）
+- Tauri CLI (optional; `@tauri-apps/cli` is already a project dependency)
 
-## 快速开始
+## Quick Start
 
 ```bash
-# 安装前端依赖
+# Install frontend dependencies
 npm install
 
-# 仅启动 Vite 前端开发服务器（端口 1420）
+# Start the Vite dev server only (port 1420)
 npm run dev
 
-# 启动 Tauri 桌面应用开发模式
+# Start the Tauri desktop app in dev mode
 npm run tauri-dev
 
-# 构建前端生产包到 dist/
+# Build the frontend production bundle to dist/
 npm run build
 
-# 构建完整桌面应用安装包
+# Build the full desktop installer
 npm run tauri-build
 ```
 
-## 测试
+## Testing
 
 ```bash
-# 前端单元/集成测试
+# Frontend unit / integration tests
 npm run test
 
-# 监听模式
+# Watch mode
 npm run test:watch
 
-# 覆盖率报告
+# Coverage report
 npm run test:coverage
 
-# E2E 测试
+# E2E tests
 npm run test:e2e
 
-# E2E UI 模式
+# E2E UI mode
 npm run test:e2e:ui
 
-# 依次运行单元测试与 E2E 测试
+# Run unit tests then E2E tests
 npm run test:all
 
-# TypeScript 类型检查
+# TypeScript type check
 npm run type-check
 
-# ESLint 代码检查
+# ESLint
 npm run lint
 
-# Prettier 格式检查
+# Prettier format check
 npm run format:check
 
-# 后端 Rust 测试
+# Backend Rust tests
 cd src-tauri && cargo test
 ```
 
-详细测试说明见 [TESTING.md](./TESTING.md)。
+See [TESTING.md](./TESTING.md) for details.
 
-## 项目结构
+## Project Structure
 
 ```
 .
-├── docs/                              # 产品设计文档（PRD / Agent Tools 设计）
-├── src/                               # 前端源码
-│   ├── App.tsx / App.css / main.tsx   # 应用顶层、全局样式、React 入口
-│   ├── components/                    # React 组件（30+，每组件配同名 .css）
-│   │   ├── TitleBar.tsx               # 自定义标题栏（品牌区、最近文件、窗口控制）
-│   │   ├── SetupWizard.tsx            # 首次启动配置向导（选平台 → 填 Key → 测试连接）
-│   │   ├── PdfViewer.tsx / PdfPage.tsx            # PDF 渲染、选区、缩放、单页/连续模式
-│   │   ├── PdfAnnotations.tsx / AnnotationMarker.tsx / *Popup.tsx  # 批注与浮层
-│   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录、追问）
+├── docs/                              # Product design docs (PRD / Agent Tools design)
+├── src/                               # Frontend source
+│   ├── App.tsx / App.css / main.tsx   # App shell, global styles, React entry
+│   ├── components/                    # React components (30+, each with a matching .css)
+│   │   ├── TitleBar.tsx               # Custom title bar (brand area, recent files, window controls)
+│   │   ├── SetupWizard.tsx            # First-run setup wizard (pick platform → enter key → test connection)
+│   │   ├── PdfViewer.tsx / PdfPage.tsx            # PDF rendering, selection, zoom, single/continuous modes
+│   │   ├── PdfAnnotations.tsx / AnnotationMarker.tsx / *Popup.tsx  # Annotations & popups
+│   │   ├── AiChatPanel.tsx            # Right panel (stash, interpretation history, follow-ups)
 │   │   ├── SettingsModal.tsx / RecentFilesBar.tsx / CustomInterpretModal.tsx
-│   │   └── MarkdownRenderer.tsx / ContextWidget.tsx / ThinkingIndicator.tsx / Icon.tsx 等
-│   ├── hooks/                         # 可复用状态逻辑（18 个）
+│   │   └── MarkdownRenderer.tsx / ContextWidget.tsx / ThinkingIndicator.tsx / Icon.tsx etc.
+│   ├── hooks/                         # Reusable state logic (18 hooks)
 │   │   └── useTabs / usePersistence / useRecentFiles / useSplitView /
 │   │       usePdfDocument / useViewportManager / useZoomAnchor / useSearchDomain /
 │   │       useScrollPageSync / useTabRestore / useWordLookup / useDictionaryStatus /
 │   │       useDrag / useClampedPopupPosition / useStreaming / useModal / useRightPanelLayout
-│   ├── services/                      # 业务逻辑与 Tauri 命令封装
+│   ├── services/                      # Business logic & Tauri command wrappers
 │   │   ├── llm.ts / settings.ts / updater.ts / dialog.ts / logs.ts / selection.ts
 │   │   ├── annotations.ts / sessions.ts / stash.ts / recentFiles.ts / dictionary.ts
-│   │   └── pdfTools.ts / pdfToolsRegistry.ts      # Agent Tools 执行层与授权注册表
-│   ├── data/platformPresets.ts        # LLM 多平台预设
-│   ├── types/llm.ts                   # LLM 相关类型
-│   ├── i18n/ + locales/               # i18next 接入（zh-CN / en）
-│   └── test/                          # 测试工具与全局 mock
-├── src-tauri/                         # Tauri Rust 后端
+│   │   └── pdfTools.ts / pdfToolsRegistry.ts      # Agent Tools execution layer & authorization registry
+│   ├── data/platformPresets.ts        # LLM platform presets
+│   ├── types/llm.ts                   # LLM-related types
+│   ├── i18n/ + locales/               # i18next setup (zh-CN / en)
+│   └── test/                          # Test utilities & global mocks
+├── src-tauri/                         # Tauri Rust backend
 │   ├── src/
-│   │   ├── lib.rs                     # Tauri 命令
-│   │   ├── llm_proxy.rs               # LLM 请求代理（SSE 转发、工具调用累积、错误分类）
-│   │   ├── secure_storage.rs          # API Key 系统钥匙串封装
+│   │   ├── lib.rs                     # Tauri commands
+│   │   ├── llm_proxy.rs               # LLM request proxy (SSE forwarding, tool-call accumulation, error classification)
+│   │   ├── secure_storage.rs          # System keychain wrapper for API keys
 │   │   └── dictionary.rs / paths.rs / main.rs
-│   ├── capabilities/                  # Tauri 权限配置
+│   ├── capabilities/                  # Tauri permission config
 │   ├── Cargo.toml
 │   └── tauri.conf.json
-├── e2e/                               # Playwright E2E 测试（6 个 spec + fixtures）
-├── scripts/                           # 辅助脚本（版本同步、发版、测试 PDF 生成）
+├── e2e/                               # Playwright E2E tests (6 specs + fixtures)
+├── scripts/                           # Helper scripts (version sync, release, sample PDF generation)
 ├── package.json / vite.config.ts / playwright.config.ts / tsconfig.json
 └── eslint.config.js
 ```
 
-## 当前已实现能力（超轻量版）
+## Current Features (lightweight edition)
 
-- 多 PDF Tab 同时打开（最多 10 个），支持左右分屏并排对照两份 PDF。
-- 自定义标题栏：无边框窗口，集成品牌区、最近文件入口、打开 PDF / 设置与窗口控制按钮。
-- 首次启动配置向导（SetupWizard）：选平台 → 填 API Key → 测试连接（真实调用 LLM 验证）；全部平台未配置 Key 时自动弹出，设置中可重跑。
-- PDF 本地渲染、文本选区、缩放、页码跳转、单页 / 连续滚动阅读模式。
-- 全文搜索（Ctrl / Cmd + F，跨 text item 短语匹配，结果逐页高亮跳转）与大纲 / 目录导航。
-- 选中文本后浮动工具条：复制、批注、加入暂存、解读、翻译；批注生成紫色可拖动标记（CommentPopup，防抖保存）。
-- 翻译生成可拖动 / 隐藏 / 删除的浮层批注。
-- 解读生成蓝色标记，并在右侧面板展示可点击跳转的解读记录，支持多轮追问。
-- 自定义解读：把多个暂存片段一次性发给 LLM。
-- **解读 / 自定义解读 / 追问时启用 Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文，辅助验证条款引用与跨页内容；轮次上限默认 20，超限优雅收尾并提示。
-- LLM 请求经 Rust 后端代理转发：API Key 只存系统钥匙串、按平台分条目，不再暴露给 webview；多平台预设（deepseek / kimi / bailian / glm / volcengine / openrouter / openai / custom）。
-- 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
-- 最近文件面板：置顶、搜索、失效置灰、上次读到的页码回写、分屏对照打开。
-- 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
-- 会话上下文用量条（ContextWidget）、思考过程展示（ThinkingIndicator）、Markdown 渲染（含 KaTeX 公式）。
-- 软件自动更新：启动 3 秒后自动检查，设置「关于」页可手动检查。
-- i18n 框架接入（i18next，zh-CN / en 两个 locales；当前界面固定中文，en 预埋）。
+- Open multiple PDFs in tabs (no fixed limit; memory-budget-driven hibernation keeps the app light), with side-by-side split view for comparing two PDFs.
+- Custom title bar: frameless window with brand area, recent files, open-PDF / settings, and window controls.
+- First-run setup wizard: pick a platform → enter API key → test the connection (a real LLM call); auto-opens when no platform is configured, re-runnable from settings.
+- Local PDF rendering, text selection, zoom, page jumping, single-page / continuous scroll modes.
+- Full-text search (Ctrl / Cmd + F, phrase matching across text items, per-page highlights) and outline / TOC navigation.
+- Floating toolbar on text selection: copy, comment, stash, interpret, translate; comments become draggable purple markers (debounced persistence).
+- Translations appear as draggable / hideable / deletable popup annotations.
+- Interpretations appear as blue markers, with clickable history records in the right panel and multi-turn follow-up support.
+- Custom interpretation: send multiple stashed excerpts to the LLM in one request.
+- **Agent Tools for interpretation / custom interpretation / follow-ups**: the LLM can consult the currently open PDFs via Function Calling (`list_open_pdfs` / `read_pdf_page` / `search_in_pdf`) to verify clause references and cross-page content; round limit defaults to 20 with graceful fallback.
+- LLM requests are proxied through the Rust backend: API keys are stored per-platform in the system keychain and never exposed to the webview.
+- Annotations and interpretation history persist locally in AppData, keyed by the PDF file's SHA-256 hash.
+- Recent files panel: pinning, search, grayed-out missing files, last-read page restore, open in split view.
+- Hover over an English word to look it up in a local ECDICT dictionary (toggleable; one-time offline dictionary download).
+- Context usage bar (ContextWidget), thinking-process display (ThinkingIndicator), Markdown rendering with KaTeX math.
+- Auto-update: checks 3 seconds after launch; manual check available in the About page.
+- i18n framework in place (i18next, zh-CN / en locales; UI currently fixed to Chinese, English is pre-wired).
 
-明确未实现（已规划到后续版本）：
+Deliberately not implemented yet (planned for later versions):
 
-- Clause 索引、引用追踪。
-- 术语表、测试清单生成。
-- 表格截图 + 多模态读取。
-- License 激活校验。
+- Clause indexing and reference tracking.
+- Glossary and test-checklist generation.
+- Table screenshots + multimodal reading.
+- License activation checks.
 
-## 隐私说明
+## Privacy
 
-- PDF 文件内容不上传云端，仅在本地读取和渲染。
-- 仅用户主动选中的文本片段会发送给用户配置的 LLM API,开启智能文档查询功能后，会增加标准中相关片段文本。
-- API Key 通过 Rust `keyring` crate 存入系统钥匙串；`settings.json` 中只保留空占位。钥匙串不可用时保存会明确报错，不回退明文存储。
+- PDF content never leaves your machine; files are read and rendered locally only.
+- Only the text excerpts you explicitly select are sent to the LLM API you configured; enabling smart document lookup additionally sends relevant excerpts from the standard.
+- API keys are stored in the system keychain via the Rust `keyring` crate; `settings.json` keeps only an empty placeholder. Saving fails with an explicit error when the keychain is unavailable — no plaintext fallback.
 
 ## License
 
-商业软件，后续版本计划加入 License 激活。当前「超轻量版」暂不强制校验 License。
+Source code is open under [GPL-3.0-or-later](./LICENSE): you may freely use, modify, and redistribute it, but derivative works must be published under the same terms.
+
+Official release builds are free to use. The GPL does not allow incorporating this software into proprietary (closed-source) commercial products; for closed-source commercial use — including revenue-sharing arrangements — please reach out via [GitHub Issues](https://github.com/ChqJourney/smart_reader/issues) to negotiate a separate commercial license.

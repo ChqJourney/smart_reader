@@ -8,6 +8,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 项目许可证由专有许可（Proprietary）切换为 GPL-3.0-or-later：衍生作品须以相同条款开源，闭源商用需另行洽谈商业授权；README 与应用内「关于」页许可证文本同步更新。
+- README 改为英文主文档，原中文版移至 `README.zh-CN.md`（互相链接）。
+
 ## [0.9.15] - 2026-07-31
 
 ### Added

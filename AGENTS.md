@@ -29,6 +29,7 @@
 - 解读生成蓝色标记（生成中带呼吸态），点击标记打开 InterpretPopup 内联展示解读结果（流式/错误态、原文折叠、查看解读/重新解读/删除）；右侧面板展示可点击跳转的解读记录（页码+类型徽章+LLM 一句话摘要，支持「当前文档/全部文档」过滤、排序下拉（最近活动/创建时间/按页码，按页码仅当前文档范围可选，选择持久化到 settings）与面板内删除会话），支持多轮追问。
 - 自定义解读：把多个暂存片段一次性发给 LLM。暂存区按钮常驻显示片段数量并直达弹窗；解读要求弹窗内置可勾选片段清单（默认全选）与解读方式预设下拉（选中即把预定义 prompt 填入输入框，可继续编辑，手动编辑后回到「自由提问」，模板文案在 locales 的 `customInterpret.presets.*` 段），仅能通过「取消」/「发送」关闭；暂存不落盘为有意设计。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
+- 打印（工具栏按钮 / Ctrl/Cmd+P）：弹窗可选页码范围（全部 / 当前页 / 自定义范围）与上纸内容（翻译批注、批注，均可独立勾选，默认都开）；生成带批注贴图的新 PDF（优先矢量直绘保留原页面，pdf-lib 解析失败、源文件加密（pdf-lib 无解密能力，重存会带出密文与 /Encrypt 尾条款）或内容对象丢失时自动降级为 pdfjs 整页栅格化，保证任何能打开的 PDF 都能正确打印；批注按屏幕浮层样式与位置 canvas 光栅化贴入，含用户拖动过的位置），用平台指定阅读器打开打印（macOS 预览 / Windows Edge，刻意不走系统默认 PDF 关联——若默认阅读器是本应用自身会回环成新 tab），也可导出带批注的 PDF 文件。
 - 解读 / 自定义解读会话可分享：会话头部「分享」下拉支持复制结构化 Markdown 到剪贴板或导出 .md 文件（原文片段以引用块 + 来源行展示，跳过模板 prompt / tool 消息 / 思考内容，见 `services/share.ts`）。
 - 最近文件下拉面板：置顶常用标准、按文件名/路径搜索、显示目录/相对时间/上次读到的页码、失效文件置灰、单条移除与两段式清空、从列表直接在分屏打开对照（快捷键 Ctrl/Cmd+Shift+O 开合面板）。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
@@ -55,6 +56,7 @@
 | 前端框架      | React 18 + TypeScript 5.6                                  |
 | 构建工具      | Vite 6                                                     |
 | PDF 渲染      | pdfjs-dist 4.8                                             |
+| 打印 PDF 生成 | pdf-lib（批注贴图用 canvas 光栅化，免嵌 CJK 字体）         |
 | UI 图标       | 自定义 `Icon` 组件（SVG 集合）                             |
 | Markdown 渲染 | react-markdown（gfm / math / katex）                       |
 | 国际化        | i18next + react-i18next                                    |
@@ -95,6 +97,7 @@ npm install
 │   │   ├── PdfPage.tsx                # 单页渲染（canvas / textLayer / 悬停取词）
 │   │   ├── PageRail.tsx               # 右侧页码滑轨（替代垂直滚动条，拖动/悬停显示页码）
 │   │   ├── PageJumpPanel.tsx          # Cmd/Ctrl+G 跳页面板（输入页码回车跳转）
+│   │   ├── PrintModal.tsx             # 打印弹窗（页码范围 + 翻译/批注上纸勾选，生成后系统阅读器打开或导出）
 │   │   ├── PdfAnnotations.tsx         # 按页渲染 markers 与 popup
 │   │   ├── AnnotationMarker.tsx       # 可拖动的翻译/解读/暂存/批注标记
 │   │   ├── SelectionToolbar.tsx       # 选区上方浮动工具条（暂存/解读/自定义解读/翻译/复制/批注）
@@ -159,6 +162,9 @@ npm install
 │   │   ├── llm.ts                     # streamChatCompletion（Channel 桥接后端代理）、Prompt 模板（i18n 化）
 │   │   ├── llmError.ts                # LlmError → 友好中文文案的唯一入口（原始报错只进日志，不进 UI）
 │   │   ├── pdfToolsRegistry.ts        # 当前打开 PDF 的轻量元数据注册表（Agent Tools 授权数据源）
+│   │   ├── print.ts                   # 打印编排（缓存优先取字节 → 生成 → 系统阅读器打开 / 保存对话框导出）
+│   │   ├── printPdf.ts                # 打印 PDF 生成（矢量直绘优先——同 context 不用 copyPages；解析失败、源文件加密或内容对象丢失时 pdfjs 整页栅格兜底）
+│   │   ├── printBoxRenderer.ts        # 批注浮层 canvas 光栅化为 PNG（复刻浮层样式，2x 清晰度，免嵌 CJK 字体）
 │   │   ├── pdfTools.ts                # Agent Tools 执行层（瞬态 ToolSession）
 │   │   ├── recentFiles.ts             # 最近文件 CRUD + 文件存在性检查
 │   │   ├── sessions.ts                # 解读会话数据结构与管理 + sortSessions 列表排序（纯函数）
@@ -307,6 +313,8 @@ cd src-tauri && cargo test
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表（`RecentFile` 含 `pinned` 置顶与 `lastPage` 阅读页码字段，旧数据通过 `#[serde(default)]` 兼容）。
 - `check_files_exist(paths: string[])`：批量检查文件是否仍存在于磁盘，最近文件面板用它置灰已移动/删除的条目。
 - `export_text_file(file_path: string, content: string)`：把用户经系统保存对话框选定的任意路径写入文本文件（解读分享导出 .md 使用，原子写入，不走 PDF 授权白名单）。
+- `export_binary_file(file_path: string, data: Vec<u8>)`：同上但写二进制（带批注打印 PDF 导出）；data 经 serde_json 数组传输（前端 `Array.from(bytes)`，嵌套 Uint8Array 会被序列化成对象不能用）。
+- `open_print_file(request: ipc::Request)`：接收 IPC 原始字节（前端 `invoke(cmd, bytes)`），落盘 `<AppData>/SpecReader/print/`（每次只保留最新一份）后用平台指定阅读器打开（macOS `open -a Preview` / Windows `microsoft-edge:` 协议调起 Edge），不走系统默认 PDF 关联防止回环到本应用。
 - `open_path(path: string)`：仅允许打开 `http://` / `https://` URL，禁止本地文件路径与目录。
 - `open_logs_dir()`：打开应用日志目录，供用户导出排查。
 - `check_dictionary()`：检查本地 ECDICT 词典是否存在及大小。
@@ -335,6 +343,8 @@ cd src-tauri && cargo test
     │   └── ecdict.sqlite.extract/ # 解压临时目录
     ├── logs/
     │   └── app.log                # 应用运行日志（默认 Warn 级别，可在设置中调整，保留最近 3 个文件各 10 MB）
+    ├── print/
+    │   └── SpecReader-print-{ts}.pdf  # 打印临时文件（open_print_file 每次清理旧文件，只留最新一份）
     ├── settings.json              # LLM 平台/模型 + 目标语言 + Agent Tools 开关 + 悬停翻译开关 + 日志级别 + 解读记录排序方式
     └── recent_files.json          # 最近打开文件列表
 ```

@@ -36,6 +36,7 @@
     "recentFiles": "最近文件面板",
     "openPdf": "打开 PDF 文件",
     "openInSplit": "并排对照打开（最近文件面板内）",
+    "print": "打印（含批注）",
     "showShortcuts": "显示本快捷键列表"
   },
   "quickToggles": {
@@ -87,7 +88,8 @@
     "closeSearch": "关闭搜索",
     "jumpToPage": "跳转到页",
     "jumpToPageHint": "输入页码，回车跳转",
-    "pageRail": "页面滑轨"
+    "pageRail": "页面滑轨",
+    "print": "打印（Ctrl/Cmd+P）"
   },
   "panel": {
     "hide": "隐藏面板"
@@ -378,6 +380,22 @@
     "title": "批注",
     "hidePopup": "隐藏批注框",
     "placeholder": "输入批注内容…"
+  },
+  "print": {
+    "title": "打印",
+    "rangeLabel": "页码范围",
+    "rangeAll": "全部页（共 {{numPages}} 页）",
+    "rangeCurrent": "当前页（第 {{page}} 页）",
+    "rangeCustom": "自定义范围",
+    "rangePlaceholder": "如 1-3,5,8-9",
+    "rangeInvalid": "页码范围格式不正确",
+    "includeLabel": "包含内容",
+    "includeTranslations": "翻译批注",
+    "includeComments": "批注",
+    "print": "打印",
+    "export": "导出 PDF",
+    "generating": "正在生成…",
+    "failed": "生成打印文件失败，请查看日志"
   },
   "wizard": {
     "title": "欢迎使用 SpecReader AI",

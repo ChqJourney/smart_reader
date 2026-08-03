@@ -19,6 +19,13 @@ import Icon from "./Icon";
 import PdfPage from "./PdfPage";
 import PageRail from "./PageRail";
 import PageJumpPanel from "./PageJumpPanel";
+import PrintModal from "./PrintModal";
+import {
+  generatePrintPdf,
+  openPrintPreview,
+  exportPrintPdf,
+} from "../services/print";
+import { PrintOptions } from "../services/printPdf";
 import {
   computeFitToWidthScale,
   computeCenteredScrollLeft,
@@ -250,6 +257,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // Cmd/Ctrl+G 跳页面板与跳页大数字闪卡。
     const [jumpOpen, setJumpOpen] = useState(false);
     const [flashPage, setFlashPage] = useState<number | null>(null);
+    const [printOpen, setPrintOpen] = useState(false);
 
     const singleContainerRef = useRef<HTMLDivElement>(null);
     const continuousContainerRef = useRef<HTMLDivElement>(null);
@@ -545,6 +553,13 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         if (isModifier && e.key.toLowerCase() === "g") {
           e.preventDefault();
           setJumpOpen((v) => !v);
+          return;
+        }
+
+        // Cmd/Ctrl+P 打开打印弹窗（拦截 webview 默认打印行为）。
+        if (isModifier && e.key.toLowerCase() === "p") {
+          e.preventDefault();
+          setPrintOpen(true);
           return;
         }
 
@@ -867,6 +882,41 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       }
     };
 
+    // 打印：生成带批注贴图的 PDF（字节取 App 级缓存，未命中回退后端读取），
+    // 再交给系统阅读器打印或导出。与 viewer 渲染生命周期解耦。
+    const handlePrint = useCallback(
+      async (options: PrintOptions) => {
+        const pdfBytes = await generatePrintPdf(
+          {
+            filePath,
+            fileHash: fileHash ?? "",
+            annotations: annotations ?? [],
+            cachedBytes,
+          },
+          options
+        );
+        await openPrintPreview(pdfBytes);
+      },
+      [filePath, fileHash, annotations, cachedBytes]
+    );
+
+    const handlePrintExport = useCallback(
+      async (options: PrintOptions) => {
+        const pdfBytes = await generatePrintPdf(
+          {
+            filePath,
+            fileHash: fileHash ?? "",
+            annotations: annotations ?? [],
+            cachedBytes,
+          },
+          options
+        );
+        const baseName = fileName.replace(/\.pdf$/i, "");
+        await exportPrintPdf(pdfBytes, `${baseName}-print.pdf`);
+      },
+      [filePath, fileHash, fileName, annotations, cachedBytes]
+    );
+
     const parseScaleInput = (value: string): number | null => {
       const trimmed = value.trim();
       const hasPercent = trimmed.endsWith("%");
@@ -1171,6 +1221,15 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           <div className="pdf-controls-right">
             <button
               className="icon-btn"
+              onClick={() => setPrintOpen(true)}
+              disabled={numPages === 0 || isLoading}
+              aria-label={t("pdf.print")}
+              title={t("pdf.print")}
+            >
+              <Icon name="print" size={16} />
+            </button>
+            <button
+              className="icon-btn"
               onClick={fitToWidth}
               disabled={numPages === 0 || isLoading}
               aria-label={t("pdf.fitToWidth")}
@@ -1388,6 +1447,16 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
               numPages={numPages}
               onSubmit={handleJumpToPage}
               onClose={() => setJumpOpen(false)}
+            />
+          )}
+
+          {printOpen && numPages > 0 && (
+            <PrintModal
+              numPages={numPages}
+              currentPage={pageNum}
+              onPrint={handlePrint}
+              onExport={handlePrintExport}
+              onClose={() => setPrintOpen(false)}
             />
           )}
 

@@ -36,6 +36,7 @@
     "recentFiles": "Recent files panel",
     "openPdf": "Open PDF file",
     "openInSplit": "Open side by side (in recent files panel)",
+    "print": "Print (with annotations)",
     "showShortcuts": "Show this shortcut list"
   },
   "quickToggles": {
@@ -87,7 +88,8 @@
     "closeSearch": "Close Search",
     "jumpToPage": "Go to page",
     "jumpToPageHint": "Type a page number and press Enter to jump",
-    "pageRail": "Page rail"
+    "pageRail": "Page rail",
+    "print": "Print (Ctrl/Cmd+P)"
   },
   "panel": {
     "hide": "Hide Panel"
@@ -378,6 +380,22 @@
     "title": "Comment",
     "hidePopup": "Hide comment box",
     "placeholder": "Type your comment…"
+  },
+  "print": {
+    "title": "Print",
+    "rangeLabel": "Page range",
+    "rangeAll": "All pages ({{numPages}} pages)",
+    "rangeCurrent": "Current page (page {{page}})",
+    "rangeCustom": "Custom range",
+    "rangePlaceholder": "e.g. 1-3,5,8-9",
+    "rangeInvalid": "Invalid page range",
+    "includeLabel": "Include",
+    "includeTranslations": "Translation annotations",
+    "includeComments": "Comments",
+    "print": "Print",
+    "export": "Export PDF",
+    "generating": "Generating…",
+    "failed": "Failed to generate the print file. See logs."
   },
   "wizard": {
     "title": "Welcome to SpecReader AI",

@@ -239,6 +239,8 @@ pub fn run() {
             save_recent_files,
             check_files_exist,
             export_text_file,
+            export_binary_file,
+            open_print_file,
             check_dictionary,
             download_dictionary,
             lookup_word,
@@ -350,6 +352,102 @@ fn export_text_file_core(file_path: &str, content: &str) -> Result<(), String> {
         }
     }
     atomic_write(&path, content.as_bytes()).map_err(|e| format!("Failed to export file: {}", e))
+}
+
+/// 导出二进制文件（如带批注的打印 PDF）到系统保存对话框选定的任意路径。
+/// 与 export_text_file 同一安全模型：路径由用户显式选择，不走 PDF 授权白名单。
+/// data 经 serde_json 数组传输（前端 Array.from(bytes)）。
+#[tauri::command]
+fn export_binary_file(file_path: String, data: Vec<u8>) -> Result<(), String> {
+    export_binary_file_core(&file_path, &data)
+}
+
+fn export_binary_file_core(file_path: &str, data: &[u8]) -> Result<(), String> {
+    let path = PathBuf::from(file_path);
+    if let Some(parent) = path.parent() {
+        if !parent.as_os_str().is_empty() && !parent.exists() {
+            return Err(format!(
+                "Export directory does not exist: {}",
+                parent.display()
+            ));
+        }
+    }
+    atomic_write(&path, data).map_err(|e| format!("Failed to export file: {}", e))
+}
+
+/// 把前端生成的打印 PDF 落盘到 AppData 的 print/ 目录，并用平台指定阅读器
+/// 打开（macOS Preview / Windows Edge）。刻意不走系统默认 PDF 关联：若用户
+/// 已把本应用设为默认 PDF 阅读器，默认打开会回环成本应用的新 tab，而本应用
+/// 自身没有打印能力。原始字节经 IPC 请求体传入（前端 invoke(cmd, bytes)）。
+#[tauri::command]
+fn open_print_file(
+    app: tauri::AppHandle,
+    request: tauri::ipc::Request<'_>,
+) -> Result<(), String> {
+    let bytes = match request.body() {
+        tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
+        tauri::ipc::InvokeBody::Json(_) => {
+            return Err("open_print_file expects raw PDF bytes".to_string());
+        }
+    };
+    if bytes.is_empty() {
+        return Err("open_print_file received empty PDF bytes".to_string());
+    }
+    let dir = paths::app_data_dir(&app)?.join("print");
+    let path = write_print_temp_file(&dir, &bytes)?;
+    open_with_platform_viewer(&path)
+}
+
+/// 写入 print 临时文件并清理旧文件（每次只保留最新一份，避免无限堆积）。
+fn write_print_temp_file(dir: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
+    std::fs::create_dir_all(dir)
+        .map_err(|e| format!("Failed to create print directory: {}", e))?;
+    if let Ok(entries) = std::fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().is_some_and(|ext| ext == "pdf") {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    }
+    let millis = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
+    let path = dir.join(format!("SpecReader-print-{}.pdf", millis));
+    std::fs::write(&path, bytes)
+        .map_err(|e| format!("Failed to write print file: {}", e))?;
+    Ok(path)
+}
+
+fn open_with_platform_viewer(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .args(["-a", "Preview"])
+            .arg(path)
+            .spawn()
+            .map_err(|e| format!("Failed to open Preview: {}", e))?;
+        Ok(())
+    }
+    #[cfg(target_os = "windows")]
+    {
+        // Edge 在 Win10/11 必装且自带打印支持；经 microsoft-edge: 协议调起，
+        // 与系统默认 PDF 关联解耦。
+        let url = tauri::Url::from_file_path(path)
+            .map_err(|_| format!("Failed to build file URL for {}", path.display()))?;
+        std::process::Command::new("cmd")
+            .args(["/c", "start", "", &format!("microsoft-edge:{}", url)])
+            .spawn()
+            .map_err(|e| format!("Failed to open Edge: {}", e))?;
+        Ok(())
+    }
+    #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+    {
+        // Linux 没有必定存在的 PDF 阅读器，退回默认关联（若默认阅读器是本
+        // 应用自身会回环；当前发布目标不含 Linux，接受该限制）。
+        open::that(path).map_err(|e| format!("Failed to open PDF: {}", e))
+    }
 }
 
 #[cfg(test)]
@@ -1753,6 +1851,54 @@ mod tests {
         let result = export_text_file_core(path.to_str().unwrap(), "content");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    #[test]
+    fn export_binary_file_writes_bytes_to_user_selected_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("print.pdf");
+
+        export_binary_file_core(path.to_str().unwrap(), b"%PDF-1.7 bytes").unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"%PDF-1.7 bytes");
+    }
+
+    #[test]
+    fn export_binary_file_rejects_missing_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("no-such-dir").join("print.pdf");
+
+        let result = export_binary_file_core(path.to_str().unwrap(), b"bytes");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    #[test]
+    fn write_print_temp_file_writes_pdf_and_cleans_stale_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let print_dir = dir.path().join("print");
+        std::fs::create_dir_all(&print_dir).unwrap();
+        let stale = print_dir.join("SpecReader-print-old.pdf");
+        std::fs::write(&stale, b"old").unwrap();
+        let keep = print_dir.join("unrelated.txt");
+        std::fs::write(&keep, b"keep").unwrap();
+
+        let path = write_print_temp_file(&print_dir, b"%PDF-new").unwrap();
+
+        assert_eq!(std::fs::read(&path).unwrap(), b"%PDF-new");
+        assert!(path.extension().is_some_and(|ext| ext == "pdf"));
+        assert!(!stale.exists());
+        assert!(keep.exists());
+    }
+
+    #[test]
+    fn write_print_temp_file_creates_missing_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let print_dir = dir.path().join("print");
+
+        let path = write_print_temp_file(&print_dir, b"%PDF-new").unwrap();
+
+        assert!(path.exists());
     }
 
     // H-2: atomic file writes.

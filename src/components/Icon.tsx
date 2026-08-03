@@ -44,6 +44,7 @@ export type IconName =
   | "comment"
   | "share"
   | "swap"
+  | "print"
   | "help";
 
 interface IconProps {
@@ -755,6 +756,34 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </>
+  ),
+  print: (
+    <>
+      <path
+        d="M6 6.5V2.5h8v4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <rect
+        x="2.5"
+        y="6.5"
+        width="15"
+        height="6"
+        rx="1.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M6 10.5h8v7H6z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
         strokeLinejoin="round"
       />
     </>

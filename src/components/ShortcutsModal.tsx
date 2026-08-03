@@ -66,6 +66,7 @@ const GROUPS: ShortcutGroup[] = [
         combos: [["Ctrl/Cmd", "Shift", "O"]],
       },
       { labelKey: "shortcuts.openInSplit", combos: [["Alt", "Enter"]] },
+      { labelKey: "shortcuts.print", combos: [["Ctrl/Cmd", "P"]] },
       { labelKey: "shortcuts.showShortcuts", combos: [["Ctrl/Cmd", "/"]] },
     ],
   },

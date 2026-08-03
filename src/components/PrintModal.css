@@ -1,0 +1,65 @@
+.print-modal {
+  width: 380px;
+}
+
+.print-modal-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.print-modal-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #616161;
+}
+
+.print-modal-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #1f1f1f;
+  cursor: pointer;
+}
+
+.print-modal-option input {
+  margin: 0;
+  cursor: pointer;
+}
+
+.print-modal-range-input {
+  margin-left: 24px;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  outline: none;
+}
+
+.print-modal-range-input:focus {
+  border-color: #0078d4;
+}
+
+.print-modal-range-input.invalid {
+  border-color: #c42b1c;
+}
+
+.print-modal-range-error {
+  margin-left: 24px;
+  font-size: 0.75rem;
+  color: #c42b1c;
+}
+
+.print-modal-error {
+  margin: 0 0 10px;
+  font-size: 0.8rem;
+  color: #c42b1c;
+}
+
+.print-modal-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}

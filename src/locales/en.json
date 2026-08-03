@@ -30,6 +30,9 @@
     "closeNamed": "Close {{fileName}}",
     "dragToSplit": "Drag to the reading area to compare side by side"
   },
+  "fileDrop": {
+    "overlayHint": "Release to open PDF"
+  },
   "pdf": {
     "hidePanel": "Hide PDF Panel",
     "switchToContinuous": "Switch to Continuous",

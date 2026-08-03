@@ -25,6 +25,7 @@ import {
 } from "./hooks/useRightPanelLayout";
 import { useRecentFiles, type RecentFile } from "./hooks/useRecentFiles";
 import { useSplitView } from "./hooks/useSplitView";
+import { useFileDrop } from "./hooks/useFileDrop";
 import TitleBar from "./components/TitleBar";
 import TitleBarToggles from "./components/TitleBarToggles";
 import {
@@ -101,6 +102,11 @@ function App() {
   );
   const recentFiles = useRecentFiles();
   const splitView = useSplitView();
+  // 系统文件拖放：把 PDF 拖进窗口即打开（hook 内部用 ref 稳定回调，listener 只注册一次）。
+  const { isFileDragOver } = useFileDrop({
+    openPdfByPath: tabs.openPdfByPath,
+    addRecentFile: recentFiles.addRecentFile,
+  });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const dictionaryStatus = useDictionaryStatus();
@@ -448,56 +454,99 @@ function App() {
     [splitPct]
   );
 
-  // 拖拽 tab 经过主区域时显示 drop-zone 遮罩。用计数器抵消子元素间移动
-  // 造成的 dragenter/dragleave 抖动；drop / dragend 时兜底复位。
+  // tab → 分屏的鼠标拖拽实现。系统文件拖放（dragDropEnabled）开启后，
+  // WebView2 会接管页面内所有 HTML5 拖放事件，原 HTML5 DnD（draggable +
+  // dataTransfer）失效，故改为 mousedown + 阈值 + 全局 mousemove/mouseup
+  // 监听的模式（与 useDrag.ts 同一思路；useDrag 只回传增量位移，这里需要
+  // 绝对坐标做命中检测，所以在本组件内做局部实现）。
   const [isDragOver, setIsDragOver] = useState(false);
-  const dragDepthRef = useRef(0);
+  const tabDragRef = useRef<{
+    tabId: string;
+    startX: number;
+    startY: number;
+    started: boolean;
+  } | null>(null);
 
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    dragDepthRef.current += 1;
-    setIsDragOver(true);
-  }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setIsDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback(() => {
-    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
-    if (dragDepthRef.current === 0) setIsDragOver(false);
-  }, []);
-
-  const resetDragOver = useCallback(() => {
-    dragDepthRef.current = 0;
-    setIsDragOver(false);
-  }, []);
-
-  useEffect(() => {
-    if (!isDragOver) return;
-    window.addEventListener("dragend", resetDragOver);
-    window.addEventListener("drop", resetDragOver);
-    return () => {
-      window.removeEventListener("dragend", resetDragOver);
-      window.removeEventListener("drop", resetDragOver);
-    };
-  }, [isDragOver, resetDragOver]);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      resetDragOver();
-      const draggedTabId = e.dataTransfer.getData("text/plain");
-      if (!draggedTabId || draggedTabId === tabs.activeTabId) return;
-      if (!tabs.tabs.some((t) => t.id === draggedTabId)) return;
-      // 目标 tab 可能处于休眠：先唤醒（不激活），viewer 重新挂载走冷启动恢复
-      tabs.wakeTab(draggedTabId);
-      splitView.enterSplitView(draggedTabId);
+  const isPointInMainArea = useCallback(
+    (x: number, y: number) => {
+      const el = layout.mainRef.current;
+      if (!el) return false;
+      const rect = el.getBoundingClientRect();
+      return (
+        x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
+      );
     },
-    [tabs, splitView, resetDragOver]
+    [layout.mainRef]
   );
+
+  const handleTabDragMouseMove = useCallback(
+    (e: MouseEvent) => {
+      const drag = tabDragRef.current;
+      if (!drag) return;
+      if (!drag.started) {
+        // 阈值内视为单击准备阶段，不进入拖拽态（保住 onClick 激活 tab）
+        if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 5) {
+          return;
+        }
+        drag.started = true;
+        document.body.style.userSelect = "none";
+        document.body.style.cursor = "grabbing";
+      }
+      setIsDragOver(isPointInMainArea(e.clientX, e.clientY));
+    },
+    [isPointInMainArea]
+  );
+
+  const handleTabDragMouseUp = useCallback(
+    (e: MouseEvent) => {
+      window.removeEventListener("mousemove", handleTabDragMouseMove);
+      window.removeEventListener("mouseup", handleTabDragMouseUp);
+      const drag = tabDragRef.current;
+      if (!drag) return;
+      tabDragRef.current = null;
+      document.body.style.userSelect = "";
+      document.body.style.cursor = "";
+      setIsDragOver(false);
+      // 未过阈值 = 单击，交由 tab 的 onClick 处理；释放在阅读区外 = 取消拖拽
+      if (!drag.started) return;
+      const droppedTabId = drag.tabId;
+      if (!isPointInMainArea(e.clientX, e.clientY)) return;
+      if (droppedTabId === tabs.activeTabId) return;
+      if (!tabs.tabs.some((t) => t.id === droppedTabId)) return;
+      // 目标 tab 可能处于休眠：先唤醒（不激活），viewer 重新挂载走冷启动恢复
+      tabs.wakeTab(droppedTabId);
+      splitView.enterSplitView(droppedTabId);
+    },
+    [handleTabDragMouseMove, isPointInMainArea, tabs, splitView]
+  );
+
+  const handleTabDragMouseDown = useCallback(
+    (e: React.MouseEvent, tabId: string) => {
+      // 仅左键启动拖拽（不影响中键等其它按键语义）；激活 tab 不可拖拽，
+      // 与原 HTML5 实现（仅非激活 tab 带 draggable）保持一致。
+      if (e.button !== 0) return;
+      if (tabId === tabs.activeTabId) return;
+      // 关闭按钮自身处理点击，不从它启动拖拽
+      if ((e.target as HTMLElement).closest(".tab-close")) return;
+      tabDragRef.current = {
+        tabId,
+        startX: e.clientX,
+        startY: e.clientY,
+        started: false,
+      };
+      window.addEventListener("mousemove", handleTabDragMouseMove);
+      window.addEventListener("mouseup", handleTabDragMouseUp);
+    },
+    [tabs.activeTabId, handleTabDragMouseMove, handleTabDragMouseUp]
+  );
+
+  // 组件卸载时兜底清理全局监听（拖拽中途 unmount 的防御）
+  useEffect(() => {
+    return () => {
+      window.removeEventListener("mousemove", handleTabDragMouseMove);
+      window.removeEventListener("mouseup", handleTabDragMouseUp);
+    };
+  }, [handleTabDragMouseMove, handleTabDragMouseUp]);
 
   // tab 栏「并排对照」入口：取下一个非激活 tab 作为副屏。
   const handleEnterSplit = useCallback(() => {
@@ -1062,16 +1111,12 @@ function App() {
                   : ""
               }`}
               onClick={() => handleTabClick(tab.id)}
+              onMouseDown={(e) => handleTabDragMouseDown(e, tab.id)}
               title={
                 tab.id !== tabs.activeTabId
                   ? `${tab.fileName}\n${t("tab.dragToSplit")}`
                   : tab.fileName
               }
-              draggable={tab.id !== tabs.activeTabId}
-              onDragStart={(e) => {
-                e.dataTransfer.setData("text/plain", tab.id);
-                e.dataTransfer.effectAllowed = "move";
-              }}
             >
               <span className="tab-name">{tab.fileName}</span>
               <button
@@ -1124,14 +1169,7 @@ function App() {
           </div>
         )}
 
-      <main
-        className="app-main"
-        ref={layout.mainRef}
-        onDragEnter={handleDragEnter}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
+      <main className="app-main" ref={layout.mainRef}>
         {isDragOver && (
           <div className="split-drop-overlay">
             <span>{t("app.dropToSplit")}</span>
@@ -1495,6 +1533,11 @@ function App() {
             setCustomInterpretPreselected(null);
           }}
         />
+      )}
+      {isFileDragOver && (
+        <div className="file-drop-overlay">
+          <span>{t("fileDrop.overlayHint")}</span>
+        </div>
       )}
     </div>
   );

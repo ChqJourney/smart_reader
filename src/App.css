@@ -144,8 +144,8 @@ body {
   border-color: #b4d6fb;
 }
 
-/* 非激活 tab 可拖拽到阅读区并排对照，给出抓取手势提示 */
-.tab-item[draggable="true"] {
+/* 非激活 tab 可拖拽到阅读区并排对照（鼠标拖拽实现），给出抓取手势提示 */
+.tab-item:not(.active) {
   cursor: grab;
 }
 
@@ -228,6 +228,23 @@ body {
   position: absolute;
   inset: 8px;
   z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 120, 212, 0.08);
+  border: 2px dashed #0078d4;
+  border-radius: 8px;
+  color: #0078d4;
+  font-size: 1rem;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+/* 系统文件拖放（拖 PDF 进窗口）的全窗口遮罩，视觉与 split-drop-overlay 一致 */
+.file-drop-overlay {
+  position: fixed;
+  inset: 8px;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;

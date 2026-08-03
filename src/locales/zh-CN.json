@@ -30,6 +30,9 @@
     "closeNamed": "关闭 {{fileName}}",
     "dragToSplit": "拖到阅读区可并排对照"
   },
+  "fileDrop": {
+    "overlayHint": "松开以打开 PDF"
+  },
   "pdf": {
     "hidePanel": "隐藏 PDF 面板",
     "switchToContinuous": "切换为连续阅读",

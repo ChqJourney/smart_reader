@@ -193,6 +193,42 @@ async function openPdf(path = "/test/file.pdf") {
   });
 }
 
+// jsdom 无布局，mock 阅读区 rect 供 tab 拖拽的指针命中检测使用。
+function mockMainAreaRect(main: HTMLElement, width = 800, height = 600) {
+  main.getBoundingClientRect = vi.fn(
+    () =>
+      ({
+        left: 0,
+        top: 0,
+        right: width,
+        bottom: height,
+        width,
+        height,
+        x: 0,
+        y: 0,
+        toJSON: () => "",
+      }) as DOMRect
+  );
+}
+
+// 模拟 tab→分屏的鼠标拖拽：mousedown 起步 → mousemove 越过阈值进入拖拽态
+// → mouseup 释放在阅读区 rect 内（新实现为鼠标拖拽，HTML5 DnD 已拆除）。
+function dragTabIntoMainArea(tab: HTMLElement) {
+  const main = document.querySelector("main") as HTMLElement;
+  mockMainAreaRect(main);
+  fireEvent.mouseDown(tab, { button: 0, clientX: 100, clientY: 10 });
+  fireEvent.mouseMove(window, { clientX: 400, clientY: 300 });
+  fireEvent.mouseUp(window, { clientX: 400, clientY: 300 });
+}
+
+// keep-alive 下非激活 tab 的 viewer 常驻 DOM（外层带 .viewer-hidden），
+// 统计「可见」viewer 数。
+function splitViewVisibleViewerCount() {
+  return document.querySelectorAll(
+    ".pdf-panel:not(.viewer-hidden) [data-testid='pdf-viewer']"
+  ).length;
+}
+
 function setupMockInvoke(
   overrides: Record<string, (args?: Record<string, any>) => unknown> = {}
 ) {
@@ -810,20 +846,7 @@ describe("App", () => {
     // Find the inactive tab (file-a) and drag it into the main area.
     const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i })
       .parentElement as HTMLElement;
-    let draggedTabId = "";
-    const dataTransfer = {
-      setData: vi.fn((_format: string, value: string) => {
-        draggedTabId = value;
-      }),
-      effectAllowed: "",
-      getData: vi.fn(() => draggedTabId),
-      dropEffect: "",
-    };
-
-    fireEvent.dragStart(inactiveTab, { dataTransfer });
-    const main = document.querySelector("main") as HTMLElement;
-    fireEvent.dragOver(main, { dataTransfer });
-    fireEvent.drop(main, { dataTransfer });
+    dragTabIntoMainArea(inactiveTab);
 
     await waitFor(() => {
       expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);
@@ -873,19 +896,10 @@ describe("App", () => {
 
     const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i })
       .parentElement as HTMLElement;
-    let draggedTabId = "";
-    const dataTransfer = {
-      setData: vi.fn((_format: string, value: string) => {
-        draggedTabId = value;
-      }),
-      effectAllowed: "",
-      getData: vi.fn(() => draggedTabId),
-      dropEffect: "",
-    };
 
-    fireEvent.dragStart(inactiveTab, { dataTransfer });
-    fireEvent.dragOver(main, { dataTransfer });
-    fireEvent.drop(main, { dataTransfer });
+    fireEvent.mouseDown(inactiveTab, { button: 0, clientX: 100, clientY: 10 });
+    fireEvent.mouseMove(window, { clientX: 400, clientY: 300 });
+    fireEvent.mouseUp(window, { clientX: 400, clientY: 300 });
 
     await waitFor(() => {
       expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);
@@ -917,20 +931,7 @@ describe("App", () => {
 
     const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i })
       .parentElement as HTMLElement;
-    let draggedTabId = "";
-    const dataTransfer = {
-      setData: vi.fn((_format: string, value: string) => {
-        draggedTabId = value;
-      }),
-      effectAllowed: "",
-      getData: vi.fn(() => draggedTabId),
-      dropEffect: "",
-    };
-
-    const main = document.querySelector("main") as HTMLElement;
-    fireEvent.dragStart(inactiveTab, { dataTransfer });
-    fireEvent.dragOver(main, { dataTransfer });
-    fireEvent.drop(main, { dataTransfer });
+    dragTabIntoMainArea(inactiveTab);
 
     await waitFor(() => {
       expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);
@@ -967,20 +968,7 @@ describe("App", () => {
 
     const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i })
       .parentElement as HTMLElement;
-    let draggedTabId = "";
-    const dataTransfer = {
-      setData: vi.fn((_format: string, value: string) => {
-        draggedTabId = value;
-      }),
-      effectAllowed: "",
-      getData: vi.fn(() => draggedTabId),
-      dropEffect: "",
-    };
-
-    const main = document.querySelector("main") as HTMLElement;
-    fireEvent.dragStart(inactiveTab, { dataTransfer });
-    fireEvent.dragOver(main, { dataTransfer });
-    fireEvent.drop(main, { dataTransfer });
+    dragTabIntoMainArea(inactiveTab);
 
     await waitFor(() => {
       expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);
@@ -1070,31 +1058,99 @@ describe("App", () => {
     ).toHaveLength(1);
   });
 
-  it("shows a drop-zone overlay while dragging over the main area", async () => {
+  it("shows a drop-zone overlay while dragging a tab over the main area", async () => {
+    (open as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("/test/file-a.pdf")
+      .mockResolvedValueOnce("/test/file-b.pdf");
+
     renderApp();
-    await openPdf();
-
-    const main = document.querySelector("main") as HTMLElement;
-    expect(screen.queryByText("松开以并排打开")).not.toBeInTheDocument();
-
-    fireEvent.dragEnter(main);
-    expect(screen.getByText("松开以并排打开")).toBeInTheDocument();
-
-    // 子元素间移动造成的成对 enter/leave 不应让遮罩抖动消失
-    fireEvent.dragEnter(main);
-    fireEvent.dragLeave(main);
-    expect(screen.getByText("松开以并排打开")).toBeInTheDocument();
-
-    fireEvent.dragLeave(main);
-    expect(screen.queryByText("松开以并排打开")).not.toBeInTheDocument();
-
-    // drop 时兜底复位
-    fireEvent.dragEnter(main);
-    expect(screen.getByText("松开以并排打开")).toBeInTheDocument();
-    fireEvent.drop(main, {
-      dataTransfer: { getData: vi.fn(() => "") },
+    await openPdf("/test/file-a.pdf");
+    fireEvent.click(screen.getByTestId("open-pdf-btn"));
+    await waitFor(() => {
+      expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
     });
+
+    const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i })
+      .parentElement as HTMLElement;
+    const main = document.querySelector("main") as HTMLElement;
+    mockMainAreaRect(main);
+
     expect(screen.queryByText("松开以并排打开")).not.toBeInTheDocument();
+
+    // 阈值内的微小移动视为单击准备阶段，不显示遮罩
+    fireEvent.mouseDown(inactiveTab, { button: 0, clientX: 100, clientY: 10 });
+    fireEvent.mouseMove(window, { clientX: 102, clientY: 12 });
+    expect(screen.queryByText("松开以并排打开")).not.toBeInTheDocument();
+
+    // 越过阈值并位于阅读区内：显示遮罩
+    fireEvent.mouseMove(window, { clientX: 400, clientY: 300 });
+    expect(screen.getByText("松开以并排打开")).toBeInTheDocument();
+
+    // 移出阅读区：遮罩隐藏
+    fireEvent.mouseMove(window, { clientX: 900, clientY: 300 });
+    expect(screen.queryByText("松开以并排打开")).not.toBeInTheDocument();
+
+    // 移回并释放：进入分屏，遮罩复位
+    fireEvent.mouseMove(window, { clientX: 400, clientY: 300 });
+    expect(screen.getByText("松开以并排打开")).toBeInTheDocument();
+    fireEvent.mouseUp(window, { clientX: 400, clientY: 300 });
+    expect(screen.queryByText("松开以并排打开")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);
+    });
+  });
+
+  it("cancels the tab drag when released outside the main area", async () => {
+    (open as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("/test/file-a.pdf")
+      .mockResolvedValueOnce("/test/file-b.pdf");
+
+    renderApp();
+    await openPdf("/test/file-a.pdf");
+    fireEvent.click(screen.getByTestId("open-pdf-btn"));
+    await waitFor(() => {
+      expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
+    });
+
+    const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i })
+      .parentElement as HTMLElement;
+    const main = document.querySelector("main") as HTMLElement;
+    mockMainAreaRect(main);
+
+    // 拖拽越过阈值，但释放在阅读区外：取消，不进分屏
+    fireEvent.mouseDown(inactiveTab, { button: 0, clientX: 100, clientY: 10 });
+    fireEvent.mouseMove(window, { clientX: 900, clientY: 300 });
+    fireEvent.mouseUp(window, { clientX: 900, clientY: 300 });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(splitViewVisibleViewerCount()).toBe(1);
+    expect(screen.queryByLabelText("退出并排视图")).not.toBeInTheDocument();
+  });
+
+  it("keeps tab click activation working with the mouse-drag handler attached", async () => {
+    (open as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("/test/file-a.pdf")
+      .mockResolvedValueOnce("/test/file-b.pdf");
+
+    renderApp();
+    await openPdf("/test/file-a.pdf");
+    fireEvent.click(screen.getByTestId("open-pdf-btn"));
+    await waitFor(() => {
+      expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
+    });
+
+    const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i })
+      .parentElement as HTMLElement;
+    // 未越过阈值的 mousedown + mouseup + click：按单击处理，激活该 tab
+    fireEvent.mouseDown(inactiveTab, { button: 0, clientX: 100, clientY: 10 });
+    fireEvent.mouseUp(window, { clientX: 100, clientY: 10 });
+    fireEvent.click(inactiveTab);
+    await waitFor(() => {
+      const activeTabEl = document.querySelector(".tab-item.active");
+      expect(activeTabEl?.textContent).toContain("file-a.pdf");
+    });
   });
 
   it("enters split view via the tab-bar side-by-side button", async () => {
@@ -1139,20 +1195,7 @@ describe("App", () => {
     // Drag file-a (inactive) into the main area: it becomes the secondary tab.
     const inactiveTab = screen.getByRole("button", { name: /关闭 file-a.pdf/i })
       .parentElement as HTMLElement;
-    let draggedTabId = "";
-    const dataTransfer = {
-      setData: vi.fn((_format: string, value: string) => {
-        draggedTabId = value;
-      }),
-      effectAllowed: "",
-      getData: vi.fn(() => draggedTabId),
-      dropEffect: "",
-    };
-
-    const main = document.querySelector("main") as HTMLElement;
-    fireEvent.dragStart(inactiveTab, { dataTransfer });
-    fireEvent.dragOver(main, { dataTransfer });
-    fireEvent.drop(main, { dataTransfer });
+    dragTabIntoMainArea(inactiveTab);
 
     await waitFor(() => {
       expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);

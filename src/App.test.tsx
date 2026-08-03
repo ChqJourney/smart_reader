@@ -291,6 +291,22 @@ describe("App", () => {
     expect(screen.getByTestId("open-pdf-btn")).toBeInTheDocument();
   });
 
+  it("opens a PDF via Ctrl/Cmd+O", async () => {
+    renderApp();
+    (open as ReturnType<typeof vi.fn>).mockResolvedValue("/test/file.pdf");
+    fireEvent.keyDown(window, { key: "o", ctrlKey: true });
+    await waitFor(() => {
+      expect(screen.getByText("file.pdf")).toBeInTheDocument();
+    });
+  });
+
+  it("does not open the file dialog on Ctrl+Shift+O (recent files panel)", async () => {
+    renderApp();
+    fireEvent.keyDown(window, { key: "O", ctrlKey: true, shiftKey: true });
+    // Ctrl+Shift+O 是最近文件面板的快捷键，不应触发文件对话框
+    expect(open).not.toHaveBeenCalled();
+  });
+
   it("opens a recent file from the panel and restores its last page", async () => {
     setupMockInvoke({
       load_recent_files: () => [

@@ -9,6 +9,7 @@ interface TitleBarProps {
   recentFiles: RecentFilesBarProps;
   onOpenPdf: () => void;
   onOpenSettings: () => void;
+  onOpenShortcuts: () => void;
   /** 标题栏中部的快捷开关 / 模型显示（TitleBarToggles），无可显示项时为 null */
   quickToggles?: React.ReactNode;
 }
@@ -30,6 +31,7 @@ export default function TitleBar({
   recentFiles,
   onOpenPdf,
   onOpenSettings,
+  onOpenShortcuts,
   quickToggles,
 }: TitleBarProps) {
   const { t } = useTranslation();
@@ -110,10 +112,18 @@ export default function TitleBar({
           className="titlebar-open-btn"
           onClick={onOpenPdf}
           aria-label={t("app.openPdf")}
-          title={t("app.openPdf")}
+          title={t("app.openPdfHint")}
         >
           <Icon name="open" size={14} />
           <span>{t("app.openPdf")}</span>
+        </button>
+        <button
+          className="titlebar-shortcuts-btn"
+          onClick={onOpenShortcuts}
+          aria-label={t("app.showShortcuts")}
+          title={t("app.showShortcuts")}
+        >
+          <Icon name="help" size={16} />
         </button>
         <button
           className="titlebar-settings-btn"

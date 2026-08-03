@@ -2,6 +2,7 @@
   "app": {
     "openSettings": "Open Settings",
     "openPdf": "Open PDF",
+    "openPdfHint": "Open PDF (Ctrl/Cmd+O)",
     "exitSplitView": "Exit Split View",
     "exitSplit": "Exit Split",
     "enterSplitView": "Side by Side",
@@ -11,7 +12,31 @@
     "minimize": "Minimize",
     "toggleMaximize": "Maximize / Restore",
     "close": "Close",
+    "showShortcuts": "Keyboard shortcuts (Ctrl/Cmd+/)",
     "splitCoachmark": "Want to read two PDFs side by side? Drag a tab into the reading area, or click \"Side by Side\" in the tab bar."
+  },
+  "shortcuts": {
+    "title": "Keyboard Shortcuts",
+    "scrollWheel": "Scroll",
+    "groups": {
+      "navigation": "Page Navigation",
+      "search": "Search",
+      "view": "View",
+      "panels": "Panels & Windows"
+    },
+    "prevNextPage": "Previous / next page",
+    "prevNextPageArrows": "Previous / next page (single-page mode)",
+    "scrollPage": "Scroll up / down (continuous mode)",
+    "firstLast": "Jump to start / end (continuous mode)",
+    "gotoPage": "Go to page",
+    "openSearch": "Full-text search",
+    "nextPrevMatch": "Next / previous match (in search box)",
+    "closePanels": "Close search / go-to-page panel",
+    "zoom": "Zoom page",
+    "recentFiles": "Recent files panel",
+    "openPdf": "Open PDF file",
+    "openInSplit": "Open side by side (in recent files panel)",
+    "showShortcuts": "Show this shortcut list"
   },
   "quickToggles": {
     "hoverTranslate": "Hover Lookup",

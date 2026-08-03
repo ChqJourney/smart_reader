@@ -2,6 +2,7 @@
   "app": {
     "openSettings": "打开设置",
     "openPdf": "打开 PDF",
+    "openPdfHint": "打开 PDF（Ctrl/Cmd+O）",
     "exitSplitView": "退出并排视图",
     "exitSplit": "退出并排",
     "enterSplitView": "并排对照",
@@ -11,7 +12,31 @@
     "minimize": "最小化",
     "toggleMaximize": "最大化 / 还原",
     "close": "关闭",
+    "showShortcuts": "键盘快捷键（Ctrl/Cmd+/）",
     "splitCoachmark": "想对照阅读两份 PDF？拖拽标签到阅读区，或点击标签栏「并排对照」按钮。"
+  },
+  "shortcuts": {
+    "title": "键盘快捷键",
+    "scrollWheel": "滚轮",
+    "groups": {
+      "navigation": "页面导航",
+      "search": "搜索",
+      "view": "视图",
+      "panels": "面板与窗口"
+    },
+    "prevNextPage": "上一页 / 下一页",
+    "prevNextPageArrows": "上一页 / 下一页（单页模式）",
+    "scrollPage": "上下滚动（连续模式）",
+    "firstLast": "跳到文档开头 / 结尾（连续模式）",
+    "gotoPage": "跳转到指定页",
+    "openSearch": "全文搜索",
+    "nextPrevMatch": "下一个 / 上一个匹配（搜索框内）",
+    "closePanels": "关闭搜索 / 跳页面板",
+    "zoom": "缩放页面",
+    "recentFiles": "最近文件面板",
+    "openPdf": "打开 PDF 文件",
+    "openInSplit": "并排对照打开（最近文件面板内）",
+    "showShortcuts": "显示本快捷键列表"
   },
   "quickToggles": {
     "hoverTranslate": "悬停查词",

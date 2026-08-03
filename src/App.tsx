@@ -11,6 +11,7 @@ import SelectionToolbar from "./components/SelectionToolbar";
 import AiChatPanel from "./components/AiChatPanel";
 import CustomInterpretModal from "./components/CustomInterpretModal";
 import SettingsModal from "./components/SettingsModal";
+import ShortcutsModal from "./components/ShortcutsModal";
 import SetupWizard from "./components/SetupWizard";
 import Icon from "./components/Icon";
 import { StashItem } from "./services/stash";
@@ -109,7 +110,20 @@ function App() {
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const dictionaryStatus = useDictionaryStatus();
+
+  // Ctrl/Cmd+/ 开合快捷键速查浮层（Esc 关闭由 ShortcutsModal 的 useModal 处理）。
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "/") {
+        e.preventDefault();
+        setShortcutsOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   // PDF bytes cache keyed by filePath. Reused across tab switches so large
   // files do not have to be read from disk every time the user changes tabs.
@@ -720,6 +734,23 @@ function App() {
     }
   }, [tabs, recentFiles]);
 
+  // Ctrl/Cmd+O 打开 PDF（与浏览器习惯一致）；带 Shift 时是最近文件面板的
+  // Ctrl/Cmd+Shift+O（RecentFilesBar 自行处理），这里要排除。
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        !e.shiftKey &&
+        e.key.toLowerCase() === "o"
+      ) {
+        e.preventDefault();
+        void handleOpenPdf();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleOpenPdf]);
+
   const handleRecentFileClick = useCallback(
     async (file: RecentFile) => {
       // 带上 lastPage，viewer 挂载后自动恢复到上次读到的页码
@@ -1086,6 +1117,7 @@ function App() {
         }}
         onOpenPdf={handleOpenPdf}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenShortcuts={() => setShortcutsOpen(true)}
         quickToggles={
           <TitleBarToggles
             showHoverTranslate={dictionaryStatus.status?.exists === true}
@@ -1538,6 +1570,9 @@ function App() {
         <div className="file-drop-overlay">
           <span>{t("fileDrop.overlayHint")}</span>
         </div>
+      )}
+      {shortcutsOpen && (
+        <ShortcutsModal onClose={() => setShortcutsOpen(false)} />
       )}
     </div>
   );

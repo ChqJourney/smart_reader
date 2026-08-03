@@ -171,7 +171,8 @@
 }
 
 /* Settings — ghost icon button (neutral, pairs with tinted open) */
-.titlebar-settings-btn {
+.titlebar-settings-btn,
+.titlebar-shortcuts-btn {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -188,12 +189,14 @@
     color 0.15s ease;
 }
 
-.titlebar-settings-btn:hover {
+.titlebar-settings-btn:hover,
+.titlebar-shortcuts-btn:hover {
   background: rgba(100, 116, 139, 0.1);
   color: #334155; /* slate-700 */
 }
 
-.titlebar-settings-btn:active {
+.titlebar-settings-btn:active,
+.titlebar-shortcuts-btn:active {
   background: rgba(100, 116, 139, 0.16);
 }
 

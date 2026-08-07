@@ -407,6 +407,7 @@ PdfViewer.tsx（协调层：UI + 组合 hooks）
 
 AiChatPanel.tsx
 ├── expandedId / expandedStashIds / sessionScope（「当前文档/全部文档」过滤）/ sortMode（排序方式，受控于 App 的 settings.sessionSortMode）
+├── tabRequest（App 传入的 tab 激活请求：PDF 侧加入暂存 → 暂存 tab，发起解读/自定义解读 → 解读 tab，按 nonce 变化生效）
 └── 检测到 isStreaming 会话时启动流；展示最终 assistant 消息上的 `toolEvents`；长 user 消息折叠 + 来源片段卡片（可跳原文）；assistant 气泡 hover 复制 / 头部复制全部 / 删除会话
 
 ToolCallsIndicator.tsx

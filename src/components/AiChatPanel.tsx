@@ -17,6 +17,8 @@ import ToolCallsIndicator from "./ToolCallsIndicator";
 import ContextWidget from "./ContextWidget";
 import "./AiChatPanel.css";
 
+export type Tab = "stash" | "sessions";
+
 interface AiChatPanelProps {
   stashes: StashItem[];
   /** 当前可见 tab 的会话（默认列表范围） */
@@ -42,9 +44,10 @@ interface AiChatPanelProps {
   /** 解读记录排序方式（由 App 持久化到 settings；缺省时组件内部自持） */
   sessionSortMode?: SessionSortMode;
   onSessionSortModeChange?: (mode: SessionSortMode) => void;
+  /** 外部请求激活某个 tab（如 PDF 侧加入暂存 / 发起解读）；nonce 变化即生效，
+   *  与用户手动切换无关。 */
+  tabRequest?: { tab: Tab; nonce: number };
 }
-
-type Tab = "stash" | "sessions";
 
 export default function AiChatPanel({
   stashes,
@@ -64,6 +67,7 @@ export default function AiChatPanel({
   contextWindow = 128000,
   sessionSortMode,
   onSessionSortModeChange,
+  tabRequest,
 }: AiChatPanelProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>(
@@ -176,6 +180,16 @@ export default function AiChatPanel({
     if (hasUserManuallySwitchedTabRef.current) return;
     setActiveTab(stashes.length > 0 ? "stash" : "sessions");
   }, [stashes.length]);
+
+  // PDF 侧动作的显式 tab 激活请求（加入暂存 → 暂存 tab；发起解读 → 解读 tab）。
+  // 以 nonce 变化为准，不受用户手动切换标记影响。
+  const prevTabRequestNonceRef = useRef(tabRequest?.nonce ?? 0);
+  useEffect(() => {
+    if (!tabRequest) return;
+    if (tabRequest.nonce === prevTabRequestNonceRef.current) return;
+    prevTabRequestNonceRef.current = tabRequest.nonce;
+    setActiveTab(tabRequest.tab);
+  }, [tabRequest]);
 
   // stash 被删除或清空时同步剔除失效的选中项；stash 清空时退出选择模式
   useEffect(() => {

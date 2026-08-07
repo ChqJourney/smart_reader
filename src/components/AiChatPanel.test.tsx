@@ -104,6 +104,76 @@ describe("AiChatPanel", () => {
     expect(screen.getByText(/暂无暂存片段/i)).toBeInTheDocument();
   });
 
+  it("activates the requested tab when tabRequest nonce changes", () => {
+    const { rerender } = renderPanel({
+      tabRequest: { tab: "sessions", nonce: 1 },
+    });
+    expect(
+      screen.getByRole("tab", { name: /解读记录/i })
+    ).toHaveAttribute("aria-selected", "true");
+
+    rerender(
+      <AiChatPanel
+        stashes={[]}
+        sessions={[]}
+        onRemoveStash={vi.fn()}
+        onClearStashes={vi.fn()}
+        onOpenCustomInterpret={vi.fn()}
+        onFollowUp={vi.fn()}
+        tabRequest={{ tab: "stash", nonce: 2 }}
+      />
+    );
+    expect(screen.getByRole("tab", { name: /暂存区/i })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+  });
+
+  it("honors tabRequest even after the user manually switched tabs", () => {
+    const { rerender } = renderPanel();
+
+    // 用户手动切到暂存 tab
+    fireEvent.click(screen.getByRole("tab", { name: /暂存区/i }));
+    expect(screen.getByRole("tab", { name: /暂存区/i })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+
+    // PDF 侧发起解读：强制切回解读记录 tab
+    rerender(
+      <AiChatPanel
+        stashes={[]}
+        sessions={[]}
+        onRemoveStash={vi.fn()}
+        onClearStashes={vi.fn()}
+        onOpenCustomInterpret={vi.fn()}
+        onFollowUp={vi.fn()}
+        tabRequest={{ tab: "sessions", nonce: 1 }}
+      />
+    );
+    expect(
+      screen.getByRole("tab", { name: /解读记录/i })
+    ).toHaveAttribute("aria-selected", "true");
+
+    // 之后用户仍可自由切换，相同 nonce 不再强制
+    fireEvent.click(screen.getByRole("tab", { name: /暂存区/i }));
+    rerender(
+      <AiChatPanel
+        stashes={[]}
+        sessions={[]}
+        onRemoveStash={vi.fn()}
+        onClearStashes={vi.fn()}
+        onOpenCustomInterpret={vi.fn()}
+        onFollowUp={vi.fn()}
+        tabRequest={{ tab: "sessions", nonce: 1 }}
+      />
+    );
+    expect(screen.getByRole("tab", { name: /暂存区/i })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+  });
+
   it("renders stash items with source info", () => {
     const stashes = [
       makeStash("stash-1", "first excerpt", {

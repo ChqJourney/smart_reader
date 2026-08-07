@@ -888,13 +888,24 @@ function App() {
   // 选区消费跟随焦点屏（非分屏时 focusedTab 即 activeTab）。
   const focusedSelection = focusedTab?.selection ?? null;
 
+  // PDF 侧动作驱动 AI 面板 tab 激活：加入暂存 → 暂存 tab，发起解读 → 解读 tab。
+  // nonce 自增触发 AiChatPanel 内的切换 effect。
+  const [panelTabRequest, setPanelTabRequest] = useState<{
+    tab: "stash" | "sessions";
+    nonce: number;
+  }>({ tab: "stash", nonce: 0 });
+  const requestPanelTab = useCallback((tab: "stash" | "sessions") => {
+    setPanelTabRequest((prev) => ({ tab, nonce: prev.nonce + 1 }));
+  }, []);
+
   const handleAddToStash = useCallback(
     (text: string) => {
       if (!focusedSelection || !focusedTab) return;
       persistenceHandleAddToStash(focusedSelection, text);
       tabs.clearTabSelection(focusedTab.id);
+      requestPanelTab("stash");
     },
-    [focusedSelection, focusedTab, persistenceHandleAddToStash, tabs]
+    [focusedSelection, focusedTab, persistenceHandleAddToStash, tabs, requestPanelTab]
   );
 
   // 自定义解读弹窗由 App 层统一渲染（选区工具条直达与面板按钮两个入口共用），
@@ -929,8 +940,15 @@ function App() {
       if (!focusedSelection || !focusedTab) return;
       persistenceHandleSelectionAction(focusedSelection, action, text);
       tabs.clearTabSelection(focusedTab.id);
+      if (action === "explain") requestPanelTab("sessions");
     },
-    [focusedSelection, focusedTab, persistenceHandleSelectionAction, tabs]
+    [
+      focusedSelection,
+      focusedTab,
+      persistenceHandleSelectionAction,
+      tabs,
+      requestPanelTab,
+    ]
   );
 
   const handleCopy = useCallback(
@@ -1317,6 +1335,7 @@ function App() {
                     contextWindow={contextWindow}
                     sessionSortMode={settings.sessionSortMode}
                     onSessionSortModeChange={handleSessionSortModeChange}
+                    tabRequest={panelTabRequest}
                   />
                 </div>
               </>
@@ -1461,6 +1480,7 @@ function App() {
                   contextWindow={contextWindow}
                   sessionSortMode={settings.sessionSortMode}
                   onSessionSortModeChange={handleSessionSortModeChange}
+                  tabRequest={panelTabRequest}
                 />
               </div>
             ) : (
@@ -1506,6 +1526,7 @@ function App() {
                   contextWindow={contextWindow}
                   sessionSortMode={settings.sessionSortMode}
                   onSessionSortModeChange={handleSessionSortModeChange}
+                  tabRequest={panelTabRequest}
                 />
               </div>
             ) : (
@@ -1559,6 +1580,7 @@ function App() {
             persistenceHandleCustomInterpret(prompt, selected);
             setCustomInterpretOpen(false);
             setCustomInterpretPreselected(null);
+            requestPanelTab("sessions");
           }}
           onClose={() => {
             setCustomInterpretOpen(false);

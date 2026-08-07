@@ -20,6 +20,16 @@ export function useModal({
   const contentRef = useRef<HTMLDivElement>(null);
   const previouslyFocusedRef = useRef<Element | null>(null);
 
+  // onClose / closeOnEscape 走 ref：调用方常传内联回调（父组件每次渲染都是
+  // 新引用），若作为下方 effect 的依赖，父组件任意重渲染都会让 effect 重跑——
+  // cleanup 把焦点还给弹窗外元素、新 run 又把焦点抢到第一个可聚焦元素，
+  // 输入过程中焦点被打断（自定义解读/打印弹窗均踩过）。effect 只应在 open
+  // 切换时运行。
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const closeOnEscapeRef = useRef(closeOnEscape);
+  closeOnEscapeRef.current = closeOnEscape;
+
   // Close on Escape and trap Tab focus while the modal is open.
   useEffect(() => {
     if (!open) return;
@@ -28,9 +38,9 @@ export function useModal({
 
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (!closeOnEscape) return;
+        if (!closeOnEscapeRef.current) return;
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -84,7 +94,7 @@ export function useModal({
         prev.focus();
       }
     };
-  }, [open, onClose, closeOnEscape]);
+  }, [open]);
 
   return { contentRef };
 }

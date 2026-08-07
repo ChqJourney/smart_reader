@@ -234,6 +234,34 @@ describe("CustomInterpretModal", () => {
     );
   });
 
+  it("keeps textarea focus when the parent re-renders with a new onClose identity", () => {
+    // 回归：App 传的是内联 onClose（每次渲染新引用）。修复前 useModal 的
+    // effect 依赖 onClose，App 任意重渲染（流式会话更新、updater 回调等）都会
+    // 让 effect 重跑——cleanup 把焦点还给弹窗外元素、新 run 把焦点抢到首个
+    // checkbox，导致输入中焦点跑掉（Windows 上表现为无法输入）。
+    const stashes = [makeStash("stash-1", "text")];
+    const { rerender } = render(
+      <CustomInterpretModal
+        stashes={stashes}
+        onSubmit={vi.fn()}
+        onClose={() => {}}
+      />
+    );
+
+    const textarea = screen.getByPlaceholderText(/输入你的解读要求/);
+    expect(document.activeElement).toBe(textarea);
+
+    rerender(
+      <CustomInterpretModal
+        stashes={stashes}
+        onSubmit={vi.fn()}
+        onClose={() => {}}
+      />
+    );
+
+    expect(document.activeElement).toBe(textarea);
+  });
+
   it("does not submit on Enter while IME composition is active", () => {
     const onSubmit = vi.fn();
     const stashes = [makeStash("stash-1", "text")];

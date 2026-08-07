@@ -64,6 +64,8 @@
   border: 1px solid transparent;
   border-radius: 4px;
   line-height: 24px;
+  /* input 同样不继承 body 字体，与 page-number-btn 保持一致的修复 */
+  font-family: inherit;
   background: transparent;
   outline: none;
 }
@@ -89,6 +91,9 @@
   border-radius: 4px;
   text-align: center;
   line-height: 24px;
+  /* 按钮不继承 body 字体（UA 默认 -webkit-small-control），
+     Windows 上与旁边 "/ 总页数" span 字体不同会导致高度不齐 */
+  font-family: inherit;
   font-size: 0.85rem;
   color: #616161;
   background: transparent;

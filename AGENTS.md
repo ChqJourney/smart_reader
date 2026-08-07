@@ -205,6 +205,7 @@ npm install
 │   ├── gen-sample-pdf.mjs             # 生成测试 PDF
 │   ├── gen-sample-short-pdf.mjs       # 生成短页测试 PDF
 │   ├── gen-sample-long-pdf.mjs        # 生成 60 页大文档测试 PDF
+│   ├── gen-sample-link-pdf.mjs        # 生成带内部交叉引用链接的演示 PDF（画中画录制素材）
 │   ├── bump-version.mjs               # 同步 package.json / Cargo.toml / tauri.conf.json 版本号
 │   └── prepare-release.mjs            # 发布前固化 CHANGELOG 版本段落并提取 Release notes
 ├── CHANGELOG.md                       # 版本变更记录（GitHub Release notes 来源）

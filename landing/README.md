@@ -31,6 +31,7 @@ landing/
 │       ├── README.md   # 命名规则与录制规范
 │       ├── hero.mp4 / hero-poster.jpg
 │       ├── split-view.mp4
+│       ├── link-preview.mp4
 │       ├── search-outline.mp4
 │       ├── hover-word.jpg（或 hover-word.mp4）
 │       ├── translate.mp4

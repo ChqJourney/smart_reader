@@ -79,6 +79,7 @@
     "toggleSearch": "Search (Ctrl/Cmd+F)",
     "outlineTitle": "Outline",
     "closeOutline": "Close Outline",
+    "untitledOutline": "(Untitled)",
     "searchPlaceholder": "Search PDF content",
     "searchLoading": "Searching...",
     "searchCount": "{{current}} / {{total}} matches",

@@ -171,10 +171,15 @@
   background: #e0e0e0;
 }
 
+/* 嵌套各级共用的基础列表样式；滚动/留白只归根列表，避免每层子树多出空隙 */
 .pdf-outline-list {
   list-style: none;
   margin: 0;
-  padding: 8px 0;
+  padding: 0;
+}
+
+.pdf-outline-list-root {
+  padding: 6px 0;
   overflow-y: auto;
   flex: 1;
 }
@@ -184,17 +189,28 @@
   padding: 0;
 }
 
+/* 左侧 padding 由 OutlineNode 行内样式按 8 + level * 14 计算，这里只留右侧 */
 .pdf-outline-row {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 0 12px;
+  padding-right: 12px;
   height: 28px;
   box-sizing: border-box;
 }
 
+.pdf-outline-row:hover {
+  background: #ececec;
+}
+
+/* 展开箭头不再复用 .icon-btn（其 min-width/min-height: 32px 会撑破列宽，
+   导致有/无子项的同级行起始位置错位），按钮与占位严格同宽 */
 .pdf-outline-expand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 2px;
+  margin: 0;
   min-width: 20px;
   min-height: 20px;
   width: 20px;
@@ -207,6 +223,14 @@
   flex-shrink: 0;
 }
 
+.pdf-outline-expand .icon {
+  transition: transform 0.15s ease;
+}
+
+.pdf-outline-expand.expanded .icon {
+  transform: rotate(90deg);
+}
+
 .pdf-outline-expand-placeholder {
   display: inline-block;
   width: 20px;
@@ -215,7 +239,7 @@
 }
 
 .pdf-outline-expand:hover {
-  background: #e8e8e8;
+  background: #e0e0e0;
 }
 
 .pdf-outline-title {
@@ -226,6 +250,7 @@
   padding: 2px 4px;
   margin: 0;
   font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
   color: #424242;
   cursor: pointer;
   border-radius: 4px;
@@ -234,8 +259,12 @@
   text-overflow: ellipsis;
 }
 
+.pdf-outline-row-top > .pdf-outline-title {
+  font-weight: 600;
+  color: #2e2e2e;
+}
+
 .pdf-outline-title:hover {
-  background: #e8e8e8;
   color: #1f1f1f;
 }
 

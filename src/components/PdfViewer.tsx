@@ -1285,7 +1285,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                   <Icon name="close" size={14} />
                 </button>
               </div>
-              <ul className="pdf-outline-list">
+              <ul className="pdf-outline-list pdf-outline-list-root">
                 {outline.map((item, index) => (
                   <OutlineNode
                     key={index}
@@ -1486,19 +1486,16 @@ function OutlineNode({
   return (
     <li className="pdf-outline-item">
       <div
-        className="pdf-outline-row"
-        style={{ paddingLeft: `${level * 12}px` }}
+        className={`pdf-outline-row${level === 0 ? " pdf-outline-row-top" : ""}`}
+        style={{ paddingLeft: `${8 + level * 14}px` }}
       >
         {hasChildren ? (
           <button
-            className="icon-btn pdf-outline-expand"
+            className={`pdf-outline-expand${expanded ? " expanded" : ""}`}
             onClick={() => setExpanded((v) => !v)}
             aria-label={expanded ? t("common.collapse") : t("common.expand")}
           >
-            <Icon
-              name={expanded ? "chevron-down" : "chevron-right"}
-              size={12}
-            />
+            <Icon name="chevron-right" size={12} />
           </button>
         ) : (
           <span className="pdf-outline-expand-placeholder" aria-hidden="true" />
@@ -1508,7 +1505,7 @@ function OutlineNode({
           onClick={() => onClick(item)}
           title={item.title}
         >
-          {item.title || "(Untitled)"}
+          {item.title || t("pdf.untitledOutline")}
         </button>
       </div>
       {expanded && hasChildren && (

@@ -79,6 +79,7 @@
     "toggleSearch": "搜索（Ctrl/Cmd+F）",
     "outlineTitle": "目录",
     "closeOutline": "关闭目录",
+    "untitledOutline": "（无标题）",
     "searchPlaceholder": "搜索 PDF 内容",
     "searchLoading": "搜索中...",
     "searchCount": "第 {{current}} / 共 {{total}} 个",

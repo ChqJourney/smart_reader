@@ -40,6 +40,8 @@ import {
 } from "../hooks/useViewportManager";
 import { useScrollPageSync } from "../hooks/useScrollPageSync";
 import { useTabRestore } from "../hooks/useTabRestore";
+import { useLinkPreviews } from "../hooks/useLinkPreviews";
+import LinkPreviewPopup from "./LinkPreviewPopup";
 import "./PdfViewer.css";
 
 import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -981,6 +983,27 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     const goToPrevPage = () => setPageNum((p) => Math.max(1, p - 1));
     const goToNextPage = () => setPageNum((p) => Math.min(numPages, p + 1));
 
+    // 条款链接悬停预览（画中画）：PdfPage 上报内部 dest 链接悬停，2 秒后
+    // 弹出小窗渲染目标条款；窗口可拖动/调大小/固化，详见 useLinkPreviews
+    // 与 LinkPreviewPopup。每个 viewer 一份独立状态，生命周期跟随 tab。
+    const {
+      previews: linkPreviews,
+      handleLinkHover,
+      handlePreviewEnter,
+      handlePreviewLeave,
+      togglePreviewPin,
+      closePreview,
+      closeAllPreviews,
+    } = useLinkPreviews({ pdf });
+
+    // 设置开关关闭时清空已弹出的预览窗口；PdfPage 侧通过不传 onLinkHover
+    // 停止悬停上报（reportLinkHover 内部对 undefined 回调早退）。
+    const linkPreviewEnabled = settings.linkPreviewEnabled;
+    useEffect(() => {
+      if (!linkPreviewEnabled) closeAllPreviews();
+    }, [linkPreviewEnabled, closeAllPreviews]);
+    const linkHoverHandler = linkPreviewEnabled ? handleLinkHover : undefined;
+
     // Fit-to-width now triggers an on-demand viewport load when the target
     // page's entry is missing (issue 9.4). Previously fitToWidth silently
     // returned when `pageViewports.get(pageNum)` was absent — which happened
@@ -1318,6 +1341,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                   fileName={fileName}
                   onSelection={handleSelection}
                   onGoToPage={goToPage}
+                  onLinkHover={linkHoverHandler}
                   onViewportLoaded={reportViewportLoaded}
                   annotations={annotations}
                   highlightedAnnotationId={highlightedAnnotationId}
@@ -1343,6 +1367,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                     fileName={fileName}
                     onSelection={handleSelection}
                     onGoToPage={goToPage}
+                    onLinkHover={linkHoverHandler}
                     onVisibilityChange={handlePageVisibility}
                     onViewportLoaded={reportViewportLoaded}
                     annotations={annotations}
@@ -1465,6 +1490,20 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
               {flashPage}
             </div>
           )}
+
+          {pdf &&
+            linkPreviews.map((preview) => (
+              <LinkPreviewPopup
+                key={preview.id}
+                pdf={pdf}
+                preview={preview}
+                onGoToPage={goToPage}
+                onTogglePin={togglePreviewPin}
+                onClose={closePreview}
+                onMouseEnter={handlePreviewEnter}
+                onMouseLeave={handlePreviewLeave}
+              />
+            ))}
         </div>
       </div>
     );

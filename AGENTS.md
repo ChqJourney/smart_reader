@@ -33,6 +33,7 @@
 - 解读 / 自定义解读会话可分享：会话头部「分享」下拉支持复制结构化 Markdown 到剪贴板或导出 .md 文件（原文片段以引用块 + 来源行展示，跳过模板 prompt / tool 消息 / 思考内容，见 `services/share.ts`）。
 - 最近文件下拉面板：置顶常用标准、按文件名/路径搜索、显示目录/相对时间/上次读到的页码、失效文件置灰、单条移除与两段式清空、从列表直接在分屏打开对照（快捷键 Ctrl/Cmd+Shift+O 开合面板）。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
+- 条款链接悬停预览（画中画）：默认关闭，设置「功能设置」页开启。悬停在 PDF 自带的文档内链接（条款号引用，带内部 dest）上 2 秒弹出小窗，复用 viewer 的 PDF 代理渲染目标页并自动滚动到 dest Y 位置（XYZ / FitH 取 Y，其余形态退化页首）；小窗 portal 到 body，可拖动（复用 useDrag）、右下角调大小（拖动中 canvas CSS 拉伸、松手按新宽度重渲）、内容区原生滚动；右上角图钉固化后不随鼠标移出关闭，可多个并存（上限 10 个），未固化预览同时只保留一个、鼠标离开 400ms 宽限后自动关闭；同目标（页码+destY）去重，外部 url 链接不参与；悬停链接时抑制悬停查词 tooltip。状态管理在 `hooks/useLinkPreviews.ts`，窗口组件 `components/LinkPreviewPopup.tsx`，PdfPage 仅上报悬停目标（`onLinkHover`），PdfViewer 按 `settings.linkPreviewEnabled` 门控上报并在开关关闭时清空已弹出窗口。
 - 解读 / 自定义解读 / 追问时启用 **Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文（`list_open_pdfs`、`read_pdf_page`、`search_in_pdf`），辅助验证条款引用与跨页内容。
 - LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 按平台分条目存放于系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不再落入 `settings.json`。
 - LLM 请求整体后端代理化（`llm_proxy.rs`）：前端不再直接发起 HTTP 请求，API Key 不进入 webview。
@@ -116,6 +117,7 @@ npm install
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗（片段勾选清单 + 解读方式预设下拉，App 层统一渲染）
 │   │   ├── ShortcutsModal.tsx         # 键盘快捷键速查浮层（Ctrl/Cmd+/ 或标题栏「?」开合，分组 kbd 清单）
 │   │   ├── ToolCallsIndicator.tsx     # 工具调用状态指示器（解读流中展示）
+│   │   ├── LinkPreviewPopup.tsx       # 条款链接悬停预览小窗（画中画：渲染目标页、拖动/调大小/固化，portal 到 body）
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
 │   │   ├── HibernatedPlaceholder.tsx  # 休眠 tab 在 keep-alive 树里的占位（空 div，保持 key 稳定）
 │   │   ├── ErrorBoundary.tsx          # 顶层错误边界
@@ -139,6 +141,7 @@ npm install
 │   │   ├── useDrag.ts                 # 通用拖拽（全局监听 + 阈值）
 │   │   ├── useClampedPopupPosition.ts # 浮层 clamp 定位（支持 yPercent）
 │   │   ├── useStreaming.ts            # LLM 流式输出状态
+│   │   ├── useLinkPreviews.ts         # 条款链接悬停预览状态（2s 悬停计时、同目标去重、单 transient + 多固化、400ms 宽限关闭、上限 10）
 │   │   └── useModal.ts                # Modal 通用逻辑
 │   ├── i18n/                          # i18next 初始化（index.ts，lng 硬编码 zh-CN）
 │   ├── locales/                       # zh-CN.json / en.json（顶层 key 分组一致，en 为预埋）
@@ -309,7 +312,7 @@ cd src-tauri && cargo test
 - `save_session(session: InterpretationSession)`：保存会话 JSON。
 - `delete_session(sessionId: string)`：删除会话文件。
 - `authorize_pdf_path(filePath: string)`：将用户通过对话框选择的 PDF 路径加入后端授权白名单，`read_pdf_bytes` / `get_pdf_hash` 会校验该白名单。
-- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 悬停翻译开关 + 日志级别 + 解读记录排序方式）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
+- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表（`RecentFile` 含 `pinned` 置顶与 `lastPage` 阅读页码字段，旧数据通过 `#[serde(default)]` 兼容）。
 - `check_files_exist(paths: string[])`：批量检查文件是否仍存在于磁盘，最近文件面板用它置灰已移动/删除的条目。
 - `export_text_file(file_path: string, content: string)`：把用户经系统保存对话框选定的任意路径写入文本文件（解读分享导出 .md 使用，原子写入，不走 PDF 授权白名单）。
@@ -345,7 +348,7 @@ cd src-tauri && cargo test
     │   └── app.log                # 应用运行日志（默认 Warn 级别，可在设置中调整，保留最近 3 个文件各 10 MB）
     ├── print/
     │   └── SpecReader-print-{ts}.pdf  # 打印临时文件（open_print_file 每次清理旧文件，只留最新一份）
-    ├── settings.json              # LLM 平台/模型 + 目标语言 + Agent Tools 开关 + 悬停翻译开关 + 日志级别 + 解读记录排序方式
+    ├── settings.json              # LLM 平台/模型 + 目标语言 + Agent Tools 开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式
     └── recent_files.json          # 最近打开文件列表
 ```
 
@@ -397,6 +400,7 @@ PdfViewer.tsx（协调层：UI + 组合 hooks）
 ├── useTabRestore                       # tab 状态恢复（keep-alive：仅 tab 首次打开时挂载恢复）+ pending 跳转（激活带回的同页 pending 直接清除）
 ├── pageNum / scale / viewMode          # 本组件持有的三要素状态
 ├── jumpOpen / flashPage                # Cmd/Ctrl+G 跳页面板与跳页闪卡（面板提交才闪，600ms 定时清除）
+├── useLinkPreviews                     # 条款链接悬停预览（PdfPage onLinkHover 上报 → 计时弹窗；LinkPreviewPopup 列表）
 ├── PageRail                            # 右侧页码滑轨（连续模式拖动直写 scrollTop，页码由 useScrollPageSync 停息重算收敛）
 ├── 文本选区 → onSelection
 └── PdfPage                             # 单页渲染组件；悬停取词（useWordLookup + WordTooltip）已下沉到 PdfPage
@@ -409,7 +413,7 @@ ToolCallsIndicator.tsx
 └── 工具调用状态指示器：running / done / 折叠明细
 
 SettingsModal.tsx
-└── 左侧分页设置弹窗：模型设置（平台/模型/Key）、功能设置（语言/悬停翻译/Agent Tools 开关（默认关闭，开启后显示 maxToolRounds 轮次设置）/系统提示词）、系统设置（日志/默认打开方式/重跑向导）、关于（版本/软件更新/License）
+└── 左侧分页设置弹窗：模型设置（平台/模型/Key）、功能设置（语言/悬停翻译/条款链接悬停预览（默认关闭）/Agent Tools 开关（默认关闭，开启后显示 maxToolRounds 轮次设置）/系统提示词）、系统设置（日志/默认打开方式/重跑向导）、关于（版本/软件更新/License）
 ```
 
 ### 6.5 Agent Tools 工作流

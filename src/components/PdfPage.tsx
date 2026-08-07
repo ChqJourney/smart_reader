@@ -83,6 +83,13 @@ interface PdfPageProps {
     }
   ) => void;
   onGoToPage?: (page: number) => void;
+  /**
+   * 悬停在带内部 dest 的链接注释（条款跳转）上 / 离开时上报，供
+   * PdfViewer 的悬停预览（画中画）计时。仅 dest 链接参与，外部 url 不上报。
+   */
+  onLinkHover?: (
+    hover: { dest: unknown; clientX: number; clientY: number } | null
+  ) => void;
   onVisibilityChange?: (pageNum: number, ratio: number) => void;
   annotations?: Annotation[];
   highlightedAnnotationId?: string | null;
@@ -113,6 +120,7 @@ function PdfPage({
   fileName,
   onSelection,
   onGoToPage,
+  onLinkHover,
   onVisibilityChange,
   annotations,
   highlightedAnnotationId,
@@ -507,6 +515,37 @@ function PdfPage({
     );
   };
 
+  // 悬停链接上报（条款预览）：只在「内部 dest 链接的悬停目标」变化时触发，
+  // 同一链接内的连续 mousemove 不重复上报。上报内容携带 client 坐标作为
+  // 预览窗口的初始锚点。
+  const lastHoverInternalLinkIdRef = useRef<string | null>(null);
+  const reportLinkHover = useCallback(
+    (link: LinkAnnotation | null, e?: React.MouseEvent) => {
+      const internalId = link?.dest ? link.id : null;
+      if (internalId === lastHoverInternalLinkIdRef.current) return;
+      lastHoverInternalLinkIdRef.current = internalId;
+      if (!onLinkHover) return;
+      if (internalId && link && e) {
+        onLinkHover({
+          dest: link.dest,
+          clientX: e.clientX,
+          clientY: e.clientY,
+        });
+      } else {
+        onLinkHover(null);
+      }
+    },
+    [onLinkHover]
+  );
+
+  // 卸载（关 tab / 休眠顶替）时若正悬停在链接上，补一条离开上报，
+  // 避免 PdfViewer 侧的预览计时悬空。
+  useEffect(() => {
+    return () => {
+      if (lastHoverInternalLinkIdRef.current) onLinkHover?.(null);
+    };
+  }, [onLinkHover]);
+
   const handleLinkClick = async (link: LinkAnnotation) => {
     if (link.url) {
       try {
@@ -533,6 +572,7 @@ function PdfPage({
   const handleMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
     hideTooltip();
+    reportLinkHover(null);
     const pos = getMousePosInWrapper(e);
     pendingLinkRef.current = findLinkAtPoint(pos.x, pos.y);
     isDraggingRef.current = true;
@@ -543,11 +583,10 @@ function PdfPage({
 
   const handleMouseMove = (e: React.MouseEvent) => {
     const pos = getMousePosInWrapper(e);
+    const hoveredLink = findLinkAtPoint(pos.x, pos.y);
 
     if (overlayRef.current) {
-      overlayRef.current.style.cursor = findLinkAtPoint(pos.x, pos.y)
-        ? "pointer"
-        : "crosshair";
+      overlayRef.current.style.cursor = hoveredLink ? "pointer" : "crosshair";
     }
 
     if (isDraggingRef.current && dragStartRef.current) {
@@ -562,6 +601,15 @@ function PdfPage({
       const width = Math.abs(pos.x - start.x);
       const height = Math.abs(pos.y - start.y);
       setSelectionRect({ x, y, width, height });
+      return;
+    }
+
+    reportLinkHover(hoveredLink, e);
+
+    // 链接区域优先给悬停预览：抑制悬停查词，避免词条 tooltip 与预览
+    // 窗口叠在同一个条款号上。
+    if (hoveredLink) {
+      hideTooltip();
       return;
     }
 
@@ -685,6 +733,7 @@ function PdfPage({
         onMouseUp={handleMouseUp}
         onMouseLeave={() => {
           hideTooltip();
+          reportLinkHover(null);
           isDraggingRef.current = false;
           dragStartRef.current = null;
           pendingLinkRef.current = null;

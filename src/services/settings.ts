@@ -35,6 +35,8 @@ export interface AppSettings {
   targetLanguage: string;
   systemPrompts: SystemPrompts;
   hoverTranslate: boolean;
+  /** 条款链接悬停预览（画中画）开关 */
+  linkPreviewEnabled: boolean;
   logLevel: LogLevel;
   /** Whether the right-side AI chat panel is visible. */
   rightPanelVisible: boolean;
@@ -102,6 +104,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   targetLanguage: "中文",
   systemPrompts: DEFAULT_SYSTEM_PROMPTS,
   hoverTranslate: false,
+  linkPreviewEnabled: false,
   logLevel: "warn",
   rightPanelVisible: true,
   rightPanelWidth: 0,
@@ -140,6 +143,8 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
       explain: value.systemPrompts?.explain ?? DEFAULT_SYSTEM_PROMPTS.explain,
     },
     hoverTranslate: value.hoverTranslate ?? DEFAULT_SETTINGS.hoverTranslate,
+    linkPreviewEnabled:
+      value.linkPreviewEnabled ?? DEFAULT_SETTINGS.linkPreviewEnabled,
     logLevel: isLogLevel(value.logLevel)
       ? value.logLevel
       : DEFAULT_SETTINGS.logLevel,

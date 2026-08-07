@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, waitFor } from "@testing-library/react";
+import { render, waitFor, fireEvent } from "@testing-library/react";
 import PdfPage from "./PdfPage";
 import type { PageViewportInfo } from "./PdfViewer";
 import { DEFAULT_SETTINGS } from "../services/settings";
@@ -202,5 +202,87 @@ describe("PdfPage rendering resources", () => {
       expect(canvas.width).toBe(0);
       expect(canvas.height).toBe(0);
     });
+  });
+});
+
+describe("PdfPage link hover reporting", () => {
+  beforeEach(() => {
+    // jsdom has no 2d canvas backend; stub just enough for the render effect.
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+      setTransform: vi.fn(),
+    } as unknown as CanvasRenderingContext2D);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function makeLinkPdf() {
+    const page = {
+      getViewport: ({ scale }: { scale: number }) => ({
+        width: 100 * scale,
+        height: 200 * scale,
+        scale,
+        convertToViewportPoint: (x: number, y: number) => [x, y],
+      }),
+      render: vi.fn(() => ({ promise: Promise.resolve(), cancel: vi.fn() })),
+      getTextContent: () => Promise.resolve({ items: [] }),
+      getAnnotations: () =>
+        Promise.resolve([
+          { subtype: "Link", rect: [10, 10, 30, 20], dest: "clause-19.4" },
+          {
+            subtype: "Link",
+            rect: [50, 10, 70, 20],
+            url: "https://example.com",
+          },
+        ]),
+      cleanup: vi.fn(),
+    };
+    return { getPage: vi.fn(async () => page), page };
+  }
+
+  it("reports hover on internal dest links, dedupes within a link, and ignores url links", async () => {
+    const pdf = makeLinkPdf();
+    const onLinkHover = vi.fn();
+    const { container } = render(
+      <PdfPage
+        pdf={pdf as never}
+        pageNum={1}
+        scale={1}
+        shouldRender
+        pageViewport={{ width: 100, height: 200, scale: 1 }}
+        settings={DEFAULT_SETTINGS}
+        onLinkHover={onLinkHover}
+      />
+    );
+
+    // 等链接注释异步加载进悬停指示层。
+    await waitFor(() => {
+      expect(container.querySelectorAll(".pdf-link-indicator").length).toBe(2);
+    });
+
+    const overlay = container.querySelector(
+      ".pdf-selection-overlay"
+    ) as HTMLElement;
+
+    fireEvent.mouseMove(overlay, { clientX: 15, clientY: 15 });
+    expect(onLinkHover).toHaveBeenCalledWith({
+      dest: "clause-19.4",
+      clientX: 15,
+      clientY: 15,
+    });
+
+    // 同一链接内继续移动不重复上报。
+    fireEvent.mouseMove(overlay, { clientX: 16, clientY: 16 });
+    expect(onLinkHover).toHaveBeenCalledTimes(1);
+
+    // 外部 url 链接不参与预览，上报 null（相当于离开）。
+    fireEvent.mouseMove(overlay, { clientX: 55, clientY: 15 });
+    expect(onLinkHover).toHaveBeenLastCalledWith(null);
+    expect(onLinkHover).toHaveBeenCalledTimes(2);
+
+    // 移出页面：已是 null，不再重复上报。
+    fireEvent.mouseLeave(overlay);
+    expect(onLinkHover).toHaveBeenCalledTimes(2);
   });
 });

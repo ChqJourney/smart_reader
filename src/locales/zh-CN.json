@@ -92,6 +92,15 @@
     "pageRail": "页面滑轨",
     "print": "打印（Ctrl/Cmd+P）"
   },
+  "linkPreview": {
+    "title": "第 {{page}} 页",
+    "goToPage": "跳转到第 {{page}} 页",
+    "pin": "固化预览（不随鼠标移出关闭）",
+    "unpin": "取消固化",
+    "close": "关闭预览",
+    "loading": "加载中...",
+    "loadFailed": "预览加载失败"
+  },
   "panel": {
     "hide": "隐藏面板"
   },
@@ -254,6 +263,9 @@
     "hoverTranslate": "悬停取词翻译",
     "hoverTranslateHint": "鼠标悬停在英文单词上时，使用本地 ECDICT 英汉词典显示翻译。",
     "enableHoverTranslate": "启用悬停取词翻译",
+    "linkPreview": "条款链接悬停预览",
+    "linkPreviewHint": "鼠标悬停在 PDF 自带的条款引用链接上 2 秒，弹出画中画小窗显示目标条款，可拖动、调大小并固化对照。",
+    "enableLinkPreview": "启用条款链接悬停预览",
     "agentTools": "智能查阅文档",
     "agentToolsHint": "允许 AI 在解读时自动查阅当前打开的 PDF 原文，用于核实引用的条款、表格或定义。",
     "enableAgentTools": "启用智能查阅文档",

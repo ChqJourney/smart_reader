@@ -804,6 +804,28 @@ export default function SettingsModal({
 
                   <section className="settings-section">
                     <div className="settings-section-title">
+                      {t("settings.linkPreview")}
+                    </div>
+                    <div className="settings-section-hint">
+                      {t("settings.linkPreviewHint")}
+                    </div>
+                    <label className="settings-toggle">
+                      <input
+                        type="checkbox"
+                        checked={settings.linkPreviewEnabled}
+                        onChange={(e) =>
+                          setSettings((s) => ({
+                            ...s,
+                            linkPreviewEnabled: e.target.checked,
+                          }))
+                        }
+                      />
+                      {t("settings.enableLinkPreview")}
+                    </label>
+                  </section>
+
+                  <section className="settings-section">
+                    <div className="settings-section-title">
                       {t("settings.agentTools")}
                     </div>
                     <div className="settings-section-hint">

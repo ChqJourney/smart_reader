@@ -732,6 +732,9 @@ struct AppSettings {
     system_prompts: SystemPrompts,
     #[serde(default)]
     hover_translate: bool,
+    /// 条款链接悬停预览（画中画）开关
+    #[serde(default)]
+    link_preview_enabled: bool,
     #[serde(default = "default_log_level")]
     log_level: String,
     /// Whether the right-side AI chat panel is visible.
@@ -797,6 +800,7 @@ impl Default for AppSettings {
             target_language: default_target_language(),
             system_prompts: SystemPrompts::default(),
             hover_translate: false,
+            link_preview_enabled: false,
             log_level: default_log_level(),
             right_panel_visible: default_right_panel_visible(),
             right_panel_width: default_right_panel_width(),
@@ -1439,6 +1443,7 @@ mod tests {
             target_language: "中文".to_string(),
             system_prompts: SystemPrompts::default(),
             hover_translate: false,
+            link_preview_enabled: false,
             log_level: "warn".to_string(),
             right_panel_visible: true,
             right_panel_width: 0,

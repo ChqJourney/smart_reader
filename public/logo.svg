@@ -1,20 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <defs>
-    <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1e40af" />
-      <stop offset="100%" stop-color="#0ea5e9" />
-    </linearGradient>
-  </defs>
+  <!-- 文档页（纸白 + 暖纸描边） -->
+  <rect x="11" y="9" width="42" height="46" rx="6" fill="#fffbf5" stroke="#c4b8a4" stroke-width="3" />
 
-  <!-- 文档底板 -->
-  <rect x="8" y="4" width="42" height="52" rx="6" fill="#ffffff" stroke="url(#logoGrad)" stroke-width="3" />
+  <!-- 焦橙书签（探出页边） -->
+  <path d="M35 3 h13 v19 l-6.5 -5 l-6.5 5 z" fill="#f54001" />
 
-  <!-- 文档内文本行 -->
-  <line x1="17" y1="17" x2="41" y2="17" stroke="#1e40af" stroke-width="3" stroke-linecap="round" />
-  <line x1="17" y1="27" x2="41" y2="27" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" />
-  <line x1="17" y1="37" x2="33" y2="37" stroke="#94a3b8" stroke-width="3" stroke-linecap="round" />
-
-  <!-- 右下角 AI 高光标记 -->
-  <circle cx="46" cy="46" r="12" fill="url(#logoGrad)" />
-  <path d="M46 40 L47.5 44.5 L52 44.5 L48.25 47.5 L49.75 52 L46 49 L42.25 52 L43.75 47.5 L40 44.5 L44.5 44.5 Z" fill="#ffffff" />
+  <!-- 文本行（暖棕色阶，一条焦橙高亮行呼应「选中→解读」） -->
+  <line x1="19" y1="21" x2="30" y2="21" stroke="#4f483e" stroke-width="3" stroke-linecap="round" />
+  <line x1="19" y1="29" x2="33" y2="29" stroke="#8a7d6b" stroke-width="3" stroke-linecap="round" />
+  <line x1="19" y1="37" x2="30" y2="37" stroke="#f54001" stroke-width="3" stroke-linecap="round" />
+  <line x1="19" y1="45" x2="26" y2="45" stroke="#b0a693" stroke-width="3" stroke-linecap="round" />
 </svg>

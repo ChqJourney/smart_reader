@@ -4,18 +4,370 @@
   padding: 0;
 }
 
+/* ==========================================================================
+   Fonts（本地打包 woff2，离线可用；中文回退系统字体栈）
+   ========================================================================== */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/inter-latin-400-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("./assets/fonts/inter-latin-600-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/jetbrains-mono-latin-400-normal.woff2")
+    format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("./assets/fonts/jetbrains-mono-latin-500-normal.woff2")
+    format("woff2");
+}
+
+/* ==========================================================================
+   Design Tokens（Phase 1：暖纸色系 Paper Workbench）
+   设计依据见 docs/UI_DESIGN_OPTIMIZATION.md。
+   - 纸面色阶：--surface-page → --surface-panel → --surface-content
+   - 文字三档：--text-primary / --text-secondary / --text-muted(faint)
+   - 唯一 chrome 强调色：--accent（焦橙）；蓝色仅保留给解读标记与正文链接
+   - 批注语义色独立成族：--mark-interpret / success / amber / purple / danger
+   - 同名旧 token 保留为别名，Phase 2 组件改造时归并
+   ========================================================================== */
+:root {
+  /* 字体 */
+  --font-ui:
+    "Inter", "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont,
+    "PingFang SC", "Microsoft YaHei", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono:
+    "JetBrains Mono", "SF Mono", "Cascadia Mono", Consolas, monospace;
+
+  /* 文字（暖棕三档） */
+  --text-primary: #4f483e;
+  --text-body: #4f483e;
+  --text-content: #4f483e;
+  --text-secondary: #8a7d6b;
+  --text-tertiary: #8a7d6b;
+  --text-muted: #b0a693;
+  --text-dim: #8a7d6b;
+  --text-quiet: #8a7d6b;
+  --text-faint: #b0a693;
+  --text-disabled: #b0a693;
+  --text-faded: #b0a693;
+  --text-subtle: #8a7d6b;
+  --text-meta: #8a7d6b;
+  --text-dark-strong: #4f483e;
+  --text-on-accent: #fff;
+  --text-on-dark: #e8e2d5;
+  --text-slate-800: #4f483e;
+  --text-slate-700: #4f483e;
+  --text-slate-600: #8a7d6b;
+  --text-slate-500: #8a7d6b;
+  --text-slate-400: #b0a693;
+  --text-steel: #4f483e;
+  --text-md: #4f483e;
+  --text-md-heading: #3a342b;
+  --text-md-muted: #8a7d6b;
+
+  /* 背景（纸面色阶） */
+  --surface-page: #ece4d9;
+  --surface-content: #fffbf5;
+  --surface-hover: #eae3d6;
+  --surface-active: #e3dac8;
+  --surface-pressed: #e0d6c3;
+  --surface-hover-2: #eae3d6;
+  --surface-hover-3: #eae3d6;
+  --surface-hover-4: #eae3d6;
+  --surface-soft: #e6ded2;
+  --surface-titlebar-alt: #e6ded2;
+  --surface-header-alt: #f4f0ea;
+  --surface-panel: #f4f0ea;
+  --surface-panel-alt: #f4f0ea;
+  --surface-sunken: #efe8da;
+  --surface-input: #fffbf5;
+  --surface-track: #e6ded2;
+  --surface-splitter: #c4b8a4;
+  --surface-tooltip: #4f483e;
+  --surface-mid: #8a7d6b;
+  --surface-disabled: #b0a693;
+  --surface-cool: #f4f0ea;
+  --surface-cool-hover: #eae3d6;
+  --surface-cool-2: #efe8da;
+  --surface-md-code: #f0ebe1;
+  --surface-md-code-dark: #312b21;
+
+  /* 边框（暖纸线条，仅两档） */
+  --border-default: #d8cfbf;
+  --border-strong: #c4b8a4;
+  --border-popup: #d8cfbf;
+  --border-subtle: #ddd4c4;
+  --border-faint: #e3dac9;
+  --border-input: #c4b8a4;
+  --border-disabled: #cfc3ae;
+  --border-cool: #d8cfbf;
+  --border-cool-strong: #c4b8a4;
+  --border-panel: #d8cfbf;
+  --border-md: #d8cfbf;
+  --border-md-table: #ddd4c4;
+
+  /* 唯一 chrome 强调色（焦橙） */
+  --accent: #f54001;
+  --accent-hover: #d93800;
+  --accent-active: #b62f00;
+  --accent-deep: #d93800;
+  --accent-soft: #ffe3d4;
+  --accent-soft-border: #ffc198;
+  --accent-bright: #ffc198;
+
+  /* 历史蓝族 token → chrome 用色并入焦橙；正文链接保留蓝色 */
+  --blue-50: #ffe3d4;
+  --blue-200: #ffc198;
+  --blue-300: #ffc198;
+  --blue-600: #f54001;
+  --blue-700: #d93800;
+  --blue-tint: #ffe3d4;
+  --blue-tint-2: #ffe3d4;
+  --blue-tint-3: #ffe3d4;
+  --blue-tint-4: #ffe3d4;
+  --blue-tint-5: #ffe3d4;
+  --blue-tint-6: #ffe3d4;
+  --blue-tint-7: #ffe3d4;
+  --blue-tint-8: #ffe3d4;
+  --blue-link: #0969da;
+  --blue-link-code: #0550ae;
+  --blue-material: #f54001;
+
+  /* 批注语义色（与 chrome 强调色分离） */
+  --mark-interpret: #2563eb;
+  --mark-interpret-soft: #e0e9fd;
+
+  /* 危险 / 错误（统一为一种红） */
+  --danger: #c42b1c;
+  --danger-2: #c42b1c;
+  --danger-hover: #a82418;
+  --danger-deep: #a82418;
+  --danger-alt: #c42b1c;
+  --danger-600: #c42b1c;
+  --danger-500: #ef4444;
+  --danger-bg: #fceae5;
+  --danger-bg-2: #fceae5;
+  --danger-border: #f2c4bb;
+
+  /* 成功 */
+  --success: #1a7f37;
+  --success-2: #0f7b0f;
+  --success-3: #1e7e34;
+  --success-4: #0f9d58;
+  --success-bg: #e8f5ec;
+  --success-bg-2: #eaf7ed;
+  --success-border: #b7e2c4;
+  --success-border-2: #c3e6cb;
+
+  /* 警告 / 琥珀 */
+  --warning: #f0a020;
+  --warning-strong: #e8590c;
+  --warning-deep: #e08a00;
+  --amber-400: #fbbf24;
+  --amber-500: #f59e0b;
+  --amber-600: #d97706;
+
+  /* 紫（自定义解读徽章等） */
+  --purple-50: #f3e8fd;
+  --purple-500: #8b5cf6;
+  --purple-600: #7c3aed;
+
+  /* RGB 三元组（供 rgba() 引用，暗色主题重定义后全部自动适配） */
+  --ink-rgb: 79, 72, 62; /* 暖棕：hover/分割线/阴影 */
+  --accent-rgb: 245, 64, 1; /* 焦橙：focus ring/选区/遮罩 */
+  --backdrop-rgb: 43, 38, 30; /* 模态遮罩 */
+  --interpret-rgb: 37, 99, 235; /* 解读语义蓝（呼吸动画） */
+  --danger-rgb: 196, 43, 28; /* 危险色 tint */
+
+  /* 阴影（暖棕派生，弹层统一一级） */
+  --shadow-popup: 0 8px 24px rgba(var(--ink-rgb), 0.14);
+  --shadow-sm: 0 2px 6px rgba(var(--ink-rgb), 0.08);
+}
+
+/* ==========================================================================
+   暗色主题：深暖灰纸面（PDF 页面保持原样白色渲染，不反色）
+   通过 document.documentElement.dataset.theme = "dark" 启用。
+   ========================================================================== */
+:root[data-theme="dark"] {
+  /* 文字 */
+  --text-primary: #e8e0d2;
+  --text-body: #e8e0d2;
+  --text-content: #e8e0d2;
+  --text-secondary: #a89a83;
+  --text-tertiary: #a89a83;
+  --text-muted: #7d7261;
+  --text-dim: #a89a83;
+  --text-quiet: #a89a83;
+  --text-faint: #7d7261;
+  --text-disabled: #7d7261;
+  --text-faded: #7d7261;
+  --text-subtle: #a89a83;
+  --text-meta: #a89a83;
+  --text-dark-strong: #e8e0d2;
+  --text-on-accent: #fff;
+  --text-on-dark: #e8e2d5;
+  --text-slate-800: #e8e0d2;
+  --text-slate-700: #e8e0d2;
+  --text-slate-600: #a89a83;
+  --text-slate-500: #a89a83;
+  --text-slate-400: #7d7261;
+  --text-steel: #e8e0d2;
+  --text-md: #e8e0d2;
+  --text-md-heading: #f2ecdf;
+  --text-md-muted: #a89a83;
+
+  /* 背景（深暖灰色阶） */
+  --surface-page: #1c1915;
+  --surface-content: #2f2a22;
+  --surface-hover: #3a342b;
+  --surface-active: #443d32;
+  --surface-pressed: #4a4338;
+  --surface-hover-2: #3a342b;
+  --surface-hover-3: #3a342b;
+  --surface-hover-4: #3a342b;
+  --surface-soft: #383228;
+  --surface-titlebar-alt: #383228;
+  --surface-header-alt: #26221c;
+  --surface-panel: #26221c;
+  --surface-panel-alt: #26221c;
+  --surface-sunken: #242019;
+  --surface-input: #2f2a22;
+  --surface-track: #3a342b;
+  --surface-splitter: #4a4336;
+  --surface-tooltip: #14110d;
+  --surface-mid: #8a7d6b;
+  --surface-disabled: #5a5346;
+  --surface-cool: #26221c;
+  --surface-cool-hover: #3a342b;
+  --surface-cool-2: #242019;
+  --surface-md-code: #26221c;
+  --surface-md-code-dark: #14110e;
+
+  /* 边框 */
+  --border-default: #443d31;
+  --border-strong: #564e3f;
+  --border-popup: #443d31;
+  --border-subtle: #3a342a;
+  --border-faint: #322c23;
+  --border-input: #564e3f;
+  --border-disabled: #4a4336;
+  --border-cool: #443d31;
+  --border-cool-strong: #564e3f;
+  --border-panel: #443d31;
+  --border-md: #443d31;
+  --border-md-table: #3a342a;
+
+  /* 强调色（同色相提明度） */
+  --accent: #ff6a2b;
+  --accent-hover: #ff7d45;
+  --accent-active: #ff8f5c;
+  --accent-deep: #ff7d45;
+  --accent-soft: #4a2612;
+  --accent-soft-border: #8a3a14;
+  --accent-bright: #ff8a4d;
+
+  /* 历史蓝族 token */
+  --blue-50: #4a2612;
+  --blue-200: #8a3a14;
+  --blue-300: #8a3a14;
+  --blue-600: #ff6a2b;
+  --blue-700: #ff7d45;
+  --blue-tint: #4a2612;
+  --blue-tint-2: #4a2612;
+  --blue-tint-3: #4a2612;
+  --blue-tint-4: #4a2612;
+  --blue-tint-5: #4a2612;
+  --blue-tint-6: #4a2612;
+  --blue-tint-7: #4a2612;
+  --blue-tint-8: #4a2612;
+  --blue-link: #5da9f5;
+  --blue-link-code: #6ea8ff;
+  --blue-material: #ff6a2b;
+
+  /* 批注语义色（提明度） */
+  --mark-interpret: #6ea8ff;
+  --mark-interpret-soft: #1d2f4d;
+
+  /* 危险 */
+  --danger: #e5533f;
+  --danger-2: #e5533f;
+  --danger-hover: #f0715c;
+  --danger-deep: #f0715c;
+  --danger-alt: #e5533f;
+  --danger-600: #e5533f;
+  --danger-500: #f26d5f;
+  --danger-bg: #3d1d16;
+  --danger-bg-2: #3d1d16;
+  --danger-border: #6e2f22;
+
+  /* 成功 */
+  --success: #45b863;
+  --success-2: #45b863;
+  --success-3: #45b863;
+  --success-4: #45b863;
+  --success-bg: #16281a;
+  --success-bg-2: #16281a;
+  --success-border: #24502e;
+  --success-border-2: #24502e;
+
+  /* 警告 / 琥珀 */
+  --warning: #e8a13a;
+  --warning-strong: #f08c2e;
+  --warning-deep: #d9a05a;
+  --amber-400: #f5c96a;
+  --amber-500: #eda93f;
+  --amber-600: #d18f2e;
+
+  /* 紫 */
+  --purple-50: #2a2140;
+  --purple-500: #a78bfa;
+  --purple-600: #b49bff;
+
+  /* RGB 三元组（暗色适配） */
+  --ink-rgb: 232, 224, 210;
+  --accent-rgb: 255, 106, 43;
+  --backdrop-rgb: 0, 0, 0;
+  --interpret-rgb: 110, 168, 255;
+  --danger-rgb: 229, 83, 63;
+
+  /* 阴影 */
+  --shadow-popup: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+/* 数字 / 元数据：等宽 + 表格数字（跳转时宽度不跳动） */
+.page-info,
+.page-number-btn,
+.page-jump-input,
+.page-jump-total,
+.context-widget-label,
+.page-rail-tip,
+.session-item-page {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum";
+}
+
 body {
-  font-family:
-    "Segoe UI Variable",
-    "Segoe UI",
-    -apple-system,
-    BlinkMacSystemFont,
-    Roboto,
-    Helvetica,
-    Arial,
-    sans-serif;
-  background: #f3f3f3;
-  color: #1f1f1f;
+  font-family: var(--font-ui);
+  background: var(--surface-page);
+  color: var(--text-primary);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -35,7 +387,7 @@ body {
   min-width: 32px;
   min-height: 32px;
   background: transparent;
-  color: #424242;
+  color: var(--text-body);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -47,12 +399,12 @@ body {
 }
 
 .icon-btn:hover:not(:disabled) {
-  background: #f0f0f0;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .icon-btn:active:not(:disabled) {
-  background: #e5e5e5;
+  background: var(--surface-active);
 }
 
 .icon-btn:disabled {
@@ -61,38 +413,37 @@ body {
 }
 
 .icon-btn.primary {
-  background: #0078d4;
-  color: #fff;
+  background: var(--accent);
+  color: var(--text-on-accent);
   padding: 6px 12px;
   min-width: auto;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 .icon-btn.primary:hover:not(:disabled) {
-  background: #006cbe;
+  background: var(--accent-hover);
 }
 
 .icon-btn.primary:active:not(:disabled) {
-  background: #005a9e;
+  background: var(--accent-active);
 }
 
 .icon-btn.active {
-  background: #e8f0fe;
-  color: #0078d4;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .file-name {
   font-size: 0.85rem;
-  color: #aaa;
+  color: var(--text-disabled);
 }
 
 .tab-bar {
   display: flex;
   align-items: flex-end;
-  gap: 4px;
+  gap: 2px;
   padding: 6px 12px 0;
-  background: rgba(255, 255, 255, 0.92);
-  border-bottom: 1px solid #e5e5e5;
+  background: var(--surface-panel);
   overflow-x: auto;
   flex-shrink: 0;
   /* 隐藏不需要的滚动条，保留横向滚动能力 */
@@ -111,37 +462,33 @@ body {
   max-width: 200px;
   flex-shrink: 0;
   padding: 7px 10px 7px 14px;
-  background: #f3f3f3;
-  color: #616161;
-  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 8px 8px 0 0;
   cursor: pointer;
   font-size: 0.85rem;
   user-select: none;
   transition:
     background 0.15s ease,
     color 0.15s ease;
+  /* 透明边框仅用于保持几何尺寸一致，层级靠底色差表达 */
   border: 1px solid transparent;
   border-bottom: none;
 }
 
 .tab-item:hover {
-  background: #eaeaea;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .tab-item.active {
-  background: #ffffff;
-  color: #1f1f1f;
-  border-color: #e5e5e5;
-  border-bottom: 1px solid #ffffff;
-  margin-bottom: -1px;
-  box-shadow: 0 -1px 3px rgba(0, 0, 0, 0.04);
+  background: var(--surface-content);
+  color: var(--text-primary);
 }
 
 .tab-item.secondary {
-  background: #e8f0fe;
-  color: #0078d4;
-  border-color: #b4d6fb;
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 /* 非激活 tab 可拖拽到阅读区并排对照（鼠标拖拽实现），给出抓取手势提示 */
@@ -157,9 +504,9 @@ body {
   align-items: center;
   gap: 6px;
   padding: 5px 10px;
-  background: #fff;
-  color: #424242;
-  border: 1px solid #e5e5e5;
+  background: var(--surface-content);
+  color: var(--text-body);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.8rem;
@@ -167,7 +514,7 @@ body {
 
 .split-view-exit:hover,
 .split-view-enter:hover {
-  background: #f0f0f0;
+  background: var(--surface-hover);
 }
 
 .tab-close {
@@ -176,16 +523,16 @@ body {
   min-width: 20px;
   min-height: 20px;
   padding: 0;
-  color: #757575;
+  color: var(--text-tertiary);
 }
 
 .tab-close:hover {
-  background: #e0e0e0;
-  color: #1f1f1f;
+  background: var(--surface-active);
+  color: var(--text-primary);
 }
 
 .tab-item.active .tab-close:hover {
-  background: #e0e0e0;
+  background: var(--surface-active);
 }
 
 .tab-name {
@@ -197,22 +544,22 @@ body {
 
 .parse-info {
   font-size: 0.75rem;
-  color: #7ecaff;
+  color: var(--accent-bright);
   margin-left: auto;
 }
 
 .open-temp-btn {
   padding: 6px 12px;
   background: transparent;
-  color: #7ecaff;
-  border: 1px solid #7ecaff;
+  color: var(--accent-bright);
+  border: 1px solid var(--accent-bright);
   border-radius: 4px;
   cursor: pointer;
   font-size: 0.75rem;
 }
 
 .open-temp-btn:hover {
-  background: rgba(126, 202, 255, 0.15);
+  background: var(--accent-soft);
 }
 
 .app-main {
@@ -231,10 +578,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 120, 212, 0.08);
-  border: 2px dashed #0078d4;
+  background: rgba(var(--accent-rgb), 0.06);
+  border: 2px dashed var(--accent);
   border-radius: 8px;
-  color: #0078d4;
+  color: var(--accent);
   font-size: 1rem;
   font-weight: 600;
   pointer-events: none;
@@ -248,10 +595,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 120, 212, 0.08);
-  border: 2px dashed #0078d4;
+  background: rgba(var(--accent-rgb), 0.06);
+  border: 2px dashed var(--accent);
   border-radius: 8px;
-  color: #0078d4;
+  color: var(--accent);
   font-size: 1rem;
   font-weight: 600;
   pointer-events: none;
@@ -261,8 +608,8 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border-right: 1px solid #e5e5e5;
+  background: var(--surface-content);
+  border-right: 1px solid var(--border-default);
 }
 
 .pdf-panel.expanded {
@@ -278,8 +625,8 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: #ffffff;
-  border-left: 1px solid #e5e5e5;
+  background: var(--surface-content);
+  border-left: 1px solid var(--border-default);
 }
 
 .right-panel.expanded {
@@ -298,33 +645,33 @@ body {
 }
 
 .panel-divider:hover {
-  background: rgba(0, 120, 212, 0.08);
+  background: var(--accent-soft);
 }
 
 .panel-divider-handle {
   width: 3px;
   height: 28px;
-  background: #c4c4c4;
+  background: var(--surface-splitter);
   border-radius: 2px;
 }
 
 .panel-divider:hover .panel-divider-handle {
-  background: #0078d4;
+  background: var(--accent);
 }
 
 .panel-toggle {
   padding: 8px;
-  background: #ffffff;
-  border: 1px solid #e5e5e5;
+  background: var(--surface-content);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   cursor: pointer;
-  color: #616161;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
 }
 
 .panel-toggle:hover {
-  background: #f8f8f8;
-  color: #1f1f1f;
+  background: var(--surface-panel-alt);
+  color: var(--text-primary);
 }
 
 .panel-toggle.collapsed {
@@ -334,24 +681,24 @@ body {
   border-radius: 0;
   border-top: none;
   border-bottom: none;
-  background: #fafafa;
-  color: #616161;
+  background: var(--surface-panel);
+  color: var(--text-secondary);
   box-shadow: none;
 }
 
 .panel-toggle.collapsed.left {
   border-left: none;
-  border-right: 1px solid #e5e5e5;
+  border-right: 1px solid var(--border-default);
 }
 
 .panel-toggle.collapsed.right {
   border-right: none;
-  border-left: 1px solid #e5e5e5;
+  border-left: 1px solid var(--border-default);
 }
 
 .panel-toggle.collapsed:hover {
-  background: #f0f0f0;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 /* 并排对照首次轻引导气泡（仅首次打开第二个 PDF 时出现一次） */
@@ -365,11 +712,11 @@ body {
   align-items: center;
   gap: 12px;
   padding: 8px 14px;
-  background: #0078d4;
-  color: #fff;
+  background: var(--accent);
+  color: var(--text-on-accent);
   border-radius: 8px;
   font-size: 13px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 16px rgba(var(--ink-rgb), 0.25);
   /* 气泡本身不拦截点击（避免遮挡 tab 栏 / 工具栏），仅关闭按钮可点。 */
   pointer-events: none;
 }
@@ -378,7 +725,7 @@ body {
   pointer-events: auto;
   background: rgba(255, 255, 255, 0.2);
   border: none;
-  color: #fff;
+  color: var(--text-on-accent);
   border-radius: 4px;
   padding: 2px 10px;
   cursor: pointer;

@@ -5,10 +5,10 @@
   max-height: 280px;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid #e0e0e0;
-  border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  background: var(--surface-content);
+  border: none;
+  border-radius: 8px;
+  box-shadow: var(--shadow-popup);
   overflow: hidden;
   transform: translate(-50%, 12px);
 }
@@ -23,8 +23,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 0px 2px;
-  background: #fafafa;
-  border-bottom: 1px solid #e8e8e8;
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border-subtle);
   cursor: grab;
   user-select: none;
 }
@@ -35,7 +35,7 @@
   gap: 6px;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #1f1f1f;
+  color: var(--text-primary);
 }
 
 .translate-popup-actions {
@@ -55,15 +55,15 @@
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  color: #616161;
+  color: var(--text-secondary);
   transition:
     background 0.15s ease,
     color 0.15s ease;
 }
 
 .translate-popup-actions button:hover {
-  background: #f0f0f0;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .translate-popup-body {
@@ -72,16 +72,16 @@
   padding: 10px 12px;
   font-size: 0.8rem;
   line-height: 1.6;
-  color: #333;
+  color: var(--text-content);
 }
 
 .translate-popup-error {
-  color: #c42b1c;
+  color: var(--danger);
   margin: 0;
 }
 
 .translate-popup-streaming {
-  color: #757575;
+  color: var(--text-tertiary);
   font-style: italic;
   margin: 0;
 }
@@ -91,7 +91,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #757575;
+  color: var(--text-tertiary);
   font-style: italic;
   padding: 16px 0;
 }
@@ -105,8 +105,8 @@
   display: inline-block;
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(0, 120, 212, 0.2);
-  border-top-color: #0078d4;
+  border: 2px solid rgba(var(--accent-rgb), 0.2);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: spinner-rotate 0.8s linear infinite;
   flex-shrink: 0;
@@ -120,5 +120,5 @@
 
 .translate-popup-body .markdown-content {
   font-size: inherit;
-  color: #333;
+  color: var(--text-content);
 }

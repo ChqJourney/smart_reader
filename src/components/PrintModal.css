@@ -12,7 +12,7 @@
 .print-modal-label {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #616161;
+  color: var(--text-secondary);
 }
 
 .print-modal-option {
@@ -20,7 +20,7 @@
   align-items: center;
   gap: 8px;
   font-size: 0.85rem;
-  color: #1f1f1f;
+  color: var(--text-primary);
   cursor: pointer;
 }
 
@@ -33,29 +33,29 @@
   margin-left: 24px;
   padding: 6px 8px;
   font-size: 0.85rem;
-  border: 1px solid #d0d0d0;
+  border: 1px solid var(--border-input);
   border-radius: 6px;
   outline: none;
 }
 
 .print-modal-range-input:focus {
-  border-color: #0078d4;
+  border-color: var(--accent);
 }
 
 .print-modal-range-input.invalid {
-  border-color: #c42b1c;
+  border-color: var(--danger);
 }
 
 .print-modal-range-error {
   margin-left: 24px;
   font-size: 0.75rem;
-  color: #c42b1c;
+  color: var(--danger);
 }
 
 .print-modal-error {
   margin: 0 0 10px;
   font-size: 0.8rem;
-  color: #c42b1c;
+  color: var(--danger);
 }
 
 .print-modal-primary {

@@ -1,7 +1,7 @@
 .pdf-page-wrapper {
   position: relative;
   background: white;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 2px 8px rgba(var(--ink-rgb), 0.18);
 }
 
 .pdf-selection-overlay {
@@ -19,12 +19,12 @@
 .pdf-selection-rect {
   position: absolute;
   pointer-events: none;
-  background: rgba(0, 120, 212, 0.16);
-  border: 1.5px solid rgba(0, 120, 212, 0.85);
+  background: rgba(var(--accent-rgb), 0.14);
+  border: 1.5px solid rgba(var(--accent-rgb), 0.75);
   border-radius: 3px;
   box-shadow:
     0 0 0 1px rgba(255, 255, 255, 0.65) inset,
-    0 2px 8px rgba(0, 0, 0, 0.12);
+    0 2px 8px rgba(var(--ink-rgb), 0.14);
   z-index: 11;
 }
 
@@ -33,10 +33,10 @@
   pointer-events: none;
   margin: -2px -4px -3px -4px;
   padding: 2px 4px 3px 4px;
-  background: rgba(0, 120, 212, 0.22);
-  border: 1px solid rgba(0, 120, 212, 0.35);
+  background: rgba(var(--accent-rgb), 0.18);
+  border: 1px solid rgba(var(--accent-rgb), 0.32);
   border-radius: 3px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(var(--ink-rgb), 0.1);
   box-sizing: content-box;
   mix-blend-mode: multiply;
   z-index: 9;
@@ -54,8 +54,8 @@
 
 .pdf-link-indicator {
   position: absolute;
-  border-bottom: 1.5px solid rgba(0, 100, 220, 0.35);
-  background: rgba(0, 100, 220, 0.04);
+  border-bottom: 1.5px solid rgba(var(--accent-rgb), 0.35);
+  background: rgba(var(--accent-rgb), 0.04);
   pointer-events: none;
 }
 

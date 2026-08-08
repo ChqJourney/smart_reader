@@ -1,7 +1,7 @@
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(var(--backdrop-rgb), 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -12,9 +12,9 @@
   width: 480px;
   max-width: 90vw;
   padding: 20px;
-  background: #fff;
+  background: var(--surface-content);
   border-radius: 12px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 16px 48px rgba(var(--ink-rgb), 0.2);
 }
 
 .modal-content h3 {
@@ -25,7 +25,7 @@
 
 .modal-hint {
   font-size: 0.8rem;
-  color: #757575;
+  color: var(--text-tertiary);
   margin-bottom: 12px;
 }
 
@@ -43,7 +43,7 @@
   align-items: flex-start;
   gap: 8px;
   padding: 8px 10px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   cursor: pointer;
   transition:
@@ -52,12 +52,12 @@
 }
 
 .modal-stash-item:hover {
-  border-color: #0078d4;
+  border-color: var(--accent);
 }
 
 .modal-stash-item.selected {
-  border-color: #0078d4;
-  background: #f5f9ff;
+  border-color: var(--accent);
+  background: var(--blue-tint-2);
 }
 
 .modal-stash-item input[type="checkbox"] {
@@ -65,7 +65,7 @@
   width: 14px;
   height: 14px;
   margin: 2px 0 0;
-  accent-color: #0078d4;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -78,13 +78,13 @@
 
 .modal-stash-source {
   font-size: 0.75rem;
-  color: #757575;
+  color: var(--text-tertiary);
   font-weight: 500;
 }
 
 .modal-stash-text {
   font-size: 0.8rem;
-  color: #1f1f1f;
+  color: var(--text-primary);
   line-height: 1.4;
   word-break: break-word;
 }
@@ -98,7 +98,7 @@
 
 .modal-preset-label {
   font-size: 0.85rem;
-  color: #424242;
+  color: var(--text-body);
   flex-shrink: 0;
 }
 
@@ -110,7 +110,7 @@
 .modal-content textarea {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid #d1d1d1;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   font-size: 0.9rem;
   font-family: inherit;
@@ -119,8 +119,8 @@
 
 .modal-content textarea:focus {
   outline: none;
-  border-color: #0078d4;
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.15);
 }
 
 .modal-actions {
@@ -132,26 +132,26 @@
 
 .modal-actions button {
   padding: 8px 16px;
-  background: #f3f3f3;
-  border: 1px solid #e5e5e5;
+  background: var(--surface-page);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.85rem;
-  color: #424242;
+  color: var(--text-body);
 }
 
 .modal-actions button:hover:not(:disabled) {
-  background: #e8e8e8;
+  background: var(--surface-soft);
 }
 
 .modal-actions button:last-child {
-  background: #0078d4;
-  color: #fff;
-  border-color: #0078d4;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
 }
 
 .modal-actions button:last-child:hover:not(:disabled) {
-  background: #006cbe;
+  background: var(--accent-hover);
 }
 
 .modal-actions button:disabled {

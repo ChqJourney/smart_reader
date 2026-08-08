@@ -302,6 +302,13 @@
       "warn": "Warn",
       "error": "Error"
     },
+    "theme": "Theme",
+    "themeHint": "In dark mode, PDF pages keep their original rendering; only the app chrome switches to a warm dark gray",
+    "themeNames": {
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    },
     "defaultPdfReader": "Default PDF Reader",
     "defaultPdfReaderHint": "Open Windows default apps settings, find .pdf in the list and set SpecReader AI as the default.",
     "setAsDefaultPdfReader": "Set as Default PDF Reader",

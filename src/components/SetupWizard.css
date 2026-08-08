@@ -24,21 +24,21 @@
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  color: #757575;
+  color: var(--text-tertiary);
   transition:
     background 0.15s ease,
     color 0.15s ease;
 }
 .wizard-close:hover {
-  background: #f3f3f3;
-  color: #1f1f1f;
+  background: var(--surface-page);
+  color: var(--text-primary);
 }
 
 .wizard-content h3 {
   font-size: 1.35rem;
   font-weight: 600;
   margin: 0 40px 6px 0;
-  color: #1f1f1f;
+  color: var(--text-primary);
 }
 
 .wizard-content .modal-hint {
@@ -58,19 +58,19 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #9e9e9e;
+  color: var(--text-muted);
   font-size: 0.92rem;
 }
 .wizard-steps li:not(:last-child)::after {
   content: "";
   width: 36px;
   height: 1px;
-  background: #e5e5e5;
+  background: var(--surface-active);
   margin-left: 10px;
 }
 .wizard-steps li.active,
 .wizard-steps li.done {
-  color: #1f1f1f;
+  color: var(--text-primary);
 }
 .wizard-step-dot {
   display: flex;
@@ -79,21 +79,21 @@
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 1px solid #d1d1d1;
-  background: #fff;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-content);
   font-size: 0.85rem;
-  color: #9e9e9e;
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 .wizard-steps li.active .wizard-step-dot {
-  border-color: #0078d4;
-  color: #0078d4;
-  background: #eaf4fd;
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--blue-tint-5);
 }
 .wizard-steps li.done .wizard-step-dot {
-  border-color: #0078d4;
-  background: #0078d4;
-  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--text-on-accent);
 }
 
 .wizard-body {
@@ -105,7 +105,7 @@
 }
 .wizard-lead {
   font-size: 1rem;
-  color: #424242;
+  color: var(--text-body);
   margin: 0 0 18px;
   line-height: 1.6;
 }
@@ -123,8 +123,8 @@
   gap: 6px;
   padding: 18px;
   text-align: left;
-  background: #fff;
-  border: 1px solid #e0e0e0;
+  background: var(--surface-content);
+  border: 1px solid var(--border-popup);
   border-radius: 12px;
   cursor: pointer;
   transition:
@@ -133,18 +133,18 @@
     background 0.15s ease;
 }
 .wizard-platform:hover {
-  border-color: #b4d6fb;
-  background: #fafcff;
+  border-color: var(--accent-soft-border);
+  background: var(--blue-tint-4);
 }
 .wizard-platform.selected {
-  border-color: #0078d4;
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
-  background: #f5faff;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.15);
+  background: var(--blue-tint-3);
 }
 .wizard-platform-name {
   font-size: 1.02rem;
   font-weight: 600;
-  color: #1f1f1f;
+  color: var(--text-primary);
 }
 .wizard-configured {
   display: inline-block;
@@ -153,15 +153,15 @@
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 1.5;
-  color: #1a7f37;
-  background: #e8f5ec;
-  border: 1px solid #b7e2c4;
+  color: var(--success);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
   border-radius: 999px;
   vertical-align: middle;
 }
 .wizard-platform-blurb {
   font-size: 0.85rem;
-  color: #757575;
+  color: var(--text-tertiary);
   line-height: 1.55;
 }
 .wizard-platform-check {
@@ -174,8 +174,8 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #0078d4;
-  color: #fff;
+  background: var(--accent);
+  color: var(--text-on-accent);
 }
 .wizard-tag {
   position: absolute;
@@ -185,16 +185,16 @@
   font-weight: 600;
   padding: 2px 9px;
   border-radius: 10px;
-  color: #fff;
+  color: var(--text-on-accent);
 }
 .wizard-tag.recommended {
-  background: #0078d4;
+  background: var(--accent);
 }
 .wizard-tag.free {
-  background: #e08a00;
+  background: var(--warning-deep);
 }
 .wizard-tag.card {
-  background: #8a8a8a;
+  background: var(--surface-disabled);
 }
 
 /* 密钥输入 */
@@ -202,7 +202,7 @@
   display: inline-block;
   align-self: flex-start;
   font-size: 0.95rem;
-  color: #0078d4;
+  color: var(--accent);
   text-decoration: none;
   margin-bottom: 12px;
 }
@@ -212,28 +212,28 @@
 .wizard-input {
   width: 100%;
   padding: 12px 14px;
-  border: 1px solid #d1d1d1;
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
   font-size: 1rem;
   font-family: inherit;
-  color: #1f1f1f;
+  color: var(--text-primary);
   box-sizing: border-box;
 }
 .wizard-input:focus {
   outline: none;
-  border-color: #0078d4;
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.15);
 }
 .wizard-hint {
   font-size: 0.85rem;
-  color: #757575;
+  color: var(--text-tertiary);
   margin: 10px 0 0;
   line-height: 1.5;
 }
 .wizard-hint-keep {
-  color: #1a7f37;
-  background: #e8f5ec;
-  border: 1px solid #b7e2c4;
+  color: var(--success);
+  background: var(--success-bg);
+  border: 1px solid var(--success-border);
   border-radius: 6px;
   padding: 8px 12px;
   margin: 10px 0 0;
@@ -250,7 +250,7 @@
   border: none;
   cursor: pointer;
   font-size: 0.9rem;
-  color: #616161;
+  color: var(--text-secondary);
 }
 .wizard-advanced-toggle svg {
   transition: transform 0.15s ease;
@@ -263,8 +263,8 @@
   flex-direction: column;
   gap: 14px;
   padding: 16px;
-  background: #fafafa;
-  border: 1px solid #eee;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-faint);
   border-radius: 8px;
   margin-bottom: 4px;
 }
@@ -273,30 +273,30 @@
   flex-direction: column;
   gap: 8px;
   font-size: 0.9rem;
-  color: #424242;
+  color: var(--text-body);
 }
 .wizard-field select,
 .wizard-field input {
   padding: 10px 12px;
-  border: 1px solid #d1d1d1;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   font-size: 0.95rem;
-  color: #1f1f1f;
+  color: var(--text-primary);
   font-family: inherit;
-  background: #fff;
+  background: var(--surface-content);
 }
 .wizard-field select:focus,
 .wizard-field input:focus {
   outline: none;
-  border-color: #0078d4;
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.15);
 }
 .wizard-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: 0.9rem;
-  color: #424242;
+  color: var(--text-body);
 }
 
 /* 测试连接 */
@@ -314,9 +314,9 @@
   line-height: 1.5;
 }
 .wizard-result.ok {
-  background: #eaf7ed;
-  color: #1e7e34;
-  border: 1px solid #c3e6cb;
+  background: var(--success-bg-2);
+  color: var(--success-3);
+  border: 1px solid var(--success-border-2);
 }
 .wizard-result.ok svg {
   margin-top: 2px;
@@ -324,19 +324,19 @@
 }
 .wizard-result.err {
   flex-direction: column;
-  background: #fdecec;
-  color: #b3261e;
-  border: 1px solid #f5c2c0;
+  background: var(--danger-bg);
+  color: var(--danger-2);
+  border: 1px solid var(--danger-border);
 }
 .wizard-result.err strong {
   font-weight: 600;
 }
 .wizard-result.err span {
-  color: #8a1f1a;
+  color: var(--danger-deep);
 }
 .wizard-result-hint {
   font-size: 0.85rem;
-  color: #757575;
+  color: var(--text-tertiary);
   margin-top: 12px;
 }
 
@@ -347,14 +347,14 @@
   justify-content: space-between;
   margin-top: 24px;
   padding-top: 20px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-faint);
 }
 .wizard-link {
   background: transparent;
   border: none;
   cursor: pointer;
   font-size: 0.9rem;
-  color: #0078d4;
+  color: var(--accent);
   padding: 6px 0;
 }
 .wizard-link:hover {
@@ -366,24 +366,24 @@
 }
 .wizard-nav button {
   padding: 10px 22px;
-  background: #f3f3f3;
-  border: 1px solid #e5e5e5;
+  background: var(--surface-page);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.95rem;
-  color: #1f1f1f;
+  color: var(--text-primary);
   transition: background 0.15s ease;
 }
 .wizard-nav button:hover:not(:disabled) {
-  background: #e9e9e9;
+  background: var(--surface-hover-2);
 }
 .wizard-nav button.primary {
-  background: #0078d4;
-  border-color: #0078d4;
-  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text-on-accent);
 }
 .wizard-nav button.primary:hover:not(:disabled) {
-  background: #106ebe;
+  background: var(--accent-deep);
 }
 .wizard-nav button:disabled {
   opacity: 0.5;

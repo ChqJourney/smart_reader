@@ -6,8 +6,8 @@
   justify-content: center;
   padding: 24px;
   text-align: center;
-  background: #fafafa;
-  color: #1f1f1f;
+  background: var(--surface-panel);
+  color: var(--text-primary);
 }
 
 .error-boundary h2 {
@@ -17,7 +17,7 @@
 
 .error-boundary p {
   margin-bottom: 16px;
-  color: #616161;
+  color: var(--text-secondary);
   max-width: 480px;
 }
 
@@ -25,11 +25,11 @@
   max-width: 640px;
   margin-bottom: 24px;
   padding: 12px 16px;
-  background: #fff;
-  border: 1px solid #e5e5e5;
+  background: var(--surface-content);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   font-size: 0.85rem;
-  color: #c42b1c;
+  color: var(--danger);
   overflow: auto;
   text-align: left;
   white-space: pre-wrap;
@@ -43,8 +43,8 @@
 
 .error-boundary-actions button {
   padding: 10px 20px;
-  background: #0078d4;
-  color: #fff;
+  background: var(--accent);
+  color: var(--text-on-accent);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -52,15 +52,15 @@
 }
 
 .error-boundary-actions button:hover {
-  background: #006cbe;
+  background: var(--accent-hover);
 }
 
 .error-boundary-actions button:last-child {
-  background: #f3f3f3;
-  color: #424242;
-  border: 1px solid #e5e5e5;
+  background: var(--surface-page);
+  color: var(--text-body);
+  border: 1px solid var(--border-default);
 }
 
 .error-boundary-actions button:last-child:hover {
-  background: #e8e8e8;
+  background: var(--surface-soft);
 }

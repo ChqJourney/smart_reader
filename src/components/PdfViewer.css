@@ -10,8 +10,8 @@
   justify-content: space-between;
   gap: 12px;
   padding: 8px 14px;
-  background: #ffffff;
-  border-bottom: 1px solid #e5e5e5;
+  background: var(--surface-content);
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 
@@ -34,12 +34,12 @@
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  color: #424242;
+  color: var(--text-body);
   transition: background 0.15s ease;
 }
 
 .pdf-controls button:hover:not(:disabled) {
-  background: #f0f0f0;
+  background: var(--surface-hover);
 }
 
 .pdf-controls button:disabled {
@@ -50,7 +50,7 @@
 .pdf-controls .page-info,
 .pdf-controls .scale-input {
   font-size: 0.85rem;
-  color: #616161;
+  color: var(--text-secondary);
   min-width: 80px;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -72,8 +72,8 @@
 
 .pdf-controls .scale-input:hover,
 .pdf-controls .scale-input:focus {
-  border-color: #d1d1d1;
-  background: #fff;
+  border-color: var(--border-strong);
+  background: var(--surface-content);
 }
 
 .pdf-controls .page-info {
@@ -95,7 +95,7 @@
      Windows 上与旁边 "/ 总页数" span 字体不同会导致高度不齐 */
   font-family: inherit;
   font-size: 0.85rem;
-  color: #616161;
+  color: var(--text-secondary);
   background: transparent;
   cursor: pointer;
   font-variant-numeric: tabular-nums;
@@ -103,8 +103,8 @@
 
 .pdf-controls .page-number-btn:hover:not(:disabled),
 .pdf-controls .page-number-btn:focus {
-  border-color: #d1d1d1;
-  background: #fff;
+  border-color: var(--border-strong);
+  background: var(--surface-content);
   outline: none;
 }
 
@@ -112,21 +112,21 @@
 .pdf-mode-toggle,
 .pdf-outline-toggle,
 .pdf-search-toggle {
-  color: #616161;
+  color: var(--text-secondary);
 }
 
 .pdf-hide-btn:hover,
 .pdf-mode-toggle:hover,
 .pdf-outline-toggle:hover,
 .pdf-search-toggle:hover {
-  background: #f0f0f0;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .pdf-outline-toggle.active,
 .pdf-search-toggle.active {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: var(--blue-tint-8);
+  color: var(--blue-material);
 }
 
 .pdf-viewer-body {
@@ -141,8 +141,8 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: #f9f9f9;
-  border-right: 1px solid #e5e5e5;
+  background: var(--surface-input);
+  border-right: 1px solid var(--border-default);
   overflow: hidden;
 }
 
@@ -153,8 +153,8 @@
   padding: 10px 12px;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #424242;
-  border-bottom: 1px solid #e5e5e5;
+  color: var(--text-body);
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 
@@ -164,11 +164,11 @@
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  color: #616161;
+  color: var(--text-secondary);
 }
 
 .pdf-outline-header button:hover {
-  background: #e0e0e0;
+  background: var(--surface-track);
 }
 
 /* 嵌套各级共用的基础列表样式；滚动/留白只归根列表，避免每层子树多出空隙 */
@@ -200,7 +200,7 @@
 }
 
 .pdf-outline-row:hover {
-  background: #ececec;
+  background: var(--surface-hover-3);
 }
 
 /* 展开箭头不再复用 .icon-btn（其 min-width/min-height: 32px 会撑破列宽，
@@ -219,7 +219,7 @@
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  color: #616161;
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
@@ -239,7 +239,7 @@
 }
 
 .pdf-outline-expand:hover {
-  background: #e0e0e0;
+  background: var(--surface-track);
 }
 
 .pdf-outline-title {
@@ -251,7 +251,7 @@
   margin: 0;
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
-  color: #424242;
+  color: var(--text-body);
   cursor: pointer;
   border-radius: 4px;
   white-space: nowrap;
@@ -261,11 +261,11 @@
 
 .pdf-outline-row-top > .pdf-outline-title {
   font-weight: 600;
-  color: #2e2e2e;
+  color: var(--text-dark-strong);
 }
 
 .pdf-outline-title:hover {
-  color: #1f1f1f;
+  color: var(--text-primary);
 }
 
 .pdf-search-bar {
@@ -276,15 +276,15 @@
   align-items: center;
   gap: 6px;
   padding: 6px 10px;
-  background: #ffffff;
-  border: 1px solid #e0e0e0;
+  background: var(--surface-content);
+  border: 1px solid var(--border-popup);
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px rgba(var(--ink-rgb), 0.12);
   z-index: 100;
 }
 
 .pdf-search-bar .icon {
-  color: #616161;
+  color: var(--text-secondary);
   flex-shrink: 0;
 }
 
@@ -293,17 +293,17 @@
   border: none;
   outline: none;
   font-size: 0.85rem;
-  color: #424242;
+  color: var(--text-body);
   background: transparent;
 }
 
 .pdf-search-input::placeholder {
-  color: #9e9e9e;
+  color: var(--text-muted);
 }
 
 .pdf-search-count {
   font-size: 0.75rem;
-  color: #616161;
+  color: var(--text-secondary);
   min-width: 60px;
   text-align: center;
   font-variant-numeric: tabular-nums;
@@ -316,11 +316,11 @@
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  color: #616161;
+  color: var(--text-secondary);
 }
 
 .pdf-search-bar button:hover:not(:disabled) {
-  background: #f0f0f0;
+  background: var(--surface-hover);
 }
 
 .pdf-search-bar button:disabled {
@@ -335,7 +335,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: #ededed;
+  background: var(--surface-hover-4);
   min-width: 0;
 }
 
@@ -359,10 +359,10 @@
   transform: translate(-50%, -50%);
   font-size: 120px;
   font-weight: 800;
-  color: rgba(31, 31, 31, 0.85);
+  color: rgba(var(--ink-rgb), 0.85);
   text-shadow:
     0 4px 24px rgba(255, 255, 255, 0.9),
-    0 10px 40px rgba(0, 0, 0, 0.25);
+    0 10px 40px rgba(var(--ink-rgb), 0.25);
   z-index: 110;
   pointer-events: none;
   opacity: 0;
@@ -407,7 +407,7 @@
 }
 
 .pdf-placeholder {
-  color: #757575;
+  color: var(--text-tertiary);
   font-size: 0.9rem;
   text-align: center;
 }
@@ -418,6 +418,6 @@
   justify-content: center;
   height: 100%;
   padding: 24px;
-  color: #c42b1c;
+  color: var(--danger);
   text-align: center;
 }

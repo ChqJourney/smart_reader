@@ -10,8 +10,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 14px;
-  border-bottom: 1px solid #e5e5e5;
-  background: #ffffff;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-content);
   flex-shrink: 0;
 }
 
@@ -19,13 +19,13 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  color: #424242;
+  color: var(--text-body);
 }
 
 .ai-chat-header h2 {
   font-size: 0.95rem;
   font-weight: 600;
-  color: #1f1f1f;
+  color: var(--text-primary);
 }
 
 .ai-chat-header-actions {
@@ -37,7 +37,7 @@
 .ai-chat-back-title {
   font-size: 0.85rem;
   font-weight: 500;
-  color: #424242;
+  color: var(--text-body);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -45,23 +45,23 @@
 }
 
 .session-back-btn {
-  color: #616161;
+  color: var(--text-secondary);
   padding: 4px;
   margin-left: -6px;
 }
 
 .session-back-btn:hover {
-  background: #f0f0f0;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .panel-hide-btn {
-  color: #616161;
+  color: var(--text-secondary);
 }
 
 .panel-hide-btn:hover {
-  background: #f0f0f0;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .ai-chat-messages {
@@ -76,8 +76,8 @@
 .ai-chat-input-area {
   flex-shrink: 0;
   padding: 12px 16px;
-  border-top: 1px solid #e5e5e5;
-  background: #fafafa;
+  border-top: 1px solid var(--border-default);
+  background: var(--surface-panel);
 }
 
 .ai-chat-input-area .follow-up-input {
@@ -85,7 +85,7 @@
 }
 
 .ai-chat-placeholder {
-  color: #757575;
+  color: var(--text-tertiary);
   font-size: 0.85rem;
   text-align: center;
   margin-top: 24px;
@@ -108,7 +108,7 @@
 
 .ai-chat-role {
   font-size: 0.75rem;
-  color: #888;
+  color: var(--text-dim);
   font-weight: 500;
 }
 
@@ -135,17 +135,17 @@
 .ai-chat-message.user .ai-chat-content .markdown-content h4,
 .ai-chat-message.user .ai-chat-content .markdown-content h5,
 .ai-chat-message.user .ai-chat-content .markdown-content h6 {
-  color: #ffffff;
+  color: var(--text-on-accent);
 }
 
 .ai-chat-message.user .ai-chat-content .markdown-content code {
   background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
+  color: var(--text-on-accent);
 }
 
 .ai-chat-message.user .ai-chat-content .markdown-content pre {
-  background: rgba(0, 0, 0, 0.35);
-  color: #e6edf3;
+  background: rgba(var(--backdrop-rgb), 0.35);
+  color: var(--text-on-dark);
 }
 
 .ai-chat-message.user .ai-chat-content .markdown-content pre code {
@@ -168,32 +168,32 @@
 }
 
 .ai-chat-message.user .ai-chat-content .markdown-content a {
-  color: #ffffff;
+  color: var(--text-on-accent);
   text-decoration: underline;
 }
 
 .ai-chat-message.user .ai-chat-content {
-  background: #0078d4;
+  background: var(--accent);
   color: white;
   border-bottom-right-radius: 4px;
 }
 
 .ai-chat-message.assistant .ai-chat-content {
-  background: #fff;
-  color: #333;
-  border: 1px solid #e0e0e0;
+  background: var(--surface-content);
+  color: var(--text-content);
+  border: 1px solid var(--border-popup);
   border-bottom-left-radius: 4px;
 }
 
 .ai-chat-message.streaming .ai-chat-content {
-  color: #888;
+  color: var(--text-dim);
   font-style: italic;
 }
 
 .ai-chat-tabs {
   display: flex;
-  border-bottom: 1px solid #e5e5e5;
-  background: #fafafa;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-panel);
   flex-shrink: 0;
 }
 
@@ -205,7 +205,7 @@
   border-bottom: 2px solid transparent;
   cursor: pointer;
   font-size: 0.85rem;
-  color: #616161;
+  color: var(--text-secondary);
   transition:
     color 0.15s ease,
     border-color 0.15s ease,
@@ -213,14 +213,14 @@
 }
 
 .ai-chat-tabs button:hover {
-  background: #f0f0f0;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .ai-chat-tabs button.active {
-  color: #0078d4;
-  border-bottom-color: #0078d4;
-  background: #ffffff;
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+  background: var(--surface-content);
   font-weight: 500;
 }
 
@@ -238,8 +238,8 @@
 
 .stash-item {
   padding: 10px 12px;
-  background: #fff;
-  border: 1px solid #e5e5e5;
+  background: var(--surface-content);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   transition:
     border-color 0.15s ease,
@@ -247,13 +247,13 @@
 }
 
 .stash-item:hover {
-  border-color: #0078d4;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  border-color: var(--accent);
+  box-shadow: 0 2px 6px rgba(var(--ink-rgb), 0.04);
 }
 
 .stash-item.selected {
-  border-color: #0078d4;
-  background: #f5f9ff;
+  border-color: var(--accent);
+  background: var(--blue-tint-2);
 }
 
 .stash-item-header {
@@ -275,26 +275,26 @@
   width: 14px;
   height: 14px;
   margin: 0;
-  accent-color: #0078d4;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
 .stash-item-source {
   font-size: 0.75rem;
-  color: #757575;
+  color: var(--text-tertiary);
   font-weight: 500;
 }
 
 .stash-item-text {
   font-size: 0.8rem;
-  color: #1f1f1f;
+  color: var(--text-primary);
   word-break: break-word;
   cursor: pointer;
   line-height: 1.5;
 }
 
 .stash-item-text:hover {
-  color: #0078d4;
+  color: var(--accent);
 }
 
 /* 选择模式下点击文本是切换选中而非跳转，hover 不高亮 */
@@ -311,30 +311,30 @@
 .stash-actions button {
   flex: 1;
   padding: 8px 12px;
-  background: #f3f3f3;
-  border: 1px solid #e5e5e5;
+  background: var(--surface-page);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.8rem;
-  color: #424242;
+  color: var(--text-body);
   transition:
     background 0.15s ease,
     border-color 0.15s ease;
 }
 
 .stash-actions button:hover:not(:disabled) {
-  background: #e8e8e8;
-  border-color: #d1d1d1;
+  background: var(--surface-soft);
+  border-color: var(--border-strong);
 }
 
 .stash-actions button.primary {
-  background: #0078d4;
-  color: #fff;
-  border-color: #0078d4;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
 }
 
 .stash-actions button.primary:hover:not(:disabled) {
-  background: #006cbe;
+  background: var(--accent-hover);
 }
 
 .stash-actions button:disabled {
@@ -349,9 +349,9 @@
 }
 
 .session-item {
-  padding: 10px 12px;
-  background: #fff;
-  border: 1px solid #e5e5e5;
+  padding: 10px 12px 10px 14px;
+  background: var(--surface-content);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   cursor: pointer;
   transition:
@@ -360,14 +360,31 @@
     box-shadow 0.15s ease;
 }
 
+/* 左侧 2px 语义色条标识会话类型（inset 阴影实现，不受边框态影响） */
+.session-item.explain {
+  box-shadow: inset 2px 0 0 var(--mark-interpret);
+}
+
+.session-item.custom {
+  box-shadow: inset 2px 0 0 var(--purple-500);
+}
+
 .session-item:hover {
-  background: #f8f8f8;
-  border-color: #0078d4;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  background: var(--surface-panel-alt);
+  border-color: var(--border-strong);
+  box-shadow:
+    inset 2px 0 0 var(--mark-interpret),
+    var(--shadow-sm);
+}
+
+.session-item.custom:hover {
+  box-shadow:
+    inset 2px 0 0 var(--purple-500),
+    var(--shadow-sm);
 }
 
 .session-item.streaming {
-  border-color: #0078d4;
+  border-color: var(--accent);
 }
 
 .session-item-header {
@@ -387,10 +404,9 @@
   flex-shrink: 0;
   padding: 1px 6px;
   border-radius: 4px;
-  background: #f3f3f3;
-  border: 1px solid #e5e5e5;
+  background: var(--surface-sunken);
   font-size: 0.7rem;
-  color: #616161;
+  color: var(--text-secondary);
   font-weight: 500;
 }
 
@@ -403,31 +419,31 @@
 }
 
 .session-item-type.explain {
-  background: #e8f0fe;
-  color: #0078d4;
+  background: var(--mark-interpret-soft);
+  color: var(--mark-interpret);
 }
 
 .session-item-type.custom {
-  background: #f3e8fd;
-  color: #7c3aed;
+  background: var(--purple-50);
+  color: var(--purple-600);
 }
 
 .session-item-source {
   font-size: 0.75rem;
-  color: #757575;
+  color: var(--text-tertiary);
   font-weight: 500;
   margin-top: 4px;
 }
 
 .session-item-status {
   font-size: 0.75rem;
-  color: #0078d4;
+  color: var(--accent);
   font-style: italic;
 }
 
 .session-item-summary {
   font-size: 0.8rem;
-  color: #1f1f1f;
+  color: var(--text-primary);
   word-break: break-word;
   line-height: 1.5;
   display: -webkit-box;
@@ -442,26 +458,26 @@
   min-width: 24px;
   min-height: 24px;
   padding: 0;
-  color: #757575;
+  color: var(--text-tertiary);
   flex-shrink: 0;
 }
 
 .session-item-delete:hover {
-  background: #f0f0f0;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .session-delete-btn {
-  color: #616161;
+  color: var(--text-secondary);
 }
 
 .session-delete-btn:hover {
-  background: #f0f0f0;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .streaming-cursor {
-  color: #757575;
+  color: var(--text-tertiary);
   font-style: italic;
 }
 
@@ -476,7 +492,7 @@
 .streaming-dots span {
   width: 5px;
   height: 5px;
-  background: #757575;
+  background: var(--surface-mid);
   border-radius: 50%;
   animation: streaming-dot-bounce 1.4s ease-in-out infinite both;
 }
@@ -515,7 +531,7 @@
 .follow-up-input textarea {
   flex: 1;
   padding: 8px 10px;
-  border: 1px solid #d1d1d1;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   font-size: 0.85rem;
   resize: vertical;
@@ -525,14 +541,14 @@
 
 .follow-up-input textarea:focus {
   outline: none;
-  border-color: #0078d4;
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.15);
 }
 
 .follow-up-input button {
   padding: 8px 14px;
-  background: #0078d4;
-  color: #fff;
+  background: var(--accent);
+  color: var(--text-on-accent);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -542,7 +558,7 @@
 }
 
 .follow-up-input button:hover:not(:disabled) {
-  background: #006cbe;
+  background: var(--accent-hover);
 }
 
 .follow-up-input button:disabled {
@@ -563,13 +579,13 @@
   min-width: 24px;
   min-height: 24px;
   padding: 0;
-  color: #757575;
+  color: var(--text-tertiary);
 }
 
 .stash-item-edit:hover,
 .stash-item-delete:hover {
-  background: #f0f0f0;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .stash-item-text.truncated {
@@ -583,14 +599,14 @@
   padding: 2px 6px;
   background: transparent;
   border: none;
-  color: #0078d4;
+  color: var(--accent);
   font-size: 0.75rem;
   cursor: pointer;
   border-radius: 4px;
 }
 
 .stash-item-expand:hover {
-  background: #e8f0fe;
+  background: var(--accent-soft);
 }
 
 .stash-item-edit-form {
@@ -602,7 +618,7 @@
 .stash-item-edit-form textarea {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid #d1d1d1;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   font-size: 0.8rem;
   font-family: inherit;
@@ -612,8 +628,8 @@
 
 .stash-item-edit-form textarea:focus {
   outline: none;
-  border-color: #0078d4;
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.15);
 }
 
 .stash-item-edit-actions {
@@ -624,26 +640,26 @@
 
 .stash-item-edit-actions button {
   padding: 6px 12px;
-  background: #f3f3f3;
-  border: 1px solid #e5e5e5;
+  background: var(--surface-page);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.8rem;
-  color: #424242;
+  color: var(--text-body);
 }
 
 .stash-item-edit-actions button:hover:not(:disabled) {
-  background: #e8e8e8;
+  background: var(--surface-soft);
 }
 
 .stash-item-edit-actions button.primary {
-  background: #0078d4;
-  color: #fff;
-  border-color: #0078d4;
+  background: var(--accent);
+  color: var(--text-on-accent);
+  border-color: var(--accent);
 }
 
 .stash-item-edit-actions button.primary:hover:not(:disabled) {
-  background: #006cbe;
+  background: var(--accent-hover);
 }
 
 .stash-item-edit-actions button:disabled {
@@ -672,12 +688,12 @@
   align-items: center;
   gap: 5px;
   padding: 5px 10px;
-  background: #f3f3f3;
-  border: 1px solid #e5e5e5;
+  background: var(--surface-page);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.75rem;
-  color: #616161;
+  color: var(--text-secondary);
   transition:
     background 0.15s ease,
     color 0.15s ease,
@@ -685,14 +701,14 @@
 }
 
 .session-scope-switch:hover {
-  background: #e8e8e8;
-  color: #1f1f1f;
+  background: var(--surface-soft);
+  color: var(--text-primary);
 }
 
 .session-scope-switch.active {
-  background: #e8f0fe;
-  border-color: #0078d4;
-  color: #0078d4;
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
   font-weight: 500;
 }
 
@@ -736,7 +752,7 @@
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  color: #9e9e9e;
+  color: var(--text-muted);
   opacity: 0;
   transition:
     opacity 0.15s ease,
@@ -749,8 +765,8 @@
 }
 
 .ai-chat-copy-btn:hover {
-  background: #f0f0f0;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 /* 首条 user 消息的来源片段卡片（蓝色气泡内的半透明白卡片） */
@@ -771,7 +787,7 @@
   border-radius: 6px;
   cursor: pointer;
   text-align: left;
-  color: #fff;
+  color: var(--text-on-accent);
   transition: background 0.15s ease;
 }
 
@@ -807,21 +823,21 @@
 
 .ai-chat-msg-expand:hover {
   background: rgba(255, 255, 255, 0.14);
-  color: #fff;
+  color: var(--text-on-accent);
 }
 
 /* 会话详情头部操作按钮 */
 .session-goto-source-btn,
 .session-copy-btn,
 .session-share-btn {
-  color: #616161;
+  color: var(--text-secondary);
 }
 
 .session-goto-source-btn:hover,
 .session-copy-btn:hover,
 .session-share-btn:hover {
-  background: #f0f0f0;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 /* 分享下拉菜单 */
@@ -834,10 +850,10 @@
   right: 0;
   top: calc(100% + 4px);
   min-width: 160px;
-  background: #fff;
-  border: 1px solid #e0e0e0;
+  background: var(--surface-content);
+  border: 1px solid var(--border-popup);
   border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 16px rgba(var(--ink-rgb), 0.12);
   padding: 4px;
   z-index: 20;
   display: flex;
@@ -850,12 +866,12 @@
   text-align: left;
   padding: 6px 10px;
   font-size: 0.8125rem;
-  color: #1f1f1f;
+  color: var(--text-primary);
   border-radius: 4px;
   cursor: pointer;
   white-space: nowrap;
 }
 
 .session-share-menu button:hover {
-  background: #f0f0f0;
+  background: var(--surface-hover);
 }

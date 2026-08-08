@@ -747,6 +747,9 @@ struct AppSettings {
     /// 解读记录列表排序方式："recentActivity" | "createdAt" | "page"
     #[serde(default = "default_session_sort_mode")]
     session_sort_mode: String,
+    /// 界面主题："system" | "light" | "dark"
+    #[serde(default = "default_theme")]
+    theme: String,
 }
 
 fn default_platform_id() -> String {
@@ -785,6 +788,10 @@ fn default_session_sort_mode() -> String {
     "recentActivity".to_string()
 }
 
+fn default_theme() -> String {
+    "system".to_string()
+}
+
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
@@ -805,6 +812,7 @@ impl Default for AppSettings {
             right_panel_visible: default_right_panel_visible(),
             right_panel_width: default_right_panel_width(),
             session_sort_mode: default_session_sort_mode(),
+            theme: default_theme(),
         }
     }
 }
@@ -1448,6 +1456,7 @@ mod tests {
             right_panel_visible: true,
             right_panel_width: 0,
             session_sort_mode: "recentActivity".to_string(),
+            theme: "system".to_string(),
         }
     }
 

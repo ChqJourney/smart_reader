@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpecReader AI 图标设计方案 · 暖纸色系适配</title>
+<style>
+  :root {
+    --page: #ece4d9;
+    --panel: #f4f0ea;
+    --card: #fffbf5;
+    --ink: #4f483e;
+    --ink-strong: #3a342b;
+    --ink-2: #8a7d6b;
+    --ink-3: #b0a693;
+    --border: #d8cfbf;
+    --accent: #f54001;
+    --accent-deep: #d93800;
+    --accent-soft: #ffe3d4;
+    --dark-panel: #2b261e;
+    --dark-text: #e8e0d2;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.6;
+    padding: 48px 24px 80px;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; }
+  header.hero { margin-bottom: 40px; }
+  .hero h1 { font-size: 28px; color: var(--ink-strong); letter-spacing: -0.02em; }
+  .hero p { color: var(--ink-2); margin-top: 8px; max-width: 720px; }
+  .tokens { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+  .token {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px 6px 8px;
+    font-size: 12.5px; color: var(--ink-2); font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+  }
+  .token .sw { width: 18px; height: 18px; border-radius: 5px; border: 1px solid rgba(79,72,62,.18); }
+
+  section.concept {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 28px 24px;
+    margin-bottom: 28px;
+  }
+  .concept-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .concept-head .no {
+    font-family: "JetBrains Mono", monospace; font-size: 13px; font-weight: 700;
+    color: var(--accent); background: var(--accent-soft);
+    border-radius: 6px; padding: 2px 9px;
+  }
+  .concept-head h2 { font-size: 20px; color: var(--ink-strong); letter-spacing: -0.01em; }
+  .concept-head .en { font-size: 13px; color: var(--ink-3); }
+  .concept .story { color: var(--ink-2); font-size: 14px; margin: 10px 0 22px; max-width: 720px; }
+
+  .stage-label {
+    font-size: 11.5px; font-weight: 600; letter-spacing: .06em;
+    color: var(--ink-3); text-transform: uppercase; margin-bottom: 10px;
+  }
+  .row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 22px; }
+  .cell { flex: 1 1 300px; }
+
+  /* 模拟标题栏 */
+  .mockbar {
+    height: 44px; display: flex; align-items: center; gap: 8px;
+    padding: 0 14px; border-radius: 10px; border: 1px solid var(--border);
+  }
+  .mockbar.light { background: var(--panel); }
+  .mockbar.dark  { background: var(--dark-panel); border-color: #453c2f; }
+  .mockbar .brand { font-size: 13.5px; font-weight: 550; letter-spacing: -0.02em; }
+  .mockbar.light .brand { color: var(--ink); }
+  .mockbar.dark .brand { color: var(--dark-text); }
+  .mockbar .divider { width: 1px; height: 20px; background: rgba(127,117,100,.35); margin: 0 6px; }
+  .mockbar .pill {
+    font-size: 11px; color: var(--ink-3); border: 1px solid var(--border);
+    border-radius: 6px; padding: 2px 8px;
+  }
+  .mockbar.dark .pill { color: #9a8d79; border-color: #453c2f; }
+  .mockbar svg { filter: drop-shadow(0 1px 2px rgba(30,24,16,.18)); }
+
+  /* 应用图标展示 */
+  .appicon-stage {
+    display: flex; align-items: flex-end; gap: 28px; flex-wrap: wrap;
+    background:
+      radial-gradient(120% 90% at 20% 0%, #f7f1e6 0%, #e9e0d0 55%, #ddd2bd 100%);
+    border: 1px solid var(--border); border-radius: 12px; padding: 28px;
+  }
+  .appicon-stage .big { text-align: center; }
+  .appicon-stage .big svg { display: block; filter: drop-shadow(0 10px 24px rgba(62,48,28,.28)); }
+  .appicon-stage .name { font-size: 12px; color: var(--ink-2); margin-top: 10px; }
+  .ramp { display: flex; align-items: flex-end; gap: 18px; }
+  .ramp .sz { text-align: center; }
+  .ramp .sz svg { display: block; margin: 0 auto; filter: drop-shadow(0 2px 5px rgba(62,48,28,.18)); }
+  .ramp .sz span { font-size: 10.5px; color: var(--ink-3); font-family: "JetBrains Mono", monospace; }
+
+  .checker {
+    background-image:
+      linear-gradient(45deg, #e6ded2 25%, transparent 25%, transparent 75%, #e6ded2 75%),
+      linear-gradient(45deg, #e6ded2 25%, transparent 25%, transparent 75%, #e6ded2 75%);
+    background-size: 16px 16px; background-position: 0 0, 8px 8px;
+    background-color: #f8f4ec;
+    border: 1px solid var(--border); border-radius: 12px; padding: 22px;
+    display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap;
+  }
+
+  .notes { font-size: 13px; color: var(--ink-2); border-top: 1px dashed var(--border); padding-top: 14px; margin-top: 4px; }
+  .notes b { color: var(--ink); }
+
+  table.cmp { width: 100%; border-collapse: collapse; margin-top: 14px; font-size: 13.5px; }
+  .cmp th, .cmp td { border: 1px solid var(--border); padding: 9px 12px; text-align: left; }
+  .cmp th { background: var(--panel); color: var(--ink-strong); font-weight: 600; }
+  .cmp td { background: var(--card); }
+  .cmp .star { color: var(--accent); letter-spacing: 1px; white-space: nowrap; }
+
+  .reco {
+    background: var(--card); border: 1px solid var(--accent-soft-border, #ffc198);
+    border-left: 4px solid var(--accent); border-radius: 12px;
+    padding: 20px 24px; margin-top: 28px; font-size: 14px; color: var(--ink-2);
+  }
+  .reco b { color: var(--ink-strong); }
+  footer { margin-top: 36px; font-size: 12px; color: var(--ink-3); }
+  code { font-family: "JetBrains Mono", "SF Mono", Consolas, monospace; font-size: .92em; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ SVG 符号库（方案本体，可移植） ══════════════ -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gPaper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fffdf8"/>
+      <stop offset="100%" stop-color="#efe7d8"/>
+    </linearGradient>
+    <linearGradient id="gOrange" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff5a1a"/>
+      <stop offset="100%" stop-color="#dd3a00"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ── 方案 A：书签条款 ── -->
+  <symbol id="a-title" viewBox="0 0 64 64">
+    <rect x="11" y="9" width="42" height="46" rx="6" fill="#fffbf5" stroke="#c4b8a4" stroke-width="3"/>
+    <path d="M35 3 h13 v19 l-6.5 -5 l-6.5 5 z" fill="#f54001"/>
+    <line x1="19" y1="21" x2="30" y2="21" stroke="#4f483e" stroke-width="3" stroke-linecap="round"/>
+    <line x1="19" y1="29" x2="33" y2="29" stroke="#8a7d6b" stroke-width="3" stroke-linecap="round"/>
+    <line x1="19" y1="37" x2="30" y2="37" stroke="#f54001" stroke-width="3" stroke-linecap="round"/>
+    <line x1="19" y1="45" x2="26" y2="45" stroke="#b0a693" stroke-width="3" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="a-app" viewBox="0 0 64 64">
+    <rect x="3" y="3" width="58" height="58" rx="14" fill="url(#gPaper)" stroke="#d8cfbf" stroke-width="1.5"/>
+    <g transform="translate(6.5,5.5) scale(0.83)">
+      <rect x="11" y="9" width="42" height="46" rx="6" fill="#fffbf5" stroke="#c4b8a4" stroke-width="3"/>
+      <path d="M35 3 h13 v19 l-6.5 -5 l-6.5 5 z" fill="#f54001"/>
+      <line x1="19" y1="21" x2="30" y2="21" stroke="#4f483e" stroke-width="3" stroke-linecap="round"/>
+      <line x1="19" y1="29" x2="33" y2="29" stroke="#8a7d6b" stroke-width="3" stroke-linecap="round"/>
+      <line x1="19" y1="37" x2="30" y2="37" stroke="#f54001" stroke-width="3" stroke-linecap="round"/>
+      <line x1="19" y1="45" x2="26" y2="45" stroke="#b0a693" stroke-width="3" stroke-linecap="round"/>
+    </g>
+  </symbol>
+
+  <!-- ── 方案 B：§ 条款印记（§ 用字体渲染，落地时转曲） ── -->
+  <symbol id="b-title" viewBox="0 0 64 64">
+    <rect x="12" y="12" width="40" height="40" rx="10" fill="url(#gOrange)"/>
+    <text x="32" y="43" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif"
+          font-weight="700" font-size="32" fill="#fffbf5">&#167;</text>
+  </symbol>
+  <symbol id="b-app" viewBox="0 0 64 64">
+    <rect x="3" y="3" width="58" height="58" rx="14" fill="url(#gOrange)"/>
+    <text x="32" y="45" text-anchor="middle" font-family="Georgia, 'Times New Roman', serif"
+          font-weight="700" font-size="40" fill="#fffbf5">&#167;</text>
+  </symbol>
+
+  <!-- ── 方案 C：检索之镜 ── -->
+  <symbol id="c-title" viewBox="0 0 64 64">
+    <rect x="9" y="8" width="38" height="48" rx="6" fill="#fffbf5" stroke="#c4b8a4" stroke-width="3"/>
+    <line x1="16" y1="19" x2="37" y2="19" stroke="#4f483e" stroke-width="3" stroke-linecap="round"/>
+    <line x1="16" y1="27" x2="37" y2="27" stroke="#8a7d6b" stroke-width="3" stroke-linecap="round"/>
+    <line x1="16" y1="35" x2="29" y2="35" stroke="#f54001" stroke-width="3" stroke-linecap="round"/>
+    <line x1="16" y1="43" x2="25" y2="43" stroke="#b0a693" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="41" cy="41" r="11" fill="#ffe3d4" stroke="#f54001" stroke-width="4"/>
+    <line x1="49" y1="49" x2="58" y2="58" stroke="#4f483e" stroke-width="5" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="c-app" viewBox="0 0 64 64">
+    <rect x="3" y="3" width="58" height="58" rx="14" fill="url(#gPaper)" stroke="#d8cfbf" stroke-width="1.5"/>
+    <g transform="translate(4.5,3) scale(0.86)">
+      <rect x="9" y="8" width="38" height="48" rx="6" fill="#fffbf5" stroke="#c4b8a4" stroke-width="3"/>
+      <line x1="16" y1="19" x2="37" y2="19" stroke="#4f483e" stroke-width="3" stroke-linecap="round"/>
+      <line x1="16" y1="27" x2="37" y2="27" stroke="#8a7d6b" stroke-width="3" stroke-linecap="round"/>
+      <line x1="16" y1="35" x2="29" y2="35" stroke="#f54001" stroke-width="3" stroke-linecap="round"/>
+      <line x1="16" y1="43" x2="25" y2="43" stroke="#b0a693" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="41" cy="41" r="11" fill="#ffe3d4" stroke="#f54001" stroke-width="4"/>
+      <line x1="49" y1="49" x2="58" y2="58" stroke="#4f483e" stroke-width="5" stroke-linecap="round"/>
+    </g>
+  </symbol>
+
+  <!-- ── 方案 D：星芒解读（现有图标的暖纸重配色） ── -->
+  <symbol id="d-title" viewBox="0 0 64 64">
+    <rect x="8" y="4" width="42" height="52" rx="6" fill="#fffbf5" stroke="#c4b8a4" stroke-width="3"/>
+    <line x1="17" y1="17" x2="41" y2="17" stroke="#4f483e" stroke-width="3" stroke-linecap="round"/>
+    <line x1="17" y1="27" x2="41" y2="27" stroke="#8a7d6b" stroke-width="3" stroke-linecap="round"/>
+    <line x1="17" y1="37" x2="33" y2="37" stroke="#b0a693" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="46" cy="46" r="12" fill="#f54001"/>
+    <path d="M46 38.5 c1.1 4.2 3.3 6.4 7.5 7.5 c-4.2 1.1 -6.4 3.3 -7.5 7.5 c-1.1 -4.2 -3.3 -6.4 -7.5 -7.5 c4.2 -1.1 6.4 -3.3 7.5 -7.5 z" fill="#fffbf5"/>
+  </symbol>
+  <symbol id="d-app" viewBox="0 0 64 64">
+    <rect x="3" y="3" width="58" height="58" rx="14" fill="url(#gPaper)" stroke="#d8cfbf" stroke-width="1.5"/>
+    <g transform="translate(5,4) scale(0.85)">
+      <rect x="8" y="4" width="42" height="52" rx="6" fill="#fffbf5" stroke="#c4b8a4" stroke-width="3"/>
+      <line x1="17" y1="17" x2="41" y2="17" stroke="#4f483e" stroke-width="3" stroke-linecap="round"/>
+      <line x1="17" y1="27" x2="41" y2="27" stroke="#8a7d6b" stroke-width="3" stroke-linecap="round"/>
+      <line x1="17" y1="37" x2="33" y2="37" stroke="#b0a693" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="46" cy="46" r="12" fill="#f54001"/>
+      <path d="M46 38.5 c1.1 4.2 3.3 6.4 7.5 7.5 c-4.2 1.1 -6.4 3.3 -7.5 7.5 c-1.1 -4.2 -3.3 -6.4 -7.5 -7.5 c4.2 -1.1 6.4 -3.3 7.5 -7.5 z" fill="#fffbf5"/>
+    </g>
+  </symbol>
+</svg>
+
+<div class="wrap">
+
+  <header class="hero">
+    <h1>SpecReader AI 图标设计方案</h1>
+    <p>目标：让标题栏图标（22px SVG）与应用图标（Dock / 任务栏 / 安装包）匹配新的「暖纸色系 Paper Workbench」——纸面色阶 + 暖棕文字 + 唯一焦橙强调色。蓝色只保留给解读语义，不再出现在品牌图标里。</p>
+    <div class="tokens">
+      <span class="token"><span class="sw" style="background:#f54001"></span>#f54001 焦橙</span>
+      <span class="token"><span class="sw" style="background:#d93800"></span>#d93800 深橙</span>
+      <span class="token"><span class="sw" style="background:#ffe3d4"></span>#ffe3d4 橙雾</span>
+      <span class="token"><span class="sw" style="background:#fffbf5"></span>#fffbf5 纸白</span>
+      <span class="token"><span class="sw" style="background:#f4f0ea"></span>#f4f0ea 纸壳</span>
+      <span class="token"><span class="sw" style="background:#4f483e"></span>#4f483e 暖棕</span>
+      <span class="token"><span class="sw" style="background:#8a7d6b"></span>#8a7d6b 灰棕</span>
+    </div>
+  </header>
+
+  <!-- ════════ 方案 A ════════ -->
+  <section class="concept">
+    <div class="concept-head">
+      <span class="no">A</span><h2>书签条款</h2><span class="en">Bookmarked Clause</span>
+    </div>
+    <p class="story">一页标准文本 + 探出页边的焦橙书签。书签表达「正在精读、随时回到这条款」，是阅读器最经典的隐喻；页面里再压一条橙色高亮行，呼应选中文本 → 解读的核心闭环。与现有图标一样以「文档」为主体，用户认知零成本切换。</p>
+
+    <div class="row">
+      <div class="cell">
+        <div class="stage-label">标题栏 · 浅色</div>
+        <div class="mockbar light">
+          <svg width="22" height="22"><use href="#a-title"/></svg>
+          <span class="brand">SpecReader AI</span>
+          <span class="divider"></span>
+          <span class="pill">最近文件</span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="stage-label">标题栏 · 深色</div>
+        <div class="mockbar dark">
+          <svg width="22" height="22"><use href="#a-title"/></svg>
+          <span class="brand">SpecReader AI</span>
+          <span class="divider"></span>
+          <span class="pill">最近文件</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-label">应用图标</div>
+    <div class="appicon-stage">
+      <div class="big">
+        <svg width="160" height="160"><use href="#a-app"/></svg>
+        <div class="name">SpecReader AI</div>
+      </div>
+      <div class="ramp">
+        <div class="sz"><svg width="16" height="16"><use href="#a-app"/></svg><span>16</span></div>
+        <div class="sz"><svg width="24" height="24"><use href="#a-app"/></svg><span>24</span></div>
+        <div class="sz"><svg width="32" height="32"><use href="#a-app"/></svg><span>32</span></div>
+        <div class="sz"><svg width="48" height="48"><use href="#a-app"/></svg><span>48</span></div>
+        <div class="sz"><svg width="64" height="64"><use href="#a-app"/></svg><span>64</span></div>
+      </div>
+    </div>
+
+    <p class="notes"><b>优点</b>：隐喻完整（文档 + 书签 + 高亮行三层叙事）、小尺寸轮廓清晰、明暗主题通吃。<b>注意</b>：16px 下文本行会糊成色条，靠书签剪影撑辨识度（可接受）。</p>
+  </section>
+
+  <!-- ════════ 方案 B ════════ -->
+  <section class="concept">
+    <div class="concept-head">
+      <span class="no">B</span><h2>§ 条款印记</h2><span class="en">Section Mark</span>
+    </div>
+    <p class="story">「§」是法律与标准文献中「条款」的通用符号——对每天查 IEC 条款的工程师来说一击即中。焦橙实底 + 纸白字形，是四个方案中最大胆、Dock 里最容易一眼认出的一个；气质接近 Bear / Things 这类单字形图标。</p>
+
+    <div class="row">
+      <div class="cell">
+        <div class="stage-label">标题栏 · 浅色</div>
+        <div class="mockbar light">
+          <svg width="22" height="22"><use href="#b-title"/></svg>
+          <span class="brand">SpecReader AI</span>
+          <span class="divider"></span>
+          <span class="pill">最近文件</span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="stage-label">标题栏 · 深色</div>
+        <div class="mockbar dark">
+          <svg width="22" height="22"><use href="#b-title"/></svg>
+          <span class="brand">SpecReader AI</span>
+          <span class="divider"></span>
+          <span class="pill">最近文件</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-label">应用图标</div>
+    <div class="appicon-stage">
+      <div class="big">
+        <svg width="160" height="160"><use href="#b-app"/></svg>
+        <div class="name">SpecReader AI</div>
+      </div>
+      <div class="ramp">
+        <div class="sz"><svg width="16" height="16"><use href="#b-app"/></svg><span>16</span></div>
+        <div class="sz"><svg width="24" height="24"><use href="#b-app"/></svg><span>24</span></div>
+        <div class="sz"><svg width="32" height="32"><use href="#b-app"/></svg><span>32</span></div>
+        <div class="sz"><svg width="48" height="48"><use href="#b-app"/></svg><span>48</span></div>
+        <div class="sz"><svg width="64" height="64"><use href="#b-app"/></svg><span>64</span></div>
+      </div>
+    </div>
+
+    <p class="notes"><b>优点</b>：16px 依然锐利、全尺寸无衰减；品类表达最精准。<b>注意</b>：预览里的 § 用 Georgia 字体渲染，<b>落地时必须转曲为路径</b>再导出 PNG，避免打包机器缺字体导致变形；橙色实底在 Windows 任务栏上会比周围图标更「跳」（可以是优点）。</p>
+  </section>
+
+  <!-- ════════ 方案 C ════════ -->
+  <section class="concept">
+    <div class="concept-head">
+      <span class="no">C</span><h2>检索之镜</h2><span class="en">Reading Lens</span>
+    </div>
+    <p class="story">文档 + 右下角焦橙放大镜，直接翻译「Spec / Reader」：在标准里检索、放大、细读。镜片填了 #ffe3d4 橙雾色，既呼应 --accent-soft，又让镜片有「玻璃」的体积感。隐喻覆盖面比书签更广（搜索、细读、审查都算）。</p>
+
+    <div class="row">
+      <div class="cell">
+        <div class="stage-label">标题栏 · 浅色</div>
+        <div class="mockbar light">
+          <svg width="22" height="22"><use href="#c-title"/></svg>
+          <span class="brand">SpecReader AI</span>
+          <span class="divider"></span>
+          <span class="pill">最近文件</span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="stage-label">标题栏 · 深色</div>
+        <div class="mockbar dark">
+          <svg width="22" height="22"><use href="#c-title"/></svg>
+          <span class="brand">SpecReader AI</span>
+          <span class="divider"></span>
+          <span class="pill">最近文件</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-label">应用图标</div>
+    <div class="appicon-stage">
+      <div class="big">
+        <svg width="160" height="160"><use href="#c-app"/></svg>
+        <div class="name">SpecReader AI</div>
+      </div>
+      <div class="ramp">
+        <div class="sz"><svg width="16" height="16"><use href="#c-app"/></svg><span>16</span></div>
+        <div class="sz"><svg width="24" height="24"><use href="#c-app"/></svg><span>24</span></div>
+        <div class="sz"><svg width="32" height="32"><use href="#c-app"/></svg><span>32</span></div>
+        <div class="sz"><svg width="48" height="48"><use href="#c-app"/></svg><span>48</span></div>
+        <div class="sz"><svg width="64" height="64"><use href="#c-app"/></svg><span>64</span></div>
+      </div>
+    </div>
+
+    <p class="notes"><b>优点</b>：语义直白、双色对比强。<b>注意</b>：元素最多，16px 下镜柄与页边会粘连，需要一个小尺寸特化版（去掉文本行、只留页 + 镜）。</p>
+  </section>
+
+  <!-- ════════ 方案 D ════════ -->
+  <section class="concept">
+    <div class="concept-head">
+      <span class="no">D</span><h2>星芒解读</h2><span class="en">Spark Insight · 现款重配色</span>
+    </div>
+    <p class="story">保留现有图标的构图（文档 + 右下角 AI 角标），只做「换血」：蓝紫渐变 → 焦橙，冷蓝文本行 → 暖棕色阶，五角星 → 四芒星（更贴近当下 AI 闪烁符号的通用语言）。改动最小、品牌连续性最强，老用户不会「认不出」。右侧面板的解读蓝色标记不受影响。</p>
+
+    <div class="row">
+      <div class="cell">
+        <div class="stage-label">标题栏 · 浅色</div>
+        <div class="mockbar light">
+          <svg width="22" height="22"><use href="#d-title"/></svg>
+          <span class="brand">SpecReader AI</span>
+          <span class="divider"></span>
+          <span class="pill">最近文件</span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="stage-label">标题栏 · 深色</div>
+        <div class="mockbar dark">
+          <svg width="22" height="22"><use href="#d-title"/></svg>
+          <span class="brand">SpecReader AI</span>
+          <span class="divider"></span>
+          <span class="pill">最近文件</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-label">应用图标</div>
+    <div class="appicon-stage">
+      <div class="big">
+        <svg width="160" height="160"><use href="#d-app"/></svg>
+        <div class="name">SpecReader AI</div>
+      </div>
+      <div class="ramp">
+        <div class="sz"><svg width="16" height="16"><use href="#d-app"/></svg><span>16</span></div>
+        <div class="sz"><svg width="24" height="24"><use href="#d-app"/></svg><span>24</span></div>
+        <div class="sz"><svg width="32" height="32"><use href="#d-app"/></svg><span>32</span></div>
+        <div class="sz"><svg width="48" height="48"><use href="#d-app"/></svg><span>48</span></div>
+        <div class="sz"><svg width="64" height="64"><use href="#d-app"/></svg><span>64</span></div>
+      </div>
+    </div>
+
+    <p class="notes"><b>优点</b>：与现款构图一致，迁移成本与认知成本都最低；「AI 角标」叙事仍在。<b>注意</b>：四芒星在 16px 会缩成一个亮点，仍可接受；缺点是四个方案里最不「新鲜」。</p>
+  </section>
+
+  <!-- ════════ 对比 ════════ -->
+  <section class="concept">
+    <div class="concept-head"><h2>横向对比</h2></div>
+    <table class="cmp">
+      <tr><th>方案</th><th>16px 辨识度</th><th>配色契合</th><th>品类表达</th><th>独特性</th><th>落地工作量</th></tr>
+      <tr><td><b>A · 书签条款</b></td><td class="star">★★★★</td><td class="star">★★★★★</td><td>精读 / 回读条款</td><td class="star">★★★</td><td>小（纯 SVG 路径）</td></tr>
+      <tr><td><b>B · § 条款印记</b></td><td class="star">★★★★★</td><td class="star">★★★★★</td><td>标准条款，一击即中</td><td class="star">★★★★★</td><td>中（§ 需转曲）</td></tr>
+      <tr><td><b>C · 检索之镜</b></td><td class="star">★★★</td><td class="star">★★★★★</td><td>检索 / 细读</td><td class="star">★★★</td><td>中（需 16px 特化版）</td></tr>
+      <tr><td><b>D · 星芒解读</b></td><td class="star">★★★★</td><td class="star">★★★★★</td><td>AI 解读</td><td class="star">★★</td><td>最小（构图沿用现款）</td></tr>
+    </table>
+
+    <div class="reco">
+      <b>我的推荐：A 主推，B 备选。</b>
+      A 在「阅读器」隐喻、小尺寸轮廓、明暗主题适应性之间最均衡，且与现款文档构图有连续性；如果你更想要 Dock 里一眼跳出的品牌符号、并且目标用户（标准工程师）对 § 有天然亲近感，选 B。也可以混搭：<b>应用图标用 B（单字形最醒目），标题栏用 A（与旁边品牌名的图文组合更柔和）</b>——两者色系完全一致，不会割裂。
+    </div>
+  </section>
+
+  <footer>
+    <p>落地路径：标题栏 → 把选中方案的 <code>&lt;symbol&gt;</code> 内容存为 <code>public/logo.svg</code>；应用图标 → 用 SVG 导出 1024×1024 PNG 后执行 <code>npx tauri icon &lt;path&gt;</code> 自动重新生成 <code>src-tauri/icons/</code> 全套尺寸（含 .icns / .ico）。方案 B 的 § 字符务必先转曲再导出。预览中的渐变仅为纸面微光，若追求绝对扁平可去掉。</p>
+  </footer>
+
+</div>
+</body>
+</html>

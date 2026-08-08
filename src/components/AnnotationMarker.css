@@ -12,7 +12,7 @@
   user-select: none;
   transform: translate(-50%, -50%);
   box-shadow:
-    0 2px 6px rgba(0, 0, 0, 0.18),
+    0 2px 6px rgba(var(--ink-rgb), 0.18),
     0 0 0 1.5px rgba(255, 255, 255, 0.25) inset;
   transition:
     transform 0.1s ease,
@@ -20,21 +20,21 @@
 }
 
 .annotation-marker.translate {
-  background: #0f9d58;
+  background: var(--success-4);
 }
 
 .annotation-marker.explain {
-  background: #0078d4;
+  background: var(--mark-interpret);
 }
 
 .annotation-marker.comment {
-  background: #8b5cf6;
+  background: var(--purple-500);
 }
 
 .annotation-marker:hover {
   transform: translate(-50%, -50%) scale(1.15);
   box-shadow:
-    0 4px 10px rgba(0, 0, 0, 0.22),
+    0 4px 10px rgba(var(--ink-rgb), 0.22),
     0 0 0 1.5px rgba(255, 255, 255, 0.3) inset;
 }
 
@@ -51,22 +51,22 @@
   0%,
   100% {
     box-shadow:
-      0 0 0 0 rgba(0, 120, 212, 0.5),
+      0 0 0 0 rgba(var(--interpret-rgb), 0.5),
       0 0 0 1.5px rgba(255, 255, 255, 0.25) inset;
   }
   50% {
     box-shadow:
-      0 0 0 8px rgba(0, 120, 212, 0),
+      0 0 0 8px rgba(var(--interpret-rgb), 0),
       0 0 0 1.5px rgba(255, 255, 255, 0.25) inset;
   }
 }
 
 .annotation-marker.stash {
-  background: #f59e0b;
+  background: var(--amber-500);
 }
 
 .annotation-marker.stash.interpreted {
-  background: #d97706;
+  background: var(--amber-600);
 }
 
 .annotation-marker.stash.highlighted {
@@ -79,14 +79,14 @@
 }
 
 .annotation-marker.stash .interpreted-stash-star {
-  fill: #fbbf24;
-  stroke: #fff;
+  fill: var(--amber-400);
+  stroke: var(--surface-content);
   stroke-width: 1;
 }
 
 .annotation-marker.stash .interpreted-stash-highlight {
-  fill: #ef4444;
-  stroke: #fff;
+  fill: var(--danger-500);
+  stroke: var(--surface-content);
   stroke-width: 0.5;
 }
 

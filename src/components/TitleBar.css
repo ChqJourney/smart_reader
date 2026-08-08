@@ -1,7 +1,6 @@
 /* ═════════════════════════════════════════════════════
-   TitleBar — Modern custom titlebar for SpecReader AI
-   Design language: thin, frosted glass, refined spacing,
-   premium accent colors, subtle interactions.
+   TitleBar — 与 tab 栏同底色的暖纸壳层（--surface-panel），
+   无渐变、无磨砂、无硬分隔，与 tab 栏合并为一条壳层色带。
    Height 44px — sits slightly above the 40px tab header
    for a correct "window top / tabs below" hierarchy.
    ═════════════════════════════════════════════════════ */
@@ -13,18 +12,7 @@
   height: 44px;
   padding: 0 8px 0 14px;
 
-  /* Frosted glass */
-  background: linear-gradient(
-    to bottom,
-    rgba(253, 254, 255, 0.94),
-    rgba(249, 250, 252, 0.9)
-  );
-  backdrop-filter: blur(20px) saturate(180%);
-
-  /* Subtle separator — no hard border */
-  box-shadow:
-    0 0.5px 0 rgba(15, 23, 42, 0.06),
-    0 1px 2px rgba(15, 23, 42, 0.03);
+  background: var(--surface-panel);
 
   flex-shrink: 0;
   position: relative;
@@ -47,14 +35,14 @@
   height: 22px;
   border-radius: 6px;
   flex-shrink: 0;
-  filter: drop-shadow(0 1px 2px rgba(30, 64, 175, 0.12));
+  filter: drop-shadow(0 1px 2px rgba(var(--ink-rgb), 0.14));
 }
 
 .titlebar-brand-name {
   font-size: 13.5px;
   font-weight: 550;
   letter-spacing: -0.02em;
-  color: #1e293b; /* slate-800 */
+  color: var(--text-slate-800); /* slate-800 */
   white-space: nowrap;
 }
 
@@ -62,7 +50,7 @@
 .titlebar-divider {
   width: 1px;
   height: 20px;
-  background: rgba(148, 163, 184, 0.28); /* slate-400 @ 28% */
+  background: rgba(var(--ink-rgb), 0.16);
   margin: 0 10px;
   flex-shrink: 0;
   border-radius: 1px;
@@ -83,31 +71,31 @@
   background: transparent;
   border-color: transparent;
   border-radius: 7px;
-  color: #64748b; /* slate-500 */
+  color: var(--text-slate-500); /* slate-500 */
 }
 
 .titlebar-center .recent-files-trigger:hover {
-  background: rgba(100, 116, 139, 0.08);
+  background: rgba(var(--ink-rgb), 0.06);
   border-color: transparent;
-  color: #334155;
+  color: var(--text-slate-700);
 }
 
 .titlebar-center .recent-files-trigger.open {
-  background: #eff6ff; /* blue-50 */
+  background: var(--accent-soft);
   border-color: transparent;
-  color: #2563eb; /* blue-600 */
+  color: var(--accent);
 }
 
 /* Count badge inside titlebar */
 .titlebar-center .recent-files-count {
-  background: rgba(148, 163, 184, 0.18);
-  color: #475569;
+  background: rgba(var(--ink-rgb), 0.1);
+  color: var(--text-slate-600);
   font-size: 67%;
 }
 
 .titlebar-center .recent-files-trigger.open .recent-files-count {
-  background: #bfdbfe; /* blue-200 */
-  color: #1d4ed8; /* blue-700 */
+  background: var(--accent-soft-border);
+  color: var(--accent-hover);
 }
 
 /* ── Spacer / drag region ───────────────────────── */
@@ -137,9 +125,9 @@
   font-size: 13px;
   font-weight: 550;
   line-height: 1;
-  color: #2563eb; /* blue-600 */
-  background: rgba(37, 99, 235, 0.08); /* tinted */
-  border: 1px solid rgba(37, 99, 235, 0.16); /* hairline accent */
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.08); /* tinted */
+  border: 1px solid rgba(var(--accent-rgb), 0.16); /* hairline accent */
   border-radius: 7px;
   cursor: pointer;
   white-space: nowrap;
@@ -151,23 +139,23 @@
 }
 
 .titlebar-open-btn:hover:not(:disabled) {
-  background: rgba(37, 99, 235, 0.14);
-  border-color: rgba(37, 99, 235, 0.3);
-  color: #1d4ed8; /* blue-700 */
+  background: rgba(var(--accent-rgb), 0.14);
+  border-color: rgba(var(--accent-rgb), 0.3);
+  color: var(--accent-hover);
 }
 
 .titlebar-open-btn:active:not(:disabled) {
-  background: rgba(37, 99, 235, 0.18);
-  border-color: rgba(37, 99, 235, 0.34);
+  background: rgba(var(--accent-rgb), 0.18);
+  border-color: rgba(var(--accent-rgb), 0.34);
   transform: translateY(0.5px);
 }
 
 .titlebar-open-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-  background: rgba(37, 99, 235, 0.05);
-  border-color: rgba(37, 99, 235, 0.08);
-  color: #93c5fd; /* blue-300 */
+  background: rgba(var(--accent-rgb), 0.05);
+  border-color: rgba(var(--accent-rgb), 0.08);
+  color: var(--accent-soft-border);
 }
 
 /* Settings — ghost icon button (neutral, pairs with tinted open) */
@@ -180,7 +168,7 @@
   width: 34px;
   height: 30px; /* exact match with open-btn height */
   background: transparent;
-  color: #64748b; /* slate-500 */
+  color: var(--text-slate-500); /* slate-500 */
   border: none;
   border-radius: 7px;
   cursor: pointer;
@@ -191,20 +179,20 @@
 
 .titlebar-settings-btn:hover,
 .titlebar-shortcuts-btn:hover {
-  background: rgba(100, 116, 139, 0.1);
-  color: #334155; /* slate-700 */
+  background: rgba(var(--ink-rgb), 0.08);
+  color: var(--text-slate-700);
 }
 
 .titlebar-settings-btn:active,
 .titlebar-shortcuts-btn:active {
-  background: rgba(100, 116, 139, 0.16);
+  background: rgba(var(--ink-rgb), 0.14);
 }
 
 /* ── Divider before window controls ─────────────── */
 .titlebar-wc-divider {
   width: 1px;
   height: 20px;
-  background: rgba(148, 163, 184, 0.26);
+  background: rgba(var(--ink-rgb), 0.16);
   margin: 0 8px 0 6px;
   flex-shrink: 0;
   border-radius: 1px;
@@ -226,7 +214,7 @@
   background: transparent;
   border: none;
   border-radius: 7px;
-  color: #64748b; /* slate-500 */
+  color: var(--text-slate-500); /* slate-500 */
   cursor: pointer;
   transition:
     background 0.13s ease,
@@ -234,16 +222,16 @@
 }
 
 .wc-btn:hover {
-  background: rgba(100, 116, 139, 0.1);
-  color: #1e293b; /* slate-800 */
+  background: rgba(var(--ink-rgb), 0.08);
+  color: var(--text-slate-800);
 }
 
 .wc-btn:active {
-  background: rgba(100, 116, 139, 0.18);
+  background: rgba(var(--ink-rgb), 0.14);
 }
 
 /* Close button hover — system red */
 .wc-btn.wc-close:hover {
-  background: #dc2626; /* red-600 */
-  color: #ffffff;
+  background: var(--danger-600); /* red-600 */
+  color: var(--text-on-accent);
 }

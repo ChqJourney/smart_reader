@@ -4,10 +4,10 @@
   display: flex;
   gap: 4px;
   padding: 4px;
-  background: rgba(37, 37, 37, 0.95);
+  background: var(--surface-content);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
-  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-popup);
 }
 
 .selection-toolbar button {
@@ -16,7 +16,7 @@
   gap: 6px;
   padding: 7px 12px;
   background: transparent;
-  color: #fff;
+  color: var(--text-body);
   border: none;
   border-radius: 6px;
   cursor: pointer;
@@ -27,5 +27,5 @@
 }
 
 .selection-toolbar button:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--surface-hover);
 }

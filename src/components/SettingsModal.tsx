@@ -9,6 +9,7 @@ import {
   DEFAULT_SYSTEM_PROMPTS,
   LogLevel,
   SystemPrompts,
+  ThemeMode,
   ThinkingMode,
   PlatformId,
   openDefaultAppsSettings,
@@ -407,6 +408,10 @@ export default function SettingsModal({
 
   const updateLogLevel = (value: LogLevel) => {
     setSettings((s) => ({ ...s, logLevel: value }));
+  };
+
+  const updateTheme = (value: ThemeMode) => {
+    setSettings((s) => ({ ...s, theme: value }));
   };
 
   const resetPrompt = (key: keyof SystemPrompts) => {
@@ -927,6 +932,32 @@ export default function SettingsModal({
 
               {activePage === "system" && (
                 <>
+                  <section className="settings-section">
+                    <div className="settings-section-title">
+                      {t("settings.theme")}
+                    </div>
+                    <div className="settings-section-hint">
+                      {t("settings.themeHint")}
+                    </div>
+                    <div className="settings-field">
+                      <select
+                        id="theme-mode"
+                        value={settings.theme}
+                        onChange={(e) =>
+                          updateTheme(e.target.value as ThemeMode)
+                        }
+                      >
+                        {(["system", "light", "dark"] as ThemeMode[]).map(
+                          (mode) => (
+                            <option key={mode} value={mode}>
+                              {t(`settings.themeNames.${mode}`)}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </div>
+                  </section>
+
                   <section className="settings-section">
                     <div className="settings-section-title">
                       {t("settings.logLevel")}

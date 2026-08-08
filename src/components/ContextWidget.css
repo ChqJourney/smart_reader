@@ -5,8 +5,8 @@
   align-items: center;
   gap: 10px;
   padding: 7px 14px;
-  background: #fafafa;
-  border-bottom: 1px solid #e5e5e5;
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border-default);
   font-size: 0.7rem;
   flex-shrink: 0;
 }
@@ -14,7 +14,7 @@
 .context-widget-bar {
   flex: 1;
   height: 4px;
-  background: #e0e0e0;
+  background: var(--surface-track);
   border-radius: 2px;
   overflow: hidden;
   min-width: 40px;
@@ -30,39 +30,39 @@
 
 /* Default / low usage: subtle blue matching app accent */
 .context-widget-green .context-widget-fill {
-  background: #0078d4;
+  background: var(--accent);
 }
 
 .context-widget-yellow .context-widget-fill {
-  background: #f0a020;
+  background: var(--warning);
 }
 
 .context-widget-orange .context-widget-fill {
-  background: #e8590c;
+  background: var(--warning-strong);
 }
 
 .context-widget-red .context-widget-fill {
-  background: #c42b1c;
+  background: var(--danger);
 }
 
 .context-widget-label {
   white-space: nowrap;
   font-weight: 500;
-  color: #888;
+  color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
 
 /* Only color the label when usage is notable */
 .context-widget-yellow .context-widget-label {
-  color: #f0a020;
+  color: var(--warning);
 }
 
 .context-widget-orange .context-widget-label {
-  color: #e8590c;
+  color: var(--warning-strong);
 }
 
 .context-widget-red .context-widget-label {
-  color: #c42b1c;
+  color: var(--danger);
 }
 
 .context-widget-new-session {
@@ -88,7 +88,7 @@
   gap: 6px;
   padding: 6px 10px;
   font-size: 0.8rem;
-  color: var(--text-secondary, #666);
+  color: var(--text-quiet);
   cursor: pointer;
   user-select: none;
 }
@@ -104,8 +104,8 @@
 .thinking-indicator-spinner {
   width: 12px;
   height: 12px;
-  border: 2px solid #e0e0e0;
-  border-top-color: #0078d4;
+  border: 2px solid var(--border-popup);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: thinking-spin 0.8s linear infinite;
 }
@@ -126,10 +126,10 @@
 .thinking-indicator-details {
   margin-top: 6px;
   padding: 8px 10px;
-  background: var(--bg-secondary, #f5f5f5);
+  background: var(--surface-sunken);
   border-radius: 6px;
   font-size: 0.75rem;
-  color: var(--text-secondary, #888);
+  color: var(--text-dim);
   white-space: pre-wrap;
   max-height: 200px;
   overflow-y: auto;
@@ -143,21 +143,21 @@
   gap: 8px;
   padding: 8px 12px;
   margin-top: 8px;
-  background: rgba(196, 43, 28, 0.08);
-  border: 1px solid rgba(196, 43, 28, 0.2);
+  background: rgba(var(--danger-rgb), 0.08);
+  border: 1px solid rgba(var(--danger-rgb), 0.2);
   border-radius: 6px;
   font-size: 0.8rem;
 }
 
 .error-banner-icon {
-  color: #c42b1c;
+  color: var(--danger);
   flex-shrink: 0;
   margin-top: 2px;
 }
 
 .error-banner-content {
   flex: 1;
-  color: var(--text-primary, #333);
+  color: var(--text-content);
 }
 
 .error-banner-actions {
@@ -168,16 +168,16 @@
 
 .error-banner-action {
   background: none;
-  border: 1px solid rgba(196, 43, 28, 0.3);
+  border: 1px solid rgba(var(--danger-rgb), 0.3);
   border-radius: 4px;
   padding: 2px 8px;
   font-size: 0.75rem;
   cursor: pointer;
-  color: #c42b1c;
+  color: var(--danger);
 }
 
 .error-banner-action:hover {
-  background: rgba(196, 43, 28, 0.08);
+  background: rgba(var(--danger-rgb), 0.08);
 }
 
 /* Token usage display */
@@ -187,7 +187,7 @@
   gap: 8px;
   padding: 4px 0;
   font-size: 0.7rem;
-  color: var(--text-tertiary, #999);
+  color: var(--text-faint);
 }
 
 .token-usage-item {
@@ -202,9 +202,9 @@
   gap: 4px;
   padding: 6px 10px;
   font-size: 0.8rem;
-  color: var(--text-secondary, #666);
+  color: var(--text-quiet);
   border-radius: 6px;
-  background: var(--bg-secondary, #f5f5f5);
+  background: var(--surface-sunken);
   margin-bottom: 6px;
 }
 
@@ -244,7 +244,7 @@
 
 .tool-call-name {
   font-weight: 500;
-  color: var(--text-primary, #333);
+  color: var(--text-content);
 }
 
 .tool-call-summary {
@@ -264,8 +264,8 @@
   display: inline-block;
   width: 12px;
   height: 12px;
-  border: 2px solid #e0e0e0;
-  border-top-color: #0078d4;
+  border: 2px solid var(--border-popup);
+  border-top-color: var(--accent);
   border-radius: 50%;
   animation: thinking-spin 0.8s linear infinite;
 }

@@ -25,6 +25,7 @@ const DEFAULT_SETTINGS = {
   rightPanelVisible: true,
   rightPanelWidth: 0,
   sessionSortMode: "recentActivity",
+  theme: "system",
 };
 
 describe("settings service", () => {
@@ -308,6 +309,7 @@ describe("settings service", () => {
       rightPanelVisible: true,
       rightPanelWidth: 0,
       sessionSortMode: "recentActivity",
+      theme: "system",
     };
     await saveSettings(settings);
     expect(saved).toEqual(settings);

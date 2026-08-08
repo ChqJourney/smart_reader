@@ -21,9 +21,9 @@
   font-size: 12px;
   font-weight: 500;
   letter-spacing: -0.01em;
-  color: #64748b; /* slate-500 */
-  background: rgba(100, 116, 139, 0.07);
-  border: 1px solid rgba(100, 116, 139, 0.1);
+  color: var(--text-slate-500); /* slate-500 */
+  background: rgba(var(--ink-rgb), 0.07);
+  border: 1px solid rgba(var(--ink-rgb), 0.1);
   border-radius: 7px;
   cursor: default;
   max-width: 260px;
@@ -31,7 +31,7 @@
 }
 
 .titlebar-model-display .icon {
-  color: #94a3b8; /* slate-400 */
+  color: var(--text-slate-400); /* slate-400 */
   flex-shrink: 0;
 }
 
@@ -53,9 +53,9 @@
   font-weight: 500;
   line-height: 1;
   white-space: nowrap;
-  color: #64748b; /* slate-500 */
+  color: var(--text-slate-500); /* slate-500 */
   background: transparent;
-  border: 1px solid rgba(100, 116, 139, 0.14);
+  border: 1px solid rgba(var(--ink-rgb), 0.14);
   border-radius: 7px;
   cursor: pointer;
   transition:
@@ -66,8 +66,8 @@
 }
 
 .titlebar-toggle:hover {
-  background: rgba(100, 116, 139, 0.08);
-  color: #334155; /* slate-700 */
+  background: rgba(var(--ink-rgb), 0.08);
+  color: var(--text-slate-700); /* slate-700 */
 }
 
 .titlebar-toggle:active {
@@ -76,15 +76,15 @@
 
 /* 开启态：与 .titlebar-open-btn 同一套蓝色 tinted 语言 */
 .titlebar-toggle.on {
-  color: #2563eb; /* blue-600 */
-  background: rgba(37, 99, 235, 0.08);
-  border-color: rgba(37, 99, 235, 0.2);
+  color: var(--blue-600); /* blue-600 */
+  background: rgba(var(--accent-rgb), 0.08);
+  border-color: rgba(var(--accent-rgb), 0.2);
 }
 
 .titlebar-toggle.on:hover {
-  background: rgba(37, 99, 235, 0.13);
-  border-color: rgba(37, 99, 235, 0.3);
-  color: #1d4ed8; /* blue-700 */
+  background: rgba(var(--accent-rgb), 0.13);
+  border-color: rgba(var(--accent-rgb), 0.3);
+  color: var(--blue-700); /* blue-700 */
 }
 
 .titlebar-toggle-label {
@@ -98,7 +98,7 @@
   height: 14px;
   flex-shrink: 0;
   border-radius: 999px;
-  background: rgba(100, 116, 139, 0.24);
+  background: rgba(var(--ink-rgb), 0.24);
   transition: background 0.15s ease;
 }
 
@@ -109,13 +109,13 @@
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #ffffff;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.18);
+  background: var(--surface-content);
+  box-shadow: 0 1px 2px rgba(var(--ink-rgb), 0.18);
   transition: transform 0.15s ease;
 }
 
 .titlebar-toggle.on .titlebar-toggle-switch {
-  background: #2563eb; /* blue-600 */
+  background: var(--blue-600); /* blue-600 */
 }
 
 .titlebar-toggle.on .titlebar-toggle-knob {
@@ -126,7 +126,7 @@
 .titlebar-toggle-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.36);
+  background: rgba(var(--ink-rgb), 0.36);
   backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
@@ -137,12 +137,12 @@
 .titlebar-toggle-modal {
   width: 380px;
   max-width: calc(100vw - 48px);
-  background: #ffffff;
+  background: var(--surface-content);
   border-radius: 12px;
   padding: 20px 22px 16px;
   box-shadow:
-    0 12px 40px rgba(15, 23, 42, 0.18),
-    0 2px 8px rgba(15, 23, 42, 0.08);
+    0 12px 40px rgba(var(--ink-rgb), 0.18),
+    0 2px 8px rgba(var(--ink-rgb), 0.08);
 }
 
 .titlebar-toggle-modal h3 {
@@ -150,14 +150,14 @@
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
-  color: #1e293b; /* slate-800 */
+  color: var(--text-slate-800); /* slate-800 */
 }
 
 .titlebar-toggle-modal-body {
   margin: 0;
   font-size: 13px;
   line-height: 1.65;
-  color: #475569; /* slate-600 */
+  color: var(--text-slate-600); /* slate-600 */
 }
 
 .titlebar-toggle-modal-actions {
@@ -172,8 +172,8 @@
   padding: 0 14px;
   font-size: 13px;
   font-weight: 500;
-  color: #475569;
-  background: rgba(100, 116, 139, 0.08);
+  color: var(--text-slate-600);
+  background: rgba(var(--ink-rgb), 0.08);
   border: none;
   border-radius: 7px;
   cursor: pointer;
@@ -181,14 +181,14 @@
 }
 
 .titlebar-toggle-modal-actions button:hover {
-  background: rgba(100, 116, 139, 0.14);
+  background: rgba(var(--ink-rgb), 0.14);
 }
 
 .titlebar-toggle-modal-actions button.primary {
-  color: #ffffff;
-  background: #2563eb; /* blue-600 */
+  color: var(--text-on-accent);
+  background: var(--blue-600); /* blue-600 */
 }
 
 .titlebar-toggle-modal-actions button.primary:hover {
-  background: #1d4ed8; /* blue-700 */
+  background: var(--blue-700); /* blue-700 */
 }

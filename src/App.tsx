@@ -205,6 +205,24 @@ function App() {
     };
   }, [settingsLoaded]);
 
+  // 主题：把 settings.theme 应用到 <html data-theme>；为 "system" 时跟随
+  // 操作系统亮暗并监听切换。dark token 组见 App.css :root[data-theme="dark"]。
+  useEffect(() => {
+    const root = document.documentElement;
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const dark =
+        settings.theme === "dark" ||
+        (settings.theme === "system" && media.matches);
+      root.dataset.theme = dark ? "dark" : "light";
+    };
+    apply();
+    if (settings.theme === "system") {
+      media.addEventListener("change", apply);
+      return () => media.removeEventListener("change", apply);
+    }
+  }, [settings.theme]);
+
   // Check for application updates shortly after startup. Errors are ignored
   // so that a missing network or non-Tauri test environment does not break
   // the app launch flow.
@@ -905,7 +923,13 @@ function App() {
       tabs.clearTabSelection(focusedTab.id);
       requestPanelTab("stash");
     },
-    [focusedSelection, focusedTab, persistenceHandleAddToStash, tabs, requestPanelTab]
+    [
+      focusedSelection,
+      focusedTab,
+      persistenceHandleAddToStash,
+      tabs,
+      requestPanelTab,
+    ]
   );
 
   // 自定义解读弹窗由 App 层统一渲染（选区工具条直达与面板按钮两个入口共用），

@@ -2,16 +2,18 @@
   position: fixed;
   display: flex;
   flex-direction: column;
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.14);
+  background: var(--surface-content);
+  border: none;
   border-radius: 8px;
-  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28);
+  box-shadow: var(--shadow-popup);
   overflow: hidden;
   z-index: 500;
 }
 
 .link-preview-popup.pinned {
-  border-color: rgba(0, 100, 220, 0.45);
+  box-shadow:
+    var(--shadow-popup),
+    0 0 0 1px var(--accent);
 }
 
 .link-preview-header {
@@ -20,8 +22,8 @@
   justify-content: space-between;
   gap: 6px;
   padding: 2px 6px;
-  background: #f4f4f6;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--surface-header-alt);
+  border-bottom: 1px solid var(--border-subtle);
   cursor: move;
   user-select: none;
   flex-shrink: 0;
@@ -33,15 +35,15 @@
   padding: 4px 6px;
   font-size: 12px;
   font-weight: 600;
-  color: #333;
+  color: var(--text-content);
   cursor: pointer;
   border-radius: 4px;
   white-space: nowrap;
 }
 
 .link-preview-title:hover {
-  background: rgba(0, 0, 0, 0.06);
-  color: rgba(0, 100, 220, 0.9);
+  background: var(--surface-hover);
+  color: var(--accent);
 }
 
 .link-preview-actions {
@@ -51,14 +53,14 @@
 }
 
 .link-preview-pin.active {
-  color: rgba(0, 100, 220, 0.95);
-  background: rgba(0, 100, 220, 0.12);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .link-preview-body {
   flex: 1;
   overflow: auto;
-  background: #e8e8ea;
+  background: var(--surface-titlebar-alt);
 }
 
 .link-preview-body canvas {
@@ -66,7 +68,7 @@
   width: 100%;
   height: auto;
   margin: 0 auto;
-  background: #fff;
+  background: var(--surface-content);
 }
 
 .link-preview-status {
@@ -76,12 +78,12 @@
   align-items: center;
   justify-content: center;
   font-size: 13px;
-  color: #888;
+  color: var(--text-dim);
   pointer-events: none;
 }
 
 .link-preview-status.error {
-  color: #c0392b;
+  color: var(--danger-alt);
 }
 
 .link-preview-resize {
@@ -95,12 +97,12 @@
     135deg,
     transparent 0%,
     transparent 50%,
-    rgba(0, 0, 0, 0.25) 50%,
-    rgba(0, 0, 0, 0.25) 60%,
+    rgba(var(--ink-rgb), 0.3) 50%,
+    rgba(var(--ink-rgb), 0.3) 60%,
     transparent 60%,
     transparent 70%,
-    rgba(0, 0, 0, 0.25) 70%,
-    rgba(0, 0, 0, 0.25) 80%,
+    rgba(var(--ink-rgb), 0.3) 70%,
+    rgba(var(--ink-rgb), 0.3) 80%,
     transparent 80%
   );
 }

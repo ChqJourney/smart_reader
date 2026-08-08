@@ -13,10 +13,10 @@
   height: 36px;
   padding: 8px 10px;
   box-sizing: border-box;
-  border: 1px solid #d1d1d1;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  background: #fff;
-  color: #1f1f1f;
+  background: var(--surface-content);
+  color: var(--text-primary);
   font-family: inherit;
   font-size: 0.85rem;
   text-align: left;
@@ -27,19 +27,19 @@
 }
 
 .icon-select-trigger:hover {
-  border-color: #b1b1b1;
+  border-color: var(--border-disabled);
 }
 
 .icon-select-trigger:focus-visible,
 .icon-select.open .icon-select-trigger {
   outline: none;
-  border-color: #0078d4;
-  box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.15);
 }
 
 .icon-select-trigger > svg {
   flex-shrink: 0;
-  color: #616161;
+  color: var(--text-secondary);
   transition: transform 0.15s ease;
 }
 
@@ -61,7 +61,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #1a7f37;
+  background: var(--success);
   flex-shrink: 0;
 }
 
@@ -82,10 +82,10 @@
   max-height: 240px;
   overflow-y: auto;
   padding: 4px;
-  background: #fff;
-  border: 1px solid #d1d1d1;
+  background: var(--surface-content);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 24px rgba(var(--ink-rgb), 0.12);
 }
 
 .icon-select-option {
@@ -97,7 +97,7 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #1f1f1f;
+  color: var(--text-primary);
   font-family: inherit;
   font-size: 0.85rem;
   text-align: left;
@@ -105,12 +105,12 @@
 }
 
 .icon-select-option:hover {
-  background: #f3f3f3;
+  background: var(--surface-page);
 }
 
 .icon-select-option.selected {
-  background: #f0f7ff;
-  color: #0078d4;
+  background: var(--blue-tint);
+  color: var(--accent);
 }
 
 .icon-select-option-label {
@@ -124,5 +124,5 @@
 /* 选中项最右侧的绿色对勾 */
 .icon-select-check {
   flex-shrink: 0;
-  color: #1a7f37;
+  color: var(--success);
 }

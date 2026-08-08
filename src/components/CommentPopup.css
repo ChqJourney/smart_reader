@@ -5,10 +5,10 @@
   max-height: 280px;
   display: flex;
   flex-direction: column;
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid #e0e0e0;
-  border-radius: 10px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
+  background: var(--surface-content);
+  border: none;
+  border-radius: 8px;
+  box-shadow: var(--shadow-popup);
   overflow: hidden;
   transform: translate(-50%, 12px);
 }
@@ -23,8 +23,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 0px 2px;
-  background: #fafafa;
-  border-bottom: 1px solid #e8e8e8;
+  background: var(--surface-panel);
+  border-bottom: 1px solid var(--border-subtle);
   cursor: grab;
   user-select: none;
 }
@@ -35,7 +35,7 @@
   gap: 6px;
   font-size: 0.8rem;
   font-weight: 600;
-  color: #1f1f1f;
+  color: var(--text-primary);
 }
 
 .comment-popup-actions {
@@ -55,15 +55,15 @@
   border: none;
   border-radius: 4px;
   cursor: pointer;
-  color: #616161;
+  color: var(--text-secondary);
   transition:
     background 0.15s ease,
     color 0.15s ease;
 }
 
 .comment-popup-actions button:hover {
-  background: #f0f0f0;
-  color: #1f1f1f;
+  background: var(--surface-hover);
+  color: var(--text-primary);
 }
 
 .comment-popup-body {
@@ -83,9 +83,9 @@
   font: inherit;
   font-size: 0.8rem;
   line-height: 1.6;
-  color: #333;
+  color: var(--text-content);
 }
 
 .comment-popup-textarea::placeholder {
-  color: #aaa;
+  color: var(--text-disabled);
 }

@@ -22,6 +22,8 @@ export type LogLevel = "trace" | "debug" | "info" | "warn" | "error";
 
 export type ThinkingMode = "enabled" | "disabled" | "auto";
 
+export type ThemeMode = "system" | "light" | "dark";
+
 export interface AppSettings {
   llm: LlmConfig;
   /** Platform preset ID for model dropdown population */
@@ -44,6 +46,8 @@ export interface AppSettings {
   rightPanelWidth: number;
   /** 解读记录列表排序方式 */
   sessionSortMode: SessionSortMode;
+  /** 界面主题：跟随系统 / 浅色 / 深色 */
+  theme: ThemeMode;
 }
 
 const LEGACY_STORAGE_KEY = "standardread-llm-config";
@@ -109,6 +113,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   rightPanelVisible: true,
   rightPanelWidth: 0,
   sessionSortMode: "recentActivity",
+  theme: "system",
 };
 
 function isValidSettings(value: unknown): value is Partial<AppSettings> {
@@ -154,7 +159,14 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
     sessionSortMode: isSessionSortMode(value.sessionSortMode)
       ? value.sessionSortMode
       : DEFAULT_SETTINGS.sessionSortMode,
+    theme: isThemeMode(value.theme) ? value.theme : DEFAULT_SETTINGS.theme,
   };
+}
+
+function isThemeMode(value: unknown): value is ThemeMode {
+  return (
+    typeof value === "string" && ["system", "light", "dark"].includes(value)
+  );
 }
 
 function isSessionSortMode(value: unknown): value is SessionSortMode {

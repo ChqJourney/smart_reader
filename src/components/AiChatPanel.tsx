@@ -806,7 +806,7 @@ export default function AiChatPanel({
                   return (
                     <div
                       key={session.id}
-                      className={`session-item ${session.isStreaming ? "streaming" : ""}`}
+                      className={`session-item ${isCustom ? "custom" : "explain"} ${session.isStreaming ? "streaming" : ""}`}
                       onClick={() => {
                         onGotoSession?.(session);
                         enterSessionChatbox(session);

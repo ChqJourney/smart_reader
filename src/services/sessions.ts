@@ -166,6 +166,54 @@ export function sortSessions(
   return sorted;
 }
 
+export interface TurnProcess {
+  /** 该轮全部 assistant 消息的 reasoningContent 按序合并（无则为 undefined） */
+  reasoning?: string;
+  /** 该轮全部工具调用事件（含中间消息与流式占位消息上的） */
+  toolEvents: ToolEvent[];
+}
+
+/**
+ * 按「轮」（一个 user 消息到其最终 assistant 正文）归组思考与工具调用。
+ * Agent loop 中每个工具轮次会产生一条隐藏的 assistant(toolCalls) 中间消息，
+ * reasoningContent / toolEvents 分散在这些中间消息与流式占位消息上；UI 需要把
+ * 同一轮的思考 + 工具调用收进该轮最终 assistant 消息的「过程气泡」里展示，
+ * 与正文气泡并列（一轮对话 AI 侧最多两个框）。返回 Map：最终 assistant 消息 id
+ * → 该轮累计的 TurnProcess（中间消息自身不入 Map，避免重复展示）。
+ */
+export function collectTurnProcess(
+  messages: InterpretationMessage[]
+): Map<string, TurnProcess> {
+  const map = new Map<string, TurnProcess>();
+  let accEvents: ToolEvent[] = [];
+  let accReasoning: string[] = [];
+  let lastAssistantId: string | null = null;
+  const flush = () => {
+    if (!lastAssistantId) return;
+    const reasoning = accReasoning.join("\n\n");
+    if (accEvents.length === 0 && !reasoning) return;
+    map.set(lastAssistantId, {
+      reasoning: reasoning || undefined,
+      toolEvents: accEvents,
+    });
+  };
+  for (const m of messages) {
+    if (m.role === "user") {
+      flush();
+      accEvents = [];
+      accReasoning = [];
+      lastAssistantId = null;
+      continue;
+    }
+    if (m.role !== "assistant") continue;
+    if (m.toolEvents?.length) accEvents = [...accEvents, ...m.toolEvents];
+    if (m.reasoningContent) accReasoning.push(m.reasoningContent);
+    lastAssistantId = m.id;
+  }
+  flush();
+  return map;
+}
+
 export function finishStreaming(
   session: InterpretationSession
 ): InterpretationSession {

@@ -116,7 +116,7 @@ npm install
 │   │   ├── RecentFilesBar.tsx         # 最近文件：触发按钮 + 下拉面板（置顶/搜索/分屏打开）
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗（片段勾选清单 + 解读方式预设下拉，App 层统一渲染）
 │   │   ├── ShortcutsModal.tsx         # 键盘快捷键速查浮层（Ctrl/Cmd+/ 或标题栏「?」开合，分组 kbd 清单）
-│   │   ├── ToolCallsIndicator.tsx     # 工具调用状态指示器（解读流中展示）
+│   │   ├── ToolCallsIndicator.tsx     # 一轮对话内全部工具调用的气泡（工具阶段自动展开明细，正文输出后自动收拢）
 │   │   ├── LinkPreviewPopup.tsx       # 条款链接悬停预览小窗（画中画：渲染目标页、拖动/调大小/固化，portal 到 body）
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
 │   │   ├── HibernatedPlaceholder.tsx  # 休眠 tab 在 keep-alive 树里的占位（空 div，保持 key 稳定）
@@ -409,10 +409,10 @@ PdfViewer.tsx（协调层：UI + 组合 hooks）
 AiChatPanel.tsx
 ├── expandedId / expandedStashIds / sessionScope（「当前文档/全部文档」过滤）/ sortMode（排序方式，受控于 App 的 settings.sessionSortMode）
 ├── tabRequest（App 传入的 tab 激活请求：PDF 侧加入暂存 → 暂存 tab，发起解读/自定义解读 → 解读 tab，按 nonce 变化生效）
-└── 检测到 isStreaming 会话时启动流；展示最终 assistant 消息上的 `toolEvents`；长 user 消息折叠 + 来源片段卡片（可跳原文）；assistant 气泡 hover 复制 / 头部复制全部 / 删除会话
+└── 检测到 isStreaming 会话时启动流；一轮对话（含多个工具轮次）的 reasoningContent 与全部 `toolEvents` 由 `sessions.ts` 的 `collectTurnProcess` 归组到该轮最终 assistant 消息上——AI 侧一轮最多两个框：过程气泡（思考 + 工具调用，`.ai-chat-process`）与正文气泡；长 user 消息折叠 + 来源片段卡片（可跳原文）；assistant 气泡 hover 复制 / 头部复制全部 / 删除会话
 
 ToolCallsIndicator.tsx
-└── 工具调用状态指示器：running / done / 折叠明细
+└── 工具调用气泡：工具阶段（流式且最终正文未输出）自动展开全部调用明细，正文开始输出或流结束后自动收拢为一行摘要（可点击展开回看）
 
 SettingsModal.tsx
 └── 左侧分页设置弹窗：模型设置（平台/模型/Key）、功能设置（语言/悬停翻译/条款链接悬停预览（默认关闭）/Agent Tools 开关（默认关闭，开启后显示 maxToolRounds 轮次设置）/系统提示词）、系统设置（日志/默认打开方式/重跑向导）、关于（版本/软件更新/License）

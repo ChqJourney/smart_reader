@@ -254,10 +254,8 @@
   white-space: nowrap;
 }
 
-.tool-calls-indicator.running {
-  flex-direction: row;
-  align-items: center;
-  gap: 6px;
+.tool-calls-indicator.running .tool-calls-summary {
+  color: var(--text-content);
 }
 
 .tool-calls-spinner {

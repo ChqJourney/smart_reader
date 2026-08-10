@@ -4,6 +4,7 @@ import { StashItem } from "../services/stash";
 import {
   InterpretationSession,
   SessionSortMode,
+  collectTurnProcess,
   sortSessions,
 } from "../services/sessions";
 import { copyToClipboard } from "../utils/clipboard";
@@ -137,17 +138,13 @@ export default function AiChatPanel({
     setAutoScroll(nearBottom);
   };
 
-  // 将多轮工具调用记录合并为一条可折叠的摘要，保持会话框简洁。
-  const mergedDoneToolEvents = useMemo(() => {
-    if (!activeSession) return [];
-    return activeSession.messages
-      .filter(
-        (m) =>
-          m.role === "assistant" && m.id !== activeSession.streamingMessageId
-      )
-      .flatMap((m) => m.toolEvents || [])
-      .filter((e) => e.status === "done");
-  }, [activeSession]);
+  // 将一轮对话（含多个工具轮次）的思考与全部工具调用归组到该轮最终
+  // assistant 消息上：AI 侧一轮最多两个框——过程气泡（思考 + 工具调用）
+  // 与正文气泡；工具轮次的中间消息本身被过滤不渲染。
+  const turnProcessByMessageId = useMemo(
+    () => collectTurnProcess(activeSession?.messages ?? []),
+    [activeSession]
+  );
 
   // Enter chatbox when external code asks to expand a session (e.g. PDF marker click).
   // We only react to prop changes so that the user can navigate back without being
@@ -466,32 +463,56 @@ export default function AiChatPanel({
             onScroll={handleMessagesScroll}
           >
             {activeSession.messages
-              // 工具结果消息用于 LLM 上下文回放，UI 上只需通过 assistant
-              // 消息上的 toolEvents 摘要感知，避免历史记录过于冗长。
-              // 空内容的工具调用中间消息也隐藏，统一在底部显示合并摘要。
+              // 工具结果消息用于 LLM 上下文回放，UI 上不展示。工具轮次的
+              // 中间 assistant 消息（含仅有 reasoning 的）也隐藏，其
+              // reasoningContent / toolEvents 由 collectTurnProcess 归组到
+              // 该轮最终 assistant 消息的过程气泡内。
               .filter((message) => {
                 if (message.role === "tool") return false;
                 if (message.role !== "assistant") return true;
                 const isCurrentStreaming =
                   activeSession.isStreaming &&
                   activeSession.streamingMessageId === message.id;
-                const hasVisibleContent =
-                  message.content.trim() !== "" || !!message.reasoningContent;
-                const hasRunningTools =
-                  isCurrentStreaming &&
-                  message.toolEvents?.some((e) => e.status === "running");
-                return (
-                  hasVisibleContent || isCurrentStreaming || hasRunningTools
-                );
+                if (isCurrentStreaming) return true;
+                if (message.content.trim() !== "") return true;
+                // 中止/异常收尾时正文可能为空：该轮最终消息仍有过程气泡可展示
+                return turnProcessByMessageId.has(message.id);
               })
               .map((message) => {
                 const isCurrentStreaming =
                   activeSession.isStreaming &&
                   activeSession.streamingMessageId === message.id;
-                const hasReasoning = !!message.reasoningContent;
+                const turnProcess =
+                  message.role === "assistant"
+                    ? turnProcessByMessageId.get(message.id)
+                    : undefined;
+                const turnReasoning = turnProcess?.reasoning ?? "";
+                const hasReasoning = turnReasoning !== "";
+                const turnToolEvents = turnProcess?.toolEvents ?? [];
+                const anyRunningTools =
+                  isCurrentStreaming &&
+                  turnToolEvents.some((e) => e.status === "running");
+                // 思考中 = 流式且本轮正文未输出且不在工具执行阶段
                 const isThinking =
-                  isCurrentStreaming && hasReasoning && !message.content;
-                const thinkingDone = hasReasoning && !!message.content;
+                  isCurrentStreaming &&
+                  hasReasoning &&
+                  !message.content &&
+                  !anyRunningTools;
+                const hasProcess =
+                  hasReasoning || isThinking || turnToolEvents.length > 0;
+                // 加载圆点气泡仅在「等待首个 token」阶段出现；思考 / 工具调用
+                // 阶段只保留过程气泡，正文气泡要等正文真正开始输出才渲染，
+                // 否则会出现一个空白气泡。
+                const showStreamingDots =
+                  message.role === "assistant" &&
+                  isCurrentStreaming &&
+                  !message.content &&
+                  !isThinking &&
+                  !anyRunningTools;
+                const hasContentBubble =
+                  message.role === "user" ||
+                  message.content.trim() !== "" ||
+                  showStreamingDots;
                 return (
                   <div
                     key={message.id}
@@ -506,26 +527,27 @@ export default function AiChatPanel({
                         ? t("chat.userLabel")
                         : t("chat.aiLabel")}
                     </div>
-                    <div className="ai-chat-content">
-                      {(hasReasoning || isThinking) && (
-                        <ThinkingIndicator
-                          isThinking={isThinking}
-                          reasoningContent={message.reasoningContent || ""}
-                          done={thinkingDone || !isCurrentStreaming}
-                        />
-                      )}
-                      {isCurrentStreaming &&
-                        message.toolEvents &&
-                        message.toolEvents.length > 0 && (
-                          <ToolCallsIndicator
-                            toolEvents={message.toolEvents}
-                            isStreaming={isCurrentStreaming}
+                    {hasProcess && (
+                      <div className="ai-chat-process">
+                        {(hasReasoning || isThinking) && (
+                          <ThinkingIndicator
+                            isThinking={isThinking}
+                            reasoningContent={turnReasoning}
+                            done={!isThinking}
                           />
                         )}
-                      {message.role === "assistant" &&
-                      isCurrentStreaming &&
-                      !message.content ? (
-                        !isThinking ? (
+                        {turnToolEvents.length > 0 && (
+                          <ToolCallsIndicator
+                            toolEvents={turnToolEvents}
+                            isStreaming={isCurrentStreaming}
+                            hasFinalContent={message.content.trim() !== ""}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {hasContentBubble && (
+                      <div className="ai-chat-content">
+                        {showStreamingDots ? (
                           <span className="streaming-cursor">
                             <span className="streaming-dots" aria-hidden="true">
                               <span />
@@ -533,44 +555,37 @@ export default function AiChatPanel({
                               <span />
                             </span>
                           </span>
-                        ) : null
-                      ) : message.role === "user" ? (
-                        <UserMessageContent
-                          content={message.content}
-                          isFirst={message.id === activeFirstUserMessageId}
-                          sources={activeSession.sources}
-                          onGotoStash={onGotoStash}
-                        />
-                      ) : (
-                        <MarkdownRenderer content={message.content} />
-                      )}
-                      {message.role === "assistant" &&
-                        message.content.trim() !== "" && (
-                          <button
-                            className="ai-chat-copy-btn"
-                            onClick={() =>
-                              void copyToClipboard(message.content).catch(
-                                (err) => error(`Failed to copy message: ${err}`)
-                              )
-                            }
-                            aria-label={t("chat.copyMessage")}
-                            title={t("chat.copyMessage")}
-                          >
-                            <Icon name="copy" size={12} />
-                          </button>
+                        ) : message.role === "user" ? (
+                          <UserMessageContent
+                            content={message.content}
+                            isFirst={message.id === activeFirstUserMessageId}
+                            sources={activeSession.sources}
+                            onGotoStash={onGotoStash}
+                          />
+                        ) : (
+                          <MarkdownRenderer content={message.content} />
                         )}
-                    </div>
+                        {message.role === "assistant" &&
+                          message.content.trim() !== "" && (
+                            <button
+                              className="ai-chat-copy-btn"
+                              onClick={() =>
+                                void copyToClipboard(message.content).catch(
+                                  (err) =>
+                                    error(`Failed to copy message: ${err}`)
+                                )
+                              }
+                              aria-label={t("chat.copyMessage")}
+                              title={t("chat.copyMessage")}
+                            >
+                              <Icon name="copy" size={12} />
+                            </button>
+                          )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
-            {mergedDoneToolEvents.length > 0 && (
-              <div className="ai-chat-tool-summary">
-                <ToolCallsIndicator
-                  toolEvents={mergedDoneToolEvents}
-                  isStreaming={false}
-                />
-              </div>
-            )}
           </div>
           <div className="ai-chat-input-area">
             <FollowUpInput

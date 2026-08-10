@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
+  InterpretationMessage,
   InterpretationSession,
+  ToolEvent,
   createSession,
   appendUserMessage,
   startAssistantResponse,
@@ -9,6 +11,7 @@ import {
   deleteSession,
   loadSession,
   sortSessions,
+  collectTurnProcess,
 } from "./sessions";
 import { StashItem, StashSource } from "./stash";
 
@@ -326,6 +329,106 @@ describe("sessions service", () => {
 
       expect(result).not.toBe(sessions);
       expect(sessions.map((s) => s.id)).toEqual(["a", "b"]);
+    });
+  });
+
+  describe("collectTurnProcess", () => {
+    function makeMsg(
+      id: string,
+      role: InterpretationMessage["role"],
+      extra: Partial<InterpretationMessage> = {}
+    ): InterpretationMessage {
+      return { id, role, content: "", createdAt: 1000, ...extra };
+    }
+
+    const ev = (name: string, status: ToolEvent["status"] = "done") => ({
+      name,
+      summary: `调用 ${name}`,
+      status,
+    });
+
+    it("groups all rounds of one turn onto the final assistant message", () => {
+      const messages = [
+        makeMsg("u1", "user"),
+        makeMsg("a-tc1", "assistant", { toolEvents: [ev("search_in_pdf")] }),
+        makeMsg("t1", "tool"),
+        makeMsg("a-tc2", "assistant", { toolEvents: [ev("read_pdf_page")] }),
+        makeMsg("t2", "tool"),
+        makeMsg("a-final", "assistant"),
+      ];
+
+      const result = collectTurnProcess(messages);
+
+      expect(result.size).toBe(1);
+      expect(result.get("a-final")?.toolEvents.map((e) => e.name)).toEqual([
+        "search_in_pdf",
+        "read_pdf_page",
+      ]);
+    });
+
+    it("merges reasoning across rounds of the same turn", () => {
+      const messages = [
+        makeMsg("u1", "user"),
+        makeMsg("a-tc1", "assistant", {
+          toolEvents: [ev("search_in_pdf")],
+          reasoningContent: "先定位条款",
+        }),
+        makeMsg("t1", "tool"),
+        makeMsg("a-final", "assistant", { reasoningContent: "综合给出结论" }),
+      ];
+
+      const result = collectTurnProcess(messages);
+
+      expect(result.get("a-final")?.reasoning).toBe(
+        "先定位条款\n\n综合给出结论"
+      );
+    });
+
+    it("keeps events of different turns separate", () => {
+      const messages = [
+        makeMsg("u1", "user"),
+        makeMsg("a-tc1", "assistant", { toolEvents: [ev("search_in_pdf")] }),
+        makeMsg("a-final-1", "assistant"),
+        makeMsg("u2", "user"),
+        makeMsg("a-tc2", "assistant", {
+          toolEvents: [ev("read_pdf_page"), ev("list_open_pdfs")],
+        }),
+        makeMsg("a-final-2", "assistant"),
+      ];
+
+      const result = collectTurnProcess(messages);
+
+      expect(result.get("a-final-1")?.toolEvents.map((e) => e.name)).toEqual([
+        "search_in_pdf",
+      ]);
+      expect(result.get("a-final-2")?.toolEvents.map((e) => e.name)).toEqual([
+        "read_pdf_page",
+        "list_open_pdfs",
+      ]);
+    });
+
+    it("includes the streaming placeholder's own events of the current round", () => {
+      const messages = [
+        makeMsg("u1", "user"),
+        makeMsg("a-tc1", "assistant", { toolEvents: [ev("search_in_pdf")] }),
+        makeMsg("t1", "tool"),
+        makeMsg("a-streaming", "assistant", {
+          toolEvents: [ev("read_pdf_page", "running")],
+        }),
+      ];
+
+      const result = collectTurnProcess(messages);
+
+      expect(result.get("a-streaming")?.toolEvents.map((e) => e.name)).toEqual([
+        "search_in_pdf",
+        "read_pdf_page",
+      ]);
+    });
+
+    it("returns an empty map when no reasoning or tool events exist", () => {
+      const messages = [makeMsg("u1", "user"), makeMsg("a1", "assistant")];
+
+      expect(collectTurnProcess(messages).size).toBe(0);
     });
   });
 });

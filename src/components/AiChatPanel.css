@@ -190,6 +190,31 @@
   font-style: italic;
 }
 
+/* 一轮对话的过程气泡：思考 + 工具调用（与正文气泡并列，一轮 AI 最多两个框） */
+.ai-chat-process {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border-bottom-left-radius: 4px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  font-size: 0.8rem;
+  color: var(--text-quiet);
+}
+
+/* 过程气泡内的指示器去掉自身底色与间距，避免框中框 */
+.ai-chat-process .thinking-indicator {
+  padding: 0;
+}
+
+.ai-chat-process .tool-calls-indicator {
+  background: transparent;
+  padding: 0;
+  margin-bottom: 0;
+}
+
 .ai-chat-tabs {
   display: flex;
   border-bottom: 1px solid var(--border-default);
@@ -665,12 +690,6 @@
 .stash-item-edit-actions button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-.ai-chat-tool-summary {
-  margin-top: 4px;
-  padding: 0 16px 8px;
-  flex-shrink: 0;
 }
 
 /* sessions 列表顶部工具行：范围切换按钮（左）+ 排序下拉（右） */

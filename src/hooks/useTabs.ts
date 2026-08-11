@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import i18n from "i18next";
 import { error as logError, info } from "../services/logs";
+import { showMessage } from "../services/dialog";
 import { PdfViewerState } from "../components/PdfViewer";
 import { SelectionState } from "../services/selection";
 import {
   authorizePdfPath,
   getPdfFileSize,
   getPdfHash,
+  readPdfBytes,
 } from "../services/annotations";
 import { BudgetTab, selectHibernateCandidates } from "../services/memoryBudget";
 import { getBasename } from "../utils/path";
@@ -49,12 +52,19 @@ export interface HibernationContext {
 export interface UseTabsOptions {
   /** App 用 ref 回填，避免 useTabs → usePersistence 的循环依赖。 */
   getHibernationContext?: () => HibernationContext;
+  /**
+   * 把打开链路读到的字节写入 App 级缓存（pdfCacheRef），viewer 挂载后
+   * 直接用缓存渲染，不再二次读盘。
+   */
+  cachePdfBytes?: (filePath: string, bytes: Uint8Array) => void;
 }
 
 export interface UseTabsReturn {
   tabs: PdfTab[];
   activeTabId: string | null;
   activeTab: PdfTab | null;
+  /** 正在打开中的文件路径（addTab 在飞期间），供全局「正在打开」反馈。 */
+  openingPaths: string[];
   handleOpenPdf: () => Promise<PdfTab | null>;
   openPdfByPath: (path: string, initialPage?: number) => Promise<PdfTab | null>;
   handleCloseTab: (
@@ -128,6 +138,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
   // In-flight open requests by path. Prevents duplicate tabs when the same PDF
   // is opened concurrently (e.g. rapid double-clicks or multiple listeners).
   const pendingOpens = useRef<Map<string, Promise<PdfTab | null>>>(new Map());
+  const [openingPaths, setOpeningPaths] = useState<string[]>([]);
 
   // tabs 的最新镜像：activateTab / gotoTabPage 等长驻回调（deps 不含 tabs）
   // 做休眠决策时从这里读取，避免闭包捕获过期状态。事件处理器总在 effect
@@ -141,6 +152,11 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
   useEffect(() => {
     getHibernationContextRef.current = options?.getHibernationContext;
   }, [options?.getHibernationContext]);
+
+  const cachePdfBytesRef = useRef(options?.cachePdfBytes);
+  useEffect(() => {
+    cachePdfBytesRef.current = options?.cachePdfBytes;
+  }, [options?.cachePdfBytes]);
 
   const getHibernationCtx = (): HibernationContext =>
     getHibernationContextRef.current?.() ?? {
@@ -238,18 +254,32 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
             return null;
           }
 
+          // 先按路径去重（无 I/O）：已打开的文件直接激活，避免重复全量
+          // 读取——慢网盘下这次读取是最大的等待来源。
+          const byPath = tabs.find((tab) => tab.filePath === path);
+          if (byPath) {
+            activateTab(byPath.id);
+            return byPath;
+          }
+
           // Authorize the path before reading it. The backend maintains a whitelist
           // of paths selected by the user to prevent arbitrary file access.
           await authorizePdfPath(path);
 
-          // 文件大小在加载字节前经 fs metadata 取得，供预算确定性记账。
+          // 单遍读取：read_pdf_bytes 在后端读字节的同时算好 SHA-256 并预热
+          // hash 缓存，随后的 getPdfHash 只做 metadata 校验即命中——局域网
+          // 文件整条打开链路从两遍网络传输降为一遍。字节顺手写入 App 级
+          // 缓存，viewer 挂载后不再二次读盘。
+          const bytes = await readPdfBytes(path);
+          cachePdfBytesRef.current?.(path, bytes);
+
+          // 文件大小经 fs metadata 取得，供预算确定性记账。
           const [fileHash, fileSize] = await Promise.all([
             getPdfHash(path),
             getPdfFileSize(path),
           ]);
-          const existing = tabs.find(
-            (tab) => tab.fileHash === fileHash || tab.filePath === path
-          );
+          // 同内容不同路径的文件按 hash 去重（路径去重已在上面完成）。
+          const existing = tabs.find((tab) => tab.fileHash === fileHash);
           if (existing) {
             activateTab(existing.id);
             return existing;
@@ -299,15 +329,23 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
           return newTab;
         } catch (error) {
           logError(`Failed to open PDF: ${error}`);
+          // 失败必须可见：慢网盘读取中断时静默返回 null 会让用户以为应用
+          // 卡死。dialog 自身失败（如无窗口环境）不影响主流程。
+          void showMessage(
+            i18n.t("common.notice"),
+            i18n.t("tab.openFailed", { name: getBasename(path) })
+          ).catch(() => undefined);
           return null;
         }
       })();
 
+      setOpeningPaths((prev) => [...prev, path]);
       pendingOpens.current.set(path, promise);
       try {
         return await promise;
       } finally {
         pendingOpens.current.delete(path);
+        setOpeningPaths((prev) => prev.filter((p) => p !== path));
       }
     },
     [tabs, activeTabId, activateTab]
@@ -523,6 +561,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
       tabs,
       activeTabId,
       activeTab,
+      openingPaths,
       handleOpenPdf,
       openPdfByPath,
       handleCloseTab,
@@ -539,6 +578,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
       tabs,
       activeTabId,
       activeTab,
+      openingPaths,
       handleOpenPdf,
       openPdfByPath,
       handleCloseTab,

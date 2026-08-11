@@ -54,7 +54,9 @@
   "tab": {
     "close": "Close Tab",
     "closeNamed": "Close {{fileName}}",
-    "dragToSplit": "Drag to the reading area to compare side by side"
+    "dragToSplit": "Drag to the reading area to compare side by side",
+    "openingPdf": "Opening {{name}}…",
+    "openFailed": "Cannot open {{name}}. The file may no longer be accessible (e.g. the network location is disconnected)."
   },
   "fileDrop": {
     "overlayHint": "Release to open PDF"

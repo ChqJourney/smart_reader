@@ -240,6 +240,8 @@ function setupMockInvoke(
       switch (command) {
         case "load_pdf_data":
           return Promise.resolve({ annotations: [], sessionIds: [] });
+        case "read_pdf_bytes":
+          return Promise.resolve(new ArrayBuffer(8));
         case "get_pdf_hash":
           return Promise.resolve(`hash-${args?.filePath}`);
         case "get_pdf_file_size":
@@ -712,6 +714,9 @@ describe("App", () => {
         }
         if (command === "get_pdf_hash") {
           return Promise.resolve(`hash-${args?.filePath}`);
+        }
+        if (command === "read_pdf_bytes") {
+          return Promise.resolve(new ArrayBuffer(8));
         }
         if (command === "get_pdf_file_size") {
           return Promise.resolve(1024 * 1024);

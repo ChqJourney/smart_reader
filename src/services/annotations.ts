@@ -73,6 +73,16 @@ export async function getPdfFileSize(filePath: string): Promise<number> {
   return await invoke<number>("get_pdf_file_size", { filePath });
 }
 
+/**
+ * 读取 PDF 原始字节。后端在同一遍读取中算好 SHA-256 并预热 hash 缓存，
+ * 随后的 getPdfHash 只做 metadata 校验即命中——局域网文件整条打开链路
+ * 只需一遍网络传输（原来 hash 与 bytes 各传一遍）。
+ */
+export async function readPdfBytes(filePath: string): Promise<Uint8Array> {
+  const buffer = await invoke<ArrayBuffer>("read_pdf_bytes", { filePath });
+  return new Uint8Array(buffer);
+}
+
 export function createAnnotation(
   type: "translate" | "explain" | "stash" | "comment",
   text: string,

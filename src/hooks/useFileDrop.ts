@@ -32,11 +32,19 @@ export interface UseFileDropResult {
 
 const PDF_EXT = /\.pdf$/i;
 
+/**
+ * 遮罩看门狗：慢网盘等场景下原生 leave/drop 事件可能延迟甚至丢失，
+ * 导致「松开以打开 PDF」遮罩常驻。拖拽悬停期间 over 事件会持续到达，
+ * 事件流停顿超过该阈值即认为拖拽已结束，强制隐藏遮罩。
+ */
+const OVERLAY_WATCHDOG_MS = 1500;
+
 export function useFileDrop({
   openPdfByPath,
   addRecentFile,
 }: UseFileDropOptions): UseFileDropResult {
   const [isFileDragOver, setIsFileDragOver] = useState(false);
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const openPdfByPathRef = useRef(openPdfByPath);
   const addRecentFileRef = useRef(addRecentFile);
@@ -49,14 +57,32 @@ export function useFileDrop({
     let cancelled = false;
     let unlisten: (() => void) | undefined;
 
+    const clearWatchdog = () => {
+      if (watchdogRef.current !== null) {
+        clearTimeout(watchdogRef.current);
+        watchdogRef.current = null;
+      }
+    };
+    const armWatchdog = () => {
+      clearWatchdog();
+      watchdogRef.current = setTimeout(() => {
+        setIsFileDragOver(false);
+      }, OVERLAY_WATCHDOG_MS);
+    };
+    const hideOverlay = () => {
+      clearWatchdog();
+      setIsFileDragOver(false);
+    };
+
     const handleDragDropEvent = (event: Event<DragDropEvent>) => {
       const payload = event.payload;
       if (payload.type === "enter") {
         setIsFileDragOver(true);
+        armWatchdog();
       } else if (payload.type === "leave") {
-        setIsFileDragOver(false);
+        hideOverlay();
       } else if (payload.type === "drop") {
-        setIsFileDragOver(false);
+        hideOverlay();
         const pdfPaths = payload.paths.filter((p) => PDF_EXT.test(p));
         const ignored = payload.paths.length - pdfPaths.length;
         if (ignored > 0) {
@@ -69,9 +95,16 @@ export function useFileDrop({
             }
           });
         }
+      } else if (payload.type === "over") {
+        // over 事件不做按位置分屏，只用于喂看门狗；同值 setState 不触发
+        // 重渲染，悬停中保持遮罩可见、事件流停顿后由看门狗兜底隐藏。
+        setIsFileDragOver(true);
+        armWatchdog();
       }
-      // 'over' 事件无需处理（不做按位置分屏），忽略。
     };
+
+    // 窗口失焦（如拖拽中 Alt-Tab 切走）同样可能丢 leave 事件，兜底隐藏。
+    window.addEventListener("blur", hideOverlay);
 
     try {
       getCurrentWebview()
@@ -92,6 +125,8 @@ export function useFileDrop({
 
     return () => {
       cancelled = true;
+      clearWatchdog();
+      window.removeEventListener("blur", hideOverlay);
       unlisten?.();
     };
   }, []);

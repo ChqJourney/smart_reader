@@ -19,7 +19,7 @@
 - 首次启动配置向导（SetupWizard）：选平台 → 填 Key → 测试连接，全部平台未配置 Key 时才自动弹出，设置里可重跑。
 - 多 PDF Tab 同时打开（数量不设固定上限，由内存预算调度休眠，见下），单视图下存活 tab 的 PdfViewer **常驻挂载（keep-alive）**：切 tab 仅切换 `display:none`，canvas 位图 / 滚动位置 / 页码 / 工具栏状态全部保留，切换瞬时完成；隐藏 viewer 通过 `isActive` prop 冻结 IO 可见性上报与滚动页码同步，激活时带回的同页 `pendingGotoPage` 由 useTabRestore 直接清除不跳转。**Tab 休眠（hibernation）**：打开新 tab 时若预测超预算（字节预算 = Σ存活文件大小×2，macOS 400MB / Windows 800MB；或存活 viewer 数 > 15，`services/memoryBudget.ts`），自动休眠最久未激活的隐藏 tab——卸载其 viewer、释放 `pdfCacheRef` 字节缓存，tab 外壳与状态记录（pageNum / scale / viewMode / scrollTop / fileSize / lastActivatedAt）保留；active / 分屏 secondary / 5 分钟内激活过 / 有流式会话 / 共享路径的 tab 受保护，候选耗尽仍超预算则放行。唤醒透明：激活休眠 tab 时同拍复位 `hibernated` + `pendingGotoPage`，viewer 重新挂载走现有冷启动恢复路径（useTabRestore），唤醒同样会按预算顶替休眠他人；另有纯防御性硬上限 100 个 tab。支持左右并排对照两份 PDF。进入并排的入口：鼠标拖拽非激活 tab 到阅读区（带 drop-zone 遮罩，释放在阅读区外等于取消）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter（目标 tab 休眠时先经 `wakeTab` 唤醒）。首次同时打开 ≥2 个 PDF 时显示一次性并排对照引导气泡（`.split-coachmark`，点「知道了」或 12 秒超时后写入 localStorage 不再复现；气泡本身 `pointer-events:none` 不遮挡操作）。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
 - PDF 本地渲染、文本选区、缩放、页码跳转、单页 / 连续滚动阅读模式。
-- 拖拽 PDF 文件到窗口内直接打开（Tauri 系统级文件拖放，`hooks/useFileDrop.ts` 监听 `onDragDropEvent`，全窗口遮罩提示，非 PDF 静默忽略；复用 `openPdfByPath` 打开链路）。注意：开启系统拖放后 WebView2 会接管页面内全部 HTML5 拖放事件，tab→分屏的拖拽因此是鼠标拖拽实现（mousedown + 阈值 + 全局 mousemove/mouseup，App.tsx 内局部实现），不是 HTML5 DnD。
+- 拖拽 PDF 文件到窗口内直接打开（Tauri 系统级文件拖放，`hooks/useFileDrop.ts` 监听 `onDragDropEvent`，全窗口遮罩提示，非 PDF 静默忽略；复用 `openPdfByPath` 打开链路）。遮罩带看门狗：`enter`/`over` 事件喂定时器，事件流停顿 1.5s 或窗口 blur 时强制隐藏（慢网盘下原生 leave/drop 可能延迟或丢失）。打开链路为单遍读取：`addTab` 先 `read_pdf_bytes`（后端同遍算 SHA-256 预热 hash 缓存），随后 `get_pdf_hash` 仅 metadata 校验即命中，字节直接写入 App 级 `pdfCacheRef` 供 viewer 渲染——局域网文件从两遍网络传输降为一遍；路径去重优先于一切 I/O（重复拖入已打开文件零读盘）；在飞期间 `tabs.openingPaths` 驱动底部「正在打开」toast，失败经 `showMessage` 弹窗提示不再静默。注意：开启系统拖放后 WebView2 会接管页面内全部 HTML5 拖放事件，tab→分屏的拖拽因此是鼠标拖拽实现（mousedown + 阈值 + 全局 mousemove/mouseup，App.tsx 内局部实现），不是 HTML5 DnD。
 - 右侧页码滑轨（PageRail）：替代原生垂直滚动条（CSS 隐藏，水平滚动条保留），拖动 / 悬停时显示页码 tooltip；连续模式拖动直接驱动 scrollTop，单页模式按位置映射页码。
 - Cmd/Ctrl+G 跳页面板（PageJumpPanel）：手动输入页码回车跳转，跳转时阅读区中央闪现大数字页码闪卡（600ms 定时清除）；工具栏页码显示为按钮，点击同样打开跳页面板。
 - 全文搜索（Ctrl / Cmd + F，支持跨 text item 短语匹配，结果逐页高亮、Enter / Shift+Enter 前后跳转）。
@@ -129,7 +129,7 @@ npm install
 │   │   ├── useRightPanelLayout.ts     # 右侧面板布局
 │   │   ├── useRecentFiles.ts          # 最近文件列表（置顶/单条移除/lastPage 回写/配额）
 │   │   ├── useSplitView.ts            # 双排视图状态
-│   │   ├── useFileDrop.ts             # 系统文件拖放（onDragDropEvent，拖 PDF 进窗口即打开）
+│   │   ├── useFileDrop.ts             # 系统文件拖放（onDragDropEvent，拖 PDF 进窗口即打开；遮罩带事件流停顿/blur 看门狗）
 │   │   ├── useDictionaryStatus.tsx    # 本地词典下载状态与进度
 │   │   ├── useWordLookup.ts           # 悬停取词查词逻辑（PdfPage 使用）
 │   │   ├── usePdfDocument.ts          # PDF 加载/缓存/大纲
@@ -304,7 +304,7 @@ cd src-tauri && cargo test
 
 当前暴露的命令：
 
-- `read_pdf_bytes(filePath: string)`：读取 PDF 原始字节。
+- `read_pdf_bytes(filePath: string)`：读取 PDF 原始字节；同一遍读取中算好 SHA-256 并写入 `pdf_hash_cache` 预热（`warm_pdf_hash_cache`），随后的 `get_pdf_hash` 仅 metadata 校验即命中缓存，局域网文件整条打开链路只需一遍网络传输。
 - `get_pdf_hash(filePath: string)`：计算 PDF SHA-256 hash。
 - `get_pdf_file_size(filePath: string)`：返回文件字节数（fs metadata，不读内容），供内存预算在加载字节前记账。
 - `load_pdf_data(filePath: string)`：加载 `<AppData>/SpecReader/annotations/{hash}.json`。
@@ -378,7 +378,7 @@ App.tsx（编排层，具体状态已下沉到 hooks）
 ├── useRightPanelLayout：rightVisible / rightPanelWidth
 ├── useRecentFiles：recentFiles
 ├── useSplitView：splitPct                         # 并排视图左右面板比例
-├── useFileDrop：isFileDragOver                    # 系统文件拖放（拖 PDF 进窗口即打开 + 全窗口遮罩）
+├── useFileDrop：isFileDragOver                    # 系统文件拖放（拖 PDF 进窗口即打开 + 全窗口遮罩，含看门狗兜底隐藏）
 ├── settings / settingsOpen                        # 全局设置与 Modal
 ├── dictionaryStatus                               # 本地 ECDICT 词典状态（存在性、下载进度）
 ├── wizardOpen                                     # 首次启动配置向导（settings 加载后对全部平台 checkApiKey，全未配置才自动弹出；设置里可重跑）

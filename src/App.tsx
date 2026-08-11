@@ -42,6 +42,7 @@ import {
   PLATFORM_PRESETS,
 } from "./data/platformPresets";
 import { copyToClipboard } from "./utils/clipboard";
+import { getBasename } from "./utils/path";
 import { showMessage } from "./services/dialog";
 import { useDictionaryStatus } from "./hooks/useDictionaryStatus";
 import { checkForUpdate } from "./services/updater";
@@ -66,7 +67,20 @@ function App() {
     () => hibernationCtxRef.current,
     []
   );
-  const tabs = useTabs({ getHibernationContext });
+  // PDF bytes cache keyed by filePath. Reused across tab switches so large
+  // files do not have to be read from disk every time the user changes tabs.
+  // Each PdfViewer keeps its own PDFDocumentProxy instance to avoid sharing
+  // internal PDF.js transport state between component lifecycles.
+  // 声明在 useTabs 之前：addTab 打开链路单遍读取的字节直接写入这里，
+  // viewer 挂载后不再二次读盘。
+  const pdfCacheRef = useRef<Map<string, Uint8Array>>(new Map());
+  const cachePdfBytes = useCallback((filePath: string, bytes: Uint8Array) => {
+    // 与 handlePdfLoaded 一致：已存在则不覆盖（viewer 可能正在使用）。
+    if (!pdfCacheRef.current.has(filePath)) {
+      pdfCacheRef.current.set(filePath, bytes);
+    }
+  }, []);
+  const tabs = useTabs({ getHibernationContext, cachePdfBytes });
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
@@ -124,12 +138,6 @@ function App() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
-
-  // PDF bytes cache keyed by filePath. Reused across tab switches so large
-  // files do not have to be read from disk every time the user changes tabs.
-  // Each PdfViewer keeps its own PDFDocumentProxy instance to avoid sharing
-  // internal PDF.js transport state between component lifecycles.
-  const pdfCacheRef = useRef<Map<string, Uint8Array>>(new Map());
 
   // Keep the agent tool layer in sync with currently open tabs.
   useEffect(() => {
@@ -1615,6 +1623,13 @@ function App() {
       {isFileDragOver && (
         <div className="file-drop-overlay">
           <span>{t("fileDrop.overlayHint")}</span>
+        </div>
+      )}
+      {tabs.openingPaths.length > 0 && (
+        <div className="pdf-opening-toast">
+          {t("tab.openingPdf", {
+            name: getBasename(tabs.openingPaths[tabs.openingPaths.length - 1]),
+          })}
         </div>
       )}
       {shortcutsOpen && (

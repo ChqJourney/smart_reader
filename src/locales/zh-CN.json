@@ -54,7 +54,9 @@
   "tab": {
     "close": "关闭标签页",
     "closeNamed": "关闭 {{fileName}}",
-    "dragToSplit": "拖到阅读区可并排对照"
+    "dragToSplit": "拖到阅读区可并排对照",
+    "openingPdf": "正在打开 {{name}}…",
+    "openFailed": "无法打开 {{name}}，文件可能已不可访问（如网络位置已断开）。"
   },
   "fileDrop": {
     "overlayHint": "松开以打开 PDF"

@@ -490,6 +490,33 @@ fn compute_pdf_hash_cached(
     Ok(hash)
 }
 
+/// Hash bytes already in memory and warm the shared hash cache with the
+/// file's current metadata, so a subsequent `get_pdf_hash` on the same path
+/// only stats the file. Network-drive files then need a single transfer for
+/// the whole open chain (bytes + hash) instead of two full reads.
+fn warm_pdf_hash_cache(
+    cache: &Arc<Mutex<HashMap<PathBuf, CachedHash>>>,
+    file_path: &str,
+    bytes: &[u8],
+) {
+    use sha2::{Digest, Sha256};
+
+    let Ok(metadata) = std::fs::metadata(file_path) else {
+        // 拿不到 mtime/size 就无法构造可靠的缓存键，跳过预热（下次
+        // get_pdf_hash 走正常全量计算，行为不变）。
+        return;
+    };
+    let hash = hex::encode(Sha256::digest(bytes));
+    cache.lock().unwrap().insert(
+        PathBuf::from(file_path),
+        CachedHash {
+            hash,
+            modified: metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH),
+            size: metadata.len(),
+        },
+    );
+}
+
 #[tauri::command]
 async fn read_pdf_bytes(
     state: tauri::State<'_, AppState>,
@@ -498,9 +525,11 @@ async fn read_pdf_bytes(
     // Path authorization uses tauri::State which is not Send, so keep it on
     // the async runtime thread before moving file I/O to spawn_blocking.
     validate_pdf_access(&state, &file_path)?;
+    let cache = state.pdf_hash_cache.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let bytes =
             std::fs::read(&file_path).map_err(|e| format!("Failed to read PDF file: {}", e))?;
+        warm_pdf_hash_cache(&cache, &file_path, &bytes);
         Ok::<_, String>(tauri::ipc::Response::new(bytes))
     })
     .await
@@ -1975,6 +2004,23 @@ mod tests {
         let result = read_pdf_bytes_core(&state, &path.to_string_lossy());
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("not authorized"));
+    }
+
+    #[test]
+    fn warm_pdf_hash_cache_matches_independent_hash() {
+        let state = AppState::new();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.pdf");
+        std::fs::write(&path, b"pdf bytes").unwrap();
+
+        let path_str = path.to_string_lossy().to_string();
+        let bytes = std::fs::read(&path).unwrap();
+        warm_pdf_hash_cache(&state.pdf_hash_cache, &path_str, &bytes);
+
+        // 预热后 compute_pdf_hash_cached 命中缓存（仅 metadata 校验），
+        // 返回值与独立全量计算一致。
+        let warmed = compute_pdf_hash_cached(&state.pdf_hash_cache, &path_str).unwrap();
+        assert_eq!(warmed, compute_pdf_hash(&path_str).unwrap());
     }
 
     #[test]

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import type { DragDropEvent } from "@tauri-apps/api/webview";
 import type { PhysicalPosition } from "@tauri-apps/api/dpi";
@@ -149,5 +149,82 @@ describe("useFileDrop", () => {
     );
     expect(first).not.toHaveBeenCalled();
     expect(second).toHaveBeenCalledWith("/test/a.pdf");
+  });
+
+  describe("overlay watchdog", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("hides the overlay when the drag event stream stalls", async () => {
+      const { result } = renderHook(() =>
+        useFileDrop({
+          openPdfByPath: vi.fn().mockResolvedValue(null),
+          addRecentFile: vi.fn(),
+        })
+      );
+      await act(async () => {});
+
+      act(() => emit({ type: "enter", paths: ["/test/a.pdf"], position: pos }));
+      expect(result.current.isFileDragOver).toBe(true);
+
+      // 原生 leave/drop 丢失时，事件流停顿超时后遮罩必须兜底隐藏。
+      act(() => {
+        vi.advanceTimersByTime(1600);
+      });
+      expect(result.current.isFileDragOver).toBe(false);
+    });
+
+    it("keeps the overlay alive while over events keep arriving", async () => {
+      const { result } = renderHook(() =>
+        useFileDrop({
+          openPdfByPath: vi.fn().mockResolvedValue(null),
+          addRecentFile: vi.fn(),
+        })
+      );
+      await act(async () => {});
+
+      act(() => emit({ type: "enter", paths: ["/test/a.pdf"], position: pos }));
+      for (let i = 0; i < 3; i++) {
+        act(() => {
+          vi.advanceTimersByTime(1000);
+        });
+        act(() => emit({ type: "over", position: pos }));
+      }
+      // 每次 over 都会重置看门狗，悬停 3 秒后遮罩仍在。
+      expect(result.current.isFileDragOver).toBe(true);
+
+      act(() => {
+        vi.advanceTimersByTime(1600);
+      });
+      expect(result.current.isFileDragOver).toBe(false);
+    });
+
+    it("hides the overlay on window blur", async () => {
+      const { result } = renderHook(() =>
+        useFileDrop({
+          openPdfByPath: vi.fn().mockResolvedValue(null),
+          addRecentFile: vi.fn(),
+        })
+      );
+      await act(async () => {});
+
+      act(() => emit({ type: "enter", paths: ["/test/a.pdf"], position: pos }));
+      expect(result.current.isFileDragOver).toBe(true);
+
+      act(() => {
+        window.dispatchEvent(new Event("blur"));
+      });
+      expect(result.current.isFileDragOver).toBe(false);
+
+      // blur 后看门狗也已清除，不会再触发多余的状态更新。
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+      expect(result.current.isFileDragOver).toBe(false);
+    });
   });
 });

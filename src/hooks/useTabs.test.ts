@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import { useTabs } from "./useTabs";
+import { showMessage } from "../services/dialog";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
@@ -11,7 +12,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 vi.mock("../services/dialog", () => ({
-  showMessage: vi.fn(),
+  showMessage: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../services/logs", () => ({
@@ -29,6 +30,8 @@ function setupMockInvoke() {
         case "authorizePdfPath":
         case "authorize_pdf_path":
           return Promise.resolve(undefined);
+        case "read_pdf_bytes":
+          return Promise.resolve(new ArrayBuffer(8));
         case "get_pdf_hash":
           return Promise.resolve(`hash-${args?.filePath}`);
         case "get_pdf_file_size":
@@ -89,6 +92,8 @@ describe("useTabs", () => {
         switch (command) {
           case "authorize_pdf_path":
             return Promise.resolve(undefined);
+          case "read_pdf_bytes":
+            return Promise.resolve(new ArrayBuffer(8));
           case "get_pdf_hash":
             return hashPromise.then(() => `hash-${args?.filePath}`);
           case "get_pdf_file_size":
@@ -112,7 +117,7 @@ describe("useTabs", () => {
       expect(result.current.tabs).toHaveLength(1);
     });
     expect(tab1).toEqual(tab2);
-    expect(mockInvoke).toHaveBeenCalledTimes(3); // authorize + hash + size only once each path
+    expect(mockInvoke).toHaveBeenCalledTimes(4); // authorize + bytes + hash + size，每个路径只各一次
   });
 
   it("counts authorize and hash calls correctly for concurrent same-path opens", async () => {
@@ -127,6 +132,8 @@ describe("useTabs", () => {
         switch (command) {
           case "authorize_pdf_path":
             return Promise.resolve(undefined);
+          case "read_pdf_bytes":
+            return Promise.resolve(new ArrayBuffer(8));
           case "get_pdf_hash":
             return hashPromise.then(() => `hash-${args?.filePath}`);
           case "get_pdf_file_size":
@@ -149,6 +156,9 @@ describe("useTabs", () => {
     const authorizeCalls = mockInvoke.mock.calls.filter(
       ([cmd]) => cmd === "authorize_pdf_path"
     );
+    const bytesCalls = mockInvoke.mock.calls.filter(
+      ([cmd]) => cmd === "read_pdf_bytes"
+    );
     const hashCalls = mockInvoke.mock.calls.filter(
       ([cmd]) => cmd === "get_pdf_hash"
     );
@@ -156,8 +166,100 @@ describe("useTabs", () => {
       ([cmd]) => cmd === "get_pdf_file_size"
     );
     expect(authorizeCalls).toHaveLength(1);
+    expect(bytesCalls).toHaveLength(1);
     expect(hashCalls).toHaveLength(1);
     expect(sizeCalls).toHaveLength(1);
+  });
+
+  it("hands freshly-read bytes to cachePdfBytes and tracks openingPaths", async () => {
+    const cachePdfBytes = vi.fn();
+    const { result } = renderHook(() => useTabs({ cachePdfBytes }));
+
+    let resolveBytes: (value: ArrayBuffer) => void;
+    const bytesPromise = new Promise<ArrayBuffer>((resolve) => {
+      resolveBytes = resolve;
+    });
+    mockInvoke.mockImplementation(
+      (command: string, args?: Record<string, any>) => {
+        switch (command) {
+          case "authorize_pdf_path":
+            return Promise.resolve(undefined);
+          case "read_pdf_bytes":
+            return bytesPromise;
+          case "get_pdf_hash":
+            return Promise.resolve(`hash-${args?.filePath}`);
+          case "get_pdf_file_size":
+            return Promise.resolve(1024 * 1024);
+          default:
+            return Promise.reject(
+              new Error(`No mock handler for command: ${command}`)
+            );
+        }
+      }
+    );
+
+    let openPromise: Promise<unknown>;
+    act(() => {
+      openPromise = result.current.openPdfByPath("/test/slow.pdf");
+    });
+    // 读取在飞期间 openingPaths 暴露该路径（全局「正在打开」反馈数据源）。
+    await waitFor(() => {
+      expect(result.current.openingPaths).toEqual(["/test/slow.pdf"]);
+    });
+
+    await act(async () => {
+      resolveBytes!(new ArrayBuffer(8));
+      await openPromise;
+    });
+
+    expect(result.current.openingPaths).toEqual([]);
+    expect(cachePdfBytes).toHaveBeenCalledTimes(1);
+    expect(cachePdfBytes.mock.calls[0][0]).toBe("/test/slow.pdf");
+    expect(cachePdfBytes.mock.calls[0][1]).toBeInstanceOf(Uint8Array);
+    expect(result.current.tabs).toHaveLength(1);
+  });
+
+  it("reopening an already-open path skips all file I/O", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    await act(async () => {
+      await result.current.openPdfByPath("/test/a.pdf");
+    });
+    mockInvoke.mockClear();
+
+    await act(async () => {
+      const tab = await result.current.openPdfByPath("/test/a.pdf");
+      expect(tab?.filePath).toBe("/test/a.pdf");
+    });
+
+    // 路径去重优先于任何 I/O：重复拖入已打开的文件不再读盘/算 hash。
+    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(result.current.tabs).toHaveLength(1);
+  });
+
+  it("shows an error message instead of failing silently", async () => {
+    mockInvoke.mockImplementation((command: string) => {
+      switch (command) {
+        case "authorize_pdf_path":
+          return Promise.resolve(undefined);
+        case "read_pdf_bytes":
+          return Promise.reject(new Error("network location disconnected"));
+        default:
+          return Promise.reject(
+            new Error(`No mock handler for command: ${command}`)
+          );
+      }
+    });
+    const { result } = renderHook(() => useTabs());
+
+    let tab: unknown;
+    await act(async () => {
+      tab = await result.current.openPdfByPath("/test/gone.pdf");
+    });
+
+    expect(tab).toBeNull();
+    expect(showMessage).toHaveBeenCalledTimes(1);
+    expect(result.current.openingPaths).toEqual([]);
   });
 
   it("stores and clears per-tab selection", async () => {
@@ -446,6 +548,8 @@ describe("useTabs 休眠（hibernation）", () => {
         switch (command) {
           case "authorize_pdf_path":
             return Promise.resolve(undefined);
+          case "read_pdf_bytes":
+            return Promise.resolve(new ArrayBuffer(8));
           case "get_pdf_hash":
             return Promise.resolve(`hash-${args?.filePath}`);
           case "get_pdf_file_size":

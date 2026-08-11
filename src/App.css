@@ -604,6 +604,23 @@ body {
   pointer-events: none;
 }
 
+/* 打开中轻提示：慢网盘文件读取期间（tab 尚未创建）给出即时反馈，不阻塞操作 */
+.pdf-opening-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  padding: 8px 16px;
+  background: var(--surface-panel);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  pointer-events: none;
+}
+
 .pdf-panel {
   overflow: hidden;
   display: flex;

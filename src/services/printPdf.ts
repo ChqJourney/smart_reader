@@ -289,9 +289,9 @@ export async function buildPrintPdf(
     if (!doc.isEncrypted) {
       const total = doc.getPageCount();
       const wanted = new Set(
-        (options.pages ?? Array.from({ length: total }, (_, i) => i + 1)).filter(
-          (p) => p >= 1 && p <= total
-        )
+        (
+          options.pages ?? Array.from({ length: total }, (_, i) => i + 1)
+        ).filter((p) => p >= 1 && p <= total)
       );
 
       // 目标页的内容流引用必须都能解析到对象，否则 pdf-lib 对该文件的

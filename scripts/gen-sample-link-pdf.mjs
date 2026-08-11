@@ -45,11 +45,23 @@ function addLinkAnnot(page, rect, destPage, destY) {
 }
 
 function drawHeading(page, text, y = HEADING_Y) {
-  page.drawText(text, { x: MARGIN_X, y, size: 16, font: titleFont, color: textColor });
+  page.drawText(text, {
+    x: MARGIN_X,
+    y,
+    size: 16,
+    font: titleFont,
+    color: textColor,
+  });
 }
 
 function drawBodyLine(page, text, y) {
-  page.drawText(text, { x: MARGIN_X, y, size: 11, font: bodyFont, color: textColor });
+  page.drawText(text, {
+    x: MARGIN_X,
+    y,
+    size: 11,
+    font: bodyFont,
+    color: textColor,
+  });
 }
 
 // 绘制一行含引用链接的文字。segments: [{ text, target?: { pageIndex, y } }]
@@ -66,7 +78,12 @@ function drawRefLine(page, y, segments) {
         thickness: 0.7,
         color: linkColor,
       });
-      addLinkAnnot(page, [x, y - 3, x + w, y + 9], pages[seg.target.pageIndex], seg.target.y);
+      addLinkAnnot(
+        page,
+        [x, y - 3, x + w, y + 9],
+        pages[seg.target.pageIndex],
+        seg.target.y
+      );
     } else {
       page.drawText(seg.text, { x, y, size, font: bodyFont, color: textColor });
     }
@@ -76,10 +93,10 @@ function drawRefLine(page, y, segments) {
 
 // 被引用章节标题位置表（pageIndex 从 0 起）
 const T = {
-  "5.1": { pageIndex: 3, y: HEADING_Y },
-  "5.2": { pageIndex: 4, y: HEADING_Y },
-  "6.3": { pageIndex: 5, y: HEADING_Y },
-  "7.2": { pageIndex: 6, y: HEADING_Y },
+  5.1: { pageIndex: 3, y: HEADING_Y },
+  5.2: { pageIndex: 4, y: HEADING_Y },
+  6.3: { pageIndex: 5, y: HEADING_Y },
+  7.2: { pageIndex: 6, y: HEADING_Y },
   annexA: { pageIndex: 7, y: HEADING_Y },
   annexB: { pageIndex: 8, y: HEADING_Y },
 };
@@ -116,7 +133,9 @@ const p2 = pages[1];
 drawHeading(p2, "4 Test conditions");
 drawBodyLine(p2, "4.1 General", PAGE_H - 140);
 drawRefLine(p2, PAGE_H - 170, [
-  { text: "Unless otherwise specified, the tests shall be carried out according to the" },
+  {
+    text: "Unless otherwise specified, the tests shall be carried out according to the",
+  },
 ]);
 drawRefLine(p2, PAGE_H - 190, [
   { text: "sequence given in " },
@@ -129,7 +148,9 @@ drawRefLine(p2, PAGE_H - 230, [
   { text: "." },
 ]);
 drawRefLine(p2, PAGE_H - 270, [
-  { text: "Where measurement results are evaluated, the uncertainty stated in" },
+  {
+    text: "Where measurement results are evaluated, the uncertainty stated in",
+  },
 ]);
 drawRefLine(p2, PAGE_H - 290, [
   { text: "6.3", target: T["6.3"] },
@@ -140,7 +161,9 @@ drawRefLine(p2, PAGE_H - 290, [
 const p3 = pages[2];
 drawHeading(p3, "4.2 Environmental conditions");
 drawRefLine(p3, PAGE_H - 140, [
-  { text: "Tests shall be performed under the ambient conditions specified in " },
+  {
+    text: "Tests shall be performed under the ambient conditions specified in ",
+  },
   { text: "Annex A", target: T.annexA },
   { text: "." },
 ]);
@@ -170,7 +193,7 @@ for (const t of targets) {
     drawBodyLine(
       t.page,
       `Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor ${i + 1}.`,
-      PAGE_H - 150 - i * 22,
+      PAGE_H - 150 - i * 22
     );
   }
 }
@@ -179,5 +202,5 @@ const pdfBytes = await doc.save();
 await fs.promises.mkdir("e2e/fixtures", { recursive: true });
 fs.writeFileSync("e2e/fixtures/sample-links.pdf", pdfBytes);
 console.log(
-  "Generated e2e/fixtures/sample-links.pdf (9 pages, internal links on pages 2-3)",
+  "Generated e2e/fixtures/sample-links.pdf (9 pages, internal links on pages 2-3)"
 );

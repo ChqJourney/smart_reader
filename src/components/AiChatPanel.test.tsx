@@ -108,9 +108,10 @@ describe("AiChatPanel", () => {
     const { rerender } = renderPanel({
       tabRequest: { tab: "sessions", nonce: 1 },
     });
-    expect(
-      screen.getByRole("tab", { name: /解读记录/i })
-    ).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /解读记录/i })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
 
     rerender(
       <AiChatPanel
@@ -151,9 +152,10 @@ describe("AiChatPanel", () => {
         tabRequest={{ tab: "sessions", nonce: 1 }}
       />
     );
-    expect(
-      screen.getByRole("tab", { name: /解读记录/i })
-    ).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: /解读记录/i })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
 
     // 之后用户仍可自由切换，相同 nonce 不再强制
     fireEvent.click(screen.getByRole("tab", { name: /暂存区/i }));

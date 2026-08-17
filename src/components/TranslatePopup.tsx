@@ -132,6 +132,16 @@ export default function TranslatePopup({
 
   // Sync external content updates (e.g. after persistence load)
   useEffect(() => {
+    // 本地已累积流式内容时忽略父组件回传的空 content：卸载 cleanup 保存的
+    // { content:"", isStreaming:false } 快照（StrictMode 双挂载或浮层真实
+    // 重建）可能在流式 chunk 落地之后才 flush 到父组件再回传（webkit 下
+    // 实测如此），直接覆盖会把已渲染内容清空且无恢复路径（流已结束，挂载
+    // 守卫不会重启）。annotation.content 只会随本地流式增长，不存在外部
+    // 合法清空的路径，因此该守卫安全。
+    if (annotation.content === "" && accumulatedRef.current !== "") {
+      setIsStreaming(annotation.isStreaming);
+      return;
+    }
     setLocalContent(annotation.content);
     setIsStreaming(annotation.isStreaming);
   }, [annotation.content, annotation.isStreaming]);

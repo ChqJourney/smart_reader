@@ -118,6 +118,43 @@ describe("TranslatePopup", () => {
     });
   });
 
+  // 回归：父组件滞后的空 content 回传不得清空已完成的流式内容。
+  // StrictMode 双挂载的 cleanup 会保存 { content:"", isStreaming:false }
+  // 快照，该更新可能在流式 chunk 落地之后才 flush 到父组件再经 annotation
+  // prop 回传（webkit 下实测此时序，曾导致 E2E 翻译浮层永久空白）。
+  it("父组件滞后的空 content 回传不清空已完成的流式内容", async () => {
+    (streamChatCompletion as ReturnType<typeof vi.fn>).mockImplementation(
+      async function* () {
+        yield { type: "chunk", content: "翻译结果" };
+      }
+    );
+
+    const props = {
+      scale: 1,
+      settings: DEFAULT_SETTINGS,
+      onUpdate: vi.fn(),
+      onHide: vi.fn(),
+      onClose: vi.fn(),
+    };
+    const { rerender } = render(
+      <TranslatePopup annotation={makeAnnotation()} {...props} />
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/翻译结果/)).toBeInTheDocument();
+    });
+
+    // 模拟滞后的 cleanup 快照回传：content 为空但本地已有流式内容。
+    rerender(
+      <TranslatePopup
+        annotation={makeAnnotation({ content: "", isStreaming: false })}
+        {...props}
+      />
+    );
+
+    expect(screen.getByText(/翻译结果/)).toBeInTheDocument();
+  });
+
   it("hides loading spinner when streaming finishes", async () => {
     (streamChatCompletion as ReturnType<typeof vi.fn>).mockImplementation(
       async function* () {

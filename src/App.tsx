@@ -606,6 +606,15 @@ function App() {
     }
   }, []);
 
+  // tab 栏溢出时，激活（打开/切换）的 tab 可能滚出可视区；激活变化后把它滚回可见。
+  // scrollIntoView 默认只影响最近的可滚动祖先，inline:"nearest" 保证已在视口内时不动。
+  useEffect(() => {
+    const el = tabBarRef.current;
+    if (!el || !tabs.activeTabId) return;
+    const active = el.querySelector(".tab-item.active");
+    active?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [tabs.activeTabId]);
+
   // Keep stable refs to the dynamically changing tab/recent-file callbacks so
   // the system "open-pdf" listener is registered only once. This prevents
   // duplicate listeners (and duplicate tabs) when App re-renders.

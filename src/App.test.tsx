@@ -1174,6 +1174,35 @@ describe("App", () => {
     });
   });
 
+  it("scrolls the newly active tab into view when tabs overflow", async () => {
+    const scrollSpy = vi.spyOn(Element.prototype, "scrollIntoView");
+    (open as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("/test/file-a.pdf")
+      .mockResolvedValueOnce("/test/file-b.pdf");
+
+    renderApp();
+    await openPdf("/test/file-a.pdf");
+    fireEvent.click(screen.getByTestId("open-pdf-btn"));
+    await waitFor(() => {
+      expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
+    });
+
+    // 打开新 tab 后它被激活，tab 栏应将其滚入可视区
+    const activeTabEl = document.querySelector(".tab-item.active");
+    expect(activeTabEl?.textContent).toContain("file-b.pdf");
+    await waitFor(() => {
+      expect(scrollSpy).toHaveBeenCalledWith({
+        block: "nearest",
+        inline: "nearest",
+      });
+    });
+    expect(
+      scrollSpy.mock.contexts.some((ctx) =>
+        (ctx as Element).classList?.contains("active")
+      )
+    ).toBe(true);
+  });
+
   it("enters split view via the tab-bar side-by-side button", async () => {
     (open as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce("/test/file-a.pdf")

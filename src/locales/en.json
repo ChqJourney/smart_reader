@@ -370,6 +370,7 @@
     "toolLimitFinalInstruction": "Document lookup tool calls have reached this session limit ({{maxRounds}} rounds). Do not request more tools; answer naturally and completely using only the user's excerpts and the tool results already provided above. If the available information is still insufficient, say what needs manual verification.",
     "toolResultContext": "The following completed document lookup result is available as answer context:\n{{content}}",
     "toolLimitReachedFallback": "The document lookup limit has been reached for this response. Please continue from the lookup records already shown in the panel and the source excerpt; if more clause checks are needed, raise the maximum tool call setting and start the interpretation again.",
+    "toolCallCancelled": "(This document lookup was aborted by the user and was not executed.)",
     "summarizePrompt": "Summarize the following standards-document interpretation session as a one-line title (max 60 characters) in {{targetLanguage}}. Output only the title itself, no quotes, no explanation:\n\nUser request:\n{{request}}\n\nAnswer:\n{{answer}}"
   },
   "tools": {

@@ -1929,6 +1929,185 @@ describe("usePersistence", () => {
         expect(toolMocks.dispose).toHaveBeenCalledTimes(1);
       });
     });
+
+    // 回归：一轮返回多个 toolCalls 时，abort 发生在某个 call 的 await 期间，
+    // 剩余未执行的 call 必须补写占位 tool 消息——否则持久化的
+    // assistant(toolCalls) 缺对应响应，追问回放会被 API 消息序列校验 400
+    // 拒绝，该会话此后无法追问。
+    it("工具执行中途中止：未执行的 toolCalls 补写占位 tool 消息", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      vi.mocked(streamChatCompletion).mockImplementation(async function* () {
+        yield {
+          type: "toolCall" as const,
+          name: "search_in_pdf",
+          args: JSON.stringify({ file_hash: "hash-a", query: "clause" }),
+          callId: "call-1",
+        };
+        yield {
+          type: "toolCall" as const,
+          name: "read_pdf_page",
+          args: JSON.stringify({ file_hash: "hash-a", page: 3 }),
+          callId: "call-2",
+        };
+        yield { type: "done" as const };
+      });
+
+      // call-1 的执行挂起，直到测试中止后才放行。
+      let releaseTool: (() => void) | null = null;
+      toolMocks.executeToolCall.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            releaseTool = () =>
+              resolve({ summary: "done", result: "tool result" });
+          })
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <TestHarness
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      // 等到 call-1 开始执行（挂起中）。
+      await waitFor(() => {
+        expect(toolMocks.executeToolCall).toHaveBeenCalledTimes(1);
+      });
+
+      act(() => {
+        hookRef!.handleInterruptSession("session-explain");
+      });
+
+      // 放行 call-1：loop 在下一个 call 前检测到 loopAborted，为 call-2
+      // 补写占位 tool 消息后收尾。
+      await act(async () => {
+        releaseTool!();
+      });
+
+      await waitFor(() => {
+        const session = hookRef!.sessions.find(
+          (s) => s.id === "session-explain"
+        )!;
+        expect(session.isStreaming).toBe(false);
+        const toolMsgs = session.messages.filter((m) => m.role === "tool");
+        expect(toolMsgs.map((m) => m.toolCallId).sort()).toEqual([
+          "call-1",
+          "call-2",
+        ]);
+      });
+
+      // call-2 不应真的执行。
+      expect(toolMocks.executeToolCall).toHaveBeenCalledTimes(1);
+
+      const session = hookRef!.sessions.find(
+        (s) => s.id === "session-explain"
+      )!;
+      const call1Msg = session.messages.find((m) => m.toolCallId === "call-1")!;
+      expect(call1Msg.content).toBe("tool result");
+      const call2Msg = session.messages.find((m) => m.toolCallId === "call-2")!;
+      expect(call2Msg.content).toContain("被用户中止");
+      // assistant 消息仍带两个 toolCalls，与两条 tool 消息一一对应。
+      const assistantMsg = session.messages.find((m) => m.toolCalls?.length);
+      expect(assistantMsg?.toolCalls?.map((c) => c.id).sort()).toEqual([
+        "call-1",
+        "call-2",
+      ]);
+
+      await waitFor(() => {
+        expect(toolMocks.dispose).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    // 回归（防御）：历史遗留的悬空 toolCalls（中止修复前产生的脏数据）在
+    // 追问回放时自动补占位 tool 消息，会话可自愈继续追问。
+    it("追问回放时为历史遗留的悬空 toolCalls 补占位 tool 消息", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      const streamSpy = vi
+        .mocked(streamChatCompletion)
+        .mockImplementation(makeMockStream());
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <TestHarness
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      const polluted = makeExplainSession([
+        { id: "msg-user", role: "user", content: "请解读", createdAt: 1000 },
+        {
+          id: "msg-assistant-tools",
+          role: "assistant",
+          content: "",
+          createdAt: 1001,
+          toolCalls: [
+            {
+              id: "call-answered",
+              type: "function" as const,
+              function: { name: "search_in_pdf", arguments: "{}" },
+            },
+            {
+              id: "call-orphan",
+              type: "function" as const,
+              function: { name: "read_pdf_page", arguments: "{}" },
+            },
+          ],
+        },
+        {
+          id: "msg-tool-1",
+          role: "tool",
+          content: "查阅结果",
+          createdAt: 1002,
+          toolCallId: "call-answered",
+          name: "search_in_pdf",
+        },
+      ]);
+
+      act(() => {
+        hookRef!.setSessions([polluted]);
+      });
+
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      await waitFor(() => {
+        expect(streamSpy).toHaveBeenCalled();
+      });
+
+      const apiMessages = streamSpy.mock.calls[0][0];
+      const assistantIdx = apiMessages.findIndex(
+        (m) => m.role === "assistant" && m.toolCalls?.length
+      );
+      expect(assistantIdx).toBeGreaterThan(-1);
+      // 悬空 call 的占位消息紧随 assistant 消息之后。
+      expect(apiMessages[assistantIdx + 1]).toMatchObject({
+        role: "tool",
+        toolCallId: "call-orphan",
+      });
+      // 已有响应的 call 不重复补。
+      const toolMsgs = apiMessages.filter((m) => m.role === "tool");
+      expect(toolMsgs.map((m) => m.toolCallId).sort()).toEqual([
+        "call-answered",
+        "call-orphan",
+      ]);
+    });
   });
 
   describe("流式合批", () => {

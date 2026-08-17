@@ -98,12 +98,16 @@ interface WakePlan {
 /**
  * 计算「唤醒 tabId」的休眠计划：唤醒同样挤占预算，复用同一套 LRU 候选
  * 选择，把被唤醒 tab 按 protectAs 保护起来（docs/TAB_HIBERNATION_DESIGN.md §6.1）。
+ * currentActiveTabId 是当前真实激活的 tab：protectAs 为 "secondary" 时目标
+ * tab 占副屏槽位，真实 active tab 仍必须受保护（不能仅靠 5 分钟活动窗口
+ * 兜底，否则主屏正在显示的 tab 可能被选中休眠）。
  */
 function planWake(
   tabs: readonly PdfTab[],
   tabId: string,
   protectAs: "active" | "secondary",
   ctx: HibernationContext,
+  currentActiveTabId: string | null,
   now: number
 ): WakePlan {
   const target = tabs.find((t) => t.id === tabId);
@@ -112,7 +116,7 @@ function planWake(
     t.id === tabId ? { ...t, hibernated: false } : t
   );
   const candidates = selectHibernateCandidates(woken, {
-    activeTabId: protectAs === "active" ? tabId : null,
+    activeTabId: protectAs === "active" ? tabId : currentActiveTabId,
     secondaryTabId: protectAs === "secondary" ? tabId : ctx.secondaryTabId,
     streamingTabIds: ctx.streamingTabIds,
     now,
@@ -148,6 +152,13 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
     tabsRef.current = tabs;
   }, [tabs]);
 
+  // activeTabId 的最新镜像：wakeTab / gotoTabPage 等长驻回调（deps 不含
+  // activeTabId）做休眠决策时需要保护当前真实激活的 tab。
+  const activeTabIdRef = useRef(activeTabId);
+  useEffect(() => {
+    activeTabIdRef.current = activeTabId;
+  }, [activeTabId]);
+
   const getHibernationContextRef = useRef(options?.getHibernationContext);
   useEffect(() => {
     getHibernationContextRef.current = options?.getHibernationContext;
@@ -177,6 +188,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
         tabId,
         "active",
         getHibernationCtx(),
+        activeTabIdRef.current,
         now
       );
       logHibernations(toHibernate, "budget");
@@ -210,6 +222,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
       tabId,
       "secondary",
       getHibernationCtx(),
+      activeTabIdRef.current,
       now
     );
     if (toHibernate.length === 0) {
@@ -402,6 +415,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
             nextActive.id,
             "active",
             getHibernationCtx(),
+            activeTabIdRef.current,
             now
           );
           logHibernations(toHibernate, "budget");
@@ -488,6 +502,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
         tabId,
         activate ? "active" : "secondary",
         getHibernationCtx(),
+        activeTabIdRef.current,
         now
       );
       logHibernations(toHibernate, "budget");

@@ -682,6 +682,44 @@ describe("useTabs 休眠（hibernation）", () => {
     expect(result.current.activeTabId).toBe(tabC!.id);
   });
 
+  // 回归：wakeTab 走 planWake 的 "secondary" 分支时，当前真实 active tab
+  // 必须始终受保护（此前该分支把 activeTabId 传成 null，主屏正在显示的
+  // tab 只剩 5 分钟活动窗口兜底，可能被选中休眠）。
+  it("wakeTab 唤醒为副屏时不可休眠当前 active tab", async () => {
+    mockFileSize(300 * MB); // 单文件记账 600MB，两个存活即超预算
+    const { result } = renderHook(() => useTabs());
+
+    const tabA = await openPath(result, "/test/a.pdf");
+    now += 10 * 60 * 1000;
+    const tabB = await openPath(result, "/test/b.pdf"); // a 是 active 受保护
+    now += 10 * 60 * 1000;
+    const tabC = await openPath(result, "/test/c.pdf"); // a 被休眠
+    now += 10 * 60 * 1000;
+    const tabD = await openPath(result, "/test/d.pdf"); // b 被休眠，c/d 存活
+
+    expect(result.current.tabs.map((t) => !!t.hibernated)).toEqual([
+      true,
+      true,
+      false,
+      false,
+    ]);
+    expect(result.current.activeTabId).toBe(tabD!.id);
+
+    // d 的 5 分钟活动窗口也过去后，把休眠的 a 唤醒为分屏副屏：
+    // 候选只有 c（最久未激活），休眠 c 后仍超预算也不能动 active 的 d。
+    now += 10 * 60 * 1000;
+    act(() => {
+      result.current.wakeTab(tabA!.id);
+    });
+
+    const tabs = result.current.tabs;
+    expect(tabs.find((t) => t.id === tabA!.id)!.hibernated).toBe(false);
+    expect(tabs.find((t) => t.id === tabC!.id)!.hibernated).toBe(true);
+    expect(tabs.find((t) => t.id === tabD!.id)!.hibernated).toBe(false);
+    expect(result.current.activeTabId).toBe(tabD!.id);
+    expect(tabs.find((t) => t.id === tabB!.id)!.hibernated).toBe(true);
+  });
+
   it("注入上下文：流式会话中的 tab 与分屏 secondary 受保护", async () => {
     const ctx = {
       current: {

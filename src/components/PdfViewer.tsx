@@ -740,6 +740,10 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         setPageNum(page);
         if (viewMode === "continuous" && continuousContainerRef.current) {
           const container = continuousContainerRef.current;
+          // 连续跳转时先清理上一次跳转残留的旧监听器/定时器：否则旧闭包
+          // 会用第一次跳转的目标页配上当前 scrollTop 上报过期状态，并提前
+          // 释放第二次跳转的保护锁。
+          jumpScrollCleanupRef.current?.();
           const top = computeContinuousScrollTop(
             page,
             container,

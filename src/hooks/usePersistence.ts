@@ -591,18 +591,40 @@ export function usePersistence({
       };
 
       const buildApiMessages = (): ChatMessage[] => {
-        return [
-          { role: "system", content: buildSystemContent() },
-          ...(sessionRef.current.messages
-            .filter((m) => !(m.role === "assistant" && m.id === messageId))
-            .map((m) => ({
-              role: m.role,
-              content: m.content,
-              toolCallId: m.toolCallId,
-              toolCalls: m.toolCalls,
-              reasoningContent: m.reasoningContent,
-            })) as ChatMessage[]),
-        ];
+        const history = sessionRef.current.messages
+          .filter((m) => !(m.role === "assistant" && m.id === messageId))
+          .map((m) => ({
+            role: m.role,
+            content: m.content,
+            toolCallId: m.toolCallId,
+            toolCalls: m.toolCalls,
+            reasoningContent: m.reasoningContent,
+          })) as ChatMessage[];
+        // 防御：中止曾可能留下没有 tool 响应消息的 assistant.toolCalls
+        // （历史脏数据），原样回放会被 OpenAI 兼容 API 的消息序列校验直接
+        // 400 拒绝，且该会话此后所有追问都失败。为缺失响应的 toolCall 在
+        // assistant 消息之后补一条占位 tool 消息，让会话可以自愈继续追问。
+        const answeredCallIds = new Set(
+          sessionRef.current.messages
+            .filter((m) => m.role === "tool" && m.toolCallId)
+            .map((m) => m.toolCallId as string)
+        );
+        const repaired: ChatMessage[] = [];
+        for (const m of history) {
+          repaired.push(m);
+          if (m.role === "assistant" && m.toolCalls) {
+            for (const call of m.toolCalls) {
+              if (!answeredCallIds.has(call.id)) {
+                repaired.push({
+                  role: "tool",
+                  content: i18n.t("llm.toolCallCancelled"),
+                  toolCallId: call.id,
+                });
+              }
+            }
+          }
+        }
+        return [{ role: "system", content: buildSystemContent() }, ...repaired];
       };
 
       const buildFinalNoToolsMessages = (
@@ -1055,8 +1077,24 @@ export function usePersistence({
               } as ChatMessage,
             ];
 
-            for (const call of toolCalls) {
+            for (let i = 0; i < toolCalls.length; i++) {
+              const call = toolCalls[i];
               if (loopAborted) {
+                // 中止时必须为尚未执行的 toolCalls 补写占位 tool 结果消息：
+                // 否则持久化的 assistant(toolCalls) 缺对应响应，追问回放会
+                // 被 API 消息序列校验直接 400 拒绝，该会话此后无法追问。
+                for (const pending of toolCalls.slice(i)) {
+                  const cancelledMsg = appendToolResultMessage(
+                    pending.id,
+                    pending.function.name,
+                    i18n.t("llm.toolCallCancelled")
+                  );
+                  messages.push({
+                    role: "tool",
+                    content: cancelledMsg.content,
+                    toolCallId: cancelledMsg.toolCallId,
+                  } as ChatMessage);
+                }
                 finishStreaming();
                 return;
               }

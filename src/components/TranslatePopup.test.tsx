@@ -82,6 +82,42 @@ describe("TranslatePopup", () => {
     expect(document.querySelector(".loading-spinner")).toBeInTheDocument();
   });
 
+  // 回归：流式中卸载（点 marker 隐藏 / 单页模式翻页 / tab 休眠顶掉）时
+  // cleanup 必须连同 isStreaming 一起复位，否则 annotation 永久停留在
+  // isStreaming=true，重新挂载后守卫拒绝重启流，浮层永远转圈。
+  it("流式中卸载时保存部分内容并复位 isStreaming", async () => {
+    (streamChatCompletion as ReturnType<typeof vi.fn>).mockImplementation(
+      async function* () {
+        yield { type: "chunk", content: "部分翻译" };
+        // 模拟流仍在进行（后续 chunk 不再到达）。
+        await new Promise<void>(() => {});
+      }
+    );
+
+    const onUpdate = vi.fn();
+    const { unmount } = render(
+      <TranslatePopup
+        annotation={makeAnnotation()}
+        scale={1}
+        settings={DEFAULT_SETTINGS}
+        onUpdate={onUpdate}
+        onHide={vi.fn()}
+        onClose={vi.fn()}
+      />
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/部分翻译/)).toBeInTheDocument();
+    });
+
+    unmount();
+
+    expect(onUpdate).toHaveBeenCalledWith({
+      content: "部分翻译",
+      isStreaming: false,
+    });
+  });
+
   it("hides loading spinner when streaming finishes", async () => {
     (streamChatCompletion as ReturnType<typeof vi.fn>).mockImplementation(
       async function* () {

@@ -370,6 +370,7 @@
     "toolLimitFinalInstruction": "文档查阅工具调用已达到本次上限（{{maxRounds}} 轮）。不要再请求工具；请只基于用户提供的片段和上文已查阅到的工具结果，用自然、完整的方式回答。如果信息仍不足，请说明哪些点尚需人工核对。",
     "toolResultContext": "以下是一次已完成的文档查阅结果，作为回答依据：\n{{content}}",
     "toolLimitReachedFallback": "已达到本次文档查阅工具调用上限。请基于右侧已展示的查阅记录和原文片段继续判断；如仍需更多条款核对，可以调高「最大工具调用次数」后重新发起解读。",
+    "toolCallCancelled": "（本次文档查阅已被用户中止，未执行。）",
     "summarizePrompt": "请用{{targetLanguage}}把以下标准文档解读会话概括成一句话标题（30 字以内），只输出标题本身，不要引号、不要解释：\n\n用户请求：\n{{request}}\n\n解读内容：\n{{answer}}"
   },
   "tools": {

@@ -91,6 +91,50 @@ describe("annotations service", () => {
 
       await expect(loadPdfData("/path/to/file.pdf")).rejects.toThrow("fail");
     });
+
+    it("resets isStreaming for loaded translate annotations that already have content", async () => {
+      // 历史脏数据自愈：旧版流式中卸载只存 content 不复位 isStreaming，
+      // 重新打开会永久显示「翻译中」。无内容的保持 streaming（挂载守卫会
+      // 自动重启流）；非 translate 类型不受影响。
+      mockInvoke.mockResolvedValue({
+        annotations: [
+          {
+            id: "t-dirty",
+            type: "translate",
+            text: "hello",
+            position: { page: 1, x: 0, y: 0 },
+            content: "部分翻译",
+            isStreaming: true,
+            createdAt: 1,
+          },
+          {
+            id: "t-empty",
+            type: "translate",
+            text: "world",
+            position: { page: 1, x: 0, y: 0 },
+            content: "",
+            isStreaming: true,
+            createdAt: 2,
+          },
+          {
+            id: "e-1",
+            type: "explain",
+            text: "clause",
+            position: { page: 1, x: 0, y: 0 },
+            content: "解读",
+            isStreaming: true,
+            createdAt: 3,
+          },
+        ],
+        sessionIds: [],
+      });
+
+      const result = await loadPdfData("/path/to/file.pdf");
+
+      expect(result.annotations[0].isStreaming).toBe(false);
+      expect(result.annotations[1].isStreaming).toBe(true);
+      expect(result.annotations[2].isStreaming).toBe(true);
+    });
   });
 
   describe("savePdfData", () => {

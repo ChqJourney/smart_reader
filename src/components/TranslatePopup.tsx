@@ -115,7 +115,13 @@ export default function TranslatePopup({
 
     return () => {
       abortStream("translate");
-      onUpdateRef.current({ content: accumulatedRef.current });
+      // 流式中卸载必须连同 isStreaming 一起复位：只保存部分内容会让
+      // annotation 停留在 isStreaming=true，重新挂载时挂载 effect 的守卫
+      // （已有 content 不重启流）导致浮层永久显示「翻译中」，无任何自愈路径。
+      onUpdateRef.current({
+        content: accumulatedRef.current,
+        isStreaming: false,
+      });
     };
     // This effect intentionally runs only once on mount to start the stream for
     // a newly created translation annotation. `settings` is included so the

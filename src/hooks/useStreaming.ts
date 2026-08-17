@@ -85,6 +85,13 @@ export function useStreaming() {
         }
         if (!controller.signal.aborted) {
           handlers.onDone();
+        } else {
+          // 中止发生在「两次 chunk 之间」的空闲期时，llm.ts 的 onAbort 只负责
+          // 唤醒 generator 让其自然结束（不再 yield 任何事件），for-await
+          // 会直接退出而循环体内的 aborted 检查永远执行不到。必须在这里补
+          // 触发 onAbort，否则调用方（如 agent loop 的 runOneRound）的
+          // Promise 永不 settle，toolSession 等资源静默泄漏。
+          handlers.onAbort?.();
         }
       } catch (err) {
         if (!controller.signal.aborted) {

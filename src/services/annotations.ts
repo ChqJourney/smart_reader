@@ -34,7 +34,18 @@ export async function loadPdfData(filePath: string): Promise<PdfData> {
   if (!filePath) return { annotations: [], sessionIds: [] };
   try {
     const result = await invoke<PdfData>("load_pdf_data", { filePath });
-    return result;
+    // 历史脏数据自愈：旧版 TranslatePopup 在流式中卸载时只保存了部分内容、
+    // 未复位 isStreaming，导致批注永久停留在「翻译中」。加载时把「已有内容
+    // 但仍 streaming」的翻译批注重置为完成态（无内容的保留 streaming，
+    // 挂载守卫会自动重启流）。
+    return {
+      ...result,
+      annotations: result.annotations.map((a) =>
+        a.type === "translate" && a.isStreaming && a.content
+          ? { ...a, isStreaming: false }
+          : a
+      ),
+    };
   } catch (err) {
     // 加载失败必须抛给调用方：若降级为空数据，后续防抖保存会把空桶覆盖
     // 写回磁盘，静默清空用户已有批注（文件损坏/瞬时 IO 错误都可能触发）。

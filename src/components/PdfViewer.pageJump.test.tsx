@@ -557,6 +557,64 @@ describe("PdfViewer continuous mode page jump", () => {
     globalThis.requestAnimationFrame = originalRAF;
   });
 
+  // 回归：300ms 内连续两次跳页时，旧跳转注册的 scroll 监听器/定时器必须先
+  // 清理——否则旧闭包会以第一次跳转的目标页配上当前 scrollTop 上报过期
+  // 状态，污染 tab 记录（切回 tab 时会被拉回旧页）。
+  it("快速连续两次跳页：旧跳转的残留监听器不上报过期页码", async () => {
+    const onStateChange = vi.fn();
+    const { container } = render(
+      <PdfViewer
+        filePath="/fake/test.pdf"
+        settings={DEFAULT_SETTINGS}
+        onStateChange={onStateChange}
+      />
+    );
+
+    const pageInput = await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
+      if (!input || input.disabled) {
+        throw new Error("page input not ready yet");
+      }
+      return input;
+    });
+    await waitForViewportsReady(container);
+
+    const canvasContainer = container.querySelector(
+      ".pdf-canvas-container.continuous"
+    ) as HTMLDivElement;
+    expect(canvasContainer).not.toBeNull();
+
+    vi.useFakeTimers();
+
+    const jumpTo = (page: number) => {
+      fireEvent.click(pageInput);
+      const jumpInput = screen.getByLabelText("跳转到页");
+      fireEvent.change(jumpInput, { target: { value: String(page) } });
+      fireEvent.keyDown(jumpInput, { key: "Enter", code: "Enter" });
+    };
+
+    // 300ms 内连续跳两次：先跳 5，紧接着跳 3。
+    jumpTo(5);
+    jumpTo(3);
+    expect(canvasContainer.scrollTop).toBe(expectedScrollTopForPage(3));
+
+    // 第二次跳转后的 scroll 事件会喂给残留的第一次跳转监听器（若有）。
+    fireEvent.scroll(canvasContainer);
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+
+    // 带 scrollTop 的上报只可能来自跳转收尾/滚动同步；残留的旧监听器会以
+    // pageNum=5 配上第二次跳转后的 scrollTop 上报错配状态。
+    const staleReport = onStateChange.mock.calls.some(
+      ([state]) =>
+        state.pageNum === 5 && state.scrollTop === expectedScrollTopForPage(3)
+    );
+    expect(staleReport).toBe(false);
+
+    vi.useRealTimers();
+  });
+
   it("opens the search bar with Ctrl+F and starts from the current page", async () => {
     const mockPdfWithText = {
       numPages: NUM_PAGES,

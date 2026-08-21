@@ -12,6 +12,9 @@ const mocks = vi.hoisted(() => {
     } as Record<number, { str: string; hasEOL?: boolean }[]>,
     destroySpy: vi.fn(),
     getPageSpy: vi.fn(),
+    renderSpy: vi.fn(),
+    pageWidth: 612,
+    pageHeight: 792,
     getOpenFileHashes: vi.fn(() => ["hash-a"]),
     getOpenPdfMeta: vi.fn((hash: string): OpenPdfMeta | undefined => {
       if (hash === "hash-a") {
@@ -33,6 +36,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock("pdfjs-dist", () => ({
+  GlobalWorkerOptions: {},
   getDocument: vi.fn(({ data: _data }: { data: Uint8Array }) => {
     return {
       promise: Promise.resolve({
@@ -44,6 +48,13 @@ vi.mock("pdfjs-dist", () => ({
                 items: mocks.pdfjsPageText[pageNumber] ?? [],
               })
             ),
+            getViewport: vi.fn(({ scale }: { scale: number }) => ({
+              width: mocks.pageWidth * scale,
+              height: mocks.pageHeight * scale,
+            })),
+            render: mocks.renderSpy.mockImplementation(() => ({
+              promise: Promise.resolve(),
+            })),
             cleanup: vi.fn(),
           })
         ),
@@ -71,6 +82,9 @@ describe("pdfTools", () => {
     };
     mocks.destroySpy.mockReset();
     mocks.getPageSpy.mockClear();
+    mocks.renderSpy.mockClear();
+    mocks.pageWidth = 612;
+    mocks.pageHeight = 792;
     mocks.getOpenFileHashes.mockReturnValue(["hash-a"]);
     mocks.getOpenPdfMeta.mockImplementation(
       (hash: string): OpenPdfMeta | undefined => {
@@ -309,6 +323,133 @@ describe("pdfTools", () => {
       await session.dispose();
 
       expect(mocks.destroySpy).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("screenshot_pdf_page", () => {
+    const fakeImageBytes = new Uint8Array([9, 8, 7]);
+    let drawImageSpy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      drawImageSpy = vi.fn();
+      // jsdom 的 canvas 没有真实 2d 实现，stub 掉 getContext / toBlob。
+      vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+        fillStyle: "",
+        fillRect: vi.fn(),
+        drawImage: drawImageSpy,
+      } as unknown as CanvasRenderingContext2D);
+      vi.spyOn(HTMLCanvasElement.prototype, "toBlob").mockImplementation(
+        (cb: BlobCallback) => {
+          cb(new Blob([fakeImageBytes], { type: "image/jpeg" }));
+        }
+      );
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("captures a full page and returns JPEG bytes", async () => {
+      const session = beginToolSession();
+      const { summary, result, images } = await session.executeToolCall(
+        "screenshot_pdf_page",
+        JSON.stringify({ file_hash: "hash-a", page_number: 2 })
+      );
+      await session.dispose();
+
+      expect(summary).toContain("2");
+      expect(result).toContain("page 2");
+      expect(result).toContain("a.pdf");
+      expect(images).toHaveLength(1);
+      expect(images![0].mimeType).toBe("image/jpeg");
+      expect(images![0].page).toBe(2);
+      expect(images![0].fileHash).toBe("hash-a");
+      expect(images![0].region).toBeUndefined();
+      expect(new Uint8Array(images![0].data)).toEqual(fakeImageBytes);
+      // 整页截图不做裁剪
+      expect(drawImageSpy).not.toHaveBeenCalled();
+      expect(mocks.renderSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("clamps an overflowing region and crops via drawImage", async () => {
+      const session = beginToolSession();
+      const { result, images } = await session.executeToolCall(
+        "screenshot_pdf_page",
+        JSON.stringify({
+          file_hash: "hash-a",
+          page_number: 1,
+          region: { x: 0.5, y: 0.5, width: 0.8, height: 0.8 },
+        })
+      );
+      await session.dispose();
+
+      expect(result).toContain("region");
+      expect(images).toHaveLength(1);
+      // 0.5 + 0.8 > 1，宽高被 clamp 到 0.5
+      expect(images![0].region).toEqual({
+        x: 0.5,
+        y: 0.5,
+        width: 0.5,
+        height: 0.5,
+      });
+      expect(drawImageSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("rejects invalid region values", async () => {
+      const session = beginToolSession();
+      const { result, images } = await session.executeToolCall(
+        "screenshot_pdf_page",
+        JSON.stringify({
+          file_hash: "hash-a",
+          page_number: 1,
+          region: { x: 0, y: 0, width: 0, height: 0.5 },
+        })
+      );
+      await session.dispose();
+
+      expect(result).toContain("Error:");
+      expect(images).toBeUndefined();
+      expect(mocks.renderSpy).not.toHaveBeenCalled();
+    });
+
+    it("rejects a region origin outside the page", async () => {
+      const session = beginToolSession();
+      const { result, images } = await session.executeToolCall(
+        "screenshot_pdf_page",
+        JSON.stringify({
+          file_hash: "hash-a",
+          page_number: 1,
+          region: { x: 1.2, y: 0, width: 0.5, height: 0.5 },
+        })
+      );
+      await session.dispose();
+
+      expect(result).toContain("Error:");
+      expect(images).toBeUndefined();
+    });
+
+    it("rejects unauthorized file hashes", async () => {
+      const session = beginToolSession();
+      const { result, images } = await session.executeToolCall(
+        "screenshot_pdf_page",
+        JSON.stringify({ file_hash: "hash-x", page_number: 1 })
+      );
+      await session.dispose();
+
+      expect(result).toContain("Error: PDF not open");
+      expect(images).toBeUndefined();
+    });
+
+    it("rejects out-of-range page numbers", async () => {
+      const session = beginToolSession();
+      const { result, images } = await session.executeToolCall(
+        "screenshot_pdf_page",
+        JSON.stringify({ file_hash: "hash-a", page_number: 99 })
+      );
+      await session.dispose();
+
+      expect(result).toContain("out of range");
+      expect(images).toBeUndefined();
     });
   });
 });

@@ -7,13 +7,14 @@ import type {
   ThinkingMode,
   TokenUsage,
   ChatMessage,
+  ContentPart,
   LlmError,
 } from "../types/llm";
 import type { ToolCall } from "../types/llm";
 
 export type { LlmConfig, SystemPrompts };
 export type { ThinkingMode, TokenUsage, LlmError };
-export type { ChatMessage, ToolCall };
+export type { ChatMessage, ToolCall, ContentPart };
 
 export type SelectionAction = "explain" | "translate";
 
@@ -30,6 +31,8 @@ export type StreamEvent =
 export interface StreamOptions {
   thinking?: ThinkingMode;
   enableTools?: boolean;
+  /** 当前模型为视觉模型时开启：后端会额外注入页面截图工具 */
+  enableVision?: boolean;
   authorizedFileHashes?: string[];
   signal?: AbortSignal;
 }
@@ -155,6 +158,7 @@ export async function* streamChatCompletion(
         messages,
         thinking: options?.thinking ?? "auto",
         enableTools: options?.enableTools ?? false,
+        enableVision: options?.enableVision ?? false,
         authorizedFileHashes: options?.authorizedFileHashes ?? [],
         requestId,
       },

@@ -34,7 +34,7 @@
 - 最近文件下拉面板：置顶常用标准、按文件名/路径搜索、显示目录/相对时间/上次读到的页码、失效文件置灰、单条移除与两段式清空、从列表直接在分屏打开对照（快捷键 Ctrl/Cmd+Shift+O 开合面板）。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
 - 条款链接悬停预览（画中画）：默认关闭，设置「功能设置」页开启。悬停在 PDF 自带的文档内链接（条款号引用，带内部 dest）上 2 秒弹出小窗，复用 viewer 的 PDF 代理渲染目标页并自动滚动到 dest Y 位置（XYZ / FitH 取 Y，其余形态退化页首）；小窗 portal 到 body，可拖动（复用 useDrag）、右下角调大小（拖动中 canvas CSS 拉伸、松手按新宽度重渲）、内容区原生滚动；右上角图钉固化后不随鼠标移出关闭，可多个并存（上限 10 个），未固化预览同时只保留一个、鼠标离开 400ms 宽限后自动关闭；同目标（页码+destY）去重，外部 url 链接不参与；悬停链接时抑制悬停查词 tooltip。状态管理在 `hooks/useLinkPreviews.ts`，窗口组件 `components/LinkPreviewPopup.tsx`，PdfPage 仅上报悬停目标（`onLinkHover`），PdfViewer 按 `settings.linkPreviewEnabled` 门控上报并在开关关闭时清空已弹出窗口。
-- 解读 / 自定义解读 / 追问时启用 **Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文（`list_open_pdfs`、`read_pdf_page`、`search_in_pdf`），辅助验证条款引用与跨页内容。
+- 解读 / 自定义解读 / 追问时启用 **Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文（`list_open_pdfs`、`read_pdf_page`、`search_in_pdf`），辅助验证条款引用与跨页内容；视觉模型额外提供 `screenshot_pdf_page` 页面截图工具（整页或归一化区域，图像作为合成 user 消息发给模型，见 6.5）。
 - LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 按平台分条目存放于系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不再落入 `settings.json`。
 - LLM 请求整体后端代理化（`llm_proxy.rs`）：前端不再直接发起 HTTP 请求，API Key 不进入 webview。
 - 软件自动更新：启动 3 秒后自动检查，设置「关于」页可手动检查；失败仅记日志。
@@ -45,7 +45,7 @@
 
 - Clause 索引、引用追踪。
 - 术语表、测试清单生成。
-- 表格截图 + 多模态读取。
+- 用户主动框选的表格截图 + 多模态读取（agent 侧页面截图工具已由视觉模型可用，见 6.5）。
 - License 激活校验。
 
 ## 2. 技术栈
@@ -313,7 +313,9 @@ cd src-tauri && cargo test
 - `save_pdf_data(filePath: string, data: PdfData)`：保存批注与会话引用。
 - `load_session(sessionId: string)`：加载单个会话 JSON。
 - `save_session(session: InterpretationSession)`：保存会话 JSON。
-- `delete_session(sessionId: string)`：删除会话文件。
+- `delete_session(sessionId: string)`：删除会话文件及关联的截图图片目录。
+- `save_session_image(sessionId: string, data: Vec<u8>)`：截图工具图片原子落盘到 `sessions/{session_id}/`（前端按 `Array.from(bytes)` 传输，同 `export_binary_file` 约定），返回文件名引用。
+- `read_session_image(sessionId: string, file: string)`：读回截图图片字节（`file` 仅允许纯文件名，防路径穿越），追问回放图片消息用。
 - `authorize_pdf_path(filePath: string)`：将用户通过对话框选择的 PDF 路径加入后端授权白名单，`read_pdf_bytes` / `get_pdf_hash` 会校验该白名单。
 - `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表（`RecentFile` 含 `pinned` 置顶与 `lastPage` 阅读页码字段，旧数据通过 `#[serde(default)]` 兼容）。
@@ -343,7 +345,9 @@ cd src-tauri && cargo test
     ├── annotations/
     │   ├── {pdf_hash}.json        # 批注 + 关联 session ids
     │   └── sessions/
-    │       └── {session_id}.json  # 解读会话详情
+    │       ├── {session_id}.json  # 解读会话详情（截图只存文件名引用）
+    │       └── {session_id}/      # 截图工具图片（delete_session 连带清理）
+    │           └── {ts}-{seq}.jpg
     ├── dict/
     │   ├── ecdict.sqlite          # ECDICT 本地离线词典（首次启用悬停翻译时下载）
     │   └── ecdict.sqlite.extract/ # 解压临时目录
@@ -369,7 +373,7 @@ LLM 流量已整体改为 **Rust 后端代理**（`src-tauri/src/llm_proxy.rs`�
 - Prompt 模板（`buildSelectionPrompt` 翻译/解读、`buildCustomInterpretPrompt` 自定义解读、`buildSystemPrompt`）仍在 `services/llm.ts`，已 i18n 化（走 `i18n.t`，模板文案在 locales JSON）；均接收 `targetLanguage` 参数。启用 Agent Tools 时 system prompt 追加 `llm.toolsSystemAddendum` 工具使用引导段（与用户可编辑 system prompt 解耦）。
 - 用户可见的 LLM 错误文案统一由 `services/llmError.ts` 的 `llmErrorToMessage()` 产出（配置向导 / 设置页 / 解读 / 翻译共用同一份友好中文，文案在 locales 的 `llm.error.*` 段）；后端原始报错（常为英文）只经 `services/logs.ts` 写日志，不进 UI。新增 LlmError kind 时需同步 `llmError.ts` 与两边 locales。
 - LLM 配置与目标语言通过 `services/settings.ts` 持久化到后端 AppData；首次启动时会从旧的 `localStorage` 键 `standardread-llm-config` 迁移一次。
-- 平台预设集中在 `src/data/platformPresets.ts`（8 个：`deepseek` / `kimi` / `bailian` / `glm` / `volcengine` / `openrouter` / `openai` / `custom`，含 `supportsTools` / `supportsThinking` / `contextWindow` / `apiKeyHelpUrl` 等字段）；`PlatformId` 联合类型在 `services/settings.ts` 有一份需与预设同步。默认平台 `deepseek`、默认模型 `deepseek-v4-flash`，默认目标语言为 `中文`。
+- 平台预设集中在 `src/data/platformPresets.ts`（9 个：`deepseek` / `kimi` / `xiaomimimo` / `bailian` / `glm` / `volcengine` / `openrouter` / `openai` / `custom`，含 `supportsTools` / `supportsThinking` / `supportsVision` / `contextWindow` / `apiKeyHelpUrl` 等字段）；`PlatformId` 联合类型就在本文件定义，`services/settings.ts` re-export。`supportsVision` 为模型级标记（视觉能力），仅 6 个国内平台的文档确认型号标记为 true（deepseek 需选 `deepseek-v4-flash-vision-exp`，glm 需选 `glm-4.6v`），决定 agent loop 是否注入页面截图工具；判定走 `modelSupportsVision()`。默认平台 `deepseek`、默认模型 `deepseek-v4-flash`，默认目标语言为 `中文`。
 
 ### 6.4 核心状态流
 
@@ -442,6 +446,7 @@ runSessionStream（usePersistence.ts）
 - PDF 文档实例为**瞬态**：每个 agent loop 内按需懒建 `PDFDocumentProxy`，loop 结束 `dispose` 销毁；不与 viewer 共享，避免切 tab 时生命周期耦合。
 - 授权边界：白名单由前端 `pdfToolsRegistry.ts` 执行，只保留当前打开 tab 的轻量元数据（`fileHash` / `fileName` / `filePath` / `numPages`），工具只服务登记在册的 hash；`getPdfBytes` 优先复用 App 级 bytes 缓存，未命中时回退 `read_pdf_bytes`。（后端 `StreamParams.authorized_file_hashes` 为保留字段，未启用。）
 - 工具消息（assistant-tool + tool result）会持久化到会话，追问时原样回放，并携带 `toolCalls` / `toolCallId` / `reasoningContent`。
+- 页面截图工具 `screenshot_pdf_page`（仅视觉模型，`modelSupportsVision` 门控，经 `StreamParams.enableVision` 让后端注入 schema）：前端把页面渲染成 JPEG（≤144 DPI、最长边 2048px、铺白底、quality 0.85，支持 0-1 归一化区域裁剪、原点左上），先 `save_session_image` 落盘，tool 消息只持久化 `images` 文件名引用；图片以合成 user 消息（content parts：`llm.toolImageContext` 文本 + base64 data URL）发给模型——各平台视觉 API 都只允许 user 消息带图，且同一批 toolCalls 的全部 tool 响应必须紧跟 assistant 消息（DeepSeek 会校验 adjacency），因此合成图片消息一律插在该批 tool 响应的末尾。合成消息不落盘，追问/重载时由 `buildApiMessages` + `read_session_image` 从引用重建（文件缺失则跳过图片）；同参去重命中只复用文本、不重复注入图片；落盘失败降级为纯文本结果。后端 `ChatMessage.content` 为 untagged enum（string 或 parts 数组），图片 parts 原样透传。
 - 轮次上限：`settings.maxToolRounds`（默认 **20**，见 `settings.ts` 的 `DEFAULT_SETTINGS`；UI 输入最小值 1）。
 - 超限优雅收尾：最后一轮把 tool 消息改写为 user 上下文、剥掉 assistant `toolCalls` 并追加 system 指令（i18n key `llm.toolLimitFinalInstruction`）；若模型仍返回 toolCalls 且无正文，用 `llm.toolLimitReachedFallback` 文案兜底。
 - 降级：总开关关闭或平台 `supportsTools=false` 时行为同未启用工具的旧流程。
@@ -570,7 +575,7 @@ runSessionStream（usePersistence.ts）
 
 ### 10.6 修改 Agent Tools
 
-- 工具 schema 与累积逻辑在后端 `src-tauri/src/llm_proxy.rs`；工具名固定 snake_case（`list_open_pdfs` / `read_pdf_page` / `search_in_pdf`，定义在 `builtin_tools()`），新增/修改工具需同步前端 `pdfTools.ts`。
+- 工具 schema 与累积逻辑在后端 `src-tauri/src/llm_proxy.rs`；工具名固定 snake_case（`list_open_pdfs` / `read_pdf_page` / `search_in_pdf` / `screenshot_pdf_page`，前三个定义在 `builtin_tools()`，截图工具在 `vision_tools()` 且仅 `enable_vision` 时注入），新增/修改工具需同步前端 `pdfTools.ts`。
 - 前端工具实现在 `src/services/pdfTools.ts`；任何错误都应捕获并转为 result 文本，不得向 loop 抛异常。
 - 授权与元数据在 `src/services/pdfToolsRegistry.ts`；`App.tsx` 通过 `syncOpenPdfs(tabs, getCachedBytes)` 同步当前打开 tab。修改注册表接口时需同步 `App.tsx` 调用点与 `pdfToolsRegistry.test.ts`。
 - Agent loop 在 `hooks/usePersistence.ts` 的 `runSessionStream`；修改轮次、去重、收尾逻辑时需同步 `usePersistence.test.tsx`。

@@ -2110,6 +2110,465 @@ describe("usePersistence", () => {
     });
   });
 
+  describe("agent loop 视觉截图", () => {
+    const makeVisionProps = (): UsePersistenceProps => ({
+      activeTab: null,
+      activeTabId: null,
+      secondaryTab: null,
+      isSplitView: false,
+      focusedTab: null,
+      openRightPanel: vi.fn(),
+      settings: {
+        ...DEFAULT_SETTINGS,
+        agentToolsEnabled: true,
+        platformId: "kimi",
+        llm: { ...DEFAULT_SETTINGS.llm, model: "kimi-k2.6" },
+      },
+    });
+
+    async function* screenshotRoundEvents(callId: string) {
+      yield {
+        type: "toolCall" as const,
+        name: "screenshot_pdf_page",
+        args: JSON.stringify({ file_hash: "hash-a", page_number: 2 }),
+        callId,
+      };
+      yield { type: "done" as const };
+    }
+
+    const screenshotToolResult = () => ({
+      summary: "截取第 2 页",
+      result: 'Screenshot captured: page 2 of "a.pdf".',
+      images: [
+        {
+          data: new Uint8Array([5, 6, 7]),
+          mimeType: "image/jpeg" as const,
+          fileHash: "hash-a",
+          fileName: "a.pdf",
+          page: 2,
+        },
+      ],
+    });
+
+    /** 在默认 invoke mock 基础上追加图片存取命令，返回恢复函数。 */
+    const mockImageCommands = async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const invokeMock = vi.mocked(invoke);
+      const defaultImpl = invokeMock.getMockImplementation()!;
+      invokeMock.mockImplementation(((command: string, args?: unknown) => {
+        if (command === "save_session_image")
+          return Promise.resolve("img-1.jpg");
+        if (command === "read_session_image") return Promise.resolve([1, 2, 3]);
+        return defaultImpl(command, args as Record<string, unknown>);
+      }) as typeof invoke);
+      return () => invokeMock.mockImplementation(defaultImpl);
+    };
+
+    const isImageUserMessage = (m: unknown): boolean => {
+      const msg = m as { role?: string; content?: unknown };
+      return msg.role === "user" && Array.isArray(msg.content);
+    };
+
+    it("视觉模型开启时 enableVision 传给后端", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      const calls: {
+        options?: { enableTools?: boolean; enableVision?: boolean };
+      }[] = [];
+      vi.mocked(streamChatCompletion).mockImplementation(
+        async function* (_messages, options) {
+          calls.push({ options });
+          yield* finalAnswerEvents();
+        }
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={makeVisionProps()}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      await waitFor(() => {
+        expect(calls.length).toBeGreaterThan(0);
+      });
+      expect(calls[0].options?.enableVision).toBe(true);
+    });
+
+    it("非视觉模型不开 enableVision", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      const calls: {
+        options?: { enableTools?: boolean; enableVision?: boolean };
+      }[] = [];
+      vi.mocked(streamChatCompletion).mockImplementation(
+        async function* (_messages, options) {
+          calls.push({ options });
+          yield* finalAnswerEvents();
+        }
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <TestHarness
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      await waitFor(() => {
+        expect(calls.length).toBeGreaterThan(0);
+      });
+      // TestHarness 默认 deepseek-v4-flash，非视觉模型
+      expect(calls[0].options?.enableTools).toBe(true);
+      expect(calls[0].options?.enableVision).toBe(false);
+    });
+
+    it("截图工具结果落盘并作为合成 user 图片消息注入下一轮", async () => {
+      const restoreInvoke = await mockImageCommands();
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const { streamChatCompletion } = await import("../services/llm");
+        const calls: { messages: unknown[] }[] = [];
+        let round = 0;
+        vi.mocked(streamChatCompletion).mockImplementation(
+          async function* (messages) {
+            calls.push({ messages: messages as unknown[] });
+            if (round++ === 0) {
+              // 混编批次：截图 + 读页（复刻 DeepSeek 400 回归场景）
+              yield {
+                type: "toolCall" as const,
+                name: "screenshot_pdf_page",
+                args: JSON.stringify({ file_hash: "hash-a", page_number: 2 }),
+                callId: "call-shot",
+              };
+              yield {
+                type: "toolCall" as const,
+                name: "read_pdf_page",
+                args: JSON.stringify({ file_hash: "hash-a", page_number: 5 }),
+                callId: "call-read",
+              };
+              yield { type: "done" as const };
+            } else {
+              yield* finalAnswerEvents();
+            }
+          }
+        );
+        toolMocks.executeToolCall.mockImplementation((name: string) =>
+          Promise.resolve(
+            name === "screenshot_pdf_page"
+              ? screenshotToolResult()
+              : { summary: "读取第 5 页", result: "page text" }
+          )
+        );
+
+        let hookRef: UsePersistenceReturn;
+        render(
+          <ConfigurableHarness
+            props={makeVisionProps()}
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        );
+
+        act(() => {
+          hookRef!.setSessions([makeExplainSession()]);
+        });
+        act(() => {
+          hookRef!.handleFollowUp("session-explain", "追问");
+        });
+
+        await waitFor(() => {
+          const session = hookRef!.sessions.find(
+            (s) => s.id === "session-explain"
+          );
+          expect(session?.isStreaming).toBe(false);
+        });
+
+        // 图片字节落盘，拿到文件名引用
+        expect(vi.mocked(invoke)).toHaveBeenCalledWith("save_session_image", {
+          sessionId: "session-explain",
+          data: [5, 6, 7],
+        });
+
+        // session 的 tool 消息只存引用，不存 base64
+        const session = hookRef!.sessions.find(
+          (s) => s.id === "session-explain"
+        )!;
+        const toolMsg = session.messages.find(
+          (m) => m.role === "tool" && m.images
+        )!;
+        expect(toolMsg.images).toMatchObject([{ file: "img-1.jpg", page: 2 }]);
+
+        // 下一轮请求里，合成 user 图片消息必须跟在整批 tool 响应之后
+        // （DeepSeek 校验 tool 消息必须紧跟 assistant(toolCalls)，
+        // 图片消息夹在一批 tool 响应中间会被 400 拒绝）。
+        const round1 = calls[1].messages as {
+          role: string;
+          content: unknown;
+        }[];
+        const imageIdx = round1.findIndex(isImageUserMessage);
+        expect(imageIdx).toBeGreaterThan(-1);
+        expect(round1[imageIdx - 1].role).toBe("tool");
+        expect(round1[imageIdx - 2].role).toBe("tool");
+        const parts = round1[imageIdx].content as {
+          type: string;
+          image_url?: { url: string };
+        }[];
+        expect(parts[0].type).toBe("text");
+        expect(parts[1].image_url?.url).toBe("data:image/jpeg;base64,BQYH");
+      } finally {
+        restoreInvoke();
+      }
+    });
+
+    it("同参去重命中时不重复注入图片", async () => {
+      const restoreInvoke = await mockImageCommands();
+      try {
+        const { streamChatCompletion } = await import("../services/llm");
+        const calls: { messages: unknown[] }[] = [];
+        let round = 0;
+        vi.mocked(streamChatCompletion).mockImplementation(
+          async function* (messages) {
+            calls.push({ messages: messages as unknown[] });
+            if (round++ === 0) {
+              // 两个完全相同的截图调用
+              yield {
+                type: "toolCall" as const,
+                name: "screenshot_pdf_page",
+                args: JSON.stringify({ file_hash: "hash-a", page_number: 2 }),
+                callId: "call-a",
+              };
+              yield {
+                type: "toolCall" as const,
+                name: "screenshot_pdf_page",
+                args: JSON.stringify({ file_hash: "hash-a", page_number: 2 }),
+                callId: "call-b",
+              };
+              yield { type: "done" as const };
+            } else {
+              yield* finalAnswerEvents();
+            }
+          }
+        );
+        toolMocks.executeToolCall.mockResolvedValue(screenshotToolResult());
+
+        let hookRef: UsePersistenceReturn;
+        render(
+          <ConfigurableHarness
+            props={makeVisionProps()}
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        );
+
+        act(() => {
+          hookRef!.setSessions([makeExplainSession()]);
+        });
+        act(() => {
+          hookRef!.handleFollowUp("session-explain", "追问");
+        });
+
+        await waitFor(() => {
+          const session = hookRef!.sessions.find(
+            (s) => s.id === "session-explain"
+          );
+          expect(session?.isStreaming).toBe(false);
+        });
+
+        expect(toolMocks.executeToolCall).toHaveBeenCalledTimes(1);
+        const round1 = calls[1].messages as unknown[];
+        expect(round1.filter(isImageUserMessage)).toHaveLength(1);
+      } finally {
+        restoreInvoke();
+      }
+    });
+
+    it("图片落盘失败时降级为纯文本结果", async () => {
+      // 默认 invoke mock 没有 save_session_image handler，会 reject。
+      const { streamChatCompletion } = await import("../services/llm");
+      const calls: { messages: unknown[] }[] = [];
+      let round = 0;
+      vi.mocked(streamChatCompletion).mockImplementation(
+        async function* (messages) {
+          calls.push({ messages: messages as unknown[] });
+          if (round++ === 0) {
+            yield* screenshotRoundEvents("call-shot");
+          } else {
+            yield* finalAnswerEvents();
+          }
+        }
+      );
+      toolMocks.executeToolCall.mockResolvedValue(screenshotToolResult());
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={makeVisionProps()}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      await waitFor(() => {
+        const session = hookRef!.sessions.find(
+          (s) => s.id === "session-explain"
+        );
+        expect(session?.isStreaming).toBe(false);
+      });
+
+      const session = hookRef!.sessions.find(
+        (s) => s.id === "session-explain"
+      )!;
+      const toolMsg = session.messages.find((m) => m.role === "tool")!;
+      expect(toolMsg.images).toBeUndefined();
+      expect(toolMsg.content).toContain("Failed to attach");
+      const round1 = calls[1].messages as unknown[];
+      expect(round1.filter(isImageUserMessage)).toHaveLength(0);
+    });
+
+    it("追问回放时从磁盘读回截图重建图片消息", async () => {
+      const restoreInvoke = await mockImageCommands();
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        const { streamChatCompletion } = await import("../services/llm");
+        const calls: { messages: unknown[] }[] = [];
+        vi.mocked(streamChatCompletion).mockImplementation(
+          async function* (messages) {
+            calls.push({ messages: messages as unknown[] });
+            yield* finalAnswerEvents();
+          }
+        );
+
+        const sessionWithImage = makeExplainSession([
+          { id: "msg-user", role: "user", content: "请解读", createdAt: 1000 },
+          {
+            id: "msg-assistant",
+            role: "assistant",
+            content: "",
+            createdAt: 1001,
+            toolCalls: [
+              {
+                id: "call-shot",
+                type: "function" as const,
+                function: {
+                  name: "screenshot_pdf_page",
+                  arguments: JSON.stringify({
+                    file_hash: "hash-a",
+                    page_number: 3,
+                  }),
+                },
+              },
+              {
+                id: "call-read",
+                type: "function" as const,
+                function: {
+                  name: "read_pdf_page",
+                  arguments: JSON.stringify({
+                    file_hash: "hash-a",
+                    page_number: 4,
+                  }),
+                },
+              },
+            ],
+          },
+          {
+            id: "msg-tool",
+            role: "tool",
+            content: "Screenshot captured: page 3.",
+            createdAt: 1002,
+            toolCallId: "call-shot",
+            name: "screenshot_pdf_page",
+            images: [{ file: "img-9.jpg", page: 3 }],
+          },
+          {
+            id: "msg-tool-2",
+            role: "tool",
+            content: "page 4 text",
+            createdAt: 1003,
+            toolCallId: "call-read",
+            name: "read_pdf_page",
+          },
+        ]);
+
+        let hookRef: UsePersistenceReturn;
+        render(
+          <ConfigurableHarness
+            props={makeVisionProps()}
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        );
+
+        act(() => {
+          hookRef!.setSessions([sessionWithImage]);
+        });
+        act(() => {
+          hookRef!.handleFollowUp("session-explain", "追问");
+        });
+
+        await waitFor(() => {
+          expect(calls.length).toBeGreaterThan(0);
+        });
+
+        expect(vi.mocked(invoke)).toHaveBeenCalledWith("read_session_image", {
+          sessionId: "session-explain",
+          file: "img-9.jpg",
+        });
+
+        const apiMessages = calls[0].messages as {
+          role: string;
+          content: unknown;
+          toolCallId?: string;
+        }[];
+        const imageIdx = apiMessages.findIndex(
+          (m) => m.role === "user" && Array.isArray(m.content)
+        );
+        expect(imageIdx).toBeGreaterThan(-1);
+        // 合成 user 图片消息插在整批 tool 响应（call-shot + call-read）
+        // 之后，而不是夹在两条 tool 消息中间（DeepSeek adjacency 校验）。
+        expect(apiMessages[imageIdx - 1].toolCallId).toBe("call-read");
+        expect(apiMessages[imageIdx - 2].toolCallId).toBe("call-shot");
+        const parts = apiMessages[imageIdx].content as {
+          type: string;
+          image_url?: { url: string };
+        }[];
+        expect(parts[1].image_url?.url).toBe("data:image/jpeg;base64,AQID");
+      } finally {
+        restoreInvoke();
+      }
+    });
+  });
+
   describe("流式合批", () => {
     // 返回值引用稳定：状态未变化时 re-render 必须复用同一对象，
     // 否则 App 层依赖 persistence 的回调会每次渲染重建。

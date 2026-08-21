@@ -13,13 +13,17 @@ import {
   InterpretationMessage,
   InterpretationSession,
   SessionAction,
+  SessionImageRef,
   ToolEvent,
   appendUserMessage,
+  bytesToBase64,
   createSession,
   deleteSession,
   deleteSessionOnDisk,
   loadSession,
+  readSessionImage,
   saveSession,
+  saveSessionImage,
   startAssistantResponse,
 } from "../services/sessions";
 import {
@@ -39,7 +43,7 @@ import {
 } from "../services/llm";
 import type { TokenUsage } from "../types/llm";
 import { AppSettings } from "../services/settings";
-import { PLATFORM_PRESETS } from "../data/platformPresets";
+import { PLATFORM_PRESETS, modelSupportsVision } from "../data/platformPresets";
 import { PdfTab } from "./useTabs";
 import { useStreaming } from "./useStreaming";
 import { beginToolSession, ToolSession } from "../services/pdfTools";
@@ -554,6 +558,11 @@ export function usePersistence({
       if (name === "list_open_pdfs") {
         return i18n.t("tools.callList");
       }
+      if (name === "screenshot_pdf_page") {
+        return i18n.t("tools.callScreenshot", {
+          page: args.page_number ?? "?",
+        });
+      }
     } catch {
       // fall through
     }
@@ -574,6 +583,13 @@ export function usePersistence({
         (preset?.supportsTools ?? false) &&
         (sessionRef.current.action === "explain" ||
           sessionRef.current.action === "custom");
+      // 视觉门控：仅当前模型标记为视觉模型时，后端才会注入页面截图工具
+      const visionEnabled =
+        toolsEnabled &&
+        modelSupportsVision(
+          currentSettings.platformId,
+          currentSettings.llm.model
+        );
       const maxRounds =
         currentSettings.maxToolRounds > 0 ? currentSettings.maxToolRounds : 5;
       const toolSession: ToolSession | null = toolsEnabled
@@ -590,16 +606,40 @@ export function usePersistence({
         return `${base}\n\n${i18n.t("llm.toolsSystemAddendum")}`;
       };
 
-      const buildApiMessages = (): ChatMessage[] => {
-        const history = sessionRef.current.messages
-          .filter((m) => !(m.role === "assistant" && m.id === messageId))
-          .map((m) => ({
-            role: m.role,
-            content: m.content,
-            toolCallId: m.toolCallId,
-            toolCalls: m.toolCalls,
-            reasoningContent: m.reasoningContent,
-          })) as ChatMessage[];
+      /**
+       * 截图图片的合成 user 消息：图片只能出现在 user 消息的 content parts
+       * （各平台视觉 API 的共同约束，assistant/tool 消息带图会被 400 拒绝）。
+       * 该消息不落盘，每次由 tool 消息上的 images 引用重建。
+       */
+      const buildImageUserMessage = (
+        ref: SessionImageRef,
+        base64: string
+      ): ChatMessage => ({
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: i18n.t("llm.toolImageContext", { page: ref.page }),
+          },
+          {
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${base64}` },
+          },
+        ],
+      });
+
+      /**
+       * 同步构建 API 消息；带截图引用的 tool 消息把图片位置记录到
+       * imageSpots，由 replaySessionImages 异步读盘补齐。拆分同步/异步是为
+       * 了无截图的会话保持 loop 同步启动（已有测试依赖该时序）。
+       */
+      const buildApiMessages = (): {
+        messages: ChatMessage[];
+        imageSpots: { afterIndex: number; ref: SessionImageRef }[];
+      } => {
+        const sourceMessages = sessionRef.current.messages.filter(
+          (m) => !(m.role === "assistant" && m.id === messageId)
+        );
         // 防御：中止曾可能留下没有 tool 响应消息的 assistant.toolCalls
         // （历史脏数据），原样回放会被 OpenAI 兼容 API 的消息序列校验直接
         // 400 拒绝，且该会话此后所有追问都失败。为缺失响应的 toolCall 在
@@ -610,8 +650,15 @@ export function usePersistence({
             .map((m) => m.toolCallId as string)
         );
         const repaired: ChatMessage[] = [];
-        for (const m of history) {
-          repaired.push(m);
+        const imageSpots: { afterIndex: number; ref: SessionImageRef }[] = [];
+        for (const m of sourceMessages) {
+          repaired.push({
+            role: m.role,
+            content: m.content,
+            toolCallId: m.toolCallId,
+            toolCalls: m.toolCalls,
+            reasoningContent: m.reasoningContent,
+          } as ChatMessage);
           if (m.role === "assistant" && m.toolCalls) {
             for (const call of m.toolCalls) {
               if (!answeredCallIds.has(call.id)) {
@@ -623,8 +670,56 @@ export function usePersistence({
               }
             }
           }
+          if (m.role === "tool" && m.images?.length) {
+            for (const ref of m.images) {
+              imageSpots.push({ afterIndex: repaired.length - 1, ref });
+            }
+          }
         }
-        return [{ role: "system", content: buildSystemContent() }, ...repaired];
+        return {
+          messages: [
+            { role: "system", content: buildSystemContent() },
+            ...repaired,
+          ],
+          // afterIndex 相对 repaired；加上 system 消息的偏移 1
+          imageSpots: imageSpots.map((s) => ({
+            afterIndex: s.afterIndex + 1,
+            ref: s.ref,
+          })),
+        };
+      };
+
+      /** 把 imageSpots 记录的截图从磁盘读回，重建合成 user 图片消息。 */
+      const replaySessionImages = async (
+        base: ChatMessage[],
+        imageSpots: { afterIndex: number; ref: SessionImageRef }[]
+      ): Promise<ChatMessage[]> => {
+        // 插入点必须落在该 tool 消息所属批次的末尾（同一 assistant 的
+        // toolCalls 的全部 tool 响应之后）：DeepSeek 等平台校验 tool 消息
+        // 必须紧跟 assistant(toolCalls)，中间夹 user 图片消息会 400。
+        const insertions: { index: number; ref: SessionImageRef }[] = [];
+        for (const spot of imageSpots) {
+          let end = spot.afterIndex;
+          while (end + 1 < base.length && base[end + 1].role === "tool") end++;
+          insertions.push({ index: end + 1, ref: spot.ref });
+        }
+        const result = [...base];
+        let inserted = 0;
+        for (const ins of insertions) {
+          const bytes = await readSessionImage(
+            sessionRef.current.id,
+            ins.ref.file
+          );
+          // 文件缺失时跳过图片只留文本，不阻塞追问。
+          if (!bytes) continue;
+          result.splice(
+            ins.index + inserted,
+            0,
+            buildImageUserMessage(ins.ref, bytesToBase64(bytes))
+          );
+          inserted++;
+        }
+        return result;
       };
 
       const buildFinalNoToolsMessages = (
@@ -644,7 +739,8 @@ export function usePersistence({
           }
 
           if (message.toolCalls && message.toolCalls.length > 0) {
-            const assistantContent = message.content.trim();
+            const assistantContent =
+              typeof message.content === "string" ? message.content.trim() : "";
             if (assistantContent) {
               finalMessages.push({
                 role: "assistant",
@@ -830,6 +926,7 @@ export function usePersistence({
             {
               thinking: currentSettings.thinking,
               enableTools,
+              enableVision: visionEnabled,
               authorizedFileHashes: getOpenFileHashes(),
             }
           );
@@ -879,7 +976,8 @@ export function usePersistence({
       const appendToolResultMessage = (
         toolCallId: string,
         name: string,
-        result: string
+        result: string,
+        images?: SessionImageRef[]
       ) => {
         const toolMsg: InterpretationMessage = {
           id: crypto.randomUUID(),
@@ -888,6 +986,7 @@ export function usePersistence({
           createdAt: Date.now(),
           toolCallId,
           name,
+          images,
         };
         setSessions((prev) =>
           prev.map((s) => {
@@ -964,7 +1063,12 @@ export function usePersistence({
       };
 
       const runAgentLoop = async () => {
-        let messages = buildApiMessages();
+        const built = buildApiMessages();
+        // 无截图引用的会话保持同步启动（不引入额外 microtask）
+        let messages =
+          built.imageSpots.length > 0
+            ? await replaySessionImages(built.messages, built.imageSpots)
+            : built.messages;
         const seenCalls = new Map<string, string>();
         let totalUsage: TokenUsage | undefined;
         try {
@@ -1077,6 +1181,11 @@ export function usePersistence({
               } as ChatMessage,
             ];
 
+            // 同一批 toolCalls 的全部 tool 响应必须紧跟 assistant 消息
+            // （DeepSeek 等平台会校验 adjacency，中间插入 user 消息直接 400）。
+            // 因此合成 user 图片消息先攒在 roundImageMessages，整批 tool
+            // 响应推送完毕后再统一追加。
+            const roundImageMessages: ChatMessage[] = [];
             for (let i = 0; i < toolCalls.length; i++) {
               const call = toolCalls[i];
               if (loopAborted) {
@@ -1100,15 +1209,44 @@ export function usePersistence({
               }
               const callKey = `${call.function.name}:${call.function.arguments}`;
               let result: string;
+              let imageRefs: SessionImageRef[] | undefined;
               if (seenCalls.has(callKey)) {
+                // 去重命中只复用文本：图像已在历史消息里，不重复注入。
                 result = seenCalls.get(callKey)!;
               } else {
-                const { result: r } = await toolSession!.executeToolCall(
+                const toolResult = await toolSession!.executeToolCall(
                   call.function.name,
                   call.function.arguments
                 );
-                result = r;
+                result = toolResult.result;
                 seenCalls.set(callKey, result);
+                // 截图图片：先落盘拿文件名引用（失败降级为纯文本结果），
+                // 同时生成待发模型的合成 user 图片消息（loop 内使用，
+                // 不落盘；持久化回放由 buildApiMessages 从引用重建）。
+                if (toolResult.images?.length) {
+                  const refs: SessionImageRef[] = [];
+                  for (const image of toolResult.images) {
+                    const file = await saveSessionImage(
+                      sessionRef.current.id,
+                      image.data
+                    );
+                    if (!file) continue;
+                    const ref: SessionImageRef = {
+                      file,
+                      page: image.page,
+                      region: image.region,
+                    };
+                    refs.push(ref);
+                    roundImageMessages.push(
+                      buildImageUserMessage(ref, bytesToBase64(image.data))
+                    );
+                  }
+                  if (refs.length > 0) {
+                    imageRefs = refs;
+                  } else {
+                    result += "\n(Failed to attach the screenshot image.)";
+                  }
+                }
               }
 
               // Mark tool event as done on the assistant message.
@@ -1140,7 +1278,8 @@ export function usePersistence({
               const toolMsg = appendToolResultMessage(
                 call.id,
                 call.function.name,
-                result
+                result,
+                imageRefs
               );
               messages.push({
                 role: "tool",
@@ -1148,6 +1287,8 @@ export function usePersistence({
                 toolCallId: toolMsg.toolCallId,
               } as ChatMessage);
             }
+            // 整批 tool 响应推送完毕后，再追加本批的合成 user 图片消息
+            messages.push(...roundImageMessages);
           }
           // Should never reach here; maxRounds forces a final no-tools round.
           finishStreaming();

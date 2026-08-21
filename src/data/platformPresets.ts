@@ -31,6 +31,11 @@ export interface PlatformModel {
   supportsThinking: boolean;
   /** 上下文窗口大小（tokens），用于 context widget 计算 */
   contextWindow: number;
+  /**
+   * 是否支持图片输入（视觉模型）。缺省 = false。
+   * 为 true 且 Agent Tools 开启时，agent loop 会额外提供页面截图工具。
+   */
+  supportsVision?: boolean;
 }
 
 export interface PlatformPreset {
@@ -70,6 +75,14 @@ export const PLATFORM_PRESETS: Record<PlatformId, PlatformPreset> = {
         supportsThinking: true,
         contextWindow: 128000,
       },
+      {
+        // DeepSeek 官方文档：目前仅此型号接受图片输入
+        id: "deepseek-v4-flash-vision-exp",
+        label: "DeepSeek V4 Flash Vision（视觉实验版）",
+        supportsThinking: false,
+        contextWindow: 128000,
+        supportsVision: true,
+      },
     ],
     defaultModelId: "deepseek-v4-flash",
     apiKeyHelpUrl: "https://platform.deepseek.com/api_keys",
@@ -85,6 +98,7 @@ export const PLATFORM_PRESETS: Record<PlatformId, PlatformPreset> = {
         label: "Kimi K2.6（最新，最强）",
         supportsThinking: true,
         contextWindow: 131072,
+        supportsVision: true,
       },
       {
         id: "moonshot-v1-8k",
@@ -125,6 +139,7 @@ export const PLATFORM_PRESETS: Record<PlatformId, PlatformPreset> = {
         label: "MiMo-V2.5（原生全模态，1M 上下文）",
         supportsThinking: false,
         contextWindow: 1048576,
+        supportsVision: true,
       },
     ],
     defaultModelId: "mimo-v2.5-pro",
@@ -137,10 +152,12 @@ export const PLATFORM_PRESETS: Record<PlatformId, PlatformPreset> = {
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     models: [
       {
+        // qwen-plus 别名跟随最新旗舰（qwen3.7-plus 起官方支持视觉输入）
         id: "qwen-plus",
         label: "Qwen Plus（性能均衡，推荐）",
         supportsThinking: true,
         contextWindow: 131072,
+        supportsVision: true,
       },
       {
         id: "qwen-max",
@@ -177,6 +194,14 @@ export const PLATFORM_PRESETS: Record<PlatformId, PlatformPreset> = {
         contextWindow: 256000,
       },
       {
+        // GLM-5.2 为纯文本旗舰，视觉输入由 4.6V 系列承担
+        id: "glm-4.6v",
+        label: "GLM-4.6V（视觉）",
+        supportsThinking: true,
+        contextWindow: 65536,
+        supportsVision: true,
+      },
+      {
         id: "glm-4-flash",
         label: "GLM-4 Flash（轻量，免费）",
         supportsThinking: false,
@@ -194,16 +219,19 @@ export const PLATFORM_PRESETS: Record<PlatformId, PlatformPreset> = {
     baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
     models: [
       {
+        // seed-2 系列为原生多模态模型
         id: "doubao-seed-2-0-pro-260215",
         label: "Doubao Seed 2.0 Pro（旗舰）",
         supportsThinking: true,
         contextWindow: 128000,
+        supportsVision: true,
       },
       {
         id: "doubao-seed-2-0-lite-260215",
         label: "Doubao Seed 2.0 Lite（轻量）",
         supportsThinking: false,
         contextWindow: 128000,
+        supportsVision: true,
       },
     ],
     defaultModelId: "doubao-seed-2-0-pro-260215",
@@ -303,4 +331,15 @@ export function getContextWindow(
   if (model) return model.contextWindow;
   const preset = PLATFORM_PRESETS[platformId];
   return preset?.models[0]?.contextWindow ?? 128000;
+}
+
+/**
+ * 当前模型是否支持图片输入（视觉能力）。
+ * 自定义平台或未收录的模型一律视为不支持（不使用截图工具）。
+ */
+export function modelSupportsVision(
+  platformId: PlatformId,
+  modelId: string
+): boolean {
+  return findModel(platformId, modelId)?.supportsVision === true;
 }

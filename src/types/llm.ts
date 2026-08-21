@@ -8,10 +8,19 @@
 /** 思考模式开关 */
 export type ThinkingMode = "enabled" | "disabled" | "auto";
 
+/**
+ * 多模态 content part（OpenAI 兼容格式）。
+ * 图片仅以 base64 data URL 形式出现在 user 消息中（页面截图工具）。
+ */
+export type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "image_url"; image_url: { url: string } };
+
 /** Chat 消息 */
 export interface ChatMessage {
   role: "system" | "user" | "assistant" | "tool";
-  content: string;
+  /** 纯文本，或视觉场景下的 content parts 数组（仅 user 消息） */
+  content: string | ContentPart[];
   /** 工具调用 ID（role=tool 时） */
   toolCallId?: string;
   /** assistant 发起的工具调用（role=assistant 且有工具调用时） */

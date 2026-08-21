@@ -2,9 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
+use tauri::Emitter;
 #[allow(unused_imports)]
 use tauri::Manager;
-use tauri::Emitter;
 
 const LOG_FILE_NAME: &str = "app";
 const MAX_LOG_FILE_SIZE: u128 = 10 * 1024 * 1024; // 10 MB
@@ -231,6 +231,8 @@ pub fn run() {
             load_session,
             save_session,
             delete_session,
+            save_session_image,
+            read_session_image,
             load_settings,
             save_settings,
             check_api_key,
@@ -380,10 +382,7 @@ fn export_binary_file_core(file_path: &str, data: &[u8]) -> Result<(), String> {
 /// 已把本应用设为默认 PDF 阅读器，默认打开会回环成本应用的新 tab，而本应用
 /// 自身没有打印能力。原始字节经 IPC 请求体传入（前端 invoke(cmd, bytes)）。
 #[tauri::command]
-fn open_print_file(
-    app: tauri::AppHandle,
-    request: tauri::ipc::Request<'_>,
-) -> Result<(), String> {
+fn open_print_file(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> Result<(), String> {
     let bytes = match request.body() {
         tauri::ipc::InvokeBody::Raw(bytes) => bytes.clone(),
         tauri::ipc::InvokeBody::Json(_) => {
@@ -400,8 +399,7 @@ fn open_print_file(
 
 /// 写入 print 临时文件并清理旧文件（每次只保留最新一份，避免无限堆积）。
 fn write_print_temp_file(dir: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
-    std::fs::create_dir_all(dir)
-        .map_err(|e| format!("Failed to create print directory: {}", e))?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create print directory: {}", e))?;
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -415,8 +413,7 @@ fn write_print_temp_file(dir: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
         .map(|d| d.as_millis())
         .unwrap_or(0);
     let path = dir.join(format!("SpecReader-print-{}.pdf", millis));
-    std::fs::write(&path, bytes)
-        .map_err(|e| format!("Failed to write print file: {}", e))?;
+    std::fs::write(&path, bytes).map_err(|e| format!("Failed to write print file: {}", e))?;
     Ok(path)
 }
 
@@ -1072,7 +1069,65 @@ fn delete_session_from_disk(base_dir: &std::path::Path, session_id: &str) -> Res
     if path.exists() {
         std::fs::remove_file(&path).map_err(|e| format!("Failed to delete session file: {}", e))?;
     }
+    // 连带清理会话图片目录（screenshot_pdf_page 工具产生的截图）。
+    // 目录不存在不算错误。
+    let images_dir = session_images_dir(base_dir, session_id)?;
+    if images_dir.exists() {
+        std::fs::remove_dir_all(&images_dir)
+            .map_err(|e| format!("Failed to delete session images directory: {}", e))?;
+    }
     Ok(())
+}
+
+/// 会话图片目录：annotations/sessions/{session_id}/。
+/// session_id 复用 validate_session_id 的路径穿越防护。
+fn session_images_dir(base_dir: &Path, session_id: &str) -> Result<PathBuf, String> {
+    validate_session_id(session_id)?;
+    Ok(sessions_dir(base_dir).join(session_id))
+}
+
+/// 生成唯一图片文件名。没有 uuid/rand 依赖，用时间戳纳秒 + 进程内
+/// 原子计数器保证唯一（同一会话的图片量小，冲突概率可忽略）。
+fn unique_image_file_name() -> String {
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let nanos = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let seq = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    format!("{}-{}.jpg", nanos, seq)
+}
+
+fn save_session_image_to_disk(
+    base_dir: &std::path::Path,
+    session_id: &str,
+    data: &[u8],
+) -> Result<String, String> {
+    let dir = session_images_dir(base_dir, session_id)?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("Failed to create session images directory: {}", e))?;
+    let file_name = unique_image_file_name();
+    atomic_write(&dir.join(&file_name), data)
+        .map_err(|e| format!("Failed to write session image: {}", e))?;
+    Ok(file_name)
+}
+
+/// 图片文件名必须是纯文件名：拒绝路径分隔符与 ".."，防止目录穿越。
+fn validate_image_file_name(file: &str) -> Result<(), String> {
+    if file.is_empty() || file.contains('/') || file.contains('\\') || file.contains("..") {
+        return Err(format!("Invalid session image file name: {}", file));
+    }
+    Ok(())
+}
+
+fn read_session_image_from_disk(
+    base_dir: &std::path::Path,
+    session_id: &str,
+    file: &str,
+) -> Result<Vec<u8>, String> {
+    let dir = session_images_dir(base_dir, session_id)?;
+    validate_image_file_name(file)?;
+    std::fs::read(dir.join(file)).map_err(|e| format!("Failed to read session image: {}", e))
 }
 
 pub(crate) fn load_settings_from_disk(base_dir: &std::path::Path) -> Result<AppSettings, String> {
@@ -1234,6 +1289,38 @@ async fn delete_session(app: tauri::AppHandle, session_id: String) -> Result<(),
     .map_err(|e| format!("Task failed: {}", e))?
 }
 
+/// 保存会话图片（screenshot_pdf_page 截图）到 AppData，session JSON 只存
+/// 返回的文件名引用。data 经 serde_json 数组传输（前端 Array.from(bytes)）。
+/// 返回文件名（不含目录）。
+#[tauri::command]
+async fn save_session_image(
+    app: tauri::AppHandle,
+    session_id: String,
+    data: Vec<u8>,
+) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let base_dir = paths::app_data_dir(&app)?;
+        save_session_image_to_disk(&base_dir, &session_id, &data)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+/// 读取会话图片字节（前端转 base64 回填 data URL 用）。
+#[tauri::command]
+async fn read_session_image(
+    app: tauri::AppHandle,
+    session_id: String,
+    file: String,
+) -> Result<Vec<u8>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let base_dir = paths::app_data_dir(&app)?;
+        read_session_image_from_disk(&base_dir, &session_id, &file)
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
 #[tauri::command]
 async fn load_settings(
     app: tauri::AppHandle,
@@ -1273,9 +1360,7 @@ async fn check_api_key(
 ) -> Result<bool, String> {
     let storage = state.api_key_storage.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        storage
-            .retrieve(&platform_id)
-            .map(|key| key.is_some())
+        storage.retrieve(&platform_id).map(|key| key.is_some())
     })
     .await
     .map_err(|e| format!("Task failed: {}", e))?
@@ -1756,8 +1841,16 @@ mod tests {
 
         let err = load_pdf_data_from_disk(&cache, base.path(), pdf_path.to_str().unwrap())
             .expect_err("corrupt file should fail");
-        assert!(err.contains("corrupt"), "error should mention corruption: {}", err);
-        assert!(err.contains("backed up"), "error should mention backup: {}", err);
+        assert!(
+            err.contains("corrupt"),
+            "error should mention corruption: {}",
+            err
+        );
+        assert!(
+            err.contains("backed up"),
+            "error should mention backup: {}",
+            err
+        );
 
         // 原文件已被重命名为 {hash}.json.corrupt-{ts}，内容保持一致
         assert!(!path.exists());
@@ -1825,6 +1918,102 @@ mod tests {
         let result = delete_session_from_disk(base.path(), "../settings");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Invalid session id"));
+    }
+
+    #[test]
+    fn save_and_read_session_image_roundtrip() {
+        let base = tempfile::tempdir().unwrap();
+        let bytes = b"\xff\xd8\xff\xe0fake-jpeg-bytes";
+
+        let file_name = save_session_image_to_disk(base.path(), "session-1", bytes).unwrap();
+        assert!(file_name.ends_with(".jpg"));
+        // 返回的是纯文件名，不含目录
+        assert!(!file_name.contains('/'));
+        assert!(!file_name.contains('\\'));
+
+        let loaded = read_session_image_from_disk(base.path(), "session-1", &file_name).unwrap();
+        assert_eq!(loaded, bytes);
+
+        // 同一 session 保存第二张图，文件名不能冲突
+        let second = save_session_image_to_disk(base.path(), "session-1", b"second").unwrap();
+        assert_ne!(file_name, second);
+    }
+
+    #[test]
+    fn save_session_image_rejects_path_traversal_id() {
+        let base = tempfile::tempdir().unwrap();
+
+        let result = save_session_image_to_disk(base.path(), "../settings", b"bytes");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid session id"));
+    }
+
+    #[test]
+    fn read_session_image_rejects_path_traversal_file_name() {
+        let base = tempfile::tempdir().unwrap();
+        save_session_image_to_disk(base.path(), "session-1", b"bytes").unwrap();
+
+        // ../ 穿越
+        let result = read_session_image_from_disk(base.path(), "session-1", "../secret");
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .contains("Invalid session image file name"));
+        // 绝对路径
+        let result = read_session_image_from_disk(base.path(), "session-1", "/etc/passwd");
+        assert!(result.is_err());
+        // Windows 分隔符
+        let result = read_session_image_from_disk(base.path(), "session-1", "..\\secret");
+        assert!(result.is_err());
+        // 空文件名
+        let result = read_session_image_from_disk(base.path(), "session-1", "");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn read_session_image_rejects_path_traversal_session_id() {
+        let base = tempfile::tempdir().unwrap();
+
+        let result = read_session_image_from_disk(base.path(), "../settings", "a.jpg");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Invalid session id"));
+    }
+
+    #[test]
+    fn read_session_image_missing_file_errors() {
+        let base = tempfile::tempdir().unwrap();
+
+        let result = read_session_image_from_disk(base.path(), "session-1", "missing.jpg");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to read session image"));
+    }
+
+    #[test]
+    fn delete_session_removes_images_directory() {
+        let base = tempfile::tempdir().unwrap();
+        let session = sample_session("session-1");
+        save_session_to_disk(base.path(), session).unwrap();
+        save_session_image_to_disk(base.path(), "session-1", b"img1").unwrap();
+        save_session_image_to_disk(base.path(), "session-1", b"img2").unwrap();
+        let images_dir = session_images_dir(base.path(), "session-1").unwrap();
+        assert!(images_dir.exists());
+
+        delete_session_from_disk(base.path(), "session-1").unwrap();
+
+        assert!(!session_path(base.path(), "session-1").unwrap().exists());
+        assert!(!images_dir.exists());
+    }
+
+    #[test]
+    fn delete_session_without_images_directory_is_ok() {
+        // 会话从未保存过图片时，目录不存在不算错误。
+        let base = tempfile::tempdir().unwrap();
+        let session = sample_session("session-1");
+        save_session_to_disk(base.path(), session).unwrap();
+
+        delete_session_from_disk(base.path(), "session-1").unwrap();
+
+        assert!(!session_path(base.path(), "session-1").unwrap().exists());
     }
 
     // H-1: path validation for PDF commands.
@@ -2095,7 +2284,10 @@ mod tests {
 
         save_settings_with_storage(base.path(), settings.clone(), storage.as_ref()).unwrap();
 
-        assert_eq!(storage.retrieve("deepseek").unwrap(), Some("sk-test".to_string()));
+        assert_eq!(
+            storage.retrieve("deepseek").unwrap(),
+            Some("sk-test".to_string())
+        );
         let raw = std::fs::read_to_string(settings_path(base.path())).unwrap();
         assert!(
             raw.contains("\"apiKey\": \"\"") || raw.contains("\"apiKey\":\"\""),

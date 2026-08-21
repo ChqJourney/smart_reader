@@ -373,6 +373,7 @@
     "toolResultContext": "以下是一次已完成的文档查阅结果，作为回答依据：\n{{content}}",
     "toolLimitReachedFallback": "已达到本次文档查阅工具调用上限。请基于右侧已展示的查阅记录和原文片段继续判断；如仍需更多条款核对，可以调高「最大工具调用次数」后重新发起解读。",
     "toolCallCancelled": "（本次文档查阅已被用户中止，未执行。）",
+    "toolImageContext": "（页面截图工具返回的图像：第 {{page}} 页。请结合图像内容回答。）",
     "summarizePrompt": "请用{{targetLanguage}}把以下标准文档解读会话概括成一句话标题（30 字以内），只输出标题本身，不要引号、不要解释：\n\n用户请求：\n{{request}}\n\n解读内容：\n{{answer}}"
   },
   "tools": {
@@ -387,6 +388,7 @@
     "collapsedSummary": "收起调用记录",
     "callSearch": "搜索 “{{query}}”",
     "callReadPage": "读取第 {{page}} 页",
+    "callScreenshot": "截取第 {{page}} 页",
     "callList": "列出打开的文档",
     "callUnknown": "未知工具 {{name}}"
   },

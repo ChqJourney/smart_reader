@@ -29,12 +29,34 @@ pub enum ThinkingMode {
     Auto,
 }
 
+/// Message content: plain text or OpenAI-compatible content parts
+/// (`[{type:"text",...},{type:"image_url",...}]`)。图片只出现在 user 消息。
+/// untagged：JSON string → Text，JSON array → Parts。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MessageContent {
+    Text(String),
+    Parts(Vec<serde_json::Value>),
+}
+
+impl From<String> for MessageContent {
+    fn from(s: String) -> Self {
+        MessageContent::Text(s)
+    }
+}
+
+impl From<&str> for MessageContent {
+    fn from(s: &str) -> Self {
+        MessageContent::Text(s.to_string())
+    }
+}
+
 /// Chat message (mirrors frontend ChatMessage type).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChatMessage {
     pub role: String,
-    pub content: String,
+    pub content: MessageContent,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -70,9 +92,16 @@ pub struct TokenUsage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum LlmError {
-    Network { detail: String },
-    Auth { detail: String },
-    ModelNotFound { model: String, detail: String },
+    Network {
+        detail: String,
+    },
+    Auth {
+        detail: String,
+    },
+    ModelNotFound {
+        model: String,
+        detail: String,
+    },
     RateLimit {
         retry_after: Option<u32>,
         detail: String,
@@ -82,11 +111,25 @@ pub enum LlmError {
         requested: u32,
         detail: String,
     },
-    ServerError { status: u16, detail: String },
-    StreamInterrupted { partial_content: String },
-    InvalidConfig { field: String, detail: String },
-    ToolError { tool_name: String, detail: String },
-    Unknown { status: u16, body: String },
+    ServerError {
+        status: u16,
+        detail: String,
+    },
+    StreamInterrupted {
+        partial_content: String,
+    },
+    InvalidConfig {
+        field: String,
+        detail: String,
+    },
+    ToolError {
+        tool_name: String,
+        detail: String,
+    },
+    Unknown {
+        status: u16,
+        body: String,
+    },
 }
 
 /// Stream events pushed to the frontend via Channel.
@@ -94,17 +137,28 @@ pub enum LlmError {
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
 pub enum StreamEvent {
-    Chunk { content: String },
-    ReasoningChunk { content: String },
+    Chunk {
+        content: String,
+    },
+    ReasoningChunk {
+        content: String,
+    },
     ToolCall {
         name: String,
         args: String,
         #[serde(rename = "callId")]
         call_id: String,
     },
-    ToolResult { call_id: String, summary: String },
-    Usage { usage: TokenUsage },
-    Error { error: LlmError },
+    ToolResult {
+        call_id: String,
+        summary: String,
+    },
+    Usage {
+        usage: TokenUsage,
+    },
+    Error {
+        error: LlmError,
+    },
     Done,
 }
 
@@ -117,6 +171,9 @@ pub struct StreamParams {
     pub thinking: ThinkingMode,
     #[serde(default)]
     pub enable_tools: bool,
+    /// 是否启用视觉能力（截图工具）。仅对视觉模型开启。
+    #[serde(default)]
+    pub enable_vision: bool,
     #[serde(default)]
     #[allow(dead_code)] // reserved for future tool-call file_hash whitelist (Phase 6)
     pub authorized_file_hashes: Vec<String>,
@@ -134,7 +191,8 @@ pub type CancelMap = Arc<Mutex<HashMap<String, Arc<AtomicBool>>>>;
 fn chat_message_to_wire(msg: &ChatMessage) -> serde_json::Value {
     let mut out = serde_json::json!({
         "role": msg.role,
-        "content": msg.content,
+        // Text → JSON string，Parts → JSON 数组，原样透传给 OpenAI 兼容 API
+        "content": serde_json::to_value(&msg.content).unwrap_or(serde_json::Value::Null),
     });
     if let Some(tool_call_id) = &msg.tool_call_id {
         out["tool_call_id"] = serde_json::json!(tool_call_id);
@@ -196,9 +254,9 @@ fn build_request_body(
     model: &str,
     thinking: &ThinkingMode,
     enable_tools: bool,
+    enable_vision: bool,
 ) -> serde_json::Value {
-    let wire_messages: Vec<serde_json::Value> =
-        messages.iter().map(chat_message_to_wire).collect();
+    let wire_messages: Vec<serde_json::Value> = messages.iter().map(chat_message_to_wire).collect();
     let mut body = serde_json::json!({
         "model": model,
         "messages": wire_messages,
@@ -221,7 +279,12 @@ fn build_request_body(
     }
 
     if enable_tools {
-        body["tools"] = serde_json::json!(crate::llm_proxy::builtin_tools());
+        // 视觉模型额外提供截图工具；非视觉模型保持原有 3 个工具不变。
+        let mut tools: Vec<serde_json::Value> = builtin_tools().to_vec();
+        if enable_vision {
+            tools.extend_from_slice(vision_tools());
+        }
+        body["tools"] = serde_json::Value::Array(tools);
     }
 
     body
@@ -276,6 +339,41 @@ pub fn builtin_tools() -> &'static [serde_json::Value] {
     })
 }
 
+/// The vision-only tool set (page screenshot), appended to `builtin_tools()`
+/// when `enable_vision` is true. Images cost significant tokens, so this is
+/// only offered to vision-capable models.
+pub fn vision_tools() -> &'static [serde_json::Value] {
+    static TOOLS: std::sync::OnceLock<Vec<serde_json::Value>> = std::sync::OnceLock::new();
+    TOOLS.get_or_init(|| {
+        vec![serde_json::json!({
+            "type": "function",
+            "function": {
+                "name": "screenshot_pdf_page",
+                "description": "Capture a screenshot of a PDF page (or a region of it) as an image and attach it to the conversation for visual inspection. Use this when text extraction is insufficient, e.g. page layout, tables, figures, formulas, or stamped markings. Images consume significant tokens; prefer read_pdf_page / search_in_pdf when text suffices.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "file_hash": {"type": "string", "description": "PDF file identifier (from list_open_pdfs)"},
+                        "page_number": {"type": "integer", "description": "Page number, starting from 1"},
+                        "region": {
+                            "type": "object",
+                            "description": "Normalized crop region, each value a number between 0 and 1, origin at the page's TOP-LEFT corner. Omit to capture the full page.",
+                            "properties": {
+                                "x": {"type": "number", "description": "Left edge of the region (0 to 1)"},
+                                "y": {"type": "number", "description": "Top edge of the region (0 to 1)"},
+                                "width": {"type": "number", "description": "Width of the region (0 to 1)"},
+                                "height": {"type": "number", "description": "Height of the region (0 to 1)"}
+                            },
+                            "required": ["x", "y", "width", "height"]
+                        }
+                    },
+                    "required": ["file_hash", "page_number"]
+                }
+            }
+        })]
+    })
+}
+
 /// Classify an HTTP error response into a structured LlmError.
 fn classify_http_error(status: u16, body: &str, model: &str) -> LlmError {
     let body_trimmed = body.trim();
@@ -286,8 +384,7 @@ fn classify_http_error(status: u16, body: &str, model: &str) -> LlmError {
             detail: "API Key 不正确或已失效".into(),
         },
         404 => {
-            let detail = extract_error_message(body_trimmed)
-                .unwrap_or_else(|| "资源未找到".into());
+            let detail = extract_error_message(body_trimmed).unwrap_or_else(|| "资源未找到".into());
             if body_trimmed.to_lowercase().contains("model") {
                 LlmError::ModelNotFound {
                     model: model.to_string(),
@@ -340,7 +437,11 @@ fn extract_error_message(body: &str) -> Option<String> {
     }
     let v: serde_json::Value = serde_json::from_str(body).ok()?;
     // OpenAI-style: {"error": {"message": "..."}}
-    if let Some(msg) = v.get("error").and_then(|e| e.get("message")).and_then(|m| m.as_str()) {
+    if let Some(msg) = v
+        .get("error")
+        .and_then(|e| e.get("message"))
+        .and_then(|m| m.as_str())
+    {
         return Some(msg.to_string());
     }
     // Direct message field
@@ -351,10 +452,7 @@ fn extract_error_message(body: &str) -> Option<String> {
 }
 
 /// Flush any accumulated tool_calls as complete `StreamEvent::ToolCall`s.
-fn flush_tool_calls(
-    accumulators: &mut Vec<ToolCallAcc>,
-    on_event: &Channel<StreamEvent>,
-) {
+fn flush_tool_calls(accumulators: &mut Vec<ToolCallAcc>, on_event: &Channel<StreamEvent>) {
     for acc in accumulators.drain(..) {
         if acc.id.is_empty() || acc.name.is_empty() {
             continue;
@@ -414,12 +512,18 @@ fn parse_sse_line(
 
     // Extract usage from the last chunk (choices is empty or null)
     if let Some(usage) = data.get("usage").filter(|u| !u.is_null()) {
-        let prompt_tokens = usage.get("prompt_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as u32;
+        let prompt_tokens = usage
+            .get("prompt_tokens")
+            .and_then(|t| t.as_u64())
+            .unwrap_or(0) as u32;
         let completion_tokens = usage
             .get("completion_tokens")
             .and_then(|t| t.as_u64())
             .unwrap_or(0) as u32;
-        let total_tokens = usage.get("total_tokens").and_then(|t| t.as_u64()).unwrap_or(0) as u32;
+        let total_tokens = usage
+            .get("total_tokens")
+            .and_then(|t| t.as_u64())
+            .unwrap_or(0) as u32;
         let reasoning_tokens = usage
             .get("completion_tokens_details")
             .and_then(|d| d.get("reasoning_tokens"))
@@ -471,10 +575,7 @@ fn parse_sse_line(
                 .and_then(|tc| tc.as_array())
             {
                 for tc in tool_calls {
-                    let index = tc
-                        .get("index")
-                        .and_then(|i| i.as_u64())
-                        .unwrap_or(0) as usize;
+                    let index = tc.get("index").and_then(|i| i.as_u64()).unwrap_or(0) as usize;
                     if accumulators.len() <= index {
                         accumulators.resize_with(index + 1, ToolCallAcc::default);
                     }
@@ -545,11 +646,10 @@ pub async fn chat_completions_stream(
 
     // Load settings to get baseUrl + model
     let base_dir = crate::paths::app_data_dir(&app)?;
-    let settings = tauri::async_runtime::spawn_blocking(move || {
-        crate::load_settings_from_disk(&base_dir)
-    })
-    .await
-    .map_err(|e| format!("Failed to load settings: {}", e))??;
+    let settings =
+        tauri::async_runtime::spawn_blocking(move || crate::load_settings_from_disk(&base_dir))
+            .await
+            .map_err(|e| format!("Failed to load settings: {}", e))??;
 
     let base_url = settings.llm.base_url.trim_end_matches('/').to_string();
     let model = settings.llm.model.clone();
@@ -600,7 +700,13 @@ pub async fn chat_completions_stream(
 
     // Build request
     let url = format!("{}/chat/completions", base_url);
-    let body = build_request_body(&params.messages, &model, &params.thinking, params.enable_tools);
+    let body = build_request_body(
+        &params.messages,
+        &model,
+        &params.thinking,
+        params.enable_tools,
+        params.enable_vision,
+    );
 
     log::info!("llmRequestStarted: model={} url={}", model, base_url);
 
@@ -907,7 +1013,13 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
         }];
-        let body = build_request_body(&messages, "deepseek-v4-flash", &ThinkingMode::Auto, false);
+        let body = build_request_body(
+            &messages,
+            "deepseek-v4-flash",
+            &ThinkingMode::Auto,
+            false,
+            false,
+        );
         assert!(body.get("thinking").is_none());
         assert_eq!(body["model"], "deepseek-v4-flash");
         assert_eq!(body["stream"], true);
@@ -923,7 +1035,7 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
         }];
-        let body = build_request_body(&messages, "qwen-plus", &ThinkingMode::Enabled, false);
+        let body = build_request_body(&messages, "qwen-plus", &ThinkingMode::Enabled, false, false);
         assert_eq!(body["thinking"]["type"], "enabled");
         assert_eq!(body["reasoning_effort"], "high");
     }
@@ -937,7 +1049,13 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
         }];
-        let body = build_request_body(&messages, "qwen-plus", &ThinkingMode::Disabled, false);
+        let body = build_request_body(
+            &messages,
+            "qwen-plus",
+            &ThinkingMode::Disabled,
+            false,
+            false,
+        );
         assert_eq!(body["thinking"]["type"], "disabled");
         assert!(body.get("reasoning_effort").is_none());
     }
@@ -951,10 +1069,136 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
         }];
-        let body = build_request_body(&messages, "deepseek-v4-flash", &ThinkingMode::Auto, true);
+        let body = build_request_body(
+            &messages,
+            "deepseek-v4-flash",
+            &ThinkingMode::Auto,
+            true,
+            false,
+        );
         assert!(body.get("tools").is_some());
         let tools = body["tools"].as_array().unwrap();
         assert!(tools.len() >= 3);
+    }
+
+    #[test]
+    fn build_request_body_with_vision_adds_screenshot_tool() {
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            content: "hi".into(),
+            tool_call_id: None,
+            tool_calls: None,
+            reasoning_content: None,
+        }];
+        let body = build_request_body(&messages, "qwen-vl-plus", &ThinkingMode::Auto, true, true);
+        let tools = body["tools"].as_array().unwrap();
+        let names: Vec<&str> = tools
+            .iter()
+            .map(|t| t["function"]["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(tools.len(), 4);
+        assert!(names.contains(&"screenshot_pdf_page"));
+    }
+
+    #[test]
+    fn build_request_body_without_vision_omits_screenshot_tool() {
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            content: "hi".into(),
+            tool_call_id: None,
+            tool_calls: None,
+            reasoning_content: None,
+        }];
+        let body = build_request_body(&messages, "qwen-plus", &ThinkingMode::Auto, true, false);
+        let tools = body["tools"].as_array().unwrap();
+        let names: Vec<&str> = tools
+            .iter()
+            .map(|t| t["function"]["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(tools.len(), 3);
+        assert!(!names.contains(&"screenshot_pdf_page"));
+    }
+
+    #[test]
+    fn build_request_body_no_tools_ignores_vision() {
+        // enable_tools=false 时即使 enable_vision=true 也不下发任何工具。
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            content: "hi".into(),
+            tool_call_id: None,
+            tool_calls: None,
+            reasoning_content: None,
+        }];
+        let body = build_request_body(&messages, "qwen-vl-plus", &ThinkingMode::Auto, false, true);
+        assert!(body.get("tools").is_none());
+    }
+
+    #[test]
+    fn chat_message_deserializes_content_parts() {
+        // OpenAI 兼容的图片 content parts：JSON 数组反序列化为 Parts。
+        let raw = r#"{
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "what is in this image?"},
+                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,QUJD"}}
+            ]
+        }"#;
+        let msg: ChatMessage = serde_json::from_str(raw).unwrap();
+        match &msg.content {
+            MessageContent::Parts(parts) => {
+                assert_eq!(parts.len(), 2);
+                assert_eq!(parts[0]["type"], "text");
+                assert_eq!(parts[1]["image_url"]["url"], "data:image/jpeg;base64,QUJD");
+            }
+            MessageContent::Text(_) => panic!("Expected Parts content"),
+        }
+    }
+
+    #[test]
+    fn chat_message_text_content_still_deserializes() {
+        // 旧格式（纯字符串 content）必须继续可用。
+        let raw = r#"{"role": "user", "content": "hello"}"#;
+        let msg: ChatMessage = serde_json::from_str(raw).unwrap();
+        assert!(matches!(msg.content, MessageContent::Text(ref s) if s == "hello"));
+    }
+
+    #[test]
+    fn wire_format_passthrough_text_and_parts_content() {
+        let text_msg = ChatMessage {
+            role: "user".into(),
+            content: "plain".into(),
+            tool_call_id: None,
+            tool_calls: None,
+            reasoning_content: None,
+        };
+        let parts_msg = ChatMessage {
+            role: "user".into(),
+            content: MessageContent::Parts(vec![
+                serde_json::json!({"type": "text", "text": "look"}),
+                serde_json::json!({"type": "image_url", "image_url": {"url": "data:image/jpeg;base64,QUJD"}}),
+            ]),
+            tool_call_id: None,
+            tool_calls: None,
+            reasoning_content: None,
+        };
+        let body = build_request_body(
+            &[text_msg, parts_msg],
+            "qwen-vl-plus",
+            &ThinkingMode::Auto,
+            false,
+            false,
+        );
+        let wire = body["messages"].as_array().unwrap();
+        // Text → JSON string
+        assert_eq!(wire[0]["content"], "plain");
+        // Parts → JSON 数组原样透传
+        let content = wire[1]["content"].as_array().unwrap();
+        assert_eq!(content.len(), 2);
+        assert_eq!(content[0]["type"], "text");
+        assert_eq!(
+            content[1]["image_url"]["url"],
+            "data:image/jpeg;base64,QUJD"
+        );
     }
 
     #[test]
@@ -982,7 +1226,7 @@ mod tests {
                 reasoning_content: None,
             },
         ];
-        let body = build_request_body(&messages, "qwen-plus", &ThinkingMode::Auto, false);
+        let body = build_request_body(&messages, "qwen-plus", &ThinkingMode::Auto, false, false);
         let wire = body["messages"].as_array().unwrap();
         assert_eq!(wire[0]["role"], "assistant");
         assert_eq!(wire[0]["content"], "");
@@ -1038,7 +1282,8 @@ mod tests {
 
     #[test]
     fn classify_400_context_length_as_context_exceeded() {
-        let body = r#"{"error":{"message":"This model's maximum context length is 128000 tokens"}}"#;
+        let body =
+            r#"{"error":{"message":"This model's maximum context length is 128000 tokens"}}"#;
         let error = classify_http_error(400, body, "deepseek-chat");
         assert!(matches!(error, LlmError::ContextLengthExceeded { .. }));
     }
@@ -1085,12 +1330,8 @@ mod tests {
         let events_clone = events.clone();
         let channel = Channel::new(move |body: tauri::ipc::InvokeResponseBody| {
             let event: Option<StreamEvent> = match body {
-                tauri::ipc::InvokeResponseBody::Json(s) => {
-                    serde_json::from_str(&s).ok()
-                }
-                tauri::ipc::InvokeResponseBody::Raw(bytes) => {
-                    serde_json::from_slice(&bytes).ok()
-                }
+                tauri::ipc::InvokeResponseBody::Json(s) => serde_json::from_str(&s).ok(),
+                tauri::ipc::InvokeResponseBody::Raw(bytes) => serde_json::from_slice(&bytes).ok(),
             };
             if let Some(event) = event {
                 events_clone.lock().unwrap().push(event);
@@ -1125,7 +1366,12 @@ mod tests {
             .filter(|e| matches!(e, StreamEvent::ToolCall { .. }))
             .collect();
         assert_eq!(tool_calls.len(), 1);
-        if let StreamEvent::ToolCall { name, args, call_id } = tool_calls[0] {
+        if let StreamEvent::ToolCall {
+            name,
+            args,
+            call_id,
+        } = tool_calls[0]
+        {
             assert_eq!(name, "read_pdf_page");
             assert_eq!(call_id, "call_1");
             assert_eq!(args, r#"{"file_hash":"abc"}"#);
@@ -1237,7 +1483,9 @@ mod tests {
             let (channel, events) = test_channel();
             let cancel_flag = Arc::new(AtomicBool::new(false));
             let stream = futures_util::stream::iter(vec![
-                Ok::<_, String>(b"data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n".to_vec()),
+                Ok::<_, String>(
+                    b"data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n".to_vec(),
+                ),
                 Ok::<_, String>(b"data: [DONE]\n\n".to_vec()),
             ]);
 
@@ -1260,13 +1508,10 @@ mod tests {
             let (channel, events) = test_channel();
             let cancel_flag = Arc::new(AtomicBool::new(false));
             // 「中」= E4 B8 AD，把它的 3 个字节切到两个 chunk（1+2）。
-            let full = "data: {\"choices\":[{\"delta\":{\"content\":\"中文\"}}]}\n\ndata: [DONE]\n\n";
+            let full =
+                "data: {\"choices\":[{\"delta\":{\"content\":\"中文\"}}]}\n\ndata: [DONE]\n\n";
             let bytes = full.as_bytes();
-            let split_at = bytes
-                .windows(3)
-                .position(|w| w == "中".as_bytes())
-                .unwrap()
-                + 1;
+            let split_at = bytes.windows(3).position(|w| w == "中".as_bytes()).unwrap() + 1;
             let stream = futures_util::stream::iter(vec![
                 Ok::<_, String>(bytes[..split_at].to_vec()),
                 Ok::<_, String>(bytes[split_at..].to_vec()),

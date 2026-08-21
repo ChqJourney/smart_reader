@@ -373,6 +373,7 @@
     "toolResultContext": "The following completed document lookup result is available as answer context:\n{{content}}",
     "toolLimitReachedFallback": "The document lookup limit has been reached for this response. Please continue from the lookup records already shown in the panel and the source excerpt; if more clause checks are needed, raise the maximum tool call setting and start the interpretation again.",
     "toolCallCancelled": "(This document lookup was aborted by the user and was not executed.)",
+    "toolImageContext": "(Image returned by the page screenshot tool: page {{page}}. Use the image content in your answer.)",
     "summarizePrompt": "Summarize the following standards-document interpretation session as a one-line title (max 60 characters) in {{targetLanguage}}. Output only the title itself, no quotes, no explanation:\n\nUser request:\n{{request}}\n\nAnswer:\n{{answer}}"
   },
   "tools": {
@@ -387,6 +388,7 @@
     "collapsedSummary": "Collapse call records",
     "callSearch": "Search for “{{query}}”",
     "callReadPage": "Read page {{page}}",
+    "callScreenshot": "Capture page {{page}}",
     "callList": "List open documents",
     "callUnknown": "Unknown tool {{name}}"
   },

@@ -124,7 +124,10 @@ mod tests {
         let storage = MemoryStorage::new();
         storage.store("deepseek", "sk-ds").unwrap();
         storage.store("kimi", "sk-km").unwrap();
-        assert_eq!(storage.retrieve("deepseek").unwrap(), Some("sk-ds".to_string()));
+        assert_eq!(
+            storage.retrieve("deepseek").unwrap(),
+            Some("sk-ds".to_string())
+        );
         assert_eq!(storage.retrieve("kimi").unwrap(), Some("sk-km".to_string()));
     }
 
@@ -149,7 +152,10 @@ mod tests {
         storage.store("deepseek", "sk-ds").unwrap();
         // Deleting one platform doesn't affect another
         storage.delete("kimi").unwrap();
-        assert_eq!(storage.retrieve("deepseek").unwrap(), Some("sk-ds".to_string()));
+        assert_eq!(
+            storage.retrieve("deepseek").unwrap(),
+            Some("sk-ds".to_string())
+        );
         assert_eq!(storage.retrieve("kimi").unwrap(), None);
     }
 }

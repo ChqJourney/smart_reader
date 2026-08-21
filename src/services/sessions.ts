@@ -20,6 +20,26 @@ export interface ToolEvent {
   status: "running" | "done";
 }
 
+/** 归一化截图区域（0-1，原点页面左上角），与 pdfTools.ToolImageRegion 同构。 */
+export interface SessionImageRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * 截图工具图片的持久化引用。图片本体落盘在
+ * `<AppData>/SpecReader/annotations/sessions/{sessionId}/{file}`，
+ * session JSON 里只存这个引用，避免 base64 撑爆会话文件。
+ */
+export interface SessionImageRef {
+  /** 图片文件名（不含目录，位于 sessions/{sessionId}/ 下） */
+  file: string;
+  page: number;
+  region?: SessionImageRegion;
+}
+
 export interface InterpretationMessage {
   id: string;
   role: "user" | "assistant" | "tool";
@@ -39,6 +59,8 @@ export interface InterpretationMessage {
   toolCalls?: ToolCall[];
   /** UI-facing summary of tool calls executed for this assistant message */
   toolEvents?: ToolEvent[];
+  /** 截图工具图片引用（仅 role === "tool" 的截图结果消息） */
+  images?: SessionImageRef[];
 }
 
 export interface InterpretationSession {
@@ -252,5 +274,61 @@ export async function deleteSessionOnDisk(sessionId: string): Promise<void> {
     await invoke("delete_session", { sessionId });
   } catch (err) {
     error(`Failed to delete session: ${err}`);
+  }
+}
+
+/** Uint8Array → base64（分块避免栈溢出，截图图片约数百 KB）。 */
+export function bytesToBase64(bytes: Uint8Array): string {
+  let binary = "";
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+/** base64 → Uint8Array。 */
+export function base64ToBytes(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * 把截图图片字节落盘到 sessions/{sessionId}/ 目录，返回文件名引用。
+ * 失败返回 null（调用方降级为纯文本结果，不中断 agent loop）。
+ */
+export async function saveSessionImage(
+  sessionId: string,
+  data: Uint8Array
+): Promise<string | null> {
+  try {
+    // 与 export_binary_file 同一传输约定：嵌套 Uint8Array 会被序列化成对象，
+    // 必须用普通 number 数组。
+    return await invoke<string>("save_session_image", {
+      sessionId,
+      data: Array.from(data),
+    });
+  } catch (err) {
+    error(`Failed to save session image: ${err}`);
+    return null;
+  }
+}
+
+/** 读取落盘的截图图片字节（追问/重载时回放图片消息用）。 */
+export async function readSessionImage(
+  sessionId: string,
+  file: string
+): Promise<Uint8Array | null> {
+  try {
+    const data = await invoke<number[]>("read_session_image", {
+      sessionId,
+      file,
+    });
+    return new Uint8Array(data);
+  } catch (err) {
+    error(`Failed to read session image: ${err}`);
+    return null;
   }
 }

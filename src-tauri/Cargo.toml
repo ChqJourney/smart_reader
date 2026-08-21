@@ -1,6 +1,6 @@
 [package]
 name = "app"
-version = "0.9.23"
+version = "0.9.24"
 description = "AI assistant for reading and interpreting standard PDFs"
 authors = ["SpecReader AI Team"]
 license = "GPL-3.0-or-later"

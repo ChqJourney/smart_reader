@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [0.9.24] - 2026-08-21
+
 ### Added
 
 - Agent Tools 新增 `screenshot_pdf_page` 页面截图工具（仅视觉模型可用）：解读/追问时 LLM 可截取整页或指定归一化区域（0-1 坐标，原点页面左上角）的页面图像，用于查看文本提取无法表达的版面、表格、图示与公式；截图渲染为 JPEG（≤144 DPI），落盘到 AppData 会话图片目录（session JSON 只存文件名引用，删除会话时一并清理），追问时自动回放图片；仅预设中标记为视觉的模型生效（Kimi K2.6 / MiMo-V2.5 / Qwen Plus / GLM-4.6V / Doubao Seed 2.0 / DeepSeek V4 Flash Vision），非视觉模型行为不变。

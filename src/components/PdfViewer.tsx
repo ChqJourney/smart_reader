@@ -41,6 +41,7 @@ import {
 import { useScrollPageSync } from "../hooks/useScrollPageSync";
 import { useTabRestore } from "../hooks/useTabRestore";
 import { useLinkPreviews } from "../hooks/useLinkPreviews";
+import { usePanScroll } from "../hooks/usePanScroll";
 import LinkPreviewPopup from "./LinkPreviewPopup";
 import "./PdfViewer.css";
 
@@ -653,6 +654,66 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       goToPreviousScreen,
       goToNextScreen,
     ]);
+
+    // Space 按住进入临时 pan 态（手型工具）：光标变 grab，左键拖拽滚动页面，
+    // 松开立即恢复文字选择。与上面的键盘导航分开管理：pan 是「按住」语义，
+    // 需要 keyup/blur 收尾，且不依赖 pdf 加载状态。
+    const [spaceHeld, setSpaceHeld] = useState(false);
+    useEffect(() => {
+      if (!isFocused) {
+        setSpaceHeld(false);
+        return;
+      }
+      const handleSpaceDown = (e: KeyboardEvent) => {
+        if (e.code !== "Space") return;
+        const target = e.target as HTMLElement | null;
+        const tag = target?.tagName?.toLowerCase();
+        // 输入类控件聚焦时 Space 是正常输入，不劫持。
+        if (
+          tag === "input" ||
+          tag === "textarea" ||
+          tag === "select" ||
+          target?.isContentEditable
+        ) {
+          return;
+        }
+        // 按住不放时浏览器会自动重复派发 keydown（repeat=true），每一次都要
+        // 拦默认行为——否则容器聚焦时 Space 的默认滚动会在重复事件上生效，
+        // 连续模式下页面会自己往下滑。
+        e.preventDefault();
+        // 按钮在 Chromium/WebView2 中点击后保留焦点，此时 Space 的默认行为
+        // 是「点击该按钮」；blur 掉让 Space 始终表示 pan（按钮仍可用 Enter
+        // 或鼠标激活，键盘可访问性不受损）。
+        if (tag === "button") target?.blur();
+        if (!e.repeat) setSpaceHeld(true);
+      };
+      const handleSpaceUp = (e: KeyboardEvent) => {
+        if (e.code === "Space") setSpaceHeld(false);
+      };
+      // 窗口失焦（如 Alt+Tab）时收不到 keyup，强制复位避免卡在 pan 态。
+      const handleWindowBlur = () => setSpaceHeld(false);
+      window.addEventListener("keydown", handleSpaceDown);
+      window.addEventListener("keyup", handleSpaceUp);
+      window.addEventListener("blur", handleWindowBlur);
+      return () => {
+        window.removeEventListener("keydown", handleSpaceDown);
+        window.removeEventListener("keyup", handleSpaceUp);
+        window.removeEventListener("blur", handleWindowBlur);
+      };
+    }, [isFocused]);
+
+    // 拖拽滚动画布：仅在 Space 按住且内容溢出时生效，详见 usePanScroll。
+    const getScrollContainer = useCallback(
+      () =>
+        viewMode === "single"
+          ? singleContainerRef.current
+          : continuousContainerRef.current,
+      [viewMode]
+    );
+    const { isPanning, handlers: panHandlers } = usePanScroll({
+      getContainer: getScrollContainer,
+      active: spaceHeld,
+    });
 
     const zoomOut = useCallback(() => {
       zoomTo(scale * (1 - ZOOM_STEP_RATIO));
@@ -1326,13 +1387,14 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           )}
 
           <div
-            className={`pdf-canvas-container ${viewMode === "continuous" ? "continuous" : ""}`}
+            className={`pdf-canvas-container ${viewMode === "continuous" ? "continuous" : ""} ${spaceHeld ? "pan-ready" : ""} ${isPanning ? "panning" : ""}`}
             ref={
               viewMode === "single"
                 ? singleContainerRef
                 : continuousContainerRef
             }
             tabIndex={0}
+            {...panHandlers}
           >
             {numPages > 0 ? (
               viewMode === "single" ? (

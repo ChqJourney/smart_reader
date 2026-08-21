@@ -18,6 +18,7 @@
   "shortcuts": {
     "title": "Keyboard Shortcuts",
     "scrollWheel": "Scroll",
+    "mouseDrag": "drag",
     "groups": {
       "navigation": "Page Navigation",
       "search": "Search",
@@ -29,6 +30,7 @@
     "scrollPage": "Scroll up / down (continuous mode)",
     "firstLast": "Jump to start / end (continuous mode)",
     "gotoPage": "Go to page",
+    "panPage": "Hold to drag the page (pan)",
     "openSearch": "Full-text search",
     "nextPrevMatch": "Next / previous match (in search box)",
     "closePanels": "Close search / go-to-page panel",

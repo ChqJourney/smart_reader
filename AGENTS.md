@@ -142,6 +142,7 @@ npm install
 │   │   ├── useClampedPopupPosition.ts # 浮层 clamp 定位（支持 yPercent）
 │   │   ├── useStreaming.ts            # LLM 流式输出状态
 │   │   ├── useLinkPreviews.ts         # 条款链接悬停预览状态（2s 悬停计时、同目标去重、单 transient + 多固化、400ms 宽限关闭、上限 10）
+│   │   ├── usePanScroll.ts            # Space 按住临时 pan（手型工具拖拽滚动画布，仅溢出时生效，复用 useDrag）
 │   │   └── useModal.ts                # Modal 通用逻辑
 │   ├── i18n/                          # i18next 初始化（index.ts，lng 硬编码 zh-CN）
 │   ├── locales/                       # zh-CN.json / en.json（顶层 key 分组一致，en 为预埋）
@@ -200,6 +201,7 @@ npm install
 │   ├── pdf-page-jump.spec.ts          # 连续滚动页码跳转 / Cmd+G 跳页面板 / 右侧滑轨拖动
 │   ├── pdf-rapid-zoom.spec.ts         # 快速缩放回归
 │   ├── pdf-selection-translate.spec.ts # 选区翻译流程
+│   ├── pdf-space-pan.spec.ts          # Space 按住拖拽 pan（连续/单页模式 + 不按 Space 时选择不受影响）
 │   └── pdf-tab-budget.spec.ts         # Tab 休眠/唤醒回归 + per-tab 内存成本测量（init script 拨快假时间越过 5 分钟保护窗口）
 ├── scripts/                           # 辅助脚本
 │   ├── gen-sample-pdf.mjs             # 生成测试 PDF
@@ -402,6 +404,7 @@ PdfViewer.tsx（协调层：UI + 组合 hooks）
 ├── pageNum / scale / viewMode          # 本组件持有的三要素状态
 ├── jumpOpen / flashPage                # Cmd/Ctrl+G 跳页面板与跳页闪卡（面板提交才闪，600ms 定时清除）
 ├── useLinkPreviews                     # 条款链接悬停预览（PdfPage onLinkHover 上报 → 计时弹窗；LinkPreviewPopup 列表）
+├── usePanScroll + spaceHeld            # Space 按住临时 pan（手型工具）：直写 scrollTop/scrollLeft，仅溢出时生效；keyup/blur 复位
 ├── PageRail                            # 右侧页码滑轨（连续模式拖动直写 scrollTop，页码由 useScrollPageSync 停息重算收敛）
 ├── 文本选区 → onSelection
 └── PdfPage                             # 单页渲染组件；悬停取词（useWordLookup + WordTooltip）已下沉到 PdfPage
@@ -502,13 +505,14 @@ runSessionStream（usePersistence.ts）
 
 ### 8.2 E2E 测试
 
-- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 7 个 spec：
+- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 8 个 spec：
   - `app.spec.ts`：主布局、顶部最近文件入口、设置 Modal、面板显隐。
   - `pdf-page-jump.spec.ts`：连续滚动模式下页码跳转正确性、Cmd/Ctrl+G 跳页面板（输入回车跳转 + 闪卡）、右侧滑轨拖动跳页，使用 mock 的 Tauri `invoke` 返回 PDF 字节。
   - `multi-tab-state.spec.ts`：多 tab 页码/批注隔离、关闭 tab 后状态保持。
   - `pdf-large-doc.spec.ts`：>50 页大文档回归——适合宽度不横向偏移、深度缩放页码不抖动、快速切换 tab 恢复页码（fixtures 含 `gen-sample-long-pdf.mjs` 生成的 60 页 PDF）。
   - `pdf-rapid-zoom.spec.ts`：快速缩放回归。
   - `pdf-selection-translate.spec.ts`：选区翻译流程。
+  - `pdf-space-pan.spec.ts`：Space 按住拖拽 pan（连续/单页模式滚动位置不弹回、不按 Space 时拖拽仍是文字选择）。
   - `pdf-tab-budget.spec.ts`：Tab 休眠/唤醒回归（字节预算与存活 viewer 数两条预算线、唤醒后页码恢复）+ per-tab 内存成本测量；init script 在每次 `get_pdf_hash` 时拨快假时间 6 分钟，越过 5 分钟休眠保护窗口。
 - 单实例与文件关联需在打包后的安装包上手动验证，E2E 较难覆盖。
 

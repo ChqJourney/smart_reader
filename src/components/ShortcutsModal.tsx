@@ -22,6 +22,8 @@ interface ShortcutGroup {
 
 /** 按键 token「wheel」按界面语言翻译（滚轮 / Scroll） */
 const WHEEL_TOKEN = "wheel";
+/** 按键 token「drag」按界面语言翻译（拖拽 / Drag） */
+const DRAG_TOKEN = "drag";
 
 // 快捷键清单与 PdfViewer / RecentFilesBar / App 中的实际键位保持一致，
 // 新增快捷键时需同步此处。
@@ -40,6 +42,7 @@ const GROUPS: ShortcutGroup[] = [
       { labelKey: "shortcuts.scrollPage", combos: [["↑"], ["↓"]] },
       { labelKey: "shortcuts.firstLast", combos: [["Home"], ["End"]] },
       { labelKey: "shortcuts.gotoPage", combos: [["Ctrl/Cmd", "G"]] },
+      { labelKey: "shortcuts.panPage", combos: [["Space", DRAG_TOKEN]] },
     ],
   },
   {
@@ -78,7 +81,11 @@ export default function ShortcutsModal({ onClose }: ShortcutsModalProps) {
 
   const renderToken = (token: string, index: number) => (
     <kbd key={index} className="shortcuts-kbd">
-      {token === WHEEL_TOKEN ? t("shortcuts.scrollWheel") : token}
+      {token === WHEEL_TOKEN
+        ? t("shortcuts.scrollWheel")
+        : token === DRAG_TOKEN
+          ? t("shortcuts.mouseDrag")
+          : token}
     </kbd>
   );
 

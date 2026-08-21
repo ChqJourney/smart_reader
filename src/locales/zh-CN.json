@@ -18,6 +18,7 @@
   "shortcuts": {
     "title": "键盘快捷键",
     "scrollWheel": "滚轮",
+    "mouseDrag": "拖拽",
     "groups": {
       "navigation": "页面导航",
       "search": "搜索",
@@ -29,6 +30,7 @@
     "scrollPage": "上下滚动（连续模式）",
     "firstLast": "跳到文档开头 / 结尾（连续模式）",
     "gotoPage": "跳转到指定页",
+    "panPage": "按住拖动页面（平移视图）",
     "openSearch": "全文搜索",
     "nextPrevMatch": "下一个 / 上一个匹配（搜索框内）",
     "closePanels": "关闭搜索 / 跳页面板",

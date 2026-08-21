@@ -332,11 +332,18 @@
   flex: 1;
   overflow: auto;
   display: flex;
-  align-items: center;
-  justify-content: center;
   padding: 24px;
   background: var(--surface-hover-4);
   min-width: 0;
+}
+
+/* 单页模式居中用子元素 margin:auto 而非容器 align/justify-content：flex
+   居中在内容溢出时滚动范围畸形（上/左部分不可达，WKWebView 下拖拽 pan
+   会被钳回原位）；margin:auto 在内容更大时退化为 0，滚动范围正常，内容
+   更小时依然居中。连续模式由下方专属 margin 规则覆盖。 */
+.pdf-canvas-container > .pdf-page-wrapper,
+.pdf-canvas-container > .pdf-placeholder {
+  margin: auto;
 }
 
 /* 垂直滚动条由右侧 PageRail 滑轨替代（仅隐藏垂直，保留水平滚动条用于
@@ -399,6 +406,22 @@
 
 .pdf-canvas-container.continuous .pdf-page-wrapper:last-child {
   margin-bottom: 0;
+}
+
+/* Space 按住进入临时 pan 态：grab 光标提示可拖动，拖动中 grabbing 并禁止
+   文本选择。需 !important 覆盖 PdfPage 链接悬停 overlay 的 inline cursor。 */
+.pdf-canvas-container.pan-ready,
+.pdf-canvas-container.pan-ready * {
+  cursor: grab !important;
+}
+
+.pdf-canvas-container.panning,
+.pdf-canvas-container.panning * {
+  cursor: grabbing !important;
+}
+
+.pdf-canvas-container.panning {
+  user-select: none;
 }
 
 .pdf-canvas-container canvas {

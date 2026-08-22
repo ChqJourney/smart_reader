@@ -45,6 +45,7 @@ export type IconName =
   | "share"
   | "swap"
   | "print"
+  | "trash"
   | "help";
 
 interface IconProps {
@@ -785,6 +786,39 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinejoin="round"
+      />
+    </>
+  ),
+  trash: (
+    <>
+      <path
+        d="M3 5h14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M7.5 5V3.5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1V5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M4.8 5l.7 11a1.5 1.5 0 0 0 1.5 1.4h6a1.5 1.5 0 0 0 1.5-1.4l.7-11"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M8 8.5v6M12 8.5v6"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
       />
     </>
   ),

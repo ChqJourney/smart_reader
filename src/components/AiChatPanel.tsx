@@ -443,7 +443,7 @@ export default function AiChatPanel({
                   aria-label={t("session.delete")}
                   title={t("session.delete")}
                 >
-                  <Icon name="close" size={16} />
+                  <Icon name="trash" size={16} />
                 </button>
               )}
             </>
@@ -681,7 +681,7 @@ export default function AiChatPanel({
                           aria-label={t("common.delete")}
                           title={t("common.delete")}
                         >
-                          <Icon name="close" size={12} />
+                          <Icon name="trash" size={12} />
                         </button>
                       </div>
                     </div>
@@ -855,7 +855,7 @@ export default function AiChatPanel({
                             aria-label={t("session.delete")}
                             title={t("session.delete")}
                           >
-                            <Icon name="close" size={12} />
+                            <Icon name="trash" size={12} />
                           </button>
                         )}
                       </div>

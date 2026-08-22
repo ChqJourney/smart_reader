@@ -2701,4 +2701,252 @@ describe("usePersistence", () => {
       });
     });
   });
+
+  describe("handleFreeQuestion（无选区自由提问）", () => {
+    const freeQuestionTab: PdfTab = {
+      id: "tab-a",
+      filePath: "/a.pdf",
+      fileName: "a.pdf",
+      fileHash: "hash-a",
+    };
+
+    function freeQuestionProps(tab: PdfTab | null): UsePersistenceProps {
+      return {
+        activeTab: tab,
+        activeTabId: tab?.id ?? null,
+        secondaryTab: null,
+        isSplitView: false,
+        focusedTab: tab,
+        openRightPanel: vi.fn(),
+        settings: DEFAULT_SETTINGS,
+      };
+    }
+
+    it("creates an anchored empty-sources session and starts streaming", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      const streamSpy = vi
+        .mocked(streamChatCompletion)
+        .mockImplementation(makeMockStream());
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={freeQuestionProps(freeQuestionTab)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+
+      let sessionId: string | null = null;
+      act(() => {
+        sessionId = hookRef!.handleFreeQuestion("爬电距离的要求是什么？");
+      });
+
+      expect(sessionId).not.toBeNull();
+      const session = hookRef!.sessions.find((s) => s.id === sessionId);
+      expect(session).toMatchObject({
+        action: "custom",
+        anchorFileHash: "hash-a",
+        anchorFileName: "a.pdf",
+      });
+      expect(session!.sources).toEqual([]);
+      expect(session!.messages[0]).toMatchObject({
+        role: "user",
+        content: "爬电距离的要求是什么？",
+      });
+      await waitFor(() => {
+        expect(streamSpy).toHaveBeenCalledTimes(1);
+      });
+
+      act(() => {
+        vi.runAllTimers();
+      });
+    });
+
+    it("returns null without a focused tab or with an empty prompt", () => {
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={freeQuestionProps(null)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+
+      act(() => {
+        expect(hookRef!.handleFreeQuestion("问题")).toBeNull();
+      });
+      expect(hookRef!.sessions).toHaveLength(0);
+
+      // 有锚定文档但问题为空 / 全空白：同样拒绝
+      render(
+        <ConfigurableHarness
+          props={freeQuestionProps(freeQuestionTab)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+      act(() => {
+        expect(hookRef!.handleFreeQuestion("   ")).toBeNull();
+      });
+      expect(hookRef!.sessions).toHaveLength(0);
+    });
+
+    it("includes anchored sessions in visible/focused tab session lists", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      vi.mocked(streamChatCompletion).mockImplementation(makeMockStream());
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={freeQuestionProps(freeQuestionTab)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+
+      act(() => {
+        hookRef!.handleFreeQuestion("问题");
+      });
+
+      // 空 sources 会话必须经 anchorFileHash 归属到当前文档，
+      // 否则「当前文档」范围下不可见。
+      expect(hookRef!.visibleTabSessions).toHaveLength(1);
+      expect(hookRef!.focusedTabSessions).toHaveLength(1);
+
+      act(() => {
+        vi.runAllTimers();
+      });
+    });
+
+    it("uses the dedicated no-tools ask prompt when agent tools are disabled", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      // 首轮收尾后会 fire-and-forget 生成 summary（也是一次 streamChatCompletion
+      // 调用且首条是 user 消息），必须按调用次序取第一次调用的消息。
+      const calls: { role: string; content: unknown }[][] = [];
+      vi.mocked(streamChatCompletion).mockImplementation(
+        async function* (messages) {
+          calls.push(messages as (typeof calls)[number]);
+          yield { type: "chunk" as const, content: "answer" };
+          yield { type: "done" as const };
+        }
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={freeQuestionProps(freeQuestionTab)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+
+      act(() => {
+        hookRef!.handleFreeQuestion("当前标准是针对什么产品的？");
+      });
+
+      await waitFor(() => {
+        expect(calls.length).toBeGreaterThan(0);
+      });
+      const system = calls[0][0];
+      expect(system.role).toBe("system");
+      // 专用自由提问 prompt：不含「基于用户提供的文档片段」（否则模型会等片段拒答），
+      // 且声明无法访问文档并引导开启智能文档查阅。
+      expect(system.content as string).not.toContain("基于用户提供的文档片段");
+      expect(system.content as string).toContain("无法访问该文档内容");
+      expect(system.content as string).toContain("智能文档查阅");
+
+      act(() => {
+        vi.runAllTimers();
+      });
+    });
+
+    it("uses the tools-guided ask prompt when agent tools are enabled", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      const calls: { role: string; content: unknown }[][] = [];
+      vi.mocked(streamChatCompletion).mockImplementation(
+        async function* (messages) {
+          calls.push(messages as (typeof calls)[number]);
+          yield { type: "chunk" as const, content: "answer" };
+          yield { type: "done" as const };
+        }
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={{
+            ...freeQuestionProps(freeQuestionTab),
+            settings: { ...DEFAULT_SETTINGS, agentToolsEnabled: true },
+          }}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+
+      act(() => {
+        hookRef!.handleFreeQuestion("当前标准是针对什么产品的？");
+      });
+
+      await waitFor(() => {
+        expect(calls.length).toBeGreaterThan(0);
+      });
+      const system = calls[0][0];
+      expect(system.role).toBe("system");
+      // tools 开启时：明确引导模型主动查阅当前打开的文档
+      expect(system.content as string).toContain("list_open_pdfs");
+      expect(system.content as string).toContain("search_in_pdf");
+
+      act(() => {
+        vi.runAllTimers();
+      });
+    });
+
+    it("persists the anchored session id into the PDF data file", async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const invokeSpy = vi.mocked(invoke);
+      const { streamChatCompletion } = await import("../services/llm");
+      vi.mocked(streamChatCompletion).mockImplementation(makeMockStream());
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={freeQuestionProps(freeQuestionTab)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+
+      // 等 load_pdf_data 完成，hash-a 标记为已加载（未加载的 hash 不会被保存）
+      await act(async () => {});
+
+      let sessionId: string | null = null;
+      act(() => {
+        sessionId = hookRef!.handleFreeQuestion("问题");
+      });
+
+      // 推进 500ms 防抖：自由提问不产生批注变更，靠 handler 主动标脏锚定 hash
+      await act(async () => {
+        vi.advanceTimersByTime(600);
+      });
+
+      const saveCalls = invokeSpy.mock.calls.filter(
+        ([cmd, args]) =>
+          cmd === "save_pdf_data" &&
+          (args as { filePath?: string } | undefined)?.filePath === "/a.pdf"
+      );
+      expect(saveCalls.length).toBeGreaterThan(0);
+      const savedData = saveCalls[saveCalls.length - 1][1] as {
+        data: { sessionIds: string[] };
+      };
+      expect(savedData.data.sessionIds).toContain(sessionId);
+    });
+  });
 });

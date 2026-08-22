@@ -35,6 +35,12 @@ interface AiChatPanelProps {
   onOpenCustomInterpret: (preselectedIds: Set<string> | null) => void;
   onGotoStash?: (stash: StashItem) => void;
   onGotoSession?: (session: InterpretationSession) => void;
+  /** 无选区自由提问：返回新会话 id 供面板直接切入 chatbox；无可锚定文档时返回 null */
+  onFreeQuestion?: (prompt: string) => string | null;
+  /** 是否可以发起自由提问（有已打开 PDF 可锚定） */
+  canAsk?: boolean;
+  /** Agent Tools 是否开启：关闭时提问框下方提示「开启后可查阅原文」 */
+  agentToolsEnabled?: boolean;
   onFollowUp: (sessionId: string, prompt: string) => void;
   onInterrupt?: (sessionId: string) => void;
   /** 面板内删除会话（连带删除 PDF 上的对应标记） */
@@ -61,6 +67,9 @@ export default function AiChatPanel({
   onOpenCustomInterpret,
   onGotoStash,
   onGotoSession,
+  onFreeQuestion,
+  canAsk = true,
+  agentToolsEnabled,
   onFollowUp,
   onInterrupt,
   onDeleteSession,
@@ -363,10 +372,15 @@ export default function AiChatPanel({
     </div>
   );
 
-  const renderSessionSource = (session: InterpretationSession) =>
-    session.sources
+  const renderSessionSource = (session: InterpretationSession) => {
+    if (session.sources.length === 0) {
+      // 无选区自由提问会话：来源行回退为锚点文档文件名快照
+      return session.anchorFileName ?? "";
+    }
+    return session.sources
       .map((s) => `${s.source.fileName} p.${s.source.page}`)
       .join(" · ");
+  };
 
   // 页码徽章：来源页去重排序后取前 3 个，如 p.3·7·12
   const renderSessionPages = (session: InterpretationSession) => {
@@ -633,7 +647,12 @@ export default function AiChatPanel({
           {activeTab === "stash" && (
             <div className="ai-chat-content stash-list" role="tabpanel">
               {stashes.length === 0 && (
-                <p className="ai-chat-placeholder">{t("stash.emptyHint")}</p>
+                <>
+                  <p className="ai-chat-placeholder">{t("stash.emptyHint")}</p>
+                  <p className="ai-chat-placeholder">
+                    {t("stash.emptyHintAsk")}
+                  </p>
+                </>
               )}
               {stashes.map((stash) => {
                 const isExpanded = expandedStashIds.has(stash.id);
@@ -813,15 +832,21 @@ export default function AiChatPanel({
                 )}
                 {sortedSessions.map((session) => {
                   const isCustom = session.action === "custom";
-                  // 旧会话没有 LLM summary 时，回退显示首个片段的原文摘要。
+                  // 无选区自由提问：custom + 空 sources
+                  const isChat = isCustom && session.sources.length === 0;
+                  // 旧会话没有 LLM summary 时，回退显示首个片段的原文摘要；
+                  // 自由提问会话没有片段，回退到首条 user 消息（问题本身）。
                   const fallbackSummary = truncate(
-                    session.sources[0]?.text ?? "",
+                    session.sources[0]?.text ??
+                      session.messages.find((m) => m.role === "user")
+                        ?.content ??
+                      "",
                     80
                   );
                   return (
                     <div
                       key={session.id}
-                      className={`session-item ${isCustom ? "custom" : "explain"} ${session.isStreaming ? "streaming" : ""}`}
+                      className={`session-item ${isChat ? "chat" : isCustom ? "custom" : "explain"} ${session.isStreaming ? "streaming" : ""}`}
                       onClick={() => {
                         onGotoSession?.(session);
                         enterSessionChatbox(session);
@@ -829,15 +854,19 @@ export default function AiChatPanel({
                     >
                       <div className="session-item-header">
                         <div className="session-item-meta">
-                          <span className="session-item-page">
-                            {renderSessionPages(session)}
-                          </span>
+                          {renderSessionPages(session) !== "" && (
+                            <span className="session-item-page">
+                              {renderSessionPages(session)}
+                            </span>
+                          )}
                           <span
-                            className={`session-item-type ${isCustom ? "custom" : "explain"}`}
+                            className={`session-item-type ${isChat ? "chat" : isCustom ? "custom" : "explain"}`}
                           >
-                            {isCustom
-                              ? t("session.typeCustom")
-                              : t("session.typeExplain")}
+                            {isChat
+                              ? t("session.typeChat")
+                              : isCustom
+                                ? t("session.typeCustom")
+                                : t("session.typeExplain")}
                           </span>
                           {session.isStreaming && (
                             <span className="session-item-status">
@@ -869,6 +898,21 @@ export default function AiChatPanel({
                   );
                 })}
               </div>
+              {onFreeQuestion && (
+                <div className="ai-chat-input-area">
+                  {canAsk && agentToolsEnabled === false && (
+                    <p className="ask-tools-hint">{t("chat.askToolsHint")}</p>
+                  )}
+                  <AskInput
+                    disabled={!canAsk}
+                    onSend={(text) => {
+                      const id = onFreeQuestion(text);
+                      // 直接切入新会话的 chatbox 观看流式输出
+                      if (id) setActiveSessionId(id);
+                    }}
+                  />
+                </div>
+              )}
             </>
           )}
         </>
@@ -998,6 +1042,55 @@ function FollowUpInput({
         className={isStreaming ? "interrupt" : ""}
       >
         {isStreaming ? t("common.stop") : t("common.send")}
+      </button>
+    </div>
+  );
+}
+
+interface AskInputProps {
+  /** 无打开 PDF 可锚定时禁用（含 hint 文案） */
+  disabled: boolean;
+  onSend: (text: string) => void;
+}
+
+/**
+ * 解读记录列表态底部的自由提问输入框。与 FollowUpInput 同交互
+ * （Enter 发送 / Shift+Enter 换行 / 空文本禁用发送），但面向「新会话」，
+ * 不持有 session 上下文。
+ */
+function AskInput({ disabled, onSend }: AskInputProps) {
+  const { t } = useTranslation();
+  const [text, setText] = useState("");
+
+  const handleSend = () => {
+    const trimmed = text.trim();
+    if (!trimmed || disabled) return;
+    onSend(trimmed);
+    setText("");
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // isComposing：中文输入法组词中按 Enter 是确认候选词，不应触发发送。
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  return (
+    <div className="follow-up-input ask-input">
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={
+          disabled ? t("chat.askDisabledHint") : t("chat.askPlaceholder")
+        }
+        disabled={disabled}
+        rows={2}
+      />
+      <button onClick={handleSend} disabled={disabled || !text.trim()}>
+        {t("common.send")}
       </button>
     </div>
   );

@@ -56,6 +56,23 @@ export type { SelectionState } from "../services/selection";
 // react-markdown 全量重跑）。ref 累积 + 50ms 定时 flush 一次即可。
 const STREAM_FLUSH_INTERVAL = 50;
 
+/**
+ * 会话归属判定：常规会话靠 sources 里的 fileHash；无选区自由提问会话
+ * （空 sources）靠 anchorFileHash 锚点归属到创建时 focused tab 的文档。
+ */
+function sessionBelongsToHashes(
+  session: InterpretationSession,
+  hashes: ReadonlySet<string>
+): boolean {
+  if (
+    session.anchorFileHash !== undefined &&
+    hashes.has(session.anchorFileHash)
+  ) {
+    return true;
+  }
+  return session.sources.some((item) => hashes.has(item.source.fileHash));
+}
+
 export interface UsePersistenceProps {
   activeTab: PdfTab | null;
   activeTabId: string | null;
@@ -85,6 +102,8 @@ export interface UsePersistenceReturn {
   handleRemoveStash: (id: string) => void;
   handleClearStashes: () => void;
   handleCustomInterpret: (prompt: string, visibleStashes: StashItem[]) => void;
+  /** 无选区自由提问：创建空 sources 的锚定会话，返回新会话 id（无锚定文档时 null） */
+  handleFreeQuestion: (prompt: string) => string | null;
   handleSelectionAction: (
     selection: SelectionState,
     action: SelectionAction,
@@ -247,10 +266,7 @@ export function usePersistence({
   );
 
   const visibleTabSessions = useMemo(
-    () =>
-      sessions.filter((s) =>
-        s.sources.some((item) => visibleFileHashes.has(item.source.fileHash))
-      ),
+    () => sessions.filter((s) => sessionBelongsToHashes(s, visibleFileHashes)),
     [sessions, visibleFileHashes]
   );
 
@@ -263,9 +279,10 @@ export function usePersistence({
 
   const focusedTabSessions = useMemo(
     () =>
-      sessions.filter((s) =>
-        s.sources.some((item) => item.source.fileHash === focusedTab?.fileHash)
-      ),
+      sessions.filter((s) => {
+        if (!focusedTab?.fileHash) return false;
+        return sessionBelongsToHashes(s, new Set([focusedTab.fileHash]));
+      }),
     [sessions, focusedTab?.fileHash]
   );
 
@@ -315,9 +332,7 @@ export function usePersistence({
 
         const fileAnnotations = annotationsByHashRef.current[fileHash] || [];
         const fileSessionIds = sessionsRef.current
-          .filter((s) =>
-            s.sources.some((item) => item.source.fileHash === fileHash)
-          )
+          .filter((s) => sessionBelongsToHashes(s, new Set([fileHash])))
           .map((s) => s.id);
 
         try {
@@ -596,7 +611,21 @@ export function usePersistence({
         ? beginToolSession()
         : null;
 
+      // 无选区自由提问（空 sources 的 custom 会话）：没有片段可供「基于片段回答」，
+      // 沿用 explain 模板会让模型以为用户忘了贴文本而拒答；改用专用 prompt——
+      // tools 开启时明确引导模型主动用 list_open_pdfs / search_in_pdf 查证当前文档，
+      // tools 关闭时则声明无法访问文档、需要原文才能作答的问题引导用户开启工具或选中文本。
+      const isFreeQuestion =
+        sessionRef.current.action === "custom" &&
+        sessionRef.current.sources.length === 0;
+
       const buildSystemContent = () => {
+        if (isFreeQuestion) {
+          return i18n.t(
+            toolsEnabled ? "llm.askWithToolsPrompt" : "llm.askNoToolsPrompt",
+            { targetLanguage: currentSettings.targetLanguage }
+          );
+        }
         const base = buildSystemPrompt(
           sessionRef.current.action ?? "explain",
           currentSettings.targetLanguage,
@@ -1311,9 +1340,10 @@ export function usePersistence({
     (
       prompt: string,
       sources: StashItem[],
-      action: SessionAction = "explain"
+      action: SessionAction = "explain",
+      anchor?: { fileHash: string; fileName: string }
     ) => {
-      const session = createSession(sources, prompt, action);
+      const session = createSession(sources, prompt, action, anchor);
       const streamingSession = startAssistantResponse(session);
       const sessionId = streamingSession.id;
       const messageId = streamingSession.streamingMessageId!;
@@ -1324,32 +1354,32 @@ export function usePersistence({
       // and link it to the session so the marker can be deleted together with the session.
       // 片段可能来自不同 PDF（分屏对照解读），按 fileHash 逐桶更新，
       // 否则第二个文件的 stash 批注不会被标记为已解读，重启后会被加载过滤器丢弃。
+      // 空 sources（自由提问会话）下整段标记为 no-op，但流必须照常启动。
       const stashIds = new Set(sources.map((s) => s.id));
       const fileHashes = new Set(
         sources.map((s) => s.source.fileHash).filter(Boolean)
       );
-      if (fileHashes.size === 0)
-        return { sessionId, session: streamingSession };
-
-      setAnnotationsByHash((prev) => {
-        const next = { ...prev };
-        for (const fileHash of fileHashes) {
-          const list = next[fileHash] || [];
-          next[fileHash] = list.map((a) =>
-            a.type === "stash" && a.stashId && stashIds.has(a.stashId)
-              ? {
-                  ...a,
-                  interpretedGroupSize: sources.length,
-                  interpretedIndex: sources.findIndex(
-                    (s) => s.id === a.stashId
-                  ),
-                  sessionId,
-                }
-              : a
-          );
-        }
-        return next;
-      });
+      if (fileHashes.size > 0) {
+        setAnnotationsByHash((prev) => {
+          const next = { ...prev };
+          for (const fileHash of fileHashes) {
+            const list = next[fileHash] || [];
+            next[fileHash] = list.map((a) =>
+              a.type === "stash" && a.stashId && stashIds.has(a.stashId)
+                ? {
+                    ...a,
+                    interpretedGroupSize: sources.length,
+                    interpretedIndex: sources.findIndex(
+                      (s) => s.id === a.stashId
+                    ),
+                    sessionId,
+                  }
+                : a
+            );
+          }
+          return next;
+        });
+      }
 
       runSessionStream(streamingSession, messageId);
 
@@ -1510,6 +1540,30 @@ export function usePersistence({
       });
     },
     [focusedTab, startSessionFromStashes, setAnnotationsByHash]
+  );
+
+  // 无选区自由提问：空 sources 的 custom 会话，经 anchorFileHash 锚定到
+  // 创建时 focused tab 的文档（可见性过滤与持久化反查都认锚点）。
+  // 不套 buildCustomInterpretPrompt 模板——没有片段可填，模板只会稀释问题；
+  // action 复用 "custom"，Agent Tools 门控（action ∈ {explain, custom}）零改动放行。
+  // 返回新会话 id 供面板直接切入 chatbox；无可锚定文档时返回 null。
+  const handleFreeQuestion = useCallback(
+    (prompt: string): string | null => {
+      const trimmed = prompt.trim();
+      if (!trimmed || !focusedTab?.fileHash) return null;
+      const { sessionId } = startSessionFromStashes(trimmed, [], "custom", {
+        fileHash: focusedTab.fileHash,
+        fileName: focusedTab.fileName,
+      });
+      // 自由提问不产生批注变更，锚定 hash 不会因 setAnnotationsByHash 标脏；
+      // 不主动标脏则 persistDirtyHashes 永不写回该文件的 sessionIds，
+      // 会话 JSON 虽已落盘但重开 PDF 后无人引用它，等于丢失。
+      // （加载失败的 hash 不在 loadedFileHashes 中，persistDirtyHashes 仍会跳过，
+      // 不会引入「空数据覆盖写回」。）
+      dirtyHashesRef.current.add(focusedTab.fileHash);
+      return sessionId;
+    },
+    [focusedTab, startSessionFromStashes]
   );
 
   const handleSelectionAction = useCallback(
@@ -1802,6 +1856,7 @@ export function usePersistence({
       handleRemoveStash,
       handleClearStashes,
       handleCustomInterpret,
+      handleFreeQuestion,
       handleSelectionAction,
       handleFollowUp,
       handleInterruptSession,
@@ -1831,6 +1886,7 @@ export function usePersistence({
       handleRemoveStash,
       handleClearStashes,
       handleCustomInterpret,
+      handleFreeQuestion,
       handleSelectionAction,
       handleFollowUp,
       handleInterruptSession,

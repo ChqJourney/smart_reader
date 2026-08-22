@@ -72,6 +72,13 @@ export interface InterpretationSession {
   action?: SessionAction;
   createdAt: number;
   updatedAt: number;
+  /**
+   * 无选区自由提问会话的归属锚点：创建时 focused tab 的 fileHash/fileName 快照。
+   * sources 为空的会话无法靠片段归属到文档，用锚点承担可见性过滤与持久化
+   * （sessionIds 反查）职能；fileName 供「全部文档」范围下文件未打开时显示来源行。
+   */
+  anchorFileHash?: string;
+  anchorFileName?: string;
   /** Last prompt_tokens from the most recent LLM call (for ContextWidget) */
   lastPromptTokens?: number;
   /** LLM 生成的一句话摘要，用于会话列表展示 */
@@ -93,7 +100,8 @@ function createMessage(
 export function createSession(
   sources: StashItem[],
   prompt: string,
-  action: SessionAction = "explain"
+  action: SessionAction = "explain",
+  anchor?: { fileHash: string; fileName: string }
 ): InterpretationSession {
   const now = Date.now();
   return {
@@ -104,6 +112,8 @@ export function createSession(
     action,
     createdAt: now,
     updatedAt: now,
+    anchorFileHash: anchor?.fileHash,
+    anchorFileName: anchor?.fileName,
   };
 }
 

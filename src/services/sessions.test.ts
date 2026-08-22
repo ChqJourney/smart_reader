@@ -67,6 +67,30 @@ describe("sessions service", () => {
 
       expect(session.action).toBe("custom");
     });
+
+    it("creates an anchored free-question session with empty sources", () => {
+      const session = createSession(
+        [],
+        "这份标准对爬电距离的要求是什么？",
+        "custom",
+        { fileHash: "hash-a", fileName: "a.pdf" }
+      );
+
+      expect(session.sources).toEqual([]);
+      expect(session.anchorFileHash).toBe("hash-a");
+      expect(session.anchorFileName).toBe("a.pdf");
+      expect(session.messages[0]).toMatchObject({
+        role: "user",
+        content: "这份标准对爬电距离的要求是什么？",
+      });
+    });
+
+    it("leaves anchor fields undefined when no anchor is given", () => {
+      const session = createSession([makeStashItem("stash-1", "t")], "prompt");
+
+      expect(session.anchorFileHash).toBeUndefined();
+      expect(session.anchorFileName).toBeUndefined();
+    });
   });
 
   describe("appendUserMessage", () => {

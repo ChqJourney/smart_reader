@@ -111,6 +111,9 @@
     "aiLabel": "AI",
     "generatingPlaceholder": "Generating…",
     "followUpPlaceholder": "Ask a follow-up...",
+    "askPlaceholder": "Ask AI about the current document…",
+    "askDisabledHint": "Open a PDF to ask AI questions",
+    "askToolsHint": "Enable Smart Document Lookup to let AI consult the current document",
     "copyAll": "Copy all",
     "copyMessage": "Copy"
   },
@@ -120,13 +123,15 @@
     "exportMarkdown": "Export Markdown file",
     "defaultTitle": "Standard Interpretation",
     "sourceRef": "—— {{fileName}} · P.{{page}}",
-    "followUpLine": "**Follow-up**: {{content}}"
+    "followUpLine": "**Follow-up**: {{content}}",
+    "questionLine": "**Question**: {{content}}"
   },
   "stash": {
     "tabLabel": "Stash ({{count}})",
     "add": "Add to Stash",
     "source": "{{fileName}} · page {{page}}",
     "emptyHint": "No stashed snippets yet. Select content in the PDF and click Add to Stash.",
+    "emptyHintAsk": "No snippet needed to ask: type your question at the bottom of the Interpretations tab.",
     "clear": "Clear Stash",
     "expand": "Expand",
     "collapse": "Collapse",
@@ -143,6 +148,7 @@
     "delete": "Delete interpretation",
     "typeExplain": "Explain",
     "typeCustom": "Custom",
+    "typeChat": "Ask",
     "scopeCurrent": "Current",
     "scopeAll": "All documents",
     "scopeSwitch": "Click to switch document scope",
@@ -366,6 +372,8 @@
     "customInterpretPrompt": "Please answer the following question in {{targetLanguage}}:\n\n{{prompt}}\n\n{{sources}}",
     "customInterpretSource": "Excerpt {{index}} ({{fileName}} page {{page}}):\n{{text}}",
     "toolsSystemAddendum": "You can use tools to look up content in currently open PDFs. When the excerpt refers to other clause numbers, tables, or definitions and accurate interpretation requires it, use search_in_pdf / read_pdf_page to check the source before answering. Cite sources as (page N) in your answer. Do not fabricate clauses that were not found.",
+    "askWithToolsPrompt": "You are a reading assistant for testing & certification standards documents. The user is reading a currently open PDF standard and asking a question directly, without attaching any text excerpt. First use list_open_pdfs to see which documents are open, then proactively use search_in_pdf / read_pdf_page to look up the relevant source text, and answer in {{targetLanguage}} based on what you find; cite sources as (page N). If you cannot find relevant content after looking, say so explicitly and do not fabricate clauses. If the question is unrelated to the current document, you may answer briefly from general professional knowledge and note that.",
+    "askNoToolsPrompt": "You are a reading assistant for testing & certification standards documents. The user is reading a PDF standard and asking a question directly, without attaching any text excerpt, and you currently have no access to the document. Answer in {{targetLanguage}} from general professional knowledge; if the question requires consulting the source text (e.g. specific clause numbers, limits, or scope), note at the end of your answer that the user can enable \"Smart Document Lookup\" to let you consult the current document automatically, or select the relevant text and use \"Explain\".",
     "toolLimitFinalInstruction": "Document lookup tool calls have reached this session limit ({{maxRounds}} rounds). Do not request more tools; answer naturally and completely using only the user's excerpts and the tool results already provided above. If the available information is still insufficient, say what needs manual verification.",
     "toolResultContext": "The following completed document lookup result is available as answer context:\n{{content}}",
     "toolLimitReachedFallback": "The document lookup limit has been reached for this response. Please continue from the lookup records already shown in the panel and the source excerpt; if more clause checks are needed, raise the maximum tool call setting and start the interpretation again.",

@@ -765,4 +765,122 @@ describe("AiChatPanel", () => {
       expect(items[0].textContent).toContain("另一文档解读");
     });
   });
+
+  describe("free question（无选区自由提问）", () => {
+    function makeChatSession(overrides: Partial<InterpretationSession> = {}) {
+      return makeSession({
+        id: "session-chat",
+        action: "custom",
+        sources: [],
+        anchorFileHash: "hash-file",
+        anchorFileName: "file.pdf",
+        messages: [
+          makeMessage({ id: "msg-ask", role: "user", content: "爬电距离？" }),
+        ],
+        ...overrides,
+      });
+    }
+
+    it("renders the ask input in the sessions tab when onFreeQuestion is provided", () => {
+      renderPanel({ onFreeQuestion: vi.fn() });
+
+      expect(
+        screen.getByPlaceholderText("就当前文档向 AI 提问…")
+      ).toBeInTheDocument();
+    });
+
+    it("does not render the ask input without onFreeQuestion", () => {
+      renderPanel();
+
+      expect(screen.queryByPlaceholderText("就当前文档向 AI 提问…")).toBeNull();
+    });
+
+    it("disables the ask input with a hint when no PDF is open", () => {
+      renderPanel({ onFreeQuestion: vi.fn(), canAsk: false });
+
+      const textarea = screen.getByPlaceholderText("打开 PDF 后即可向 AI 提问");
+      expect(textarea).toBeDisabled();
+    });
+
+    it("submits the question and enters the new session chatbox", () => {
+      const onFreeQuestion = vi.fn(() => "session-chat");
+      renderPanel({
+        onFreeQuestion,
+        sessions: [makeChatSession()],
+      });
+
+      const textarea = screen.getByPlaceholderText("就当前文档向 AI 提问…");
+      fireEvent.change(textarea, { target: { value: "爬电距离的要求？" } });
+      fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+      expect(onFreeQuestion).toHaveBeenCalledWith("爬电距离的要求？");
+      // 切入 chatbox：显示返回按钮与会话内容
+      expect(
+        screen.getByRole("button", { name: "返回解读记录" })
+      ).toBeInTheDocument();
+    });
+
+    it("does not submit empty or whitespace-only questions", () => {
+      const onFreeQuestion = vi.fn(() => "session-chat");
+      renderPanel({ onFreeQuestion, sessions: [makeChatSession()] });
+
+      const textarea = screen.getByPlaceholderText("就当前文档向 AI 提问…");
+      fireEvent.change(textarea, { target: { value: "   " } });
+      fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+      expect(onFreeQuestion).not.toHaveBeenCalled();
+    });
+
+    it("shows the 提问 badge and no page badge for empty-sources sessions", () => {
+      const { container } = renderPanel({
+        sessions: [makeChatSession({ summary: "爬电距离要求" })],
+      });
+
+      expect(screen.getByText("提问")).toBeInTheDocument();
+      expect(container.querySelector(".session-item-page")).toBeNull();
+      // 来源行回退为锚点文档文件名
+      expect(container.querySelector(".session-item-source")?.textContent).toBe(
+        "file.pdf"
+      );
+    });
+
+    it("hides the goto-source button in the chatbox for empty-sources sessions", () => {
+      renderPanel({
+        sessions: [makeChatSession()],
+        expandedSessionId: "session-chat",
+      });
+
+      expect(screen.queryByRole("button", { name: "跳转原文" })).toBeNull();
+    });
+
+    it("shows a tools hint under the ask input when agent tools are disabled", () => {
+      renderPanel({ onFreeQuestion: vi.fn(), agentToolsEnabled: false });
+
+      expect(
+        screen.getByText(
+          "开启「智能文档查阅」后，AI 可自行查阅当前文档原文作答"
+        )
+      ).toBeInTheDocument();
+    });
+
+    it("hides the tools hint when agent tools are enabled or unspecified", () => {
+      const { unmount } = renderPanel({
+        onFreeQuestion: vi.fn(),
+        agentToolsEnabled: true,
+      });
+      expect(screen.queryByText(/智能文档查阅.*可自行查阅/)).toBeNull();
+      unmount();
+
+      renderPanel({ onFreeQuestion: vi.fn() });
+      expect(screen.queryByText(/智能文档查阅.*可自行查阅/)).toBeNull();
+    });
+
+    it("falls back to the first user message when no summary and no sources", () => {
+      renderPanel({
+        sessions: [makeChatSession({ summary: undefined })],
+      });
+
+      expect(screen.getByText("爬电距离？")).toBeInTheDocument();
+    });
+  });
 });

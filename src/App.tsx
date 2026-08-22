@@ -358,6 +358,7 @@ function App() {
     handleAddToStash: persistenceHandleAddToStash,
     handleSelectionAction: persistenceHandleSelectionAction,
     handleCustomInterpret: persistenceHandleCustomInterpret,
+    handleFreeQuestion: persistenceHandleFreeQuestion,
     handleAddComment: persistenceHandleAddComment,
     abortSessionsForTab: persistenceAbortSessionsForTab,
     setStashes: persistenceSetStashes,
@@ -1051,7 +1052,18 @@ function App() {
       const source = session.sources
         .map((s) => s.source)
         .find((src) => tabs.tabs.some((t) => t.fileHash === src.fileHash));
-      if (!source) return;
+      if (!source) {
+        // 无选区自由提问会话（空 sources）：回退到锚点文档，只激活 tab 不跳页。
+        if (session.anchorFileHash) {
+          const anchorTab = tabs.tabs.find(
+            (t) => t.fileHash === session.anchorFileHash
+          );
+          if (anchorTab && anchorTab.id !== tabs.activeTabId) {
+            tabs.handleTabClick(anchorTab.id);
+          }
+        }
+        return;
+      }
       const targetTab = tabs.tabs.find((t) => t.fileHash === source.fileHash);
       if (!targetTab) return;
 
@@ -1365,6 +1377,9 @@ function App() {
                     onUpdateStash={persistence.handleUpdateStash}
                     onClearStashes={persistence.handleClearStashes}
                     onOpenCustomInterpret={handleOpenCustomInterpret}
+                    onFreeQuestion={persistenceHandleFreeQuestion}
+                    canAsk={!!focusedTab?.fileHash}
+                    agentToolsEnabled={settings.agentToolsEnabled}
                     onGotoStash={handleGotoStash}
                     onGotoSession={handleGotoSession}
                     onFollowUp={persistence.handleFollowUp}
@@ -1509,6 +1524,9 @@ function App() {
                   onUpdateStash={persistence.handleUpdateStash}
                   onClearStashes={persistence.handleClearStashes}
                   onOpenCustomInterpret={handleOpenCustomInterpret}
+                  onFreeQuestion={persistenceHandleFreeQuestion}
+                  canAsk={!!focusedTab?.fileHash}
+                  agentToolsEnabled={settings.agentToolsEnabled}
                   onGotoStash={handleGotoStash}
                   onGotoSession={handleGotoSession}
                   onFollowUp={persistence.handleFollowUp}
@@ -1555,6 +1573,9 @@ function App() {
                   onUpdateStash={persistence.handleUpdateStash}
                   onClearStashes={persistence.handleClearStashes}
                   onOpenCustomInterpret={handleOpenCustomInterpret}
+                  onFreeQuestion={persistenceHandleFreeQuestion}
+                  canAsk={!!focusedTab?.fileHash}
+                  agentToolsEnabled={settings.agentToolsEnabled}
                   onGotoStash={handleGotoStash}
                   onGotoSession={handleGotoSession}
                   onFollowUp={persistence.handleFollowUp}

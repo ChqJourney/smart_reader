@@ -28,9 +28,10 @@
 - 翻译生成可拖动 / 隐藏 / 删除的浮层批注。
 - 解读生成蓝色标记（生成中带呼吸态），点击标记打开 InterpretPopup 内联展示解读结果（流式/错误态、原文折叠、查看解读/重新解读/删除）；右侧面板展示可点击跳转的解读记录（页码+类型徽章+LLM 一句话摘要，支持「当前文档/全部文档」过滤、排序下拉（最近活动/创建时间/按页码，按页码仅当前文档范围可选，选择持久化到 settings）与面板内删除会话），支持多轮追问。
 - 自定义解读：把多个暂存片段一次性发给 LLM。暂存区按钮常驻显示片段数量并直达弹窗；解读要求弹窗内置可勾选片段清单（默认全选）与解读方式预设下拉（选中即把预定义 prompt 填入输入框，可继续编辑，手动编辑后回到「自由提问」，模板文案在 locales 的 `customInterpret.presets.*` 段），仅能通过「取消」/「发送」关闭；暂存不落盘为有意设计。
+- 无选区自由提问：解读记录 tab 列表态底部常驻提问输入框（Enter 发送，无打开 PDF 时禁用），创建 `action: "custom"` + 空 `sources` 的会话并直接切入 chatbox 流式输出；会话经 `anchorFileHash`/`anchorFileName`（创建时 focused tab 快照）锚定到当前文档——归属过滤（`sessionBelongsToHashes`）、sessionIds 持久化反查、列表「提问」徽章与来源行回退都认锚点；Agent Tools 门控天然放行（action 为 custom）。system prompt 走专用模板（`llm.askWithToolsPrompt` / `llm.askNoToolsPrompt`，按 toolsEnabled 分流）：开启时引导模型主动 `list_open_pdfs` / `search_in_pdf` 查证当前文档，关闭时声明无法访问文档并引导用户开启；tools 关闭时提问框下方还有一行 UI 提示（`chat.askToolsHint`）。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
 - 打印（工具栏按钮 / Ctrl/Cmd+P）：弹窗可选页码范围（全部 / 当前页 / 自定义范围）与上纸内容（翻译批注、批注，均可独立勾选，默认都开）；生成带批注贴图的新 PDF（优先矢量直绘保留原页面，pdf-lib 解析失败、源文件加密（pdf-lib 无解密能力，重存会带出密文与 /Encrypt 尾条款）或内容对象丢失时自动降级为 pdfjs 整页栅格化，保证任何能打开的 PDF 都能正确打印；批注按屏幕浮层样式与位置 canvas 光栅化贴入，含用户拖动过的位置），用平台指定阅读器打开打印（macOS 预览 / Windows Edge，刻意不走系统默认 PDF 关联——若默认阅读器是本应用自身会回环成新 tab），也可导出带批注的 PDF 文件。
-- 解读 / 自定义解读会话可分享：会话头部「分享」下拉支持复制结构化 Markdown 到剪贴板或导出 .md 文件（原文片段以引用块 + 来源行展示，跳过模板 prompt / tool 消息 / 思考内容，见 `services/share.ts`）。
+- 解读 / 自定义解读会话可分享：会话头部「分享」下拉支持复制结构化 Markdown 到剪贴板或导出 .md 文件（原文片段以引用块 + 来源行展示，有来源时跳过模板 prompt、无来源的自由提问会话保留首条提问，tool 消息 / 思考内容一律跳过，见 `services/share.ts`）。
 - 最近文件下拉面板：置顶常用标准、按文件名/路径搜索、显示目录/相对时间/上次读到的页码、失效文件置灰、单条移除与两段式清空、从列表直接在分屏打开对照（快捷键 Ctrl/Cmd+Shift+O 开合面板）。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
 - 条款链接悬停预览（画中画）：默认关闭，设置「功能设置」页开启。悬停在 PDF 自带的文档内链接（条款号引用，带内部 dest）上 2 秒弹出小窗，复用 viewer 的 PDF 代理渲染目标页并自动滚动到 dest Y 位置（XYZ / FitH 取 Y，其余形态退化页首）；小窗 portal 到 body，可拖动（复用 useDrag）、右下角调大小（拖动中 canvas CSS 拉伸、松手按新宽度重渲）、内容区原生滚动；右上角图钉固化后不随鼠标移出关闭，可多个并存（上限 10 个），未固化预览同时只保留一个、鼠标离开 400ms 宽限后自动关闭；同目标（页码+destY）去重，外部 url 链接不参与；悬停链接时抑制悬停查词 tooltip。状态管理在 `hooks/useLinkPreviews.ts`，窗口组件 `components/LinkPreviewPopup.tsx`，PdfPage 仅上报悬停目标（`onLinkHover`），PdfViewer 按 `settings.linkPreviewEnabled` 门控上报并在开关关闭时清空已弹出窗口。
@@ -105,7 +106,7 @@ npm install
 │   │   ├── TranslatePopup.tsx         # 翻译浮层
 │   │   ├── InterpretPopup.tsx         # 解读结果内联浮层（解读/已解读暂存标记共用，流式/错误态、原文折叠、重新解读）
 │   │   ├── CommentPopup.tsx           # 批注浮层（拖动编辑、300ms 防抖保存、隐藏/删除）
-│   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录（页码/类型徽章/LLM 摘要/范围过滤/排序下拉/会话删除）、流式中止）
+│   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录（页码/类型徽章/LLM 摘要/范围过滤/排序下拉/会话删除）、列表态底部自由提问输入框 AskInput、流式中止）
 │   │   ├── ContextWidget.tsx          # 会话上下文用量条（数据源 activeSession.lastPromptTokens，已接入 AiChatPanel）
 │   │   ├── MarkdownRenderer.tsx       # react-markdown + gfm/math/katex，自定义 sanitize schema，公式解析失败降级纯文本
 │   │   ├── ThinkingIndicator.tsx      # 思考中/已思考 tokens 指示（可展开 reasoningContent）
@@ -380,7 +381,7 @@ LLM 流量已整体改为 **Rust 后端代理**（`src-tauri/src/llm_proxy.rs`�
 ```
 App.tsx（编排层，具体状态已下沉到 hooks）
 ├── useTabs：tabs / activeTabId / secondaryTabId   # PDF Tab 状态（单视图 + 并排视图）+ 休眠调度（addTab 唯一触发点、activateTab/wakeTab/gotoTabPage/关tab顶替时唤醒，`getHibernationContext` 由 App 以 ref 回填 secondary 与流式会话信息）
-├── usePersistence：annotations / sessions / stashes / selection（首轮成功收尾后 fire-and-forget 生成 `session.summary`（`summary-{id}` 流、thinking disabled）；`handleDeleteSession` 连带删除 PDF 标记与磁盘会话；`handleReinterpretSession` 沿用 sources+首条 prompt 另起新会话并重映射批注）
+├── usePersistence：annotations / sessions / stashes / selection（首轮成功收尾后 fire-and-forget 生成 `session.summary`（`summary-{id}` 流、thinking disabled）；`handleDeleteSession` 连带删除 PDF 标记与磁盘会话；`handleReinterpretSession` 沿用 sources+首条 prompt 另起新会话并重映射批注；`handleFreeQuestion` 创建空 sources 锚定会话并主动标脏锚定 hash——否则无批注变更时 sessionIds 永不写盘）
 ├── useRightPanelLayout：rightVisible / rightPanelWidth
 ├── useRecentFiles：recentFiles
 ├── useSplitView：splitPct                         # 并排视图左右面板比例

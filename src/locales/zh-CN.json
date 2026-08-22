@@ -111,6 +111,9 @@
     "aiLabel": "AI",
     "generatingPlaceholder": "生成中…",
     "followUpPlaceholder": "继续追问...",
+    "askPlaceholder": "就当前文档向 AI 提问…",
+    "askDisabledHint": "打开 PDF 后即可向 AI 提问",
+    "askToolsHint": "开启「智能文档查阅」后，AI 可自行查阅当前文档原文作答",
     "copyAll": "复制全部",
     "copyMessage": "复制"
   },
@@ -120,13 +123,15 @@
     "exportMarkdown": "导出 Markdown 文件",
     "defaultTitle": "标准解读",
     "sourceRef": "—— {{fileName}} · P.{{page}}",
-    "followUpLine": "**追问**：{{content}}"
+    "followUpLine": "**追问**：{{content}}",
+    "questionLine": "**提问**：{{content}}"
   },
   "stash": {
     "tabLabel": "暂存区 ({{count}})",
     "add": "加入暂存",
     "source": "{{fileName}} · 第 {{page}} 页",
     "emptyHint": "暂无暂存片段，在 PDF 中选中内容后点击「加入暂存」。",
+    "emptyHintAsk": "没有片段也可以提问：到「解读记录」页底部直接输入问题。",
     "clear": "清空暂存",
     "expand": "展开",
     "collapse": "收起",
@@ -143,6 +148,7 @@
     "delete": "删除解读记录",
     "typeExplain": "解读",
     "typeCustom": "自定义解读",
+    "typeChat": "提问",
     "scopeCurrent": "当前文档",
     "scopeAll": "全部文档",
     "scopeSwitch": "点击切换文档范围",
@@ -366,6 +372,8 @@
     "customInterpretPrompt": "请用{{targetLanguage}}回答以下问题：\n\n{{prompt}}\n\n{{sources}}",
     "customInterpretSource": "片段 {{index}}（{{fileName}} 第 {{page}} 页）：\n{{text}}",
     "toolsSystemAddendum": "你可以使用工具查阅当前打开的 PDF 原文。当片段提及其他条款号、表格或定义且对准确解读有必要时，先用 search_in_pdf / read_pdf_page 查阅再回答；回答中引用来源格式为（第 N 页）；不要编造未查阅到的条款内容。",
+    "askWithToolsPrompt": "你是一位检测认证行业标准文档阅读助手。用户正在阅读当前打开的 PDF 标准文档并直接提问，没有附带文本片段。请先用 list_open_pdfs 确认当前打开的文档，再用 search_in_pdf / read_pdf_page 主动查阅与问题相关的原文，基于查到的内容用{{targetLanguage}}回答；回答中引用来源格式为（第 N 页）。如果查阅后仍找不到相关内容，明确说明文档中未找到，不要编造条款；如果用户的问题与当前文档无关，可基于通用专业知识简要回答并说明这一点。",
+    "askNoToolsPrompt": "你是一位检测认证行业标准文档阅读助手。用户正在阅读 PDF 标准文档并直接提问，没有附带文本片段，你当前也无法访问该文档内容。请基于通用专业知识用{{targetLanguage}}回答；如果问题必须查阅原文才能准确回答（如询问具体条款号、限值、适用范围），请在回答末尾提示用户：开启「智能文档查阅」后即可自动查阅当前文档，或选中相关文本后使用「解读」。",
     "toolLimitFinalInstruction": "文档查阅工具调用已达到本次上限（{{maxRounds}} 轮）。不要再请求工具；请只基于用户提供的片段和上文已查阅到的工具结果，用自然、完整的方式回答。如果信息仍不足，请说明哪些点尚需人工核对。",
     "toolResultContext": "以下是一次已完成的文档查阅结果，作为回答依据：\n{{content}}",
     "toolLimitReachedFallback": "已达到本次文档查阅工具调用上限。请基于右侧已展示的查阅记录和原文片段继续判断；如仍需更多条款核对，可以调高「最大工具调用次数」后重新发起解读。",

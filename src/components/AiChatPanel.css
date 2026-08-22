@@ -84,6 +84,12 @@
   margin-top: 0;
 }
 
+.ask-tools-hint {
+  margin: 0 0 8px;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+}
+
 .ai-chat-placeholder {
   color: var(--text-tertiary);
   font-size: 0.85rem;
@@ -394,6 +400,10 @@
   box-shadow: inset 2px 0 0 var(--purple-500);
 }
 
+.session-item.chat {
+  box-shadow: inset 2px 0 0 var(--success);
+}
+
 .session-item:hover {
   background: var(--surface-panel-alt);
   border-color: var(--border-strong);
@@ -405,6 +415,12 @@
 .session-item.custom:hover {
   box-shadow:
     inset 2px 0 0 var(--purple-500),
+    var(--shadow-sm);
+}
+
+.session-item.chat:hover {
+  box-shadow:
+    inset 2px 0 0 var(--success),
     var(--shadow-sm);
 }
 
@@ -451,6 +467,11 @@
 .session-item-type.custom {
   background: var(--purple-50);
   color: var(--purple-600);
+}
+
+.session-item-type.chat {
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .session-item-source {
@@ -562,6 +583,13 @@
   resize: vertical;
   min-height: 40px;
   font-family: inherit;
+  /* UA 默认是白底黑字，暗色模式下必须显式走主题变量 */
+  background: var(--surface-content);
+  color: var(--text-content);
+}
+
+.follow-up-input textarea::placeholder {
+  color: var(--text-tertiary);
 }
 
 .follow-up-input textarea:focus {

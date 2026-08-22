@@ -79,6 +79,31 @@ describe("buildShareMarkdown", () => {
     expect(md).toContain("追问回答");
   });
 
+  it("自由提问会话（空 sources）保留首条 user 消息作为提问", () => {
+    const md = buildShareMarkdown(
+      makeSession({
+        sources: [],
+        anchorFileHash: "hash-1",
+        anchorFileName: "IEC 61010-1.pdf",
+        summary: "爬电距离要求",
+        messages: [
+          {
+            id: "m-1",
+            role: "user",
+            content: "爬电距离的要求是什么？",
+            createdAt: 1,
+          },
+          { id: "m-2", role: "assistant", content: "回答正文", createdAt: 2 },
+          { id: "m-3", role: "user", content: "再追问一句", createdAt: 3 },
+          { id: "m-4", role: "assistant", content: "追问回答", createdAt: 4 },
+        ],
+      })
+    );
+    expect(md).toContain("**提问**：爬电距离的要求是什么？");
+    expect(md).toContain("**追问**：再追问一句");
+    expect(md).toContain("回答正文");
+  });
+
   it("过滤 tool 消息与空内容消息", () => {
     const md = buildShareMarkdown(
       makeSession({

@@ -710,6 +710,13 @@ struct InterpretationSession {
     /// LLM-generated one-line summary shown in the session list.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     summary: Option<String>,
+    /// 无选区自由提问会话的归属锚点（创建时 focused tab 的 fileHash 快照）。
+    /// 空 sources 会话靠它参与可见性过滤与 sessionIds 持久化。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    anchor_file_hash: Option<String>,
+    /// 锚点文档的文件名快照，供「全部文档」范围下文件未打开时显示来源行。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    anchor_file_name: Option<String>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -1548,6 +1555,8 @@ mod tests {
             frozen: None,
             frozen_reason: None,
             summary: None,
+            anchor_file_hash: None,
+            anchor_file_name: None,
         }
     }
 
@@ -1591,6 +1600,19 @@ mod tests {
                 last_page: None,
             },
         ]
+    }
+
+    #[test]
+    fn session_old_format_without_anchor_fields_deserializes() {
+        // 旧版本会话 JSON 没有 anchorFileHash / anchorFileName（无选区自由提问的
+        // 归属锚点），反序列化应回退为 None，且缺失时不序列化。
+        let raw = r#"{"id":"s1","sources":[],"messages":[],"isStreaming":false,"createdAt":1,"updatedAt":2}"#;
+        let session: InterpretationSession = serde_json::from_str(raw).unwrap();
+        assert_eq!(session.anchor_file_hash, None);
+        assert_eq!(session.anchor_file_name, None);
+        let serialized = serde_json::to_string(&session).unwrap();
+        assert!(!serialized.contains("anchorFileHash"));
+        assert!(!serialized.contains("anchorFileName"));
     }
 
     #[test]

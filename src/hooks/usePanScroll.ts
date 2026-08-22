@@ -17,7 +17,7 @@ import { useDrag } from "./useDrag";
  * - 拖动途中松开 Space（active 变 false）不打断本次拖拽，直到 mouseup 收尾。
  */
 export interface UsePanScrollOptions {
-  /** 返回当前滚动容器（单页/连续模式切换时 ref 目标会变，故用 getter）。 */
+  /** 返回当前滚动容器（用 getter 以始终读到最新的 ref 目标）。 */
   getContainer: () => HTMLElement | null;
   /** 是否处于 pan 态（按住 Space 且当前屏为焦点屏）。 */
   active: boolean;

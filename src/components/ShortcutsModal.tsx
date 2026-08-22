@@ -33,11 +33,7 @@ const GROUPS: ShortcutGroup[] = [
     rows: [
       {
         labelKey: "shortcuts.prevNextPage",
-        combos: [["PageUp"], ["PageDown"]],
-      },
-      {
-        labelKey: "shortcuts.prevNextPageArrows",
-        combos: [["←"], ["→"]],
+        combos: [["PageUp"], ["PageDown"], ["←"], ["→"]],
       },
       { labelKey: "shortcuts.scrollPage", combos: [["↑"], ["↓"]] },
       { labelKey: "shortcuts.firstLast", combos: [["Home"], ["End"]] },

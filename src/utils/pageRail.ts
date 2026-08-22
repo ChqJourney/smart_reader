@@ -4,20 +4,7 @@ import type { PageViewportInfo } from "../hooks/useViewportManager";
 const PAGE_SPACING = 24;
 
 /**
- * 单页模式滑轨映射：pct ∈ [0, 1] → 页码 ∈ [1, numPages]。
- * 越界 pct 会被 clamp，numPages <= 1 时恒为 1。
- */
-export function pctToPage(pct: number, numPages: number): number {
-  if (numPages <= 1) return 1;
-  const clamped = Math.max(0, Math.min(1, pct));
-  return Math.max(
-    1,
-    Math.min(numPages, Math.round(1 + clamped * (numPages - 1)))
-  );
-}
-
-/**
- * 连续模式滑轨拖动时的页码反查：给定目标 scrollTop，返回它落在哪一页。
+ * 滑轨拖动时的页码反查：给定目标 scrollTop，返回它落在哪一页。
  *
  * 逻辑镜像 PdfViewer.computeContinuousScrollTop：按 viewport 累积高度
  * （含页间距）确定每页的纵向区间，找到包含 targetTop 的页。viewport 条目

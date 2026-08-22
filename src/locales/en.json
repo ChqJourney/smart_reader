@@ -26,9 +26,8 @@
       "panels": "Panels & Windows"
     },
     "prevNextPage": "Previous / next page",
-    "prevNextPageArrows": "Previous / next page (single-page mode)",
-    "scrollPage": "Scroll up / down (continuous mode)",
-    "firstLast": "Jump to start / end (continuous mode)",
+    "scrollPage": "Scroll up / down",
+    "firstLast": "Jump to start / end",
     "gotoPage": "Go to page",
     "panPage": "Hold to drag the page (pan)",
     "openSearch": "Full-text search",
@@ -65,8 +64,6 @@
   },
   "pdf": {
     "hidePanel": "Hide PDF Panel",
-    "switchToContinuous": "Switch to Continuous",
-    "switchToSingle": "Switch to Single Page",
     "previousPage": "Previous Page (PageUp)",
     "nextPage": "Next Page (PageDown)",
     "pageNumber": "Page Number",

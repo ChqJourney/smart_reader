@@ -85,7 +85,7 @@ cd src-tauri && cargo test
 │   ├── components/                    # React 组件（30+，每组件配同名 .css）
 │   │   ├── TitleBar.tsx               # 自定义标题栏（品牌区、最近文件、窗口控制）
 │   │   ├── SetupWizard.tsx            # 首次启动配置向导（选平台 → 填 Key → 测试连接）
-│   │   ├── PdfViewer.tsx / PdfPage.tsx            # PDF 渲染、选区、缩放、单页/连续模式
+│   │   ├── PdfViewer.tsx / PdfPage.tsx            # PDF 渲染、选区、缩放
 │   │   ├── PdfAnnotations.tsx / AnnotationMarker.tsx / *Popup.tsx  # 批注与浮层
 │   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录、追问）
 │   │   ├── SettingsModal.tsx / RecentFilesBar.tsx / CustomInterpretModal.tsx
@@ -123,7 +123,7 @@ cd src-tauri && cargo test
 - 多 PDF Tab 同时打开（不设固定上限，由内存预算调度休眠，保持轻量），支持左右分屏并排对照两份 PDF。
 - 自定义标题栏：无边框窗口，集成品牌区、最近文件入口、打开 PDF / 设置与窗口控制按钮。
 - 首次启动配置向导（SetupWizard）：选平台 → 填 API Key → 测试连接（真实调用 LLM 验证）；全部平台未配置 Key 时自动弹出，设置中可重跑。
-- PDF 本地渲染、文本选区、缩放、页码跳转、单页 / 连续滚动阅读模式。
+- PDF 本地渲染、文本选区、缩放、页码跳转、连续滚动阅读模式。
 - 全文搜索（Ctrl / Cmd + F，跨 text item 短语匹配，结果逐页高亮跳转）与大纲 / 目录导航。
 - 选中文本后浮动工具条：复制、批注、加入暂存、解读、翻译；批注生成紫色可拖动标记（CommentPopup，防抖保存）。
 - 翻译生成可拖动 / 隐藏 / 删除的浮层批注。

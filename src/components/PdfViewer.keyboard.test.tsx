@@ -38,10 +38,7 @@ function createMockPdf(numPages = 5) {
   };
 }
 
-async function renderViewerAndWaitForPdf(
-  isFocused?: boolean,
-  viewMode: "single" | "continuous" = "single"
-) {
+async function renderViewerAndWaitForPdf(isFocused?: boolean) {
   mockGetDocument.mockReturnValue({
     promise: Promise.resolve(createMockPdf()),
   });
@@ -49,11 +46,25 @@ async function renderViewerAndWaitForPdf(
     <PdfViewer
       tabId="tab-1"
       filePath="/fake/test.pdf"
-      initialState={{ viewMode }}
       settings={DEFAULT_SETTINGS}
       {...(isFocused === undefined ? {} : { isFocused })}
     />
   );
+  // 连续模式下 goToPage / 方向键 / PageUp/PageDown 都会调用容器的
+  // scrollTo / scrollBy；jsdom 未实现这两个方法，统一 mock 掉。
+  const canvasContainer = utils.container.querySelector(
+    ".pdf-canvas-container"
+  ) as HTMLDivElement;
+  Object.defineProperty(canvasContainer, "scrollTo", {
+    value: vi.fn(),
+    writable: true,
+    configurable: true,
+  });
+  Object.defineProperty(canvasContainer, "scrollBy", {
+    value: vi.fn(),
+    writable: true,
+    configurable: true,
+  });
   await waitFor(() => {
     const input = screen.getByLabelText("页码") as HTMLButtonElement;
     if (!input || input.disabled) {
@@ -77,7 +88,8 @@ describe("PdfViewer 键盘焦点（isFocused）", () => {
 
     fireEvent.keyDown(window, { key: "Escape" });
 
-    fireEvent.keyDown(window, { key: "ArrowDown" });
+    // ←/→ 连续模式下走 goToPage（clamp + scrollTo + jump lock）。
+    fireEvent.keyDown(window, { key: "ArrowRight" });
     await waitFor(() => {
       expect((screen.getByLabelText("页码") as HTMLElement).textContent).toBe(
         "2"
@@ -91,7 +103,7 @@ describe("PdfViewer 键盘焦点（isFocused）", () => {
     fireEvent.keyDown(window, { key: "f", ctrlKey: true });
     expect(container.querySelector(".pdf-search-bar")).toBeNull();
 
-    fireEvent.keyDown(window, { key: "ArrowDown" });
+    fireEvent.keyDown(window, { key: "ArrowRight" });
     // 非焦点屏不翻页：页码保持 1
     expect((screen.getByLabelText("页码") as HTMLElement).textContent).toBe(
       "1"
@@ -180,40 +192,8 @@ describe("PdfViewer PageUp/PageDown 翻页", () => {
     vi.mocked(invoke).mockResolvedValue([1, 2, 3]);
   });
 
-  it("单页模式 PageDown/PageUp 切换页码", async () => {
-    await renderViewerAndWaitForPdf();
-
-    fireEvent.keyDown(window, { key: "PageDown" });
-    await waitFor(() => {
-      expect((screen.getByLabelText("页码") as HTMLElement).textContent).toBe(
-        "2"
-      );
-    });
-
-    fireEvent.keyDown(window, { key: "PageUp" });
-    await waitFor(() => {
-      expect((screen.getByLabelText("页码") as HTMLElement).textContent).toBe(
-        "1"
-      );
-    });
-  });
-
-  it("单页模式 PageUp 在第一页不越界", async () => {
-    await renderViewerAndWaitForPdf();
-
-    fireEvent.keyDown(window, { key: "PageUp" });
-    await waitFor(() => {
-      expect((screen.getByLabelText("页码") as HTMLElement).textContent).toBe(
-        "1"
-      );
-    });
-  });
-
-  it("连续模式 PageDown/PageUp 滚动阅读区", async () => {
-    const { container } = await renderViewerAndWaitForPdf(
-      undefined,
-      "continuous"
-    );
+  it("PageDown/PageUp 滚动阅读区翻屏", async () => {
+    const { container } = await renderViewerAndWaitForPdf();
     const canvasContainer = container.querySelector(
       ".pdf-canvas-container.continuous"
     ) as HTMLDivElement;

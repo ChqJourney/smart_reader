@@ -85,7 +85,6 @@ function makeOptions() {
 
   return {
     base: {
-      viewMode: "continuous" as const,
       scale: 1.5,
       pageViewports: new Map<number, PageViewportInfo>([
         [1, { width: 800, height: 300, scale: 1.5 }],
@@ -123,20 +122,6 @@ describe("useZoomAnchor", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-  });
-
-  it("captureZoomAnchor is a no-op in single mode", () => {
-    const { base } = makeOptions();
-    const { result } = renderHook(() =>
-      useZoomAnchor({ ...base, viewMode: "single" })
-    );
-    act(() => {
-      result.current.captureZoomAnchor(0);
-    });
-    // No restore fires because no anchor was captured. Assert via the restore
-    // effect not invoking onRestored by triggering a re-render with matching
-    // viewportsForScale===scale (already the case) — onRestored stays uncalled.
-    expect(base.onRestored).not.toHaveBeenCalled();
   });
 
   it("captureZoomAnchor writes PDF-space offset for the page spanning the viewport top", () => {
@@ -246,18 +231,6 @@ describe("useZoomAnchor", () => {
     expect(r2.current.isZoomingRef.current).toBe(false);
   });
 
-  it("zoomTo does not set isZooming in single mode", () => {
-    const { base } = makeOptions();
-    const { result } = renderHook(() =>
-      useZoomAnchor({ ...base, viewMode: "single" })
-    );
-    act(() => {
-      result.current.zoomTo(2.0);
-    });
-    expect(base.setScale).toHaveBeenCalledWith(2.0);
-    expect(result.current.isZoomingRef.current).toBe(false);
-  });
-
   it("restore effect skips when viewportsForScale !== scale", () => {
     const { base } = makeOptions();
     // Capture an anchor, then render with mismatched viewportsForScale.
@@ -357,7 +330,6 @@ describe("useZoomAnchor", () => {
     expect(base.onRestored).toHaveBeenCalledWith({
       pageNum: 2,
       scale: base.scale,
-      viewMode: "continuous",
       scrollTop: expect.any(Number),
     });
     // isZooming released after restore.
@@ -487,7 +459,6 @@ describe("useZoomAnchor", () => {
     expect(base.onRestored).toHaveBeenCalledWith({
       pageNum: 2,
       scale: base.scale,
-      viewMode: "continuous",
       scrollTop: 0,
     });
   });

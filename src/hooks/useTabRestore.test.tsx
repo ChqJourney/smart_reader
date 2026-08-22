@@ -28,7 +28,6 @@ function makeOptions(overrides?: {
   pdf?: unknown;
   numPages?: number;
   isLoading?: boolean;
-  viewMode?: "single" | "continuous";
   pageNum?: number;
   pageViewports?: Map<number, PageViewportInfo>;
   tabId?: string;
@@ -46,7 +45,6 @@ function makeOptions(overrides?: {
         : { dummy: true }) as never,
       numPages,
       isLoading: overrides?.isLoading ?? false,
-      viewMode: overrides?.viewMode ?? "continuous",
       pageNum: overrides?.pageNum ?? overrides?.initialState?.pageNum ?? 1,
       pageViewports,
       tabId: overrides?.tabId ?? "tab-1",
@@ -56,7 +54,6 @@ function makeOptions(overrides?: {
       isJumpingRef,
       setPageNum: vi.fn(),
       setScale: vi.fn(),
-      setViewMode: vi.fn(),
     },
     container,
     pageViewports,
@@ -80,24 +77,23 @@ describe("useTabRestore", () => {
     vi.restoreAllMocks();
   });
 
-  it("applies initialState pageNum/scale/viewMode at mount", () => {
+  it("applies initialState pageNum/scale at mount", () => {
     const { opts } = makeOptions({
-      initialState: { pageNum: 3, scale: 2.0, viewMode: "single" },
+      initialState: { pageNum: 3, scale: 2.0 },
     });
     renderHook(() => useTabRestore(opts));
 
     expect(opts.setPageNum).toHaveBeenCalledWith(3);
     expect(opts.setScale).toHaveBeenCalledWith(2.0);
-    expect(opts.setViewMode).toHaveBeenCalledWith("single");
   });
 
-  it("does NOT re-apply pageNum/scale/viewMode when initialState changes after mount (stomp regression)", () => {
+  it("does NOT re-apply pageNum/scale when initialState changes after mount (stomp regression)", () => {
     // Regression for the "tab switch resets to page 1" bug: the tab record
     // round-trips through onStateChange; re-applying it after mount stomps
     // newer viewer state with stale record values (e.g. a record clobbered to
     // page 1 by a stray report during the restore window).
     const { opts } = makeOptions({
-      initialState: { pageNum: 5, scale: 2.0, viewMode: "continuous" },
+      initialState: { pageNum: 5, scale: 2.0 },
     });
     const { rerender } = renderHook(
       (props: { init?: Parameters<typeof useTabRestore>[0]["initialState"] }) =>
@@ -108,14 +104,12 @@ describe("useTabRestore", () => {
     expect(opts.setPageNum).toHaveBeenCalledTimes(1);
     expect(opts.setPageNum).toHaveBeenCalledWith(5);
     expect(opts.setScale).toHaveBeenCalledTimes(1);
-    expect(opts.setViewMode).toHaveBeenCalledTimes(1);
 
-    rerender({ init: { pageNum: 1, scale: 2.0, viewMode: "continuous" } });
+    rerender({ init: { pageNum: 1, scale: 2.0 } });
 
     // Still exactly one application each — the clobbered record is ignored.
     expect(opts.setPageNum).toHaveBeenCalledTimes(1);
     expect(opts.setScale).toHaveBeenCalledTimes(1);
-    expect(opts.setViewMode).toHaveBeenCalledTimes(1);
   });
 
   it("restores scrollTop when no pending goto page and pdf is ready", async () => {
@@ -240,22 +234,6 @@ describe("useTabRestore", () => {
       expect(opts.goToPage).toHaveBeenCalledWith(3);
     });
     expect(isJumpingRef.current).toBe(true);
-  });
-
-  it("executes goto in single mode regardless of viewport availability, and releases the lock", async () => {
-    const { opts, isJumpingRef } = makeOptions({
-      initialState: { pendingGotoPage: 2, scrollTop: 0 },
-      viewMode: "single",
-      pageViewports: new Map(),
-    });
-    renderHook(() => useTabRestore(opts));
-
-    await waitFor(() => {
-      expect(opts.goToPage).toHaveBeenCalledWith(2);
-    });
-    // goToPage does not manage the lock in single mode, so the restore
-    // releases it (rAF is sync-mocked).
-    expect(isJumpingRef.current).toBe(false);
   });
 
   it("restores only once per mount even if pageViewports changes", async () => {

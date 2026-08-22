@@ -30,7 +30,6 @@ export interface PdfTab {
   fileHash: string;
   pageNum?: number;
   scale?: number;
-  viewMode?: "single" | "continuous";
   scrollTop?: number;
   selection?: SelectionState | null;
   highlightedAnnotationId?: string | null;
@@ -469,9 +468,6 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
                 ...tab,
                 ...(state.pageNum !== undefined && { pageNum: state.pageNum }),
                 ...(state.scale !== undefined && { scale: state.scale }),
-                ...(state.viewMode !== undefined && {
-                  viewMode: state.viewMode,
-                }),
                 ...(state.scrollTop !== undefined && {
                   scrollTop: state.scrollTop,
                 }),

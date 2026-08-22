@@ -18,8 +18,6 @@ export type IconName =
   | "dictionary"
   | "minus"
   | "chat"
-  | "single-page"
-  | "continuous-page"
   | "hide-left"
   | "hide-right"
   | "pdf"
@@ -306,44 +304,6 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
         strokeWidth="1.5"
         strokeLinecap="round"
         strokeLinejoin="round"
-      />
-    </>
-  ),
-  "single-page": (
-    <>
-      <rect
-        x="4"
-        y="3"
-        width="12"
-        height="14"
-        rx="1"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-    </>
-  ),
-  "continuous-page": (
-    <>
-      <rect
-        x="4"
-        y="2"
-        width="12"
-        height="6"
-        rx="1"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-      />
-      <rect
-        x="4"
-        y="10"
-        width="12"
-        height="6"
-        rx="1"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
       />
     </>
   ),

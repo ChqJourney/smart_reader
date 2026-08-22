@@ -1115,7 +1115,6 @@ function App() {
     return {
       pageNum: tabs.activeTab.pageNum,
       scale: tabs.activeTab.scale,
-      viewMode: tabs.activeTab.viewMode,
       scrollTop: tabs.activeTab.scrollTop,
       pendingGotoPage: tabs.activeTab.pendingGotoPage,
     };
@@ -1126,7 +1125,6 @@ function App() {
     return {
       pageNum: secondaryTab.pageNum,
       scale: secondaryTab.scale,
-      viewMode: secondaryTab.viewMode,
       scrollTop: secondaryTab.scrollTop,
       pendingGotoPage: secondaryTab.pendingGotoPage,
     };
@@ -1462,7 +1460,6 @@ function App() {
                         initialState={{
                           pageNum: tab.pageNum,
                           scale: tab.scale,
-                          viewMode: tab.viewMode,
                           scrollTop: tab.scrollTop,
                           pendingGotoPage: tab.pendingGotoPage,
                         }}

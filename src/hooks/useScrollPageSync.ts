@@ -41,12 +41,10 @@ import type { PageViewportInfo } from "./useViewportManager";
 const PAGE_SWITCH_MARGIN_PX = 12;
 
 export interface UseScrollPageSyncOptions {
-  viewMode: "single" | "continuous";
   scale: number;
   onStateChange?: (state: {
     pageNum: number;
     scale: number;
-    viewMode: "single" | "continuous";
     scrollTop: number;
   }) => void;
   continuousContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -85,7 +83,6 @@ export function useScrollPageSync(
   _pageViewports?: Map<number, PageViewportInfo>
 ): void {
   const {
-    viewMode,
     scale,
     onStateChange,
     continuousContainerRef,
@@ -99,7 +96,6 @@ export function useScrollPageSync(
   } = options;
 
   useEffect(() => {
-    if (viewMode !== "continuous") return;
     const container = continuousContainerRef.current;
     if (!container) return;
 
@@ -187,7 +183,6 @@ export function useScrollPageSync(
             onStateChange?.({
               pageNum: settledPage,
               scale,
-              viewMode,
               scrollTop: container.scrollTop,
             });
           }
@@ -228,7 +223,6 @@ export function useScrollPageSync(
       resizeObserver.disconnect();
     };
   }, [
-    viewMode,
     scale,
     onStateChange,
     continuousContainerRef,

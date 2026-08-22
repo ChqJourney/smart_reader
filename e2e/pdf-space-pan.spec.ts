@@ -85,23 +85,23 @@ test.describe("Space pan (hand tool)", () => {
     await expect(page.locator(".selection-toolbar")).toHaveCount(0);
   });
 
-  test("single mode: pan position sticks after mouse release while Space is still held", async ({
+  test("continuous mode (zoomed overflow): pan position sticks after mouse release while Space is still held", async ({
     page,
   }) => {
     await openPdf(page);
 
-    // 切换到单页模式并放大到 300%，确保页面溢出容器（pan 的前提）。
-    await page.getByLabel("切换为单页阅读").click();
+    // 连续模式下放大到 300%，确保页面横向 + 纵向溢出容器（pan 的前提）。
     const scaleInput = page.getByLabel("缩放比例");
     await scaleInput.fill("300");
     await scaleInput.press("Enter");
-    const container = page.locator(".pdf-canvas-container");
+    const container = page.locator(".pdf-canvas-container.continuous");
     await expect(container).toBeVisible();
     // 等缩放重排完成：内容确实溢出才继续。
     await expect
       .poll(async () =>
         container.evaluate(
-          (el) => el.scrollHeight > el.clientHeight && el.scrollWidth > 0
+          (el) =>
+            el.scrollHeight > el.clientHeight && el.scrollWidth > el.clientWidth
         )
       )
       .toBe(true);

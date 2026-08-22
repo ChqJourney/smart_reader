@@ -32,13 +32,11 @@ function getBoundingClientRect(rect = defaultRect) {
 function TestPageRail({
   bodyRect = defaultRect,
   pageNum = 3,
-  viewMode = "single",
   onPageUp = vi.fn(),
   onPageDown = vi.fn(),
 }: {
   bodyRect?: typeof defaultRect;
   pageNum?: number;
-  viewMode?: "single" | "continuous";
   onPageUp?: () => void;
   onPageDown?: () => void;
 }) {
@@ -65,13 +63,11 @@ function TestPageRail({
       style={{ position: "relative", width: 200, height: 600 }}
     >
       <PageRail
-        viewMode={viewMode}
         pageNum={pageNum}
         numPages={10}
         continuousContainerRef={continuousContainerRef}
         pageViewportsRef={pageViewportsRef}
         scaleRef={scaleRef}
-        goToPage={vi.fn()}
         viewerBodyRef={viewerBodyRef}
         onPageUp={onPageUp}
         onPageDown={onPageDown}
@@ -150,19 +146,5 @@ describe("PageRail 显隐与翻页按钮", () => {
         "visible"
       );
     });
-  });
-
-  it("单页模式在首尾页禁用对应按钮", async () => {
-    const { getByTestId, getByLabelText } = render(
-      <TestPageRail pageNum={1} viewMode="single" />
-    );
-    const body = getByTestId("viewer-body");
-    fireEvent.mouseMove(body, { clientX: 170, clientY: 100 });
-    await waitFor(() => {
-      expect(body.querySelector(".page-rail-wrapper")).toHaveClass("visible");
-    });
-
-    expect(getByLabelText(/上一页/)).toBeDisabled();
-    expect(getByLabelText(/下一页/)).not.toBeDisabled();
   });
 });

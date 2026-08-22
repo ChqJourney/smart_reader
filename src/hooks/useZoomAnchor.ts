@@ -16,12 +16,10 @@ import type { PageViewportInfo } from "../components/PdfViewer";
 export interface ZoomRestoredState {
   pageNum: number;
   scale: number;
-  viewMode: "single" | "continuous";
   scrollTop: number;
 }
 
 export interface UseZoomAnchorOptions {
-  viewMode: "single" | "continuous";
   /** Current (live) scale. Used to gate the restore effect. */
   scale: number;
   /**
@@ -48,8 +46,8 @@ export interface UseZoomAnchorOptions {
 
 export interface UseZoomAnchorResult {
   /**
-   * Apply a new scale, clamped to [minScale, maxScale]. In continuous mode the
-   * document point currently under the viewport top is captured first so the
+   * Apply a new scale, clamped to [minScale, maxScale]. The document point
+   * currently under the viewport top is captured first so the
    * restore effect can keep it under the viewport top after the reflow.
    *
    * @param anchorViewportOffsetPx When > 0 (Ctrl+wheel), the anchor point is
@@ -57,7 +55,7 @@ export interface UseZoomAnchorResult {
    *   at the viewport top (0).
    */
   zoomTo: (target: number, anchorViewportOffsetPx?: number) => void;
-  /** Capture the viewport-top anchor (button zoom). No-op in single mode. */
+  /** Capture the viewport-top anchor (button zoom). */
   captureZoomAnchor: (anchorViewportOffsetPx: number) => void;
   /**
    * Capture the page under a screen Y (cursor). Falls back to the viewport-top
@@ -98,7 +96,6 @@ export function useZoomAnchor(
   options: UseZoomAnchorOptions
 ): UseZoomAnchorResult {
   const {
-    viewMode,
     scale,
     pageViewports,
     viewportsForScale,
@@ -168,7 +165,6 @@ export function useZoomAnchor(
   // synchronously *before* setScale, while the old layout is still present.
   const captureZoomAnchor = useCallback(
     (anchorViewportOffsetPx: number) => {
-      if (viewMode !== "continuous") return;
       const container = continuousContainerRef.current;
       if (!container) return;
       const rects = collectPageRects();
@@ -183,7 +179,7 @@ export function useZoomAnchor(
         anchorViewportOffsetPx,
       };
     },
-    [viewMode, collectPageRects, continuousContainerRef]
+    [collectPageRects, continuousContainerRef]
   );
 
   // Capture the page under a screen Y coordinate (cursor). Used by Ctrl+wheel
@@ -192,7 +188,6 @@ export function useZoomAnchor(
   // cursor sits in a gap or margin (findPageAtY returns null).
   const captureCursorAnchor = useCallback(
     (clientY: number) => {
-      if (viewMode !== "continuous") return;
       const container = continuousContainerRef.current;
       if (!container) return;
       const containerRect = container.getBoundingClientRect();
@@ -218,7 +213,7 @@ export function useZoomAnchor(
         anchorViewportOffsetPx: clientY - containerRect.top,
       };
     },
-    [viewMode, continuousContainerRef, pageWrapperRefs, captureZoomAnchor]
+    [continuousContainerRef, pageWrapperRefs, captureZoomAnchor]
   );
 
   const zoomTo = useCallback(
@@ -231,13 +226,13 @@ export function useZoomAnchor(
       // suppressing scroll page-sync indefinitely (and a later viewport commit
       // would restore the stale anchor mid-scroll). See
       // docs/REFACTOR_REVIEW_2026-07-17.md #3.
-      if (viewMode === "continuous" && clamped !== scaleRef.current) {
+      if (clamped !== scaleRef.current) {
         captureZoomAnchor(anchorViewportOffsetPx);
         isZoomingRef.current = true;
       }
       setScale(clamped);
     },
-    [viewMode, captureZoomAnchor, setScale, minScale, maxScale]
+    [captureZoomAnchor, setScale, minScale, maxScale]
   );
 
   // Restore the scroll position captured by `captureZoomAnchor` once the new
@@ -277,7 +272,6 @@ export function useZoomAnchor(
       onRestoredRef.current?.({
         pageNum: page,
         scale,
-        viewMode,
         scrollTop: container.scrollTop,
       });
     });
@@ -285,7 +279,6 @@ export function useZoomAnchor(
     pageViewports,
     viewportsForScale,
     scale,
-    viewMode,
     continuousContainerRef,
     pageWrapperRefs,
   ]);

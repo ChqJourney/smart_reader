@@ -1,19 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { pctToPage, scrollTopToPage } from "../utils/pageRail";
+import { scrollTopToPage } from "../utils/pageRail";
 import type { PageViewportInfo } from "../hooks/useViewportManager";
 import Icon from "./Icon";
 import "./PageRail.css";
 
 interface PageRailProps {
-  viewMode: "single" | "continuous";
   pageNum: number;
   numPages: number;
   continuousContainerRef: RefObject<HTMLDivElement | null>;
   pageViewportsRef: RefObject<Map<number, PageViewportInfo>>;
   scaleRef: RefObject<number>;
-  goToPage: (page: number) => void;
   viewerBodyRef: RefObject<HTMLDivElement | null>;
   onPageUp: () => void;
   onPageDown: () => void;
@@ -22,24 +20,20 @@ interface PageRailProps {
 /**
  * 右侧页码滑轨：替换原生垂直滚动条（CSS 隐藏），拖动时显示页码 tooltip。
  *
- * - 连续模式：thumb 位置 = scrollTop / maxScroll；拖动直接写容器 scrollTop
- *   （用户滚动，不走 goToPage 的 jump lock），页码由 useScrollPageSync 即时
- *   同步，tooltip 用 scrollTopToPage 反查保证不滞后。
- * - 单页模式：thumb 位置 = (pageNum - 1) / (numPages - 1)；拖动按 pct 映射
- *   页码调 goToPage。
+ * thumb 位置 = scrollTop / maxScroll；拖动直接写容器 scrollTop
+ * （用户滚动，不走 goToPage 的 jump lock），页码由 useScrollPageSync 即时
+ * 同步，tooltip 用 scrollTopToPage 反查保证不滞后。
  * thumb / tooltip 均通过 ref 直接写 DOM，避免滚动/拖动高频触发 React 渲染。
  *
  * 新增：滑轨上方提供上/下翻页按钮，行为与键盘 PageUp/PageDown 一致；
  * 按钮与滑轨整体默认隐藏，鼠标靠近阅读区右边界时淡入显示。
  */
 export default function PageRail({
-  viewMode,
   pageNum,
   numPages,
   continuousContainerRef,
   pageViewportsRef,
   scaleRef,
-  goToPage,
   viewerBodyRef,
   onPageUp,
   onPageDown,
@@ -119,16 +113,11 @@ export default function PageRail({
     [numPages]
   );
 
-  // 外部状态（滚动 / 翻页 / 模式切换）→ thumb 位置同步。
-  // 连续模式同时挂 scroll 监听（rAF 节流），滚动过程中 thumb 实时跟随。
+  // 外部状态（滚动 / 翻页）→ thumb 位置同步。
+  // 同时挂 scroll 监听（rAF 节流），滚动过程中 thumb 实时跟随。
   useEffect(() => {
     if (numPages <= 1) return;
     setTip(pageNum);
-
-    if (viewMode === "single") {
-      setThumb((pageNum - 1) / (numPages - 1));
-      return;
-    }
 
     const container = continuousContainerRef.current;
     if (!container) return;
@@ -151,9 +140,9 @@ export default function PageRail({
       container.removeEventListener("scroll", onScroll);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, [viewMode, pageNum, numPages, continuousContainerRef, setThumb, setTip]);
+  }, [pageNum, numPages, continuousContainerRef, setThumb, setTip]);
 
-  // 拖动：pct → 连续模式写 scrollTop / 单页模式 goToPage。
+  // 拖动：pct → 写容器 scrollTop。
   const applyClientY = (clientY: number) => {
     const track = trackRef.current;
     if (!track) return;
@@ -162,25 +151,19 @@ export default function PageRail({
     const pct = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
     setThumb(pct);
 
-    if (viewMode === "continuous") {
-      const container = continuousContainerRef.current;
-      if (!container) return;
-      const max = container.scrollHeight - container.clientHeight;
-      const targetTop = pct * max;
-      container.scrollTop = targetTop;
-      setTip(
-        scrollTopToPage(
-          targetTop,
-          pageViewportsRef.current ?? new Map(),
-          scaleRef.current ?? 1,
-          numPages
-        )
-      );
-    } else {
-      const page = pctToPage(pct, numPages);
-      goToPage(page);
-      setTip(page);
-    }
+    const container = continuousContainerRef.current;
+    if (!container) return;
+    const max = container.scrollHeight - container.clientHeight;
+    const targetTop = pct * max;
+    container.scrollTop = targetTop;
+    setTip(
+      scrollTopToPage(
+        targetTop,
+        pageViewportsRef.current ?? new Map(),
+        scaleRef.current ?? 1,
+        numPages
+      )
+    );
   };
 
   const endDrag = () => {
@@ -197,7 +180,6 @@ export default function PageRail({
           type="button"
           className="page-rail-btn"
           onClick={onPageUp}
-          disabled={viewMode === "single" && pageNum <= 1}
           aria-label={t("pdf.previousPage")}
           title={t("pdf.previousPage")}
           tabIndex={isVisible ? 0 : -1}
@@ -217,7 +199,6 @@ export default function PageRail({
           type="button"
           className="page-rail-btn"
           onClick={onPageDown}
-          disabled={viewMode === "single" && pageNum >= numPages}
           aria-label={t("pdf.nextPage")}
           title={t("pdf.nextPage")}
           tabIndex={isVisible ? 0 : -1}

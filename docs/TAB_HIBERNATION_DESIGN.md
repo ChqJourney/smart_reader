@@ -37,7 +37,7 @@
 - **休眠**：卸载该 tab 的 PdfViewer（销毁 pdfjs document、释放 canvas 位图与全页 DOM）、从 `pdfCacheRef` 删除其字节缓存；tab 外壳（标签页、标题、状态记录）保留。
 - **唤醒**：用户切回该 tab 时按「冷启动打开 + 状态恢复」路径重新挂载 viewer。
 
-关键依据：**恢复路径已经存在且经过充分测试**。`useTabRestore` 的挂载恢复本来就覆盖 pageNum / scale / viewMode / scrollTop / pendingGotoPage 的完整恢复（最近文件重开、关闭 tab 顶替激活走的就是这条路）；`usePdfDocument` 在 `cachedBytes` 缺失时本来就回退 `read_pdf_bytes` 重新读盘。唤醒一个休眠 tab ≈ 走一遍「首次打开该文件」的现有代码路径，增量工作集中在「卸载」这一半和休眠调度。
+关键依据：**恢复路径已经存在且经过充分测试**。`useTabRestore` 的挂载恢复本来就覆盖 pageNum / scale / scrollTop / pendingGotoPage 的完整恢复（最近文件重开、关闭 tab 顶替激活走的就是这条路）；`usePdfDocument` 在 `cachedBytes` 缺失时本来就回退 `read_pdf_bytes` 重新读盘。唤醒一个休眠 tab ≈ 走一遍「首次打开该文件」的现有代码路径，增量工作集中在「卸载」这一半和休眠调度。
 
 ## 3. Tab 生命周期状态机
 
@@ -111,7 +111,7 @@
 
 对选中的 tab：
 
-1. 快照确认：`PdfTab` 记录中的 pageNum / scale / viewMode / scrollTop 由 `handleViewerStateChange` 持续回写，休眠前无需额外采集（5 分钟保护窗口保证防抖已落盘）。`recentFiles.updateLastPage` 顺手回写一次（与关闭 tab 时一致），休眠 tab 意外丢失也能从最近文件恢复页码。
+1. 快照确认：`PdfTab` 记录中的 pageNum / scale / scrollTop 由 `handleViewerStateChange` 持续回写，休眠前无需额外采集（5 分钟保护窗口保证防抖已落盘）。`recentFiles.updateLastPage` 顺手回写一次（与关闭 tab 时一致），休眠 tab 意外丢失也能从最近文件恢复页码。
 2. 置 `tab.hibernated = true`。
 3. React 渲染层据此卸载 viewer（见 §6.1），unmount 触发 `usePdfDocument` 的 cleanup → `loadedPdf.destroy()`，pdfjs document、canvas 位图、全页 DOM、IntersectionObserver 一并释放。
 4. 若没有其他存活 tab 引用同 filePath，从 `pdfCacheRef` 删除字节缓存。
@@ -138,7 +138,7 @@ tabs.tabs.map((tab) => (
 唤醒 = `activateTab` 时若 `tab.hibernated`，置回 `false` → PdfViewer 重新挂载 → 走现有冷启动路径：
 
 1. `cachedBytes` 缺失 → `usePdfDocument` 回退 `read_pdf_bytes` 读盘，`onPdfLoaded` 重新填入 `pdfCacheRef`（需重新走 §5 预算检查：唤醒同样可能挤占预算 → 在唤醒路径上复用同一套「选候选休眠」逻辑，把唤醒的 tab 视为 active 保护起来）。
-2. `activateTab` 已设置 `pendingGotoPage = tab.pageNum`，`useTabRestore` 挂载恢复 pageNum / scale / viewMode / scrollTop —— 与最近文件重开完全一致。
+2. `activateTab` 已设置 `pendingGotoPage = tab.pageNum`，`useTabRestore` 挂载恢复 pageNum / scale / scrollTop —— 与最近文件重开完全一致。
 3. 恢复期间显示现有的 `isLoading` 占位，无需新 UI。
 
 `activateTab` 置 `hibernated=false` 与设置 `pendingGotoPage` 必须在**同一次 setTabs** 里完成，保证挂载时 initialState 已就绪。
@@ -191,13 +191,13 @@ tabs.tabs.map((tab) => (
 
 ### 9.2 验收指标
 
-| 指标                                  | 目标                                                | 测量                    |
-| ------------------------------------- | --------------------------------------------------- | ----------------------- |
-| 记账值（Σ文件大小×2）                 | 永远 ≤ BYTE_BUDGET（单文件超限放行除外）            | 单测断言 + 日志         |
-| 存活 viewer 数                        | 永远 ≤ ALIVE_VIEWER_BUDGET                          | 单测断言                |
-| 唤醒延迟（激活休眠 tab → 首屏可交互） | 典型 < 500ms，10MB 文件 < 1s                        | e2e 计时                |
-| 唤醒后状态保真                        | pageNum / scale / viewMode / scrollTop 与休眠前一致 | 单测（useTabs 层）+ e2e |
-| 开 50 个 tab 后切活跃 tab             | < 150ms，无感知卡顿                                 | e2e + 手动 soak         |
+| 指标                                  | 目标                                     | 测量                    |
+| ------------------------------------- | ---------------------------------------- | ----------------------- |
+| 记账值（Σ文件大小×2）                 | 永远 ≤ BYTE_BUDGET（单文件超限放行除外） | 单测断言 + 日志         |
+| 存活 viewer 数                        | 永远 ≤ ALIVE_VIEWER_BUDGET               | 单测断言                |
+| 唤醒延迟（激活休眠 tab → 首屏可交互） | 典型 < 500ms，10MB 文件 < 1s             | e2e 计时                |
+| 唤醒后状态保真                        | pageNum / scale / scrollTop 与休眠前一致 | 单测（useTabs 层）+ e2e |
+| 开 50 个 tab 后切活跃 tab             | < 150ms，无感知卡顿                      | e2e + 手动 soak         |
 
 ### 9.3 测试要点
 

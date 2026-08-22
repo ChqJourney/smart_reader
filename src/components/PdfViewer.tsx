@@ -57,7 +57,6 @@ export type { PageViewportInfo } from "../hooks/useViewportManager";
 export interface PdfViewerState {
   pageNum: number;
   scale: number;
-  viewMode: "single" | "continuous";
   scrollTop?: number;
 }
 
@@ -122,8 +121,7 @@ interface PdfViewerProps {
   isActive?: boolean;
   /**
    * 挂载恢复完成后自动执行一次 fit-to-width（进入并排模式时 App 对两个
-   * 屏都开启）。页码不变：连续模式走 zoomTo 的锚点恢复，锚点页保持在
-   * 视口顶部；单页模式 pageNum 本就不受 scale 影响。
+   * 屏都开启）。页码不变：走 zoomTo 的锚点恢复，锚点页保持在视口顶部。
    */
   autoFitToWidth?: boolean;
 }
@@ -250,9 +248,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
     const [pageNum, setPageNum] = useState(initialState?.pageNum ?? 1);
     const [scale, setScale] = useState(initialState?.scale ?? 1.5);
-    const [viewMode, setViewMode] = useState<"single" | "continuous">(
-      initialState?.viewMode ?? "continuous"
-    );
     const [scaleInput, setScaleInput] = useState(
       `${Math.round((initialState?.scale ?? 1.5) * 100)}%`
     );
@@ -262,7 +257,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     const [flashPage, setFlashPage] = useState<number | null>(null);
     const [printOpen, setPrintOpen] = useState(false);
 
-    const singleContainerRef = useRef<HTMLDivElement>(null);
     const continuousContainerRef = useRef<HTMLDivElement>(null);
     const viewerBodyRef = useRef<HTMLDivElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -274,7 +268,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     const lastStateRef = useRef<PdfViewerState>({
       pageNum: initialState?.pageNum ?? 1,
       scale: initialState?.scale ?? 1.5,
-      viewMode: initialState?.viewMode ?? "continuous",
     });
     const pendingFitCenterRef = useRef(false);
     // Live ref to onStateChange so the goToPage jump-lock release can report
@@ -347,18 +340,12 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // parent via the live onStateChange ref, so the hook stays free of the
     // viewer's reporting plumbing.
     const handleZoomRestored = useCallback(
-      (state: {
-        pageNum: number;
-        scale: number;
-        viewMode: "single" | "continuous";
-        scrollTop: number;
-      }) => {
+      (state: { pageNum: number; scale: number; scrollTop: number }) => {
         onStateChangeRef.current?.(state, tabId);
       },
       [tabId]
     );
     const { zoomTo, captureCursorAnchor, isZoomingRef } = useZoomAnchor({
-      viewMode,
       scale,
       pageViewports,
       viewportsForScale,
@@ -405,31 +392,23 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // 与键盘 PageUp/PageDown 行为一致的翻页回调，也提供给右侧滑轨翻页按钮。
     const goToPreviousScreen = useCallback(() => {
       if (!pdf || numPages === 0) return;
-      if (viewMode === "single") {
-        setPageNum((p) => Math.max(1, p - 1));
-      } else {
-        const container = continuousContainerRef.current;
-        if (!container) return;
-        container.scrollBy({
-          top: -container.clientHeight * 0.9,
-          behavior: "smooth",
-        });
-      }
-    }, [pdf, numPages, viewMode]);
+      const container = continuousContainerRef.current;
+      if (!container) return;
+      container.scrollBy({
+        top: -container.clientHeight * 0.9,
+        behavior: "smooth",
+      });
+    }, [pdf, numPages]);
 
     const goToNextScreen = useCallback(() => {
       if (!pdf || numPages === 0) return;
-      if (viewMode === "single") {
-        setPageNum((p) => Math.min(numPages, p + 1));
-      } else {
-        const container = continuousContainerRef.current;
-        if (!container) return;
-        container.scrollBy({
-          top: container.clientHeight * 0.9,
-          behavior: "smooth",
-        });
-      }
-    }, [pdf, numPages, viewMode]);
+      const container = continuousContainerRef.current;
+      if (!container) return;
+      container.scrollBy({
+        top: container.clientHeight * 0.9,
+        behavior: "smooth",
+      });
+    }, [pdf, numPages]);
 
     // Expose imperative goToPage for external triggers (e.g. annotation goto)
     useImperativeHandle(ref, () => ({
@@ -459,10 +438,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // after a zoom-out, or mixed portrait/landscape documents. Centering the
     // current page's wrapper instead is immune to other pages' widths.
     const centerCurrentPageHorizontally = useCallback(() => {
-      const container =
-        viewMode === "single"
-          ? singleContainerRef.current
-          : continuousContainerRef.current;
+      const container = continuousContainerRef.current;
       if (!container) return;
       // Defer to the next frame so the read happens after any pending layout
       // commit (e.g. the zoom reflow that triggered the fit).
@@ -473,11 +449,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           return;
         }
         const wrapper = pageWrapperRefs.current[pageNumRef.current - 1];
-        if (!wrapper) {
-          // Single mode (no per-page wrapper refs): center the content.
-          container.scrollLeft = maxScrollLeft / 2;
-          return;
-        }
+        if (!wrapper) return;
         const wrapperRect = wrapper.getBoundingClientRect();
         const containerRect = container.getBoundingClientRect();
         container.scrollLeft = computeCenteredScrollLeft({
@@ -489,7 +461,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           maxScrollLeft,
         });
       });
-    }, [viewMode, pageWrapperRefs]);
+    }, [pageWrapperRefs]);
 
     // After fit-to-width updates the scale, center the page horizontally so
     // residual scroll position does not leave it shifted to one side.
@@ -504,24 +476,22 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       centerCurrentPageHorizontally();
     }, [pageViewports, viewportsReady, centerCurrentPageHorizontally]);
 
-    // Notify parent of page/scale/viewMode changes. ScrollTop is intentionally
+    // Notify parent of page/scale changes. ScrollTop is intentionally
     // omitted: the continuous scroll listener reports it on user scrolls, and
     // reporting it here races with tab-switch restoration.
     useEffect(() => {
       const newState: PdfViewerState = {
         pageNum,
         scale,
-        viewMode,
       };
       if (
         lastStateRef.current.pageNum !== newState.pageNum ||
-        lastStateRef.current.scale !== newState.scale ||
-        lastStateRef.current.viewMode !== newState.viewMode
+        lastStateRef.current.scale !== newState.scale
       ) {
         lastStateRef.current = newState;
         onStateChange?.(newState, tabId);
       }
-    }, [pageNum, scale, viewMode, onStateChange, tabId]);
+    }, [pageNum, scale, onStateChange, tabId]);
 
     // Clamp pageNum when numPages becomes known or changes
     useEffect(() => {
@@ -598,46 +568,43 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
         if (isTyping) return;
 
-        if (viewMode === "single") {
-          if (e.key === "ArrowDown" || e.key === "ArrowRight") {
-            e.preventDefault();
-            setPageNum((p) => Math.min(numPages, p + 1));
-          } else if (e.key === "ArrowUp" || e.key === "ArrowLeft") {
-            e.preventDefault();
-            setPageNum((p) => Math.max(1, p - 1));
-          } else if (e.key === "PageDown") {
-            e.preventDefault();
-            goToNextScreen();
-          } else if (e.key === "PageUp") {
-            e.preventDefault();
-            goToPreviousScreen();
-          }
-        } else {
+        // ←/→ 翻页走 goToPageRef（goToPage 定义在本 effect 之后，且 ref 读到
+        // 的始终是最新实现）；↑/↓ 为平滑滚动，PageUp/Down 翻屏，Home/End 首尾。
+        if (e.key === "ArrowRight") {
+          e.preventDefault();
+          goToPageRef.current(pageNumRef.current + 1);
+        } else if (e.key === "ArrowLeft") {
+          e.preventDefault();
+          goToPageRef.current(pageNumRef.current - 1);
+        } else if (e.key === "ArrowDown") {
           const container = continuousContainerRef.current;
           if (!container) return;
-
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
-            container.scrollBy({ top: SCROLL_STEP, behavior: "smooth" });
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            container.scrollBy({ top: -SCROLL_STEP, behavior: "smooth" });
-          } else if (e.key === "PageDown") {
-            e.preventDefault();
-            goToNextScreen();
-          } else if (e.key === "PageUp") {
-            e.preventDefault();
-            goToPreviousScreen();
-          } else if (e.key === "Home") {
-            e.preventDefault();
-            container.scrollTo({ top: 0, behavior: "smooth" });
-          } else if (e.key === "End") {
-            e.preventDefault();
-            container.scrollTo({
-              top: container.scrollHeight,
-              behavior: "smooth",
-            });
-          }
+          e.preventDefault();
+          container.scrollBy({ top: SCROLL_STEP, behavior: "smooth" });
+        } else if (e.key === "ArrowUp") {
+          const container = continuousContainerRef.current;
+          if (!container) return;
+          e.preventDefault();
+          container.scrollBy({ top: -SCROLL_STEP, behavior: "smooth" });
+        } else if (e.key === "PageDown") {
+          e.preventDefault();
+          goToNextScreen();
+        } else if (e.key === "PageUp") {
+          e.preventDefault();
+          goToPreviousScreen();
+        } else if (e.key === "Home") {
+          const container = continuousContainerRef.current;
+          if (!container) return;
+          e.preventDefault();
+          container.scrollTo({ top: 0, behavior: "smooth" });
+        } else if (e.key === "End") {
+          const container = continuousContainerRef.current;
+          if (!container) return;
+          e.preventDefault();
+          container.scrollTo({
+            top: container.scrollHeight,
+            behavior: "smooth",
+          });
         }
       };
 
@@ -646,7 +613,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     }, [
       pdf,
       numPages,
-      viewMode,
       searchOpen,
       searchMatches,
       isFocused,
@@ -704,11 +670,8 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
     // 拖拽滚动画布：仅在 Space 按住且内容溢出时生效，详见 usePanScroll。
     const getScrollContainer = useCallback(
-      () =>
-        viewMode === "single"
-          ? singleContainerRef.current
-          : continuousContainerRef.current,
-      [viewMode]
+      () => continuousContainerRef.current,
+      []
     );
     const { isPanning, handlers: panHandlers } = usePanScroll({
       getContainer: getScrollContainer,
@@ -727,10 +690,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // Accumulates wheel delta and only fires one zoom step per threshold to
     // handle high-sensitivity wheels and rapid back-and-forth scrolling.
     useEffect(() => {
-      const container =
-        viewMode === "single"
-          ? singleContainerRef.current
-          : continuousContainerRef.current;
+      const container = continuousContainerRef.current;
       if (!container) return;
 
       let resetTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -770,7 +730,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           // only fires on an actual scale commit (REFACTOR_REVIEW #3).
           const atMinBoundary = direction > 0 && scaleRef.current <= MIN_SCALE;
           const atMaxBoundary = direction < 0 && scaleRef.current >= MAX_SCALE;
-          if (viewMode === "continuous" && !atMinBoundary && !atMaxBoundary) {
+          if (!atMinBoundary && !atMaxBoundary) {
             captureCursorAnchor(e.clientY);
             isZoomingRef.current = true;
           }
@@ -792,14 +752,14 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         container.removeEventListener("wheel", handleWheel);
         if (resetTimeout) clearTimeout(resetTimeout);
       };
-    }, [viewMode, captureCursorAnchor, isZoomingRef]);
+    }, [captureCursorAnchor, isZoomingRef]);
 
     const goToPage = useCallback(
       (target: number) => {
         if (numPages === 0) return;
         const page = Math.max(1, Math.min(numPages, target));
         setPageNum(page);
-        if (viewMode === "continuous" && continuousContainerRef.current) {
+        if (continuousContainerRef.current) {
           const container = continuousContainerRef.current;
           // 连续跳转时先清理上一次跳转残留的旧监听器/定时器：否则旧闭包
           // 会用第一次跳转的目标页配上当前 scrollTop 上报过期状态，并提前
@@ -840,7 +800,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
               {
                 pageNum: page,
                 scale: scaleRef.current,
-                viewMode,
                 scrollTop: container.scrollTop,
               },
               tabId
@@ -863,7 +822,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           jumpScrollCleanupRef.current = cleanup;
         }
       },
-      [numPages, viewMode, pageWrapperRefs, tabId]
+      [numPages, pageWrapperRefs, tabId]
     );
 
     // 跳页面板提交：跳转 + 大数字闪卡。闪卡仅面板跳转触发（工具栏页码
@@ -912,7 +871,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       pdf,
       numPages,
       isLoading,
-      viewMode,
       pageNum,
       pageViewports,
       tabId,
@@ -923,7 +881,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       onMountRestored: handleMountRestored,
       setPageNum,
       setScale,
-      setViewMode,
     });
 
     const handleOutlineClick = async (item: OutlineItem) => {
@@ -1032,7 +989,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // reporting; it suppresses detection during programmatic jumps
     // (isJumpingRef) and zoom reflows (isZoomingRef).
     useScrollPageSync({
-      viewMode,
       scale,
       onStateChange,
       continuousContainerRef,
@@ -1044,9 +1000,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       pageVisibilityRatios,
       isActive,
     });
-
-    const goToPrevPage = () => setPageNum((p) => Math.max(1, p - 1));
-    const goToNextPage = () => setPageNum((p) => Math.min(numPages, p + 1));
 
     // 条款链接悬停预览（画中画）：PdfPage 上报内部 dest 链接悬停，2 秒后
     // 弹出小窗渲染目标条款；窗口可拖动/调大小/固化，详见 useLinkPreviews
@@ -1077,10 +1030,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // current scale and returns it, so we can always proceed.
     const fitToWidth = useCallback(async () => {
       if (!pdf || numPages === 0) return;
-      const container =
-        viewMode === "single"
-          ? singleContainerRef.current
-          : continuousContainerRef.current;
+      const container = continuousContainerRef.current;
       if (!container) return;
       // ensureViewport returns the entry for the current scale (loading it if
       // needed). When the entry already exists and is ready it returns
@@ -1116,7 +1066,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     }, [
       pdf,
       numPages,
-      viewMode,
       pageNum,
       scale,
       ensureViewport,
@@ -1144,12 +1093,8 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         if (page > 1) pages.add(page - 1);
         if (page < numPages) pages.add(page + 1);
       });
-      // Always render current page in single mode
-      if (viewMode === "single") {
-        pages.add(pageNum);
-      }
       return pages;
-    }, [visiblePages, numPages, viewMode, pageNum]);
+    }, [visiblePages, numPages]);
 
     if (error) {
       return (
@@ -1196,114 +1141,49 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
             >
               <Icon name="search" size={16} />
             </button>
-            <button
-              onClick={() =>
-                setViewMode((m) => (m === "single" ? "continuous" : "single"))
-              }
-              className="icon-btn pdf-mode-toggle"
-              disabled={numPages === 0 || isLoading}
-              aria-label={
-                viewMode === "single"
-                  ? t("pdf.switchToContinuous")
-                  : t("pdf.switchToSingle")
-              }
-              title={
-                viewMode === "single"
-                  ? t("pdf.switchToContinuous")
-                  : t("pdf.switchToSingle")
-              }
-            >
-              <Icon
-                name={viewMode === "single" ? "continuous-page" : "single-page"}
-                size={16}
-              />
-            </button>
           </div>
 
           <div className="pdf-controls-center">
-            {viewMode === "single" && (
-              <>
-                <button
-                  className="icon-btn"
-                  onClick={goToPrevPage}
-                  disabled={pageNum <= 1 || numPages === 0}
-                  aria-label={t("pdf.previousPage")}
-                  title={t("pdf.previousPage")}
-                >
-                  <Icon name="page-prev" size={16} />
-                </button>
-                <span className="page-info">
-                  {isLoading ? (
-                    t("pdf.loading")
-                  ) : numPages > 0 ? (
-                    <>
-                      <button
-                        className="page-number-btn"
-                        onClick={() => setJumpOpen(true)}
-                        aria-label={t("pdf.pageNumber")}
-                        title={t("pdf.pageNumberHint")}
-                      >
-                        {pageNum}
-                      </button>
-                      <span> / {numPages}</span>
-                    </>
-                  ) : (
-                    ""
-                  )}
-                </span>
-                <button
-                  className="icon-btn"
-                  onClick={goToNextPage}
-                  disabled={pageNum >= numPages || numPages === 0}
-                  aria-label={t("pdf.nextPage")}
-                  title={t("pdf.nextPage")}
-                >
-                  <Icon name="page-next" size={16} />
-                </button>
-              </>
-            )}
-            {viewMode === "continuous" && (
-              <span className="page-info">
-                {isLoading ? (
-                  t("pdf.loading")
-                ) : numPages > 0 ? (
-                  <>
-                    <button
-                      className="icon-btn"
-                      onClick={() => goToPage(pageNum - 1)}
-                      disabled={pageNum <= 1 || numPages === 0 || isLoading}
-                      aria-label={t("pdf.previousPage")}
-                      title={t("pdf.previousPage")}
-                    >
-                      <Icon name="page-prev" size={16} />
-                    </button>
-                    <button
-                      className="page-number-btn"
-                      onClick={() => setJumpOpen(true)}
-                      disabled={isLoading}
-                      aria-label={t("pdf.pageNumber")}
-                      title={t("pdf.pageNumberHint")}
-                    >
-                      {pageNum}
-                    </button>
-                    <span> / {numPages}</span>
-                    <button
-                      className="icon-btn"
-                      onClick={() => goToPage(pageNum + 1)}
-                      disabled={
-                        pageNum >= numPages || numPages === 0 || isLoading
-                      }
-                      aria-label={t("pdf.nextPage")}
-                      title={t("pdf.nextPage")}
-                    >
-                      <Icon name="page-next" size={16} />
-                    </button>
-                  </>
-                ) : (
-                  ""
-                )}
-              </span>
-            )}
+            <span className="page-info">
+              {isLoading ? (
+                t("pdf.loading")
+              ) : numPages > 0 ? (
+                <>
+                  <button
+                    className="icon-btn"
+                    onClick={() => goToPage(pageNum - 1)}
+                    disabled={pageNum <= 1 || numPages === 0 || isLoading}
+                    aria-label={t("pdf.previousPage")}
+                    title={t("pdf.previousPage")}
+                  >
+                    <Icon name="page-prev" size={16} />
+                  </button>
+                  <button
+                    className="page-number-btn"
+                    onClick={() => setJumpOpen(true)}
+                    disabled={isLoading}
+                    aria-label={t("pdf.pageNumber")}
+                    title={t("pdf.pageNumberHint")}
+                  >
+                    {pageNum}
+                  </button>
+                  <span> / {numPages}</span>
+                  <button
+                    className="icon-btn"
+                    onClick={() => goToPage(pageNum + 1)}
+                    disabled={
+                      pageNum >= numPages || numPages === 0 || isLoading
+                    }
+                    aria-label={t("pdf.nextPage")}
+                    title={t("pdf.nextPage")}
+                  >
+                    <Icon name="page-next" size={16} />
+                  </button>
+                </>
+              ) : (
+                ""
+              )}
+            </span>
           </div>
 
           <div className="pdf-controls-right">
@@ -1387,27 +1267,26 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           )}
 
           <div
-            className={`pdf-canvas-container ${viewMode === "continuous" ? "continuous" : ""} ${spaceHeld ? "pan-ready" : ""} ${isPanning ? "panning" : ""}`}
-            ref={
-              viewMode === "single"
-                ? singleContainerRef
-                : continuousContainerRef
-            }
+            className={`pdf-canvas-container continuous ${spaceHeld ? "pan-ready" : ""} ${isPanning ? "panning" : ""}`}
+            ref={continuousContainerRef}
             tabIndex={0}
             {...panHandlers}
           >
             {numPages > 0 ? (
-              viewMode === "single" ? (
+              Array.from({ length: numPages }, (_, i) => i + 1).map((p) => (
                 <PdfPage
+                  key={p}
                   pdf={pdf!}
-                  pageNum={pageNum}
+                  pageNum={p}
                   scale={scale}
-                  shouldRender={renderPages.has(pageNum)}
+                  shouldRender={renderPages.has(p)}
+                  pageViewport={pageViewports.get(p) ?? null}
                   fileHash={fileHash}
                   fileName={fileName}
                   onSelection={handleSelection}
                   onGoToPage={goToPage}
                   onLinkHover={linkHoverHandler}
+                  onVisibilityChange={handlePageVisibility}
                   onViewportLoaded={reportViewportLoaded}
                   annotations={annotations}
                   highlightedAnnotationId={highlightedAnnotationId}
@@ -1418,38 +1297,10 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
                   onReinterpret={onReinterpret}
                   hoverTranslate={hoverTranslate}
                   settings={settings}
-                  searchHighlights={searchHighlightsByPage.get(pageNum)}
+                  containerRef={setPageWrapperRef(p)}
+                  searchHighlights={searchHighlightsByPage.get(p)}
                 />
-              ) : (
-                Array.from({ length: numPages }, (_, i) => i + 1).map((p) => (
-                  <PdfPage
-                    key={p}
-                    pdf={pdf!}
-                    pageNum={p}
-                    scale={scale}
-                    shouldRender={renderPages.has(p)}
-                    pageViewport={pageViewports.get(p) ?? null}
-                    fileHash={fileHash}
-                    fileName={fileName}
-                    onSelection={handleSelection}
-                    onGoToPage={goToPage}
-                    onLinkHover={linkHoverHandler}
-                    onVisibilityChange={handlePageVisibility}
-                    onViewportLoaded={reportViewportLoaded}
-                    annotations={annotations}
-                    highlightedAnnotationId={highlightedAnnotationId}
-                    sessions={sessions}
-                    onAnnotationUpdate={onAnnotationUpdate}
-                    onAnnotationDelete={onAnnotationDelete}
-                    onExplainClick={handleExplainClick}
-                    onReinterpret={onReinterpret}
-                    hoverTranslate={hoverTranslate}
-                    settings={settings}
-                    containerRef={setPageWrapperRef(p)}
-                    searchHighlights={searchHighlightsByPage.get(p)}
-                  />
-                ))
-              )
+              ))
             ) : (
               <p className="pdf-placeholder">
                 {isLoading ? t("pdf.loadingPdf") : t("pdf.selectPdfToView")}
@@ -1520,13 +1371,11 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           )}
 
           <PageRail
-            viewMode={viewMode}
             pageNum={pageNum}
             numPages={numPages}
             continuousContainerRef={continuousContainerRef}
             pageViewportsRef={pageViewportsRef}
             scaleRef={scaleRef}
-            goToPage={goToPage}
             viewerBodyRef={viewerBodyRef}
             onPageUp={goToPreviousScreen}
             onPageDown={goToNextScreen}

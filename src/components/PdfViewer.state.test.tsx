@@ -150,7 +150,6 @@ describe("PdfViewer tab state isolation", () => {
         initialState={{
           pageNum: 1,
           scale: SCALE,
-          viewMode: "continuous",
           scrollTop: targetScrollTop,
         }}
         settings={DEFAULT_SETTINGS}
@@ -191,7 +190,6 @@ describe("PdfViewer tab state isolation", () => {
         initialState={{
           pageNum: 1,
           scale: SCALE,
-          viewMode: "continuous",
           pendingGotoPage: targetPage,
         }}
         onClearPendingGotoPage={onClearPendingGotoPage}
@@ -284,7 +282,6 @@ describe("PdfViewer tab state isolation", () => {
         initialState={{
           pageNum: 1,
           scale: SCALE,
-          viewMode: "continuous",
         }}
         onStateChange={onStateChange}
         settings={DEFAULT_SETTINGS}
@@ -407,7 +404,6 @@ describe("PdfViewer tab state isolation", () => {
         initialState={{
           pageNum: 3,
           scale: SCALE,
-          viewMode: "continuous",
           scrollTop: expectedScrollTopForPage(3),
           pendingGotoPage: 3,
         }}
@@ -488,7 +484,6 @@ describe("PdfViewer tab state isolation", () => {
     const initialState = {
       pageNum: 3,
       scale: SCALE,
-      viewMode: "continuous" as const,
       scrollTop: expectedScrollTopForPage(3),
       pendingGotoPage: 3,
     };
@@ -517,7 +512,7 @@ describe("PdfViewer tab state isolation", () => {
       <PdfViewer
         tabId="tab-1"
         filePath="/fake/test.pdf"
-        initialState={{ pageNum: 1, scale: SCALE, viewMode: "continuous" }}
+        initialState={{ pageNum: 1, scale: SCALE }}
         settings={DEFAULT_SETTINGS}
       />
     );

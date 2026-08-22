@@ -3,7 +3,7 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { PageViewportInfo } from "./useViewportManager";
 
 /**
- * Restores the viewer's page / scale / viewMode / scrollTop when a tab becomes
+ * Restores the viewer's page / scale / scrollTop when a tab becomes
  * active, and executes any pending page navigation once the PDF is loaded and
  * the target page's viewport is known.
  *
@@ -23,7 +23,7 @@ import type { PageViewportInfo } from "./useViewportManager";
  *   position). Pending page jumps are NOT gated on it: goto requests can
  *   target the already-active tab (no remount), and those arrive after the
  *   mount restore has completed (docs/REFACTOR_REVIEW_2026-07-17.md #4).
- * - The mount-time application of initialState.pageNum/scale/viewMode runs
+ * - The mount-time application of initialState.pageNum/scale runs
  *   EXACTLY ONCE (didInitRef). After that the viewer is the source of truth:
  *   the tab record round-trips through onStateChange, and re-applying it on
  *   every record change stomps newer viewer state with stale record values —
@@ -37,10 +37,10 @@ import type { PageViewportInfo } from "./useViewportManager";
  *   restore window; switching away again before self-healing froze the record
  *   at page 1.
  * - The pending page jump waits until viewports for ALL pages up to the target
- *   are known, so the continuous-mode jump uses exact viewport accumulation
+ *   are known, so the jump uses exact viewport accumulation
  *   instead of DOM geometry measured against 400px placeholders (large docs).
  * - scrollTop restoration is the single inbound path; outbound reporting lives
- *   in PdfViewer's onStateChange effect (pageNum/scale/viewMode) and
+ *   in PdfViewer's onStateChange effect (pageNum/scale) and
  *   useScrollPageSync's debounced scrollTop report.
  */
 export interface UseTabRestoreOptions {
@@ -48,7 +48,6 @@ export interface UseTabRestoreOptions {
     | (Partial<{
         pageNum: number;
         scale: number;
-        viewMode: "single" | "continuous";
         scrollTop?: number;
         pendingGotoPage?: number;
       }> & { scrollTop?: number })
@@ -56,7 +55,6 @@ export interface UseTabRestoreOptions {
   pdf: PDFDocumentProxy | null;
   numPages: number;
   isLoading: boolean;
-  viewMode: "single" | "continuous";
   /** Viewer 当前页码：用于识别"激活重复带回的同页 pending"（见下）。 */
   pageNum: number;
   pageViewports: Map<number, PageViewportInfo>;
@@ -81,7 +79,6 @@ export interface UseTabRestoreOptions {
   onMountRestored?: () => void;
   setPageNum: React.Dispatch<React.SetStateAction<number>>;
   setScale: React.Dispatch<React.SetStateAction<number>>;
-  setViewMode: React.Dispatch<React.SetStateAction<"single" | "continuous">>;
 }
 
 /** True when viewports for every page in [1, page] are known. */
@@ -101,7 +98,6 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
     pdf,
     numPages,
     isLoading,
-    viewMode,
     pageNum,
     pageViewports,
     tabId,
@@ -112,7 +108,6 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
     onMountRestored,
     setPageNum,
     setScale,
-    setViewMode,
   } = options;
 
   const pendingGotoPageRef = useRef<number | undefined>(
@@ -123,7 +118,7 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
   );
   // Restoration of page/scroll position must run at most once per mount.
   const hasRestoredRef = useRef(false);
-  // initialState's page/scale/viewMode must be applied only once per mount;
+  // initialState's page/scale must be applied only once per mount;
   // afterwards the viewer owns these values (see the hook doc comment).
   const didInitRef = useRef(false);
 
@@ -133,20 +128,16 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
       didInitRef.current = true;
       if (initialState?.pageNum !== undefined) setPageNum(initialState.pageNum);
       if (initialState?.scale !== undefined) setScale(initialState.scale);
-      if (initialState?.viewMode !== undefined)
-        setViewMode(initialState.viewMode);
     }
     pendingGotoPageRef.current = initialState?.pendingGotoPage;
     pendingScrollTopRef.current = initialState?.scrollTop;
   }, [
     initialState?.pageNum,
     initialState?.scale,
-    initialState?.viewMode,
     initialState?.pendingGotoPage,
     initialState?.scrollTop,
     setPageNum,
     setScale,
-    setViewMode,
   ]);
 
   // Execute any pending page navigation once the PDF is loaded and the target
@@ -180,13 +171,14 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
         return;
       }
       // Wait until viewports for EVERY page up to the target are known, so the
-      // continuous-mode jump uses exact viewport accumulation instead of DOM
+      // jump uses exact viewport accumulation instead of DOM
       // geometry measured against not-yet-loaded placeholder heights.
       // (Clamped to numPages: a stale target beyond the document end would
       // otherwise wait forever for entries that can never arrive.)
-      const ready =
-        viewMode === "single" ||
-        hasViewportsUpTo(pageViewports, Math.min(pending, numPages));
+      const ready = hasViewportsUpTo(
+        pageViewports,
+        Math.min(pending, numPages)
+      );
       if (!ready) {
         isJumpingRef.current = true;
         return;
@@ -194,15 +186,7 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
       goToPage(pending);
       onClearPendingGotoPage?.(tabId);
       pendingGotoPageRef.current = undefined;
-      if (viewMode === "single") {
-        // goToPage manages the jump lock only in continuous mode; release the
-        // restore-window lock here (next frame, so the lock outlives this
-        // effect pass).
-        requestAnimationFrame(() => {
-          isJumpingRef.current = false;
-        });
-      }
-      // In continuous mode goToPage holds the lock around its own scroll and
+      // goToPage holds the lock around its own scroll and
       // releases it once the jump settles, so nothing more is needed here.
       if (!hasRestoredRef.current) {
         // Mount-time restore only: land on the exact scroll offset saved
@@ -210,11 +194,7 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
         // page heights are known, so scrollHeight is final and scrollTop is
         // not clamped.
         const savedScrollTop = pendingScrollTopRef.current;
-        if (
-          viewMode === "continuous" &&
-          savedScrollTop !== undefined &&
-          continuousContainerRef.current
-        ) {
+        if (savedScrollTop !== undefined && continuousContainerRef.current) {
           continuousContainerRef.current.scrollTop = savedScrollTop;
         }
         pendingScrollTopRef.current = undefined;
@@ -224,25 +204,18 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
       return;
     }
 
-    // No pending page jump: restore the exact continuous-scroll position
+    // No pending page jump: restore the exact scroll position
     // stored for this tab (mount-time, once).
     if (hasRestoredRef.current) return;
     // Wait until every page height is known: the saved scrollTop was captured
     // against fully-sized content, and applying it while pages above still
     // have placeholder heights would land at (or clamp to) the wrong spot.
-    if (
-      viewMode === "continuous" &&
-      !hasViewportsUpTo(pageViewports, numPages)
-    ) {
+    if (!hasViewportsUpTo(pageViewports, numPages)) {
       isJumpingRef.current = true;
       return;
     }
     const scrollTop = pendingScrollTopRef.current;
-    if (
-      scrollTop !== undefined &&
-      viewMode === "continuous" &&
-      continuousContainerRef.current
-    ) {
+    if (scrollTop !== undefined && continuousContainerRef.current) {
       continuousContainerRef.current.scrollTop = scrollTop;
       // Release the restore-window lock on the next frame so the scroll event
       // fired by applying scrollTop above is still suppressed by it.
@@ -262,7 +235,6 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
     pdf,
     numPages,
     isLoading,
-    viewMode,
     pageNum,
     pageViewports,
     tabId,

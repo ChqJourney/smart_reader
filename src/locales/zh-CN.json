@@ -26,9 +26,8 @@
       "panels": "面板与窗口"
     },
     "prevNextPage": "上一页 / 下一页",
-    "prevNextPageArrows": "上一页 / 下一页（单页模式）",
-    "scrollPage": "上下滚动（连续模式）",
-    "firstLast": "跳到文档开头 / 结尾（连续模式）",
+    "scrollPage": "上下滚动",
+    "firstLast": "跳到文档开头 / 结尾",
     "gotoPage": "跳转到指定页",
     "panPage": "按住拖动页面（平移视图）",
     "openSearch": "全文搜索",
@@ -65,8 +64,6 @@
   },
   "pdf": {
     "hidePanel": "隐藏 PDF 面板",
-    "switchToContinuous": "切换为连续阅读",
-    "switchToSingle": "切换为单页阅读",
     "previousPage": "上一页（PageUp）",
     "nextPage": "下一页（PageDown）",
     "pageNumber": "页码",

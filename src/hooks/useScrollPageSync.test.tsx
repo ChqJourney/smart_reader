@@ -39,7 +39,6 @@ function makeOptions() {
 
   return {
     base: {
-      viewMode: "continuous" as const,
       scale: 1.5,
       onStateChange: vi.fn(),
       continuousContainerRef: { current: container },
@@ -59,14 +58,6 @@ function makeOptions() {
 describe("useScrollPageSync", () => {
   afterEach(() => {
     vi.restoreAllMocks();
-  });
-
-  it("does not attach a scroll listener in single mode", () => {
-    const { base, container } = makeOptions();
-    const addSpy = vi.spyOn(container, "addEventListener");
-    renderHook(() => useScrollPageSync({ ...base, viewMode: "single" }));
-    // In single mode the effect returns early before addEventListener.
-    expect(addSpy).not.toHaveBeenCalledWith("scroll", expect.any(Function));
   });
 
   it("attaches a scroll listener in continuous mode", () => {

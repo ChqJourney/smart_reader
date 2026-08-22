@@ -329,7 +329,6 @@ describe("useTabs", () => {
         {
           pageNum: 5,
           scale: 2,
-          viewMode: "continuous",
           scrollTop: 1200,
         },
         tabId!
@@ -338,7 +337,6 @@ describe("useTabs", () => {
 
     expect(result.current.activeTab?.pageNum).toBe(5);
     expect(result.current.activeTab?.scale).toBe(2);
-    expect(result.current.activeTab?.viewMode).toBe("continuous");
     expect(result.current.activeTab?.scrollTop).toBe(1200);
 
     act(() => {
@@ -393,7 +391,7 @@ describe("useTabs", () => {
 
     act(() => {
       result.current.handleViewerStateChange(
-        { pageNum: 7, scale: 1.5, viewMode: "continuous" },
+        { pageNum: 7, scale: 1.5 },
         tabId!
       );
     });
@@ -461,7 +459,7 @@ describe("useTabs", () => {
     // Tab B is active; simulate scrolling to page 5 and clearing pendingGotoPage.
     act(() => {
       result.current.handleViewerStateChange(
-        { pageNum: 5, scale: 1.5, viewMode: "continuous", scrollTop: 1200 },
+        { pageNum: 5, scale: 1.5, scrollTop: 1200 },
         tabB!
       );
       result.current.clearTabPendingGotoPage(tabB!);
@@ -595,7 +593,7 @@ describe("useTabs 休眠（hibernation）", () => {
         page: 1,
       });
       result.current.handleViewerStateChange(
-        { pageNum: 3, scale: 1.5, viewMode: "continuous" },
+        { pageNum: 3, scale: 1.5 },
         tabA!.id
       );
     });
@@ -634,7 +632,7 @@ describe("useTabs 休眠（hibernation）", () => {
     const tabA = await openPath(result, "/test/a.pdf");
     act(() => {
       result.current.handleViewerStateChange(
-        { pageNum: 3, scale: 1.5, viewMode: "continuous" },
+        { pageNum: 3, scale: 1.5 },
         tabA!.id
       );
     });
@@ -784,7 +782,7 @@ describe("useTabs 休眠（hibernation）", () => {
     const tabB = await openPath(result, "/test/b.pdf"); // a 是 active 受保护，暂不休眠
     act(() => {
       result.current.handleViewerStateChange(
-        { pageNum: 7, scale: 1.5, viewMode: "continuous" },
+        { pageNum: 7, scale: 1.5 },
         tabB!.id
       );
     });

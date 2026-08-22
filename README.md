@@ -85,7 +85,7 @@ See [TESTING.md](./TESTING.md) for details.
 │   ├── components/                    # React components (30+, each with a matching .css)
 │   │   ├── TitleBar.tsx               # Custom title bar (brand area, recent files, window controls)
 │   │   ├── SetupWizard.tsx            # First-run setup wizard (pick platform → enter key → test connection)
-│   │   ├── PdfViewer.tsx / PdfPage.tsx            # PDF rendering, selection, zoom, single/continuous modes
+│   │   ├── PdfViewer.tsx / PdfPage.tsx            # PDF rendering, selection, zoom
 │   │   ├── PdfAnnotations.tsx / AnnotationMarker.tsx / *Popup.tsx  # Annotations & popups
 │   │   ├── AiChatPanel.tsx            # Right panel (stash, interpretation history, follow-ups)
 │   │   ├── SettingsModal.tsx / RecentFilesBar.tsx / CustomInterpretModal.tsx
@@ -123,7 +123,7 @@ See [TESTING.md](./TESTING.md) for details.
 - Open multiple PDFs in tabs (no fixed limit; memory-budget-driven hibernation keeps the app light), with side-by-side split view for comparing two PDFs.
 - Custom title bar: frameless window with brand area, recent files, open-PDF / settings, and window controls.
 - First-run setup wizard: pick a platform → enter API key → test the connection (a real LLM call); auto-opens when no platform is configured, re-runnable from settings.
-- Local PDF rendering, text selection, zoom, page jumping, single-page / continuous scroll modes.
+- Local PDF rendering, text selection, zoom, page jumping, continuous scroll reading mode.
 - Full-text search (Ctrl / Cmd + F, phrase matching across text items, per-page highlights) and outline / TOC navigation.
 - Floating toolbar on text selection: copy, comment, stash, interpret, translate; comments become draggable purple markers (debounced persistence).
 - Translations appear as draggable / hideable / deletable popup annotations.

@@ -109,14 +109,12 @@
 }
 
 .pdf-hide-btn,
-.pdf-mode-toggle,
 .pdf-outline-toggle,
 .pdf-search-toggle {
   color: var(--text-secondary);
 }
 
 .pdf-hide-btn:hover,
-.pdf-mode-toggle:hover,
 .pdf-outline-toggle:hover,
 .pdf-search-toggle:hover {
   background: var(--surface-hover);
@@ -337,11 +335,10 @@
   min-width: 0;
 }
 
-/* 单页模式居中用子元素 margin:auto 而非容器 align/justify-content：flex
+/* 占位提示用子元素 margin:auto 居中而非容器 align/justify-content：flex
    居中在内容溢出时滚动范围畸形（上/左部分不可达，WKWebView 下拖拽 pan
    会被钳回原位）；margin:auto 在内容更大时退化为 0，滚动范围正常，内容
-   更小时依然居中。连续模式由下方专属 margin 规则覆盖。 */
-.pdf-canvas-container > .pdf-page-wrapper,
+   更小时依然居中。页面包裏的 margin 由下方 .continuous 专属规则控制。 */
 .pdf-canvas-container > .pdf-placeholder {
   margin: auto;
 }

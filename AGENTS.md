@@ -17,10 +17,10 @@
 - 自定义标题栏（无边框窗口 `decorations: false`）：品牌区拖动 + 最近文件 / 打开 PDF（Ctrl/Cmd+O）/ 快捷键（「?」按钮）/ 设置 + 窗口控制按钮；中部为快捷状态区（TitleBarToggles）：悬停查词开关（仅词典已下载可用时可见）、智能文档查阅开关（仅当前平台已配置 API Key 时可见，开启前弹确认框提示 token 消耗大增，portal 到 body 避开标题栏 backdrop-filter 的 fixed 包含块）、当前平台/模型纯展示（仅已配置 Key 时可见），切换即时持久化到 settings。
 - 键盘快捷键速查浮层（ShortcutsModal）：`Ctrl/Cmd+/` 或标题栏「?」按钮开合，按页面导航 / 搜索 / 视图 / 面板分组以 kbd 样式列出全部快捷键；清单在 `ShortcutsModal.tsx` 的 `GROUPS` 常量中维护，新增快捷键需同步。
 - 首次启动配置向导（SetupWizard）：选平台 → 填 Key → 测试连接，全部平台未配置 Key 时才自动弹出，设置里可重跑。
-- 多 PDF Tab 同时打开（数量不设固定上限，由内存预算调度休眠，见下），单视图下存活 tab 的 PdfViewer **常驻挂载（keep-alive）**：切 tab 仅切换 `display:none`，canvas 位图 / 滚动位置 / 页码 / 工具栏状态全部保留，切换瞬时完成；隐藏 viewer 通过 `isActive` prop 冻结 IO 可见性上报与滚动页码同步，激活时带回的同页 `pendingGotoPage` 由 useTabRestore 直接清除不跳转。**Tab 休眠（hibernation）**：打开新 tab 时若预测超预算（字节预算 = Σ存活文件大小×2，macOS 400MB / Windows 800MB；或存活 viewer 数 > 15，`services/memoryBudget.ts`），自动休眠最久未激活的隐藏 tab——卸载其 viewer、释放 `pdfCacheRef` 字节缓存，tab 外壳与状态记录（pageNum / scale / viewMode / scrollTop / fileSize / lastActivatedAt）保留；active / 分屏 secondary / 5 分钟内激活过 / 有流式会话 / 共享路径的 tab 受保护，候选耗尽仍超预算则放行。唤醒透明：激活休眠 tab 时同拍复位 `hibernated` + `pendingGotoPage`，viewer 重新挂载走现有冷启动恢复路径（useTabRestore），唤醒同样会按预算顶替休眠他人；另有纯防御性硬上限 100 个 tab。支持左右并排对照两份 PDF。进入并排的入口：鼠标拖拽非激活 tab 到阅读区（带 drop-zone 遮罩，释放在阅读区外等于取消）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter（目标 tab 休眠时先经 `wakeTab` 唤醒）。首次同时打开 ≥2 个 PDF 时显示一次性并排对照引导气泡（`.split-coachmark`，点「知道了」或 12 秒超时后写入 localStorage 不再复现；气泡本身 `pointer-events:none` 不遮挡操作）。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
-- PDF 本地渲染、文本选区、缩放、页码跳转、单页 / 连续滚动阅读模式。
+- 多 PDF Tab 同时打开（数量不设固定上限，由内存预算调度休眠，见下），单视图下存活 tab 的 PdfViewer **常驻挂载（keep-alive）**：切 tab 仅切换 `display:none`，canvas 位图 / 滚动位置 / 页码 / 工具栏状态全部保留，切换瞬时完成；隐藏 viewer 通过 `isActive` prop 冻结 IO 可见性上报与滚动页码同步，激活时带回的同页 `pendingGotoPage` 由 useTabRestore 直接清除不跳转。**Tab 休眠（hibernation）**：打开新 tab 时若预测超预算（字节预算 = Σ存活文件大小×2，macOS 400MB / Windows 800MB；或存活 viewer 数 > 15，`services/memoryBudget.ts`），自动休眠最久未激活的隐藏 tab——卸载其 viewer、释放 `pdfCacheRef` 字节缓存，tab 外壳与状态记录（pageNum / scale / scrollTop / fileSize / lastActivatedAt）保留；active / 分屏 secondary / 5 分钟内激活过 / 有流式会话 / 共享路径的 tab 受保护，候选耗尽仍超预算则放行。唤醒透明：激活休眠 tab 时同拍复位 `hibernated` + `pendingGotoPage`，viewer 重新挂载走现有冷启动恢复路径（useTabRestore），唤醒同样会按预算顶替休眠他人；另有纯防御性硬上限 100 个 tab。支持左右并排对照两份 PDF。进入并排的入口：鼠标拖拽非激活 tab 到阅读区（带 drop-zone 遮罩，释放在阅读区外等于取消）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter（目标 tab 休眠时先经 `wakeTab` 唤醒）。首次同时打开 ≥2 个 PDF 时显示一次性并排对照引导气泡（`.split-coachmark`，点「知道了」或 12 秒超时后写入 localStorage 不再复现；气泡本身 `pointer-events:none` 不遮挡操作）。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
+- PDF 本地渲染、文本选区、缩放、页码跳转、连续滚动阅读模式。
 - 拖拽 PDF 文件到窗口内直接打开（Tauri 系统级文件拖放，`hooks/useFileDrop.ts` 监听 `onDragDropEvent`，全窗口遮罩提示，非 PDF 静默忽略；复用 `openPdfByPath` 打开链路）。遮罩带看门狗：`enter`/`over` 事件喂定时器，事件流停顿 1.5s 或窗口 blur 时强制隐藏（慢网盘下原生 leave/drop 可能延迟或丢失）。打开链路为单遍读取：`addTab` 先 `read_pdf_bytes`（后端同遍算 SHA-256 预热 hash 缓存），随后 `get_pdf_hash` 仅 metadata 校验即命中，字节直接写入 App 级 `pdfCacheRef` 供 viewer 渲染——局域网文件从两遍网络传输降为一遍；路径去重优先于一切 I/O（重复拖入已打开文件零读盘）；在飞期间 `tabs.openingPaths` 驱动底部「正在打开」toast，失败经 `showMessage` 弹窗提示不再静默。注意：开启系统拖放后 WebView2 会接管页面内全部 HTML5 拖放事件，tab→分屏的拖拽因此是鼠标拖拽实现（mousedown + 阈值 + 全局 mousemove/mouseup，App.tsx 内局部实现），不是 HTML5 DnD。
-- 右侧页码滑轨（PageRail）：替代原生垂直滚动条（CSS 隐藏，水平滚动条保留），拖动 / 悬停时显示页码 tooltip；连续模式拖动直接驱动 scrollTop，单页模式按位置映射页码。
+- 右侧页码滑轨（PageRail）：替代原生垂直滚动条（CSS 隐藏，水平滚动条保留），拖动 / 悬停时显示页码 tooltip；拖动直接驱动连续滚动的 scrollTop。
 - Cmd/Ctrl+G 跳页面板（PageJumpPanel）：手动输入页码回车跳转，跳转时阅读区中央闪现大数字页码闪卡（600ms 定时清除）；工具栏页码显示为按钮，点击同样打开跳页面板。
 - 全文搜索（Ctrl / Cmd + F，支持跨 text item 短语匹配，结果逐页高亮、Enter / Shift+Enter 前后跳转）。
 - 大纲 / 目录导航面板（PDF 自带 outline 时可用，点击跳转章节）。
@@ -94,7 +94,7 @@ npm install
 │   ├── main.tsx                       # React 入口（ErrorBoundary 顶层包裹）
 │   ├── vite-env.d.ts                  # Vite 类型声明
 │   ├── components/                    # React 组件（每个组件配同名 {Component}.css，由组件文件顶部 import）
-│   │   ├── PdfViewer.tsx              # PDF 渲染协调层、选区、单页/连续模式、键盘导航
+│   │   ├── PdfViewer.tsx              # PDF 渲染协调层、选区、键盘导航
 │   │   ├── PdfPage.tsx                # 单页渲染（canvas / textLayer / 悬停取词）
 │   │   ├── PageRail.tsx               # 右侧页码滑轨（替代垂直滚动条，拖动/悬停显示页码）
 │   │   ├── PageJumpPanel.tsx          # Cmd/Ctrl+G 跳页面板（输入页码回车跳转）
@@ -201,7 +201,7 @@ npm install
 │   ├── pdf-page-jump.spec.ts          # 连续滚动页码跳转 / Cmd+G 跳页面板 / 右侧滑轨拖动
 │   ├── pdf-rapid-zoom.spec.ts         # 快速缩放回归
 │   ├── pdf-selection-translate.spec.ts # 选区翻译流程
-│   ├── pdf-space-pan.spec.ts          # Space 按住拖拽 pan（连续/单页模式 + 不按 Space 时选择不受影响）
+│   ├── pdf-space-pan.spec.ts          # Space 按住拖拽 pan（连续滚动模式 + 不按 Space 时选择不受影响）
 │   └── pdf-tab-budget.spec.ts         # Tab 休眠/唤醒回归 + per-tab 内存成本测量（init script 拨快假时间越过 5 分钟保护窗口）
 ├── scripts/                           # 辅助脚本
 │   ├── gen-sample-pdf.mjs             # 生成测试 PDF
@@ -405,7 +405,7 @@ PdfViewer.tsx（协调层：UI + 组合 hooks）
 ├── useSearchDomain                     # 跨 text item 短语搜索索引/高亮/导航（PDF 原始坐标）
 ├── useScrollPageSync                   # 滚动页码同步 + scrollTop 上报
 ├── useTabRestore                       # tab 状态恢复（keep-alive：仅 tab 首次打开时挂载恢复）+ pending 跳转（激活带回的同页 pending 直接清除）
-├── pageNum / scale / viewMode          # 本组件持有的三要素状态
+├── pageNum / scale                     # 本组件持有的页码与缩放状态
 ├── jumpOpen / flashPage                # Cmd/Ctrl+G 跳页面板与跳页闪卡（面板提交才闪，600ms 定时清除）
 ├── useLinkPreviews                     # 条款链接悬停预览（PdfPage onLinkHover 上报 → 计时弹窗；LinkPreviewPopup 列表）
 ├── usePanScroll + spaceHeld            # Space 按住临时 pan（手型工具）：直写 scrollTop/scrollLeft，仅溢出时生效；keyup/blur 复位
@@ -517,7 +517,7 @@ runSessionStream（usePersistence.ts）
   - `pdf-large-doc.spec.ts`：>50 页大文档回归——适合宽度不横向偏移、深度缩放页码不抖动、快速切换 tab 恢复页码（fixtures 含 `gen-sample-long-pdf.mjs` 生成的 60 页 PDF）。
   - `pdf-rapid-zoom.spec.ts`：快速缩放回归。
   - `pdf-selection-translate.spec.ts`：选区翻译流程。
-  - `pdf-space-pan.spec.ts`：Space 按住拖拽 pan（连续/单页模式滚动位置不弹回、不按 Space 时拖拽仍是文字选择）。
+  - `pdf-space-pan.spec.ts`：Space 按住拖拽 pan（连续滚动模式下滚动位置不弹回、不按 Space 时拖拽仍是文字选择）。
   - `pdf-tab-budget.spec.ts`：Tab 休眠/唤醒回归（字节预算与存活 viewer 数两条预算线、唤醒后页码恢复）+ per-tab 内存成本测量；init script 在每次 `get_pdf_hash` 时拨快假时间 6 分钟，越过 5 分钟休眠保护窗口。
 - 单实例与文件关联需在打包后的安装包上手动验证，E2E 较难覆盖。
 

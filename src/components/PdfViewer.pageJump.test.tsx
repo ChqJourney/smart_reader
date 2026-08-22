@@ -753,7 +753,6 @@ describe("PdfViewer continuous mode page jump", () => {
         initialState={{
           pageNum: 3,
           scale: SCALE,
-          viewMode: "continuous",
           scrollTop: expectedScrollTopForPage(3),
         }}
       />
@@ -791,44 +790,6 @@ describe("PdfViewer continuous mode page jump", () => {
     });
 
     // 页码不变：仍是 initialState 恢复的第 3 页。
-    expect(pageInput.textContent).toBe("3");
-  });
-
-  it("auto fits to width in single mode when autoFitToWidth is set, keeping the page number", async () => {
-    const { container } = render(
-      <PdfViewer
-        filePath="/fake/test.pdf"
-        settings={DEFAULT_SETTINGS}
-        autoFitToWidth
-        initialState={{ pageNum: 3, scale: SCALE, viewMode: "single" }}
-      />
-    );
-
-    const canvasContainer = container.querySelector(
-      ".pdf-canvas-container"
-    ) as HTMLDivElement;
-    expect(canvasContainer).not.toBeNull();
-    Object.defineProperty(canvasContainer, "clientWidth", {
-      value: 400,
-      configurable: true,
-    });
-    vi.spyOn(window, "getComputedStyle").mockReturnValue({
-      paddingLeft: "24px",
-    } as CSSStyleDeclaration);
-
-    const pageInput = await waitFor<HTMLButtonElement>(() => {
-      const input = screen.getByLabelText("页码") as HTMLButtonElement;
-      if (!input || input.disabled) {
-        throw new Error("page input not ready yet");
-      }
-      return input;
-    });
-
-    const scaleInput = screen.getByLabelText("缩放比例") as HTMLInputElement;
-    await waitFor(() => {
-      expect(scaleInput.value).toBe("176%");
-    });
-
     expect(pageInput.textContent).toBe("3");
   });
 });

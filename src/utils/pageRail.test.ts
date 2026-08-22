@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { pctToPage, scrollTopToPage } from "./pageRail";
+import { scrollTopToPage } from "./pageRail";
 import type { PageViewportInfo } from "../hooks/useViewportManager";
 
 const PAGE_SPACING = 24;
@@ -17,28 +17,6 @@ function uniformViewports(
   for (let p = 1; p <= numPages; p++) map.set(p, vp(height, scale));
   return map;
 }
-
-describe("pctToPage", () => {
-  it("maps 0 → first page and 1 → last page", () => {
-    expect(pctToPage(0, 240)).toBe(1);
-    expect(pctToPage(1, 240)).toBe(240);
-  });
-
-  it("rounds to the nearest page", () => {
-    // pct 0.5 on 11 pages → page 6
-    expect(pctToPage(0.5, 11)).toBe(6);
-  });
-
-  it("clamps out-of-range pct", () => {
-    expect(pctToPage(-0.5, 100)).toBe(1);
-    expect(pctToPage(1.5, 100)).toBe(100);
-  });
-
-  it("returns 1 when numPages <= 1", () => {
-    expect(pctToPage(0.7, 1)).toBe(1);
-    expect(pctToPage(0.7, 0)).toBe(1);
-  });
-});
 
 describe("scrollTopToPage", () => {
   it("finds the page containing the target scrollTop", () => {

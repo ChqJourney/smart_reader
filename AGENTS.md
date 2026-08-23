@@ -209,7 +209,7 @@ npm install
 │   ├── gen-sample-short-pdf.mjs       # 生成短页测试 PDF
 │   ├── gen-sample-long-pdf.mjs        # 生成 60 页大文档测试 PDF
 │   ├── gen-sample-link-pdf.mjs        # 生成带内部交叉引用链接的演示 PDF（画中画录制素材）
-│   ├── bump-version.mjs               # 同步 package.json / Cargo.toml / tauri.conf.json 版本号
+│   ├── bump-version.mjs               # 同步 package.json / Cargo.toml / Cargo.lock / tauri.conf.json 版本号
 │   └── prepare-release.mjs            # 发布前固化 CHANGELOG 版本段落并提取 Release notes
 ├── CHANGELOG.md                       # 版本变更记录（GitHub Release notes 来源）
 ├── package.json
@@ -255,7 +255,7 @@ npm run tauri build -- --no-bundle
 2. GitHub 仓库 → Actions → Release → Run workflow，输入版本号（如 `0.8.2`）。
 3. workflow 自动：
    - 运行快速门禁（type-check / lint / 单元测试），失败即终止。
-   - 用 `scripts/bump-version.mjs` 同步 `package.json` / `Cargo.toml` / `tauri.conf.json` 版本号。
+   - 用 `scripts/bump-version.mjs` 同步 `package.json` / `Cargo.toml` / `Cargo.lock` / `tauri.conf.json` 版本号。
    - 用 `scripts/prepare-release.mjs` 把 CHANGELOG 的 `[Unreleased]` 固化为 `## [x.y.z] - 日期` 段落，并提取该段落作为 Release notes。
    - commit（`release: vx.y.z`）+ 打 tag 并 push 到 master。
    - 在 Windows runner 用 `tauri-action` 构建 NSIS 安装包，自动生成 `.sig` 与 `latest.json`，创建 **Draft Release**（notes 取自 CHANGELOG 对应段落），并附加独立 exe `SpecReader AI v{version}.exe`。

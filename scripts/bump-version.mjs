@@ -14,6 +14,18 @@ if (!version || !/^\d+\.\d+\.\d+/.test(version)) {
 
 const root = path.resolve(__dirname, "..");
 
+// Cargo.lock 里 [[package]] 的版本号要与 Cargo.toml 同步，否则发版后
+// 工作区会留下 dirty lock（crate 名从 Cargo.toml 读取，不写死）。
+const cargoTomlRaw = fs.readFileSync(
+  path.join(root, "src-tauri", "Cargo.toml"),
+  "utf8"
+);
+const crateName = cargoTomlRaw.match(/^name = "([^"]+)"$/m)?.[1];
+if (!crateName) {
+  console.error("Cannot read package name from src-tauri/Cargo.toml");
+  process.exit(1);
+}
+
 const files = [
   {
     path: path.join(root, "package.json"),
@@ -30,6 +42,25 @@ const files = [
     },
   },
   {
+    path: path.join(root, "src-tauri", "Cargo.lock"),
+    update: (content) => {
+      const pattern = new RegExp(
+        `(\\[\\[package\\]\\]\\nname = "${crateName}"\\nversion = )"[^"]+"`
+      );
+      const updated = content.replace(pattern, `$1"${version}"`);
+      if (
+        !updated.includes(
+          `[[package]]\nname = "${crateName}"\nversion = "${version}"`
+        )
+      ) {
+        throw new Error(
+          `Cargo.lock: cannot locate [[package]] entry for "${crateName}"`
+        );
+      }
+      return updated;
+    },
+  },
+  {
     path: path.join(root, "src-tauri", "tauri.conf.json"),
     update: (content) => {
       const json = JSON.parse(content);
@@ -41,8 +72,15 @@ const files = [
 
 for (const file of files) {
   const raw = fs.readFileSync(file.path, "utf8");
-  const updated = file.update(raw);
-  fs.writeFileSync(file.path, updated);
+  try {
+    const updated = file.update(raw);
+    fs.writeFileSync(file.path, updated);
+  } catch (err) {
+    console.error(
+      `Failed to update ${path.relative(root, file.path)}: ${err.message}`
+    );
+    process.exit(1);
+  }
   console.log(`Updated ${path.relative(root, file.path)} -> ${version}`);
 }
 

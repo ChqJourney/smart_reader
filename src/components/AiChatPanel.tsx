@@ -51,9 +51,12 @@ interface AiChatPanelProps {
   /** 解读记录排序方式（由 App 持久化到 settings；缺省时组件内部自持） */
   sessionSortMode?: SessionSortMode;
   onSessionSortModeChange?: (mode: SessionSortMode) => void;
-  /** 外部请求激活某个 tab（如 PDF 侧加入暂存 / 发起解读）；nonce 变化即生效，
+  /** 外部请求激活某个 tab（如 PDF 侧加入暂存）；nonce 变化即生效，
    *  与用户手动切换无关。 */
   tabRequest?: { tab: Tab; nonce: number };
+  /** 发起解读 / 自定义解读 / 重新解读后请求直接进入该会话 chatbox；
+   *  nonce 变化即生效，用户之后可自由返回列表。 */
+  expandSessionRequest?: { id: string; nonce: number } | null;
 }
 
 export default function AiChatPanel({
@@ -78,6 +81,7 @@ export default function AiChatPanel({
   sessionSortMode,
   onSessionSortModeChange,
   tabRequest,
+  expandSessionRequest,
 }: AiChatPanelProps) {
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<Tab>(
@@ -196,6 +200,18 @@ export default function AiChatPanel({
     prevTabRequestNonceRef.current = tabRequest.nonce;
     setActiveTab(tabRequest.tab);
   }, [tabRequest]);
+
+  // 发起解读 / 自定义解读 / 重新解读后直接进入新会话 chatbox（含切到解读记录
+  // tab），与自由提问行为一致。以 nonce 变化为准，用户之后可自由返回列表。
+  const prevExpandSessionNonceRef = useRef(expandSessionRequest?.nonce ?? 0);
+  useEffect(() => {
+    if (!expandSessionRequest) return;
+    if (expandSessionRequest.nonce === prevExpandSessionNonceRef.current)
+      return;
+    prevExpandSessionNonceRef.current = expandSessionRequest.nonce;
+    setActiveTab("sessions");
+    setActiveSessionId(expandSessionRequest.id);
+  }, [expandSessionRequest]);
 
   // stash 被删除或清空时同步剔除失效的选中项；stash 清空时退出选择模式
   useEffect(() => {

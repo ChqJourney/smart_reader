@@ -101,14 +101,19 @@ export interface UsePersistenceReturn {
   handleAddComment: (selection: SelectionState, text: string) => void;
   handleRemoveStash: (id: string) => void;
   handleClearStashes: () => void;
-  handleCustomInterpret: (prompt: string, visibleStashes: StashItem[]) => void;
+  /** 自定义解读：返回新会话 id 供面板直接切入 chatbox；无片段/无聚焦 tab 时返回 null */
+  handleCustomInterpret: (
+    prompt: string,
+    visibleStashes: StashItem[]
+  ) => string | null;
   /** 无选区自由提问：创建空 sources 的锚定会话，返回新会话 id（无锚定文档时 null） */
   handleFreeQuestion: (prompt: string) => string | null;
+  /** 选区动作：explain 时返回新会话 id 供面板切入 chatbox，其余动作返回 null */
   handleSelectionAction: (
     selection: SelectionState,
     action: SelectionAction,
     text: string
-  ) => void;
+  ) => string | null;
   handleFollowUp: (sessionId: string, prompt: string) => void;
   handleInterruptSession: (sessionId: string) => void;
   handleSessionUpdate: (updatedSession: InterpretationSession) => void;
@@ -118,7 +123,8 @@ export interface UsePersistenceReturn {
   ) => void;
   handleAnnotationDelete: (id: string) => Promise<void>;
   handleDeleteSession: (sessionId: string) => Promise<void>;
-  handleReinterpretSession: (sessionId: string) => void;
+  /** 重新解读：返回新会话 id 供面板切入 chatbox；会话缺失/流式中返回 null */
+  handleReinterpretSession: (sessionId: string) => string | null;
   handleUpdateStash: (id: string, text: string) => void;
   findSessionIdByAnnotationId: (id: string) => string | undefined;
   abortSessionsForTab: (
@@ -1501,8 +1507,8 @@ export function usePersistence({
   }, [visibleTabIds, stashes, setAnnotationsByHash]);
 
   const handleCustomInterpret = useCallback(
-    (prompt: string, visibleStashes: StashItem[]) => {
-      if (visibleStashes.length === 0 || !focusedTab) return;
+    (prompt: string, visibleStashes: StashItem[]): string | null => {
+      if (visibleStashes.length === 0 || !focusedTab) return null;
       const enrichedPrompt = buildCustomInterpretPrompt(
         prompt,
         visibleStashes.map((s) => ({
@@ -1512,7 +1518,11 @@ export function usePersistence({
         })),
         settingsRef.current.targetLanguage
       );
-      startSessionFromStashes(enrichedPrompt, visibleStashes, "custom");
+      const { sessionId } = startSessionFromStashes(
+        enrichedPrompt,
+        visibleStashes,
+        "custom"
+      );
 
       // Persistence of the session and its PDF references is handled by the
       // debounced effects; avoid manual writes here to prevent clobbering.
@@ -1538,6 +1548,7 @@ export function usePersistence({
         }
         return next;
       });
+      return sessionId;
     },
     [focusedTab, startSessionFromStashes, setAnnotationsByHash]
   );
@@ -1567,8 +1578,12 @@ export function usePersistence({
   );
 
   const handleSelectionAction = useCallback(
-    (selection: SelectionState, action: SelectionAction, text: string) => {
-      if (!focusedTab) return;
+    (
+      selection: SelectionState,
+      action: SelectionAction,
+      text: string
+    ): string | null => {
+      if (!focusedTab) return null;
 
       const newAnnotation = createAnnotation(
         action,
@@ -1624,7 +1639,9 @@ export function usePersistence({
             ),
           };
         });
+        return sessionId;
       }
+      return null;
     },
     [focusedTab, startSessionFromStashes, setAnnotationsByHash]
   );
@@ -1768,11 +1785,11 @@ export function usePersistence({
   // 旧会话删除（含磁盘），关联标记重新指向新会话，列表摘要沿用。
   // 流式中的会话不允许重跑（入口已禁用，这里防御）。
   const handleReinterpretSession = useCallback(
-    (sessionId: string) => {
+    (sessionId: string): string | null => {
       const session = sessions.find((s) => s.id === sessionId);
-      if (!session || session.isStreaming) return;
+      if (!session || session.isStreaming) return null;
       const firstUser = session.messages.find((m) => m.role === "user");
-      if (!firstUser) return;
+      if (!firstUser) return null;
 
       const { sessionId: newSessionId } = startSessionFromStashes(
         firstUser.content,
@@ -1797,6 +1814,7 @@ export function usePersistence({
         }
         return next;
       });
+      return newSessionId;
     },
     [sessions, startSessionFromStashes, setAnnotationsByHash]
   );

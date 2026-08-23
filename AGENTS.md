@@ -26,7 +26,7 @@
 - 大纲 / 目录导航面板（PDF 自带 outline 时可用，点击跳转章节）。
 - 选中文本后浮动工具条：加入暂存、解读、自定义解读（暂存所选并直达弹窗）、翻译、复制、批注（comment 浮层，可拖动编辑）。
 - 翻译生成可拖动 / 隐藏 / 删除的浮层批注。
-- 解读生成蓝色标记（生成中带呼吸态），点击标记打开 InterpretPopup 内联展示解读结果（流式/错误态、原文折叠、查看解读/重新解读/删除）；右侧面板展示可点击跳转的解读记录（页码+类型徽章+LLM 一句话摘要，支持「当前文档/全部文档」过滤、排序下拉（最近活动/创建时间/按页码，按页码仅当前文档范围可选，选择持久化到 settings）与面板内删除会话），支持多轮追问。
+- 解读生成蓝色标记（生成中带呼吸态），点击标记打开 InterpretPopup 内联展示解读结果（流式/错误态、原文折叠、查看解读/重新解读/删除）；发起解读 / 自定义解读发送 / 重新解读后右侧面板直接进入新会话 chatbox 观看流式输出（`expandSessionRequest`，与自由提问一致）；右侧面板展示可点击跳转的解读记录（页码+类型徽章+LLM 一句话摘要，支持「当前文档/全部文档」过滤、排序下拉（最近活动/创建时间/按页码，按页码仅当前文档范围可选，选择持久化到 settings）与面板内删除会话），支持多轮追问。
 - 自定义解读：把多个暂存片段一次性发给 LLM。暂存区按钮常驻显示片段数量并直达弹窗；解读要求弹窗内置可勾选片段清单（默认全选）与解读方式预设下拉（选中即把预定义 prompt 填入输入框，可继续编辑，手动编辑后回到「自由提问」，模板文案在 locales 的 `customInterpret.presets.*` 段），仅能通过「取消」/「发送」关闭；暂存不落盘为有意设计。
 - 无选区自由提问：解读记录 tab 列表态底部常驻提问输入框（Enter 发送，无打开 PDF 时禁用），创建 `action: "custom"` + 空 `sources` 的会话并直接切入 chatbox 流式输出；会话经 `anchorFileHash`/`anchorFileName`（创建时 focused tab 快照）锚定到当前文档——归属过滤（`sessionBelongsToHashes`）、sessionIds 持久化反查、列表「提问」徽章与来源行回退都认锚点；Agent Tools 门控天然放行（action 为 custom）。system prompt 走专用模板（`llm.askWithToolsPrompt` / `llm.askNoToolsPrompt`，按 toolsEnabled 分流）：开启时引导模型主动 `list_open_pdfs` / `search_in_pdf` 查证当前文档，关闭时声明无法访问文档并引导用户开启；tools 关闭时提问框下方还有一行 UI 提示（`chat.askToolsHint`）。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
@@ -416,7 +416,8 @@ PdfViewer.tsx（协调层：UI + 组合 hooks）
 
 AiChatPanel.tsx
 ├── expandedId / expandedStashIds / sessionScope（「当前文档/全部文档」过滤）/ sortMode（排序方式，受控于 App 的 settings.sessionSortMode）
-├── tabRequest（App 传入的 tab 激活请求：PDF 侧加入暂存 → 暂存 tab，发起解读/自定义解读 → 解读 tab，按 nonce 变化生效）
+├── tabRequest（App 传入的 tab 激活请求：PDF 侧加入暂存 → 暂存 tab，按 nonce 变化生效）
+├── expandSessionRequest（App 传入的 chatbox 进入请求：发起解读 / 自定义解读发送 / 重新解读后直接进入新会话 chatbox 观看流式输出，含切到解读 tab；按 nonce 变化生效，与自由提问行为一致）
 └── 检测到 isStreaming 会话时启动流；一轮对话（含多个工具轮次）的 reasoningContent 与全部 `toolEvents` 由 `sessions.ts` 的 `collectTurnProcess` 归组到该轮最终 assistant 消息上——AI 侧一轮最多两个框：过程气泡（思考 + 工具调用，`.ai-chat-process`）与正文气泡；长 user 消息折叠 + 来源片段卡片（可跳原文）；assistant 气泡 hover 复制 / 头部复制全部 / 删除会话
 
 ToolCallsIndicator.tsx

@@ -360,6 +360,7 @@ function App() {
     handleCustomInterpret: persistenceHandleCustomInterpret,
     handleFreeQuestion: persistenceHandleFreeQuestion,
     handleAddComment: persistenceHandleAddComment,
+    handleReinterpretSession: persistenceHandleReinterpretSession,
     abortSessionsForTab: persistenceAbortSessionsForTab,
     setStashes: persistenceSetStashes,
   } = persistence;
@@ -934,6 +935,19 @@ function App() {
     setPanelTabRequest((prev) => ({ tab, nonce: prev.nonce + 1 }));
   }, []);
 
+  // 发起解读 / 自定义解读 / 重新解读后，请求面板直接进入新会话 chatbox 观看
+  // 流式输出（与自由提问行为一致）；nonce 自增触发 AiChatPanel 内的进入 effect。
+  const [expandSessionRequest, setExpandSessionRequest] = useState<{
+    id: string;
+    nonce: number;
+  } | null>(null);
+  const requestExpandSession = useCallback((sessionId: string) => {
+    setExpandSessionRequest((prev) => ({
+      id: sessionId,
+      nonce: (prev?.nonce ?? 0) + 1,
+    }));
+  }, []);
+
   const handleAddToStash = useCallback(
     (text: string) => {
       if (!focusedSelection || !focusedTab) return;
@@ -980,17 +994,31 @@ function App() {
   const handleSelectionAction = useCallback(
     (action: SelectionAction, text: string) => {
       if (!focusedSelection || !focusedTab) return;
-      persistenceHandleSelectionAction(focusedSelection, action, text);
+      const sessionId = persistenceHandleSelectionAction(
+        focusedSelection,
+        action,
+        text
+      );
       tabs.clearTabSelection(focusedTab.id);
-      if (action === "explain") requestPanelTab("sessions");
+      // 发起解读：直接进入新会话 chatbox（含切到解读记录 tab），与自由提问一致
+      if (action === "explain" && sessionId) requestExpandSession(sessionId);
     },
     [
       focusedSelection,
       focusedTab,
       persistenceHandleSelectionAction,
       tabs,
-      requestPanelTab,
+      requestExpandSession,
     ]
+  );
+
+  // 重新解读（InterpretPopup 入口）：旧会话另起新会话后，面板同步切入其 chatbox。
+  const handleReinterpret = useCallback(
+    (sessionId: string) => {
+      const newSessionId = persistenceHandleReinterpretSession(sessionId);
+      if (newSessionId) requestExpandSession(newSessionId);
+    },
+    [persistenceHandleReinterpretSession, requestExpandSession]
   );
 
   const handleCopy = useCallback(
@@ -1309,7 +1337,7 @@ function App() {
                 onAnnotationUpdate={persistence.handleAnnotationUpdate}
                 onAnnotationDelete={persistence.handleAnnotationDelete}
                 onExplainClick={handleExplainClick}
-                onReinterpret={persistence.handleReinterpretSession}
+                onReinterpret={handleReinterpret}
                 onClearPendingGotoPage={tabs.clearTabPendingGotoPage}
                 hoverTranslate={hoverTranslateActive}
                 settings={settings}
@@ -1351,7 +1379,7 @@ function App() {
                 onAnnotationUpdate={persistence.handleAnnotationUpdate}
                 onAnnotationDelete={persistence.handleAnnotationDelete}
                 onExplainClick={handleExplainClick}
-                onReinterpret={persistence.handleReinterpretSession}
+                onReinterpret={handleReinterpret}
                 onClearPendingGotoPage={tabs.clearTabPendingGotoPage}
                 hoverTranslate={hoverTranslateActive}
                 settings={settings}
@@ -1390,6 +1418,7 @@ function App() {
                     sessionSortMode={settings.sessionSortMode}
                     onSessionSortModeChange={handleSessionSortModeChange}
                     tabRequest={panelTabRequest}
+                    expandSessionRequest={expandSessionRequest}
                   />
                 </div>
               </>
@@ -1487,7 +1516,7 @@ function App() {
                         onAnnotationUpdate={persistence.handleAnnotationUpdate}
                         onAnnotationDelete={persistence.handleAnnotationDelete}
                         onExplainClick={handleExplainClick}
-                        onReinterpret={persistence.handleReinterpretSession}
+                        onReinterpret={handleReinterpret}
                         onClearPendingGotoPage={tabs.clearTabPendingGotoPage}
                         hoverTranslate={hoverTranslateActive}
                         settings={settings}
@@ -1537,6 +1566,7 @@ function App() {
                   sessionSortMode={settings.sessionSortMode}
                   onSessionSortModeChange={handleSessionSortModeChange}
                   tabRequest={panelTabRequest}
+                  expandSessionRequest={expandSessionRequest}
                 />
               </div>
             ) : (
@@ -1586,6 +1616,7 @@ function App() {
                   sessionSortMode={settings.sessionSortMode}
                   onSessionSortModeChange={handleSessionSortModeChange}
                   tabRequest={panelTabRequest}
+                  expandSessionRequest={expandSessionRequest}
                 />
               </div>
             ) : (
@@ -1636,10 +1667,14 @@ function App() {
           stashes={persistence.visibleTabStashes}
           initialSelectedIds={customInterpretPreselected}
           onSubmit={(prompt, selected) => {
-            persistenceHandleCustomInterpret(prompt, selected);
+            const sessionId = persistenceHandleCustomInterpret(
+              prompt,
+              selected
+            );
             setCustomInterpretOpen(false);
             setCustomInterpretPreselected(null);
-            requestPanelTab("sessions");
+            // 发送后直接进入新会话 chatbox 观看流式输出
+            if (sessionId) requestExpandSession(sessionId);
           }}
           onClose={() => {
             setCustomInterpretOpen(false);

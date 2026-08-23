@@ -467,11 +467,17 @@ describe("App", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /发送/i }));
 
+    // 发送后直接进入新会话 chatbox 观看流式输出
     await waitFor(() => {
       expect(
-        screen.getByRole("tab", { name: /解读记录 \(1\)/i })
+        screen.getByRole("button", { name: /返回解读记录/i })
       ).toBeInTheDocument();
     });
+    fireEvent.click(screen.getByRole("button", { name: /返回解读记录/i }));
+
+    expect(
+      screen.getByRole("tab", { name: /解读记录 \(1\)/i })
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("tab", { name: /暂存区 \(0\)/i })
     ).toBeInTheDocument();
@@ -525,11 +531,17 @@ describe("App", () => {
     triggerPdfSelection();
     fireEvent.click(screen.getByRole("button", { name: "解读" }));
 
+    // 发起解读后直接进入新会话 chatbox
     await waitFor(() => {
       expect(
-        screen.getByRole("tab", { name: /解读记录 \(1\)/i })
+        screen.getByRole("button", { name: /返回解读记录/i })
       ).toBeInTheDocument();
     });
+
+    fireEvent.click(screen.getByRole("button", { name: /返回解读记录/i }));
+    expect(
+      screen.getByRole("tab", { name: /解读记录 \(1\)/i })
+    ).toBeInTheDocument();
   });
 
   it("saves explain session reference to PDF data", async () => {
@@ -539,9 +551,10 @@ describe("App", () => {
     triggerPdfSelection();
     fireEvent.click(screen.getByRole("button", { name: "解读" }));
 
+    // 发起解读后直接进入新会话 chatbox
     await waitFor(() => {
       expect(
-        screen.getByRole("tab", { name: /解读记录 \(1\)/i })
+        screen.getByRole("button", { name: /返回解读记录/i })
       ).toBeInTheDocument();
     });
 
@@ -604,6 +617,14 @@ describe("App", () => {
 
     triggerPdfSelection();
     fireEvent.click(screen.getByRole("button", { name: "解读" }));
+
+    // 发起解读后直接进入新会话 chatbox，先返回列表再做后续断言
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /返回解读记录/i })
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /返回解读记录/i }));
 
     await waitFor(() => {
       expect(
@@ -767,9 +788,10 @@ describe("App", () => {
     triggerPdfSelection();
     fireEvent.click(screen.getByRole("button", { name: "解读" }));
 
+    // 发起解读后直接进入新会话 chatbox
     await waitFor(() => {
       expect(
-        screen.getByRole("tab", { name: /解读记录 \(1\)/i })
+        screen.getByRole("button", { name: /返回解读记录/i })
       ).toBeInTheDocument();
     });
 

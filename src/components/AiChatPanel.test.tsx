@@ -487,6 +487,75 @@ describe("AiChatPanel", () => {
     ).toBeInTheDocument();
   });
 
+  it("enters the new session chatbox when expandSessionRequest nonce changes", () => {
+    const sessions = [
+      makeSession({
+        id: "session-1",
+        messages: [
+          makeMessage({ id: "msg-1", role: "user", content: "旧问题" }),
+          makeMessage({ id: "msg-2", role: "assistant", content: "旧回答" }),
+        ],
+      }),
+      makeSession({
+        id: "session-2",
+        messages: [
+          makeMessage({ id: "msg-3", role: "user", content: "新问题" }),
+          makeMessage({ id: "msg-4", role: "assistant", content: "新回答" }),
+        ],
+      }),
+    ];
+
+    // 先进入旧会话 chatbox（模拟用户正在阅读某个解读详情）
+    const { rerender } = renderPanel({ sessions });
+    rerender(
+      <AiChatPanel
+        stashes={[]}
+        sessions={sessions}
+        expandedSessionId="session-1"
+        onRemoveStash={vi.fn()}
+        onClearStashes={vi.fn()}
+        onOpenCustomInterpret={vi.fn()}
+        onFollowUp={vi.fn()}
+      />
+    );
+    expect(screen.getByText(/旧回答/)).toBeInTheDocument();
+
+    // 用户又发起了一个解读：面板应直接切入新会话 chatbox
+    rerender(
+      <AiChatPanel
+        stashes={[]}
+        sessions={sessions}
+        expandedSessionId="session-1"
+        expandSessionRequest={{ id: "session-2", nonce: 1 }}
+        onRemoveStash={vi.fn()}
+        onClearStashes={vi.fn()}
+        onOpenCustomInterpret={vi.fn()}
+        onFollowUp={vi.fn()}
+      />
+    );
+    expect(screen.getByText(/新回答/)).toBeInTheDocument();
+    expect(screen.queryByText(/旧回答/)).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /返回解读记录/i })
+    ).toBeInTheDocument();
+
+    // 相同 nonce 重复渲染不再强制（用户可自由返回列表）
+    fireEvent.click(screen.getByRole("button", { name: /返回解读记录/i }));
+    rerender(
+      <AiChatPanel
+        stashes={[]}
+        sessions={sessions}
+        expandedSessionId="session-1"
+        expandSessionRequest={{ id: "session-2", nonce: 1 }}
+        onRemoveStash={vi.fn()}
+        onClearStashes={vi.fn()}
+        onOpenCustomInterpret={vi.fn()}
+        onFollowUp={vi.fn()}
+      />
+    );
+    expect(screen.queryByText(/新回答/)).not.toBeInTheDocument();
+  });
+
   it("returns to list when active session is removed", () => {
     const sessions = [
       makeSession({

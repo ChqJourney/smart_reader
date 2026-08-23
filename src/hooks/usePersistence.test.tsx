@@ -1248,9 +1248,16 @@ describe("usePersistence", () => {
       ]);
     });
 
+    let returnedSessionId: string | null = null;
     act(() => {
-      hookRef!.handleCustomInterpret("请分析", [stashA, stashB]);
+      returnedSessionId = hookRef!.handleCustomInterpret("请分析", [
+        stashA,
+        stashB,
+      ]);
     });
+
+    // 返回新会话 id 供面板直接切入 chatbox
+    expect(returnedSessionId).not.toBeNull();
 
     // 跨 PDF 自定义解读：两个 fileHash 桶里的 stash 批注都被标记为已解读，
     // 否则第二个文件的批注会在解读后被误删、重启后也会丢失。
@@ -1266,7 +1273,118 @@ describe("usePersistence", () => {
     });
     expect(annoA?.sessionId).toBeDefined();
     expect(annoB?.sessionId).toBe(annoA?.sessionId);
+    expect(returnedSessionId).toBe(annoA?.sessionId);
     expect(hookRef!.stashes).toHaveLength(0);
+  });
+
+  describe("session id returns for chatbox auto-entry", () => {
+    const focusedTab: PdfTab = {
+      id: "tab-a",
+      filePath: "/a.pdf",
+      fileName: "a.pdf",
+      fileHash: "hash-a",
+    };
+    const props: UsePersistenceProps = {
+      activeTab: focusedTab,
+      activeTabId: "tab-a",
+      secondaryTab: null,
+      isSplitView: false,
+      focusedTab,
+      openRightPanel: vi.fn(),
+      settings: DEFAULT_SETTINGS,
+    };
+    const selection = {
+      text: "selected",
+      x: 10,
+      y: 20,
+      pdfX: 5,
+      pdfY: 6,
+      page: 2,
+    };
+
+    it("handleSelectionAction returns the new session id for explain, null for translate", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      vi.mocked(streamChatCompletion).mockImplementation(
+        makeMockStream(["done"])
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <ConfigurableHarness
+            props={props}
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      let explainSessionId: string | null = null;
+      act(() => {
+        explainSessionId = hookRef!.handleSelectionAction(
+          selection,
+          "explain",
+          "selected"
+        );
+      });
+      expect(explainSessionId).not.toBeNull();
+      expect(hookRef!.sessions.some((s) => s.id === explainSessionId)).toBe(
+        true
+      );
+
+      let translateResult: string | null = null;
+      act(() => {
+        translateResult = hookRef!.handleSelectionAction(
+          selection,
+          "translate",
+          "selected"
+        );
+      });
+      expect(translateResult).toBeNull();
+    });
+
+    it("handleReinterpretSession returns the new session id and null on guards", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      vi.mocked(streamChatCompletion).mockImplementation(
+        makeMockStream(["done"])
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <ConfigurableHarness
+            props={props}
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+
+      let newSessionId: string | null = null;
+      act(() => {
+        newSessionId = hookRef!.handleReinterpretSession("session-explain");
+      });
+      expect(newSessionId).not.toBeNull();
+      expect(newSessionId).not.toBe("session-explain");
+      expect(hookRef!.sessions.some((s) => s.id === newSessionId)).toBe(true);
+      // 旧会话被删除
+      expect(hookRef!.sessions.some((s) => s.id === "session-explain")).toBe(
+        false
+      );
+
+      // 会话缺失返回 null
+      let missing: string | null = null;
+      act(() => {
+        missing = hookRef!.handleReinterpretSession("no-such-session");
+      });
+      expect(missing).toBeNull();
+    });
   });
 
   describe("data-loss prevention", () => {

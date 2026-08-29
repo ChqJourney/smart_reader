@@ -11,6 +11,22 @@
   flex-shrink: 0;
 }
 
+/* 窗口收窄时中部优先让位：标题栏内容均为 flex-shrink: 0，
+   总宽超出后最右侧的窗口控制按钮会被挤出窗口。
+   先隐藏纯展示的平台/模型文本，再整体隐藏中部开关，
+   保证右侧操作按钮与最小化/最大化/关闭始终可见。 */
+@media (max-width: 1160px) {
+  .titlebar-model-display {
+    display: none;
+  }
+}
+
+@media (max-width: 980px) {
+  .titlebar-toggles {
+    display: none;
+  }
+}
+
 /* ── 当前平台 / 模型（纯展示） ───────────────────── */
 .titlebar-model-display {
   display: inline-flex;

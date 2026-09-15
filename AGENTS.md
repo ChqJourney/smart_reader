@@ -323,7 +323,7 @@ cd src-tauri && cargo test
 - `check_files_exist(paths: string[])`：批量检查文件是否仍存在于磁盘，最近文件面板用它置灰已移动/删除的条目。
 - `export_text_file(file_path: string, content: string)`：把用户经系统保存对话框选定的任意路径写入文本文件（解读分享导出 .md 使用，原子写入，不走 PDF 授权白名单）。
 - `export_binary_file(file_path: string, data: Vec<u8>)`：同上但写二进制（带批注打印 PDF 导出）；data 经 serde_json 数组传输（前端 `Array.from(bytes)`，嵌套 Uint8Array 会被序列化成对象不能用）。
-- `open_print_file(request: ipc::Request)`：接收 IPC 原始字节（前端 `invoke(cmd, bytes)`），落盘 `<AppData>/SpecReader/print/`（每次只保留最新一份）后用平台指定阅读器打开（macOS `open -a Preview` / Windows `microsoft-edge:` 协议调起 Edge），不走系统默认 PDF 关联防止回环到本应用。
+- `open_print_file(request: ipc::Request)`：接收 IPC 原始字节（前端 `invoke(cmd, bytes)`），落盘 `<AppData>/SpecReader/print/`（每次只保留最新一份）后用平台指定阅读器打开（macOS `open -a Preview` / Windows 经 `rundll32 url.dll,FileProtocolHandler` 调起 `microsoft-edge:` 协议打开 Edge——刻意不走 `cmd /c start`，cmd 的 %var% 变量扩展会吃掉 URL 中非 ASCII 用户名的百分号编码），不走系统默认 PDF 关联防止回环到本应用。
 - `open_path(path: string)`：仅允许打开 `http://` / `https://` URL，禁止本地文件路径与目录。
 - `open_logs_dir()`：打开应用日志目录，供用户导出排查。
 - `check_dictionary()`：检查本地 ECDICT 词典是否存在及大小。
@@ -560,6 +560,7 @@ runSessionStream（usePersistence.ts）
 - 下载过程带重试机制：单块读取超时、连接中断或服务器返回非成功状态码时，会自动从已下载位置重试最多 5 次，并继续通过 `dictionary-download-progress` event 推送进度。
 - 解压防 zip 炸弹：总解压大小上限 1.5GB；预留 sha256 校验常量（当前为空串，跳过校验）。
 - 解压后的 SQLite 文件通过文件头魔数 `SQLite format 3\0` 定位，不依赖 zip 内的文件名（避免中文文件名编码问题）。
+- 解压后的校验（`verify_sqlite_dict` 查 stardict 表 + sha256）任一分支失败，都会在返回 Err 前删除 final_path 上的残留损坏文件（`remove_corrupt_dict_file`），否则 `download_dictionary` 因 final_path.exists() 直接返回成功、下载永久锁死。
 - 替换词库时，建议同时删除旧 `ecdict.sqlite` 与 `.tmp`，并清空 `DICT_CONNECTION` 缓存。
 
 ### 10.4 修改 Prompt

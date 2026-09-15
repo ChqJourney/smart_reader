@@ -358,6 +358,7 @@
       "contextLengthExceeded": "内容超出模型上下文长度，请减少所选片段长度后重试。",
       "serverError": "服务错误（{{status}}），请稍后重试或换用其他平台。",
       "streamInterrupted": "响应中断，请重试。",
+      "interruptedOnExit": "上次生成未结束（应用已关闭），回答可能不完整，可直接继续追问。",
       "invalidConfig": "配置项 {{field}} 无效，请检查设置。",
       "toolError": "查阅文档时出错（{{toolName}}），请重试。",
       "unknown": "请求失败，请稍后重试。",

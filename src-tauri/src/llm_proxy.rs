@@ -19,6 +19,23 @@ use tauri::ipc::Channel;
 
 use crate::AppState;
 
+/// 连接建立超时：只限制 TCP/TLS 握手阶段，不覆盖响应体读取。
+const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// 单个 SSE chunk 的读超时：服务器停滞超过该时长视为断流。
+/// 取代旧的 300s 请求总超时——reqwest 的 `.timeout` 是「发起到 body
+/// 读完」的总时长，思考型模型的长流式输出很容易超限被强制腰斩。
+const CHUNK_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+
+/// 构建 LLM 流式请求的 HTTP client。只设 connect_timeout，不设总超时；
+/// 流停滞由 pump_sse_stream 的逐 chunk 读超时（CHUNK_READ_TIMEOUT）兜底。
+fn build_http_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .connect_timeout(CONNECT_TIMEOUT)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))
+}
+
 /// Thinking mode control.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -710,10 +727,7 @@ pub async fn chat_completions_stream(
 
     log::info!("llmRequestStarted: model={} url={}", model, base_url);
 
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(300))
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = build_http_client()?;
 
     let response = match client
         .post(&url)
@@ -772,12 +786,28 @@ async fn wait_for_cancel(flag: &AtomicBool) {
 ///
 /// 取消标志与 `stream.next()` 通过 `futures_util::select!` 竞争：连接停滞
 /// （服务器不再吐数据）时 `stream.next()` 永不返回，若只在循环顶部
-/// 检查取消标志，取消请求将永远不会被处理，前端只能等 300s 总超时兜底。
+/// 检查取消标志，取消请求将永远不会被处理。`stream.next()` 另包一层
+/// 逐 chunk 读超时（CHUNK_READ_TIMEOUT）：没有请求总超时后，停滞的
+/// 连接由它兜底断开，不会永久挂起。
 /// （tokio 未启用 macros feature，故用 futures_util 的 select!。）
 async fn pump_sse_stream<S, B, E>(
+    stream: S,
+    cancel_flag: &AtomicBool,
+    on_event: &Channel<StreamEvent>,
+) where
+    S: futures_util::Stream<Item = Result<B, E>> + Unpin,
+    B: AsRef<[u8]>,
+    E: std::fmt::Display,
+{
+    pump_sse_stream_with_timeout(stream, cancel_flag, on_event, CHUNK_READ_TIMEOUT).await
+}
+
+/// `pump_sse_stream` 的实现，读超时可注入以便测试。
+async fn pump_sse_stream_with_timeout<S, B, E>(
     mut stream: S,
     cancel_flag: &AtomicBool,
     on_event: &Channel<StreamEvent>,
+    chunk_read_timeout: std::time::Duration,
 ) where
     S: futures_util::Stream<Item = Result<B, E>> + Unpin,
     B: AsRef<[u8]>,
@@ -793,7 +823,7 @@ async fn pump_sse_stream<S, B, E>(
 
     loop {
         let cancel = wait_for_cancel(cancel_flag).fuse();
-        let next = stream.next().fuse();
+        let next = tokio::time::timeout(chunk_read_timeout, stream.next()).fuse();
         futures_util::pin_mut!(cancel, next);
 
         let next_item = futures_util::select! {
@@ -808,6 +838,19 @@ async fn pump_sse_stream<S, B, E>(
                 return;
             }
             item = next => item,
+        };
+
+        let next_item = match next_item {
+            Ok(item) => item,
+            Err(_) => {
+                // 单个 chunk 读超时：连接停滞，按断流处理并报错。
+                let _ = on_event.send(StreamEvent::Error {
+                    error: LlmError::Network {
+                        detail: "流式读取超时，服务器长时间无响应".to_string(),
+                    },
+                });
+                return;
+            }
         };
 
         match next_item {
@@ -1529,6 +1572,46 @@ mod tests {
                 StreamEvent::Chunk { content } if content.contains('\u{FFFD}')
             )));
             assert!(guard.iter().any(|e| matches!(e, StreamEvent::Done)));
+        });
+    }
+
+    /// 回归（M-B4）：LLM client 不再设 300s 请求总超时（会腰斩思考型
+    /// 模型的长流式输出），只保留连接建立超时。
+    #[test]
+    fn build_http_client_succeeds() {
+        assert!(build_http_client().is_ok());
+    }
+
+    /// 回归（M-B4）：去掉总超时后，停滞的连接由逐 chunk 读超时兜底，
+    /// 超时后报错结束而不是永久挂起。
+    #[test]
+    fn pump_times_out_when_stream_stalls() {
+        use futures_util::StreamExt;
+
+        block_on(async {
+            let (channel, events) = test_channel();
+            let cancel_flag = Arc::new(AtomicBool::new(false));
+            // 停滞的连接：吐出一段内容后再也不产生新数据，也不取消。
+            let stream = futures_util::stream::iter(vec![Ok::<_, String>(
+                b"data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n".to_vec(),
+            )])
+            .chain(futures_util::stream::pending());
+
+            pump_sse_stream_with_timeout(
+                stream,
+                &cancel_flag,
+                &channel,
+                std::time::Duration::from_millis(50),
+            )
+            .await;
+
+            let guard = events.lock().unwrap();
+            assert!(guard.iter().any(|e| matches!(
+                e,
+                StreamEvent::Error {
+                    error: LlmError::Network { detail }
+                } if detail.contains("超时")
+            )));
         });
     }
 }

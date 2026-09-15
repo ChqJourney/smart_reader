@@ -417,6 +417,24 @@ fn write_print_temp_file(dir: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// 构建 Windows 下调起 Edge 打印的命令行（程序 + 参数）。
+///
+/// 用 `rundll32 url.dll,FileProtocolHandler` 调起协议处理程序，而不是
+/// `cmd /c start`：cmd 会对整条命令行做 %var% 变量扩展，打印临时文件
+/// 落在 %APPDATA% 下（路径含用户名），中文用户名经 URL 百分号编码后
+/// （%E5%BC%A0…）会被 cmd 当作变量名吃掉，Edge 收到乱码 URL 去打开
+/// 不存在的文件。rundll32 不做 % 扩展，URL 原样传递。
+#[cfg(any(target_os = "windows", test))]
+fn windows_edge_command(path: &Path) -> Result<(&'static str, [String; 2]), String> {
+    let url = tauri::Url::from_file_path(path)
+        .map_err(|_| format!("Failed to build file URL for {}", path.display()))?;
+    let edge_url = format!("microsoft-edge:{}", url);
+    Ok((
+        "rundll32.exe",
+        ["url.dll,FileProtocolHandler".to_string(), edge_url],
+    ))
+}
+
 fn open_with_platform_viewer(path: &Path) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
@@ -431,10 +449,9 @@ fn open_with_platform_viewer(path: &Path) -> Result<(), String> {
     {
         // Edge 在 Win10/11 必装且自带打印支持；经 microsoft-edge: 协议调起，
         // 与系统默认 PDF 关联解耦。
-        let url = tauri::Url::from_file_path(path)
-            .map_err(|_| format!("Failed to build file URL for {}", path.display()))?;
-        std::process::Command::new("cmd")
-            .args(["/c", "start", "", &format!("microsoft-edge:{}", url)])
+        let (program, args) = windows_edge_command(path)?;
+        std::process::Command::new(program)
+            .args(args)
             .spawn()
             .map_err(|e| format!("Failed to open Edge: {}", e))?;
         Ok(())
@@ -2468,5 +2485,23 @@ mod tests {
         let path_str = path.to_string_lossy();
         assert!(path_str.contains("SpecReader"));
         assert!(!path_str.contains("SpecReader/Photonee"));
+    }
+
+    /// 回归（W1）：Windows 打印调起 Edge 不得经过 cmd——cmd 的 %var%
+    /// 变量扩展会吃掉 URL 中非 ASCII 用户名的百分号编码，导致 Edge
+    /// 收到乱码 URL。断言用 rundll32 且 URL 原样传递。
+    #[test]
+    fn windows_edge_command_uses_rundll32_and_passes_url_verbatim() {
+        let dir = tempfile::tempdir().unwrap();
+        // 模拟中文用户名路径 + 文件名空格。
+        let path = dir.path().join("张三 打印.pdf");
+        let (program, args) = windows_edge_command(&path).unwrap();
+        assert_eq!(program, "rundll32.exe");
+        assert_ne!(program, "cmd");
+        assert_eq!(args[0], "url.dll,FileProtocolHandler");
+        assert!(args[1].starts_with("microsoft-edge:file:///"));
+        // 百分号编码原样保留（「张」= E5 BC A0，空格 = %20）。
+        assert!(args[1].contains("%E5%BC%A0"));
+        assert!(args[1].contains("%20"));
     }
 }

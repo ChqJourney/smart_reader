@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import i18n from "i18next";
 import {
   InterpretationMessage,
   InterpretationSession,
@@ -245,8 +246,7 @@ describe("sessions service", () => {
         messages: [
           { id: "msg-1", role: "user", content: "hello", createdAt: 1 },
         ],
-        isStreaming: true,
-        streamingMessageId: "msg-2",
+        isStreaming: false,
         createdAt: 1,
         updatedAt: 2,
       };
@@ -258,7 +258,7 @@ describe("sessions service", () => {
         sessionId: "session-1",
       });
       expect(result).not.toBeNull();
-      expect(result!.streamingMessageId).toBe("msg-2");
+      expect(result!.isStreaming).toBe(false);
       expect(result!.sources[0].source.fileHash).toBe("hash-file");
       expect(result!.sources[0].source.pdfX).toBe(100);
       expect(result!.createdAt).toBe(1);
@@ -271,6 +271,92 @@ describe("sessions service", () => {
       const result = await loadSession("session-1");
 
       expect(result).toBeNull();
+    });
+
+    // 回归：流式中关窗/防抖静默期落盘会把 isStreaming=true 的会话原样保存，
+    // 重启后气泡永远转圈、追问输入框永久禁用（sendDisabled）、标记呼吸态常亮。
+    // 加载时必须复位脏 streaming 态并给正在生成的消息追加中断提示。
+    it("resets dirty isStreaming state persisted mid-stream on load", async () => {
+      const dirty = {
+        id: "session-dirty",
+        sources: [],
+        messages: [
+          { id: "msg-user", role: "user", content: "question", createdAt: 1 },
+          {
+            id: "msg-streaming",
+            role: "assistant",
+            content: "partial answer",
+            createdAt: 2,
+          },
+        ],
+        isStreaming: true,
+        streamingMessageId: "msg-streaming",
+        action: "explain",
+        createdAt: 1,
+        updatedAt: 2,
+      };
+      mockInvoke.mockResolvedValue(dirty);
+
+      const result = await loadSession("session-dirty");
+
+      expect(result).not.toBeNull();
+      // 复位后追问不再被 sendDisabled 禁用
+      expect(result!.isStreaming).toBe(false);
+      expect(result!.streamingMessageId).toBeUndefined();
+      // 正在流式输出的消息带上中断提示（对齐 onError 的 [错误] + 文案模式）
+      const assistant = result!.messages[1];
+      expect(assistant.content).toContain("partial answer");
+      expect(assistant.content).toContain(
+        i18n.t("llm.error.interruptedOnExit")
+      );
+      expect(assistant.error).toEqual({
+        kind: "streamInterrupted",
+        partialContent: "partial answer",
+      });
+      // 其它消息不受影响
+      expect(result!.messages[0]).toEqual(dirty.messages[0]);
+    });
+
+    it("marks an empty streaming message with the interruption notice only", async () => {
+      const dirty = {
+        id: "session-dirty-empty",
+        sources: [],
+        messages: [
+          { id: "msg-user", role: "user", content: "question", createdAt: 1 },
+          { id: "msg-streaming", role: "assistant", content: "", createdAt: 2 },
+        ],
+        isStreaming: true,
+        streamingMessageId: "msg-streaming",
+        createdAt: 1,
+        updatedAt: 2,
+      };
+      mockInvoke.mockResolvedValue(dirty);
+
+      const result = await loadSession("session-dirty-empty");
+
+      expect(result!.isStreaming).toBe(false);
+      expect(result!.messages[1].content.trim()).toBe(
+        `${i18n.t("common.errorPrefix")} ${i18n.t("llm.error.interruptedOnExit")}`
+      );
+    });
+
+    it("does not touch finished sessions on load", async () => {
+      const clean = {
+        id: "session-clean",
+        sources: [],
+        messages: [
+          { id: "msg-user", role: "user", content: "question", createdAt: 1 },
+          { id: "msg-ai", role: "assistant", content: "answer", createdAt: 2 },
+        ],
+        isStreaming: false,
+        createdAt: 1,
+        updatedAt: 2,
+      };
+      mockInvoke.mockResolvedValue(clean);
+
+      const result = await loadSession("session-clean");
+
+      expect(result).toEqual(clean);
     });
   });
 

@@ -452,30 +452,23 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
     );
 
     // Verify the extracted file is a valid SQLite database by opening it.
-    {
-        let conn = Connection::open(&final_path)
-            .map_err(|e| format!("Extracted dictionary is not a valid SQLite file: {}", e))?;
-        let count: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='stardict'",
-                [],
-                |row| row.get(0),
-            )
-            .map_err(|e| format!("Dictionary schema check failed: {}", e))?;
-        if count == 0 {
-            return Err("Dictionary file is missing the stardict table".to_string());
-        }
+    if let Err(e) = verify_sqlite_dict(&final_path) {
+        remove_corrupt_dict_file(&final_path);
+        return Err(e);
     }
 
     // Verify the extracted SQLite file matches the expected hash.
     {
         let final_path_clone = final_path.clone();
-        tauri::async_runtime::spawn_blocking(move || {
+        let hash_check = tauri::async_runtime::spawn_blocking(move || {
             verify_file_hash(&final_path_clone, EXPECTED_DICT_SQLITE_SHA256)
         })
         .await
-        .map_err(|e| format!("Dictionary SQLite hash verification task failed: {}", e))?
-        .map_err(|e| format!("Dictionary SQLite hash verification failed: {}", e))?;
+        .map_err(|e| format!("Dictionary SQLite hash verification task failed: {}", e))?;
+        if let Err(e) = hash_check {
+            remove_corrupt_dict_file(&final_path);
+            return Err(format!("Dictionary SQLite hash verification failed: {}", e));
+        }
     }
 
     // Clean up temp files.
@@ -488,6 +481,33 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
 
     emit_progress(&app_handle, "done", downloaded, total_size, None);
     Ok(())
+}
+
+/// 校验解压出的文件是含 stardict 表的有效 SQLite 数据库。
+fn verify_sqlite_dict(path: &std::path::Path) -> Result<(), String> {
+    let conn = Connection::open(path)
+        .map_err(|e| format!("Extracted dictionary is not a valid SQLite file: {}", e))?;
+    let count: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='stardict'",
+            [],
+            |row| row.get(0),
+        )
+        .map_err(|e| format!("Dictionary schema check failed: {}", e))?;
+    if count == 0 {
+        return Err("Dictionary file is missing the stardict table".to_string());
+    }
+    Ok(())
+}
+
+/// 校验失败时删除 final_path 上残留的损坏文件：否则后续
+/// download_dictionary 因 final_path.exists() 直接返回成功、
+/// check_dictionary 也只查存在性，悬停翻译会永久损坏且无自愈。
+/// 删除失败仅记日志，不掩盖原始校验错误。
+fn remove_corrupt_dict_file(final_path: &std::path::Path) {
+    if let Err(e) = std::fs::remove_file(final_path) {
+        log::warn!("Failed to remove corrupt dictionary file: {}", e);
+    }
 }
 
 fn extract_sqlite(
@@ -654,5 +674,57 @@ mod tests {
     #[test]
     fn sqlite_magic_matches() {
         assert_eq!(SQLITE_MAGIC, b"SQLite format 3\0");
+    }
+
+    #[test]
+    fn verify_sqlite_dict_accepts_valid_db_with_stardict() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("ok.sqlite");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute("CREATE TABLE stardict (word TEXT)", [])
+            .unwrap();
+        drop(conn);
+        assert!(verify_sqlite_dict(&path).is_ok());
+    }
+
+    #[test]
+    fn verify_sqlite_dict_rejects_db_missing_stardict() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("no_stardict.sqlite");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute("CREATE TABLE other (word TEXT)", []).unwrap();
+        drop(conn);
+        assert!(verify_sqlite_dict(&path).is_err());
+    }
+
+    #[test]
+    fn verify_sqlite_dict_rejects_garbage_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("garbage.sqlite");
+        std::fs::write(&path, b"this is not a sqlite database").unwrap();
+        assert!(verify_sqlite_dict(&path).is_err());
+    }
+
+    /// 回归（B-N1）：解压校验失败后必须删除 final_path 上的残留损坏
+    /// 文件，否则 download_dictionary 因 final_path.exists() 直接返回
+    /// 成功，下载永久锁死、悬停翻译无自愈。
+    #[test]
+    fn corrupt_dict_residue_is_removed_on_verification_failure() {
+        let dir = tempfile::tempdir().unwrap();
+        let final_path = dir.path().join(DICT_FILE);
+        std::fs::write(&final_path, b"corrupt").unwrap();
+        // 模拟 download_dictionary 的校验失败分支。
+        assert!(verify_sqlite_dict(&final_path).is_err());
+        remove_corrupt_dict_file(&final_path);
+        assert!(!final_path.exists());
+    }
+
+    #[test]
+    fn remove_corrupt_dict_file_ignores_missing_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let final_path = dir.path().join(DICT_FILE);
+        // 文件不存在时不应 panic。
+        remove_corrupt_dict_file(&final_path);
+        assert!(!final_path.exists());
     }
 }

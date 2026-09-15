@@ -358,6 +358,7 @@
       "contextLengthExceeded": "Content exceeds the model's context length. Select a shorter excerpt and try again.",
       "serverError": "Service error ({{status}}). Try again later or switch to another platform.",
       "streamInterrupted": "The response was interrupted. Please try again.",
+      "interruptedOnExit": "Generation did not finish (the app was closed). The answer may be incomplete; you can continue the conversation.",
       "invalidConfig": "Configuration field {{field}} is invalid. Check your settings.",
       "toolError": "Error while looking up the document ({{toolName}}). Please try again.",
       "unknown": "Request failed. Please try again later.",

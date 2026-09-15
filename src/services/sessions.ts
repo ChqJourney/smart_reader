@@ -1,3 +1,4 @@
+import i18n from "i18next";
 import { invoke } from "@tauri-apps/api/core";
 import { error } from "./logs";
 import { StashItem } from "./stash";
@@ -257,12 +258,56 @@ export function finishStreaming(
   };
 }
 
+/**
+ * 历史脏数据自愈：流式进行中关窗（flushPendingSaves 原样落盘）或流式期间
+ * 防抖保存赶上 >500ms 静默期（工具执行中无 chunk），都会把 isStreaming=true
+ * 的会话写进磁盘。重启后没有任何路径复位它，气泡永远转圈、追问输入框永久
+ * 禁用（sendDisabled）、PDF 标记呼吸态常亮。加载时把脏 streaming 态复位，
+ * 并给当时正在生成的 assistant 消息追加中断提示——对齐流式 onError 的
+ * 「[错误] + 友好文案」模式（content 追加 + error 字段），与翻译批注的
+ * 加载侧自愈（annotations.loadPdfData）同理。
+ */
+export function sanitizeLoadedSession(
+  session: InterpretationSession
+): InterpretationSession {
+  if (!session.isStreaming) return session;
+  const messages = session.messages.map((m) => {
+    if (
+      m.id !== session.streamingMessageId ||
+      m.role !== "assistant" ||
+      m.error
+    ) {
+      return m;
+    }
+    const notice = `${i18n.t("common.errorPrefix")} ${i18n.t(
+      "llm.error.interruptedOnExit"
+    )}`;
+    return {
+      ...m,
+      content: m.content.trim() ? `${m.content}\n\n${notice}` : notice,
+      error: {
+        kind: "streamInterrupted",
+        partialContent: m.content,
+      } as LlmError,
+    };
+  });
+  return {
+    ...session,
+    messages,
+    isStreaming: false,
+    streamingMessageId: undefined,
+  };
+}
+
 // Backend storage helpers
 export async function loadSession(
   sessionId: string
 ): Promise<InterpretationSession | null> {
   try {
-    return await invoke<InterpretationSession>("load_session", { sessionId });
+    const session = await invoke<InterpretationSession>("load_session", {
+      sessionId,
+    });
+    return session ? sanitizeLoadedSession(session) : null;
   } catch (err) {
     error(`Failed to load session: ${err}`);
     return null;

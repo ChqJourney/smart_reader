@@ -62,7 +62,10 @@ export async function savePdfData(
   try {
     await invoke("save_pdf_data", { filePath, data });
   } catch (err) {
+    // 保存失败必须抛给调用方：usePersistence 靠 rejected promise 保留脏标记
+    // 并在下次防抖/flush 重试；吞错会让上层误以为已落盘而清掉脏标记。
     error(`Failed to save PDF data: ${err}`);
+    throw err;
   }
 }
 

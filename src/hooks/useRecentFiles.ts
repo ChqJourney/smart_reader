@@ -64,7 +64,15 @@ export function useRecentFiles(): UseRecentFilesReturn {
     loadRecentFiles()
       .then((files) => {
         if (cancelled) return;
-        setRecentFiles(normalizeRecentFiles(files));
+        // 函数式合并：load 在飞期间的本地变更（addRecentFile 等）以 prev
+        // 为准不被覆盖丢失，loaded 只补齐 prev 中没有的条目。
+        setRecentFiles((prev) => {
+          const prevPaths = new Set(prev.map((f) => f.path));
+          return normalizeRecentFiles([
+            ...prev,
+            ...files.filter((f) => !prevPaths.has(f.path)),
+          ]);
+        });
         setLoaded(true);
       })
       .catch(() => {

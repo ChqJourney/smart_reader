@@ -75,7 +75,7 @@ describe("PdfAnnotations", () => {
     expect(onExplainClick).toHaveBeenCalledWith("1");
   });
 
-  it("shows inline result and calls onReinterpret for linked session", () => {
+  it("shows inline result and calls onReinterpret for linked session", async () => {
     const onReinterpret = vi.fn();
     renderPdfAnnotations({
       annotations: [
@@ -105,7 +105,8 @@ describe("PdfAnnotations", () => {
 
     fireEvent.click(screen.getByLabelText(/解读/i));
 
-    expect(screen.getByText(/内联解读结果/)).toBeInTheDocument();
+    // InterpretPopup 内 MarkdownRenderer 已改 React.lazy 懒加载，正文异步出现
+    expect(await screen.findByText(/内联解读结果/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /重新解读/i }));
     expect(onReinterpret).toHaveBeenCalledWith("session-1");
   });

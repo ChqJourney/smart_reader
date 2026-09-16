@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import * as pdfjsLib from "pdfjs-dist";
+import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import type { TextItem as PdfjsTextItem } from "pdfjs-dist/types/src/display/api";
 import type { PageViewportInfo } from "./PdfViewer";
 import { Annotation } from "../services/annotations";
@@ -15,6 +15,9 @@ import "./PdfPage.css";
 const LINE_GROUPING_THRESHOLD = 4;
 const CLICK_LINE_THRESHOLD = 8;
 const CLICK_DRAG_THRESHOLD = 10; // px
+
+/** 单页 canvas 位图像素上限：深缩放 + 高 DPR 下防止单页位图分配过大耗尽内存 */
+const MAX_CANVAS_PIXELS = 16_000_000;
 
 interface TextItem {
   text: string;
@@ -45,7 +48,7 @@ interface LinkAnnotation {
 }
 
 interface PdfPageProps {
-  pdf: pdfjsLib.PDFDocumentProxy;
+  pdf: PDFDocumentProxy;
   pageNum: number;
   scale: number;
   shouldRender: boolean;
@@ -153,7 +156,7 @@ function PdfPage({
   const [selectedItems, setSelectedItems] = useState<TextItem[]>([]);
   const isDraggingRef = useRef(false);
   const dragStartRef = useRef<{ x: number; y: number } | null>(null);
-  const renderTaskRef = useRef<pdfjsLib.RenderTask | undefined>(undefined);
+  const renderTaskRef = useRef<RenderTask | undefined>(undefined);
   const hasRenderedRef = useRef(false);
   const [tooltip, showTooltip, hideTooltip] = useWordLookup(
     !!hoverTranslate,
@@ -240,13 +243,25 @@ function PdfPage({
         // imperative wrapper writes" convention (issue 9.3).
 
         const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(pageViewport.width * dpr);
-        canvas.height = Math.floor(pageViewport.height * dpr);
+        // 位图像素（w*h*dpr²）超上限时按面积比例降低实际生效 dpr（下限 1），
+        // CSS 显示尺寸不变，防止深缩放 + 高 DPR 下单页位图过大。
+        const effectiveDpr =
+          pageViewport.width * pageViewport.height * dpr * dpr >
+          MAX_CANVAS_PIXELS
+            ? Math.max(
+                1,
+                Math.sqrt(
+                  MAX_CANVAS_PIXELS / (pageViewport.width * pageViewport.height)
+                )
+              )
+            : dpr;
+        canvas.width = Math.floor(pageViewport.width * effectiveDpr);
+        canvas.height = Math.floor(pageViewport.height * effectiveDpr);
         canvas.style.width = `${pageViewport.width}px`;
         canvas.style.height = `${pageViewport.height}px`;
 
         const context = canvas.getContext("2d")!;
-        context.setTransform(dpr, 0, 0, dpr, 0, 0);
+        context.setTransform(effectiveDpr, 0, 0, effectiveDpr, 0, 0);
 
         renderTaskRef.current = page.render({
           canvasContext: context,

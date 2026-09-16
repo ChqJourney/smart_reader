@@ -56,6 +56,11 @@ export type { SelectionState } from "../services/selection";
 // react-markdown 全量重跑）。ref 累积 + 50ms 定时 flush 一次即可。
 const STREAM_FLUSH_INTERVAL = 50;
 
+// 流式期间 chunk 合批每 50ms 触发一次 setSessions，会持续重置下面的 500ms
+// 保存防抖，长回答期间若不加干预将零落盘（崩溃丢整段已生成内容）。防抖
+// 重建时若距上次实际落盘已超过该间隔，则不再推迟、直接落盘。
+const FORCE_PERSIST_INTERVAL = 5000;
+
 /**
  * 会话归属判定：常规会话靠 sources 里的 fileHash；无选区自由提问会话
  * （空 sources）靠 anchorFileHash 锚点归属到创建时 focused tab 的文档。
@@ -215,6 +220,11 @@ export function usePersistence({
   const sessionSaveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  // 两路防抖各自的上次实际落盘时间（供 FORCE_PERSIST_INTERVAL 判定）。
+  // 0 表示尚未落盘过，首次挂起防抖时初始化为当时时间（render 期不能调
+  // Date.now()，react-hooks/purity）。
+  const lastPdfPersistAtRef = useRef(0);
+  const lastSessionPersistAtRef = useRef(0);
   const savedSessionsRef = useRef<Record<string, InterpretationSession>>({});
   const settingsRef = useRef<AppSettings>(settings);
   const streaming = useStreaming();
@@ -224,8 +234,11 @@ export function usePersistence({
     new Set()
   );
   // Allow handleInterruptSession to stop the agent loop even between LLM rounds
-  // (e.g. while tool calls are being executed). Each active session registers an
+  // (e.g. while tool calls are being executed). Each active loop registers an
   // abort callback that is checked before starting a new round or running a tool.
+  // 按 messageId 键控而非 session.id：中止后用户可立即追问，同一 session 上会
+  // 并存旧 loop（迟到收尾）与新 loop，按 session 键控会被旧 loop 的 finally
+  // 误删新 loop 的回调。
   const agentLoopAbortRef = useRef<Map<string, () => void>>(new Map());
 
   useEffect(() => {
@@ -394,6 +407,8 @@ export function usePersistence({
     }
     await persistDirtyHashes();
     await persistChangedSessions();
+    lastPdfPersistAtRef.current = Date.now();
+    lastSessionPersistAtRef.current = Date.now();
   }, [persistDirtyHashes, persistChangedSessions]);
 
   // Load annotations and sessions when active file changes.
@@ -497,9 +512,23 @@ export function usePersistence({
   // 时 cleanup 清掉未触发的定时器，旧 tab 在 500ms 窗口内的改动会丢失。
   useEffect(() => {
     if (!activeTab?.filePath || !activeTab.fileHash) return;
-    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    if (saveTimeoutRef.current) {
+      // 防抖被连续变更（典型为流式合批）反复重置：距上次实际落盘超过
+      // FORCE_PERSIST_INTERVAL 时直接 flush，长流式期间保证至多数秒落盘一次。
+      if (Date.now() - lastPdfPersistAtRef.current >= FORCE_PERSIST_INTERVAL) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+        lastPdfPersistAtRef.current = Date.now();
+        void persistDirtyHashes();
+        return;
+      }
+      clearTimeout(saveTimeoutRef.current);
+    }
+    if (lastPdfPersistAtRef.current === 0)
+      lastPdfPersistAtRef.current = Date.now();
     saveTimeoutRef.current = setTimeout(() => {
       saveTimeoutRef.current = null;
+      lastPdfPersistAtRef.current = Date.now();
       void persistDirtyHashes();
     }, 500);
     return () => {
@@ -532,10 +561,25 @@ export function usePersistence({
   // Persist modified sessions with debounce, and delete sessions that have been
   // removed from memory so that disk does not retain stale session files.
   useEffect(() => {
-    if (sessionSaveTimeoutRef.current)
+    if (sessionSaveTimeoutRef.current) {
+      // 同上面的批注防抖：流式合批持续重置防抖时，到阈值强制落盘。
+      if (
+        Date.now() - lastSessionPersistAtRef.current >=
+        FORCE_PERSIST_INTERVAL
+      ) {
+        clearTimeout(sessionSaveTimeoutRef.current);
+        sessionSaveTimeoutRef.current = null;
+        lastSessionPersistAtRef.current = Date.now();
+        void persistChangedSessions();
+        return;
+      }
       clearTimeout(sessionSaveTimeoutRef.current);
+    }
+    if (lastSessionPersistAtRef.current === 0)
+      lastSessionPersistAtRef.current = Date.now();
     sessionSaveTimeoutRef.current = setTimeout(() => {
       sessionSaveTimeoutRef.current = null;
+      lastSessionPersistAtRef.current = Date.now();
       void persistChangedSessions();
     }, 500);
     return () => {
@@ -594,7 +638,7 @@ export function usePersistence({
     (session: InterpretationSession, messageId: string) => {
       const sessionRef = { current: session };
       let loopAborted = false;
-      agentLoopAbortRef.current.set(session.id, () => {
+      agentLoopAbortRef.current.set(messageId, () => {
         loopAborted = true;
       });
       const currentSettings = settingsRef.current;
@@ -1042,9 +1086,11 @@ export function usePersistence({
       };
 
       const finishStreaming = () => {
+        // 竞态守卫：中止后用户可能已立即追问（同一 session 的新 loop、新
+        // streamingMessageId），本 loop 迟到的收尾不得清掉新流的流式状态。
         setSessions((prev) =>
           prev.map((s) =>
-            s.id === sessionRef.current.id
+            s.id === sessionRef.current.id && s.streamingMessageId === messageId
               ? {
                   ...s,
                   isStreaming: false,
@@ -1331,7 +1377,7 @@ export function usePersistence({
           error(`Agent loop error: ${err}`);
           finishStreaming();
         } finally {
-          agentLoopAbortRef.current.delete(session.id);
+          agentLoopAbortRef.current.delete(messageId);
           await toolSession?.dispose();
         }
       };
@@ -1652,7 +1698,9 @@ export function usePersistence({
       // of starting a stream is not duplicated when React StrictMode double-
       // invokes updater functions in development.
       const session = sessionsRef.current.find((s) => s.id === sessionId);
-      if (!session) return;
+      // 流式中的会话不允许追问（面板入口已禁用，这里防御：否则新 loop 会与
+      // 进行中的旧 loop 在同一 session 上交错写消息与流式状态）。
+      if (!session || session.isStreaming) return;
 
       const withUserMessage = appendUserMessage(session, prompt);
       const streamingSession = startAssistantResponse(withUserMessage);
@@ -1675,7 +1723,8 @@ export function usePersistence({
       const session = sessions.find((s) => s.id === sessionId);
       if (!session?.streamingMessageId) return;
       // Signal the agent loop to stop before starting the next round or tool.
-      agentLoopAbortRef.current.get(sessionId)?.();
+      // abort 回调按 messageId 键控，用会话当前的 streamingMessageId 查找。
+      agentLoopAbortRef.current.get(session.streamingMessageId)?.();
       streaming.abortPrefix(session.streamingMessageId);
       setSessions((prev) =>
         prev.map((s) =>
@@ -1729,6 +1778,12 @@ export function usePersistence({
         if (!confirmed) return;
         if (annotation.sessionId) {
           const sessionId = annotation.sessionId;
+          // 流式进行中的会话先中止再删：否则 agent loop 仍会对已删除的会话
+          // 收尾写 state/落盘，LLM 流也会空跑到结束（对齐 handleDeleteSession）。
+          const linkedSession = sessions.find((s) => s.id === sessionId);
+          if (linkedSession?.streamingMessageId) {
+            handleInterruptSession(sessionId);
+          }
           setSessions((prev) => deleteSession(prev, sessionId));
           // Explicitly delete the session file from disk (user-initiated delete)
           try {
@@ -1746,7 +1801,7 @@ export function usePersistence({
         return next;
       });
     },
-    [annotationsByHash, setAnnotationsByHash]
+    [annotationsByHash, sessions, handleInterruptSession, setAnnotationsByHash]
   );
 
   // 从右侧面板按 session 删除：中止进行中的流、删除会话（含磁盘文件），
@@ -1822,12 +1877,14 @@ export function usePersistence({
   // When a tab is closed, abort its streaming sessions but KEEP the sessions
   // and annotations in state (and on disk) so they can be restored when the
   // PDF is reopened. Only streaming is interrupted; no data is deleted.
+  // 关联判定除 sources.tabId 外还认 anchorFileHash：无选区自由提问会话
+  // （空 sources）只靠锚点归属文档，不关流会让它在 tab 关闭后空跑到底。
   const abortSessionsForTab = useCallback(
-    (tabId: string, _fileHash: string, _openTabIds: string[]) => {
+    (tabId: string, fileHash: string, _openTabIds: string[]) => {
       sessions.forEach((session) => {
-        const associated = session.sources.some(
-          (item) => item.source.tabId === tabId
-        );
+        const associated =
+          session.sources.some((item) => item.source.tabId === tabId) ||
+          session.anchorFileHash === fileHash;
         if (!associated) return;
 
         if (session.streamingMessageId) {

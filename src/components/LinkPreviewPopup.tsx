@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import * as pdfjsLib from "pdfjs-dist";
+import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import { error as logError } from "../services/logs";
 import { useDrag } from "../hooks/useDrag";
 import { LinkPreviewState } from "../hooks/useLinkPreviews";
@@ -14,7 +14,7 @@ const MIN_HEIGHT = 200;
 const DEST_TOP_MARGIN = 12;
 
 interface LinkPreviewPopupProps {
-  pdf: pdfjsLib.PDFDocumentProxy;
+  pdf: PDFDocumentProxy;
   preview: LinkPreviewState;
   onGoToPage: (page: number) => void;
   onTogglePin: (id: string) => void;
@@ -53,7 +53,7 @@ function LinkPreviewPopup({
   );
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
-  const renderTaskRef = useRef<pdfjsLib.RenderTask | undefined>(undefined);
+  const renderTaskRef = useRef<RenderTask | undefined>(undefined);
   const hasAutoScrolledRef = useRef(false);
   const boundsRef = useRef(bounds);
   useEffect(() => {

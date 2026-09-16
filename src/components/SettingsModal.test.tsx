@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+  act,
+} from "@testing-library/react";
 import SettingsModal from "./SettingsModal";
 import { DictionaryStatusProvider } from "../hooks/useDictionaryStatus";
 
@@ -313,6 +319,76 @@ describe("SettingsModal", () => {
       "save_settings",
       expect.anything()
     );
+  });
+
+  it("resets the test state to idle when the config changes after a success", async () => {
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    fireEvent.click(screen.getByText("测试连接"));
+    await waitFor(() => {
+      expect(screen.getByText(/连接成功/)).toBeInTheDocument();
+    });
+
+    // 修改配置后旧的成功结果失效，回到待测试状态。
+    fireEvent.change(screen.getByLabelText(/API 地址/), {
+      target: { value: "https://api.deepseek.com/other" },
+    });
+    expect(screen.queryByText(/连接成功/)).not.toBeInTheDocument();
+  });
+
+  it("discards a late test result when the config changed while in flight", async () => {
+    let resolveTest: ((value: unknown) => void) | null = null;
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "check_dictionary") {
+        return Promise.resolve({ exists: false, path: "" });
+      }
+      if (command === "download_dictionary") {
+        return Promise.resolve(undefined);
+      }
+      if (command === "check_api_key") {
+        return Promise.resolve(false);
+      }
+      if (command === "test_connection") {
+        return new Promise((resolve) => {
+          resolveTest = resolve;
+        });
+      }
+      return Promise.reject(
+        new Error(`No mock handler for command: ${command}`)
+      );
+    });
+
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    fireEvent.click(screen.getByText("测试连接"));
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith(
+        "test_connection",
+        expect.anything()
+      );
+    });
+
+    // 测试在飞期间修改配置：状态回到 idle。
+    fireEvent.change(screen.getByLabelText(/API 地址/), {
+      target: { value: "https://api.deepseek.com/other" },
+    });
+
+    // 旧测试迟到返回成功：不得覆盖 idle 状态。
+    await waitFor(() => expect(resolveTest).not.toBeNull());
+    await act(async () => {
+      resolveTest!({ success: true, model: "deepseek-v4-flash" });
+    });
+    expect(screen.queryByText(/连接成功/)).not.toBeInTheDocument();
   });
 
   it("renders system prompt tabs and switches between translate and explain", () => {

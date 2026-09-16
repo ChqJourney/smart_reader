@@ -192,11 +192,18 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
       );
       logHibernations(toHibernate, "budget");
       const hibernateIds = new Set(toHibernate.map((t) => t.id));
-      // Always set pendingGotoPage when activating a tab so the viewer knows it
-      // should restore position. If no page has been saved yet, default to 1.
+      // 目标已是当前 active 且未休眠时跳过 pendingGotoPage 重写：重写会用
+      // 旧 pageNum 覆盖在飞的 gotoTabPage 跳转（useTabRestore 收到同页
+      // pending 会再次跳回），仅刷新 lastActivatedAt。
+      const prevActiveId = activeTabIdRef.current;
+      // Always set pendingGotoPage when switching to a tab so the viewer knows
+      // it should restore position. If no page has been saved yet, default to 1.
       setTabs((prev) =>
         prev.map((tab) => {
           if (tab.id === tabId) {
+            if (tabId === prevActiveId && !tab.hibernated) {
+              return { ...tab, lastActivatedAt: now };
+            }
             return {
               ...tab,
               pendingGotoPage: tab.pageNum ?? 1,

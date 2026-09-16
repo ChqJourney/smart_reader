@@ -88,13 +88,18 @@ export function useFileDrop({
         if (ignored > 0) {
           info(`[useFileDrop] 忽略 ${ignored} 个非 PDF 拖放文件`);
         }
-        for (const path of pdfPaths) {
-          void openPdfByPathRef.current(path).then((tab) => {
+        // 批量拖放串行打开：并行打开多份大 PDF 会瞬时叠加内存峰值。
+        // openPdfByPath 内部已 catch 不会 reject，await 安全；成功才记 recent
+        // 的语义与原 .then 链一致。
+        void (async () => {
+          for (const path of pdfPaths) {
+            if (cancelled) break;
+            const tab = await openPdfByPathRef.current(path);
             if (tab) {
               addRecentFileRef.current(path, getBasename(path));
             }
-          });
-        }
+          }
+        })();
       } else if (payload.type === "over") {
         // over 事件不做按位置分屏，只用于喂看门狗；同值 setState 不触发
         // 重渲染，悬停中保持遮罩可见、事件流停顿后由看门狗兜底隐藏。

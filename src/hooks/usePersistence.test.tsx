@@ -349,6 +349,78 @@ describe("usePersistence", () => {
     });
   });
 
+  // M-F2 回归：删除流式进行中的批注会话前必须先中止其 LLM 流，否则 agent
+  // loop 会对已删除的会话继续收尾写 state/落盘，流也空跑到结束。
+  it("aborts the in-flight stream when deleting a streaming annotation session", async () => {
+    const { streamChatCompletion } = await import("../services/llm");
+    let capturedSignal: AbortSignal | undefined;
+
+    vi.mocked(streamChatCompletion).mockImplementation(
+      async function* (_messages, options) {
+        capturedSignal = options?.signal;
+        yield { type: "chunk" as const, content: "partial" };
+        // 流挂起，保持 isStreaming；中止后由 shouldAdvanceTime 放行结束。
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        yield { type: "done" as const };
+      }
+    );
+
+    let hookRef: UsePersistenceReturn;
+    render(
+      <StrictMode>
+        <TestHarness
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      </StrictMode>
+    );
+
+    const annotation: Annotation = {
+      id: "anno-1",
+      type: "explain",
+      text: "source text",
+      position: { page: 1, x: 10, y: 20 },
+      content: "",
+      isStreaming: false,
+      createdAt: 1000,
+      sessionId: "session-1",
+    };
+
+    const session: InterpretationSession = {
+      id: "session-1",
+      sources: [],
+      messages: [
+        { id: "msg-1", role: "user", content: "请解读", createdAt: 1000 },
+      ],
+      isStreaming: false,
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    act(() => {
+      hookRef!.setAnnotations([annotation]);
+      hookRef!.setSessions([session]);
+    });
+
+    act(() => {
+      hookRef!.handleFollowUp("session-1", "追问");
+    });
+
+    await waitFor(() => {
+      expect(capturedSignal).toBeDefined();
+    });
+    expect(capturedSignal!.aborted).toBe(false);
+
+    await act(async () => {
+      await hookRef!.handleAnnotationDelete("anno-1");
+    });
+
+    expect(capturedSignal!.aborted).toBe(true);
+    expect(hookRef!.sessions).toHaveLength(0);
+    expect(hookRef!.annotations).toHaveLength(0);
+  });
+
   // H-5: split view must keep annotations separated by fileHash.
   it("loads secondary PDF annotations and keeps them separate by fileHash", async () => {
     const { invoke } = await import("@tauri-apps/api/core");
@@ -1611,6 +1683,85 @@ describe("usePersistence", () => {
         invokeSpy.mock.calls.filter(([cmd]) => cmd === "save_session")
       ).toHaveLength(0);
     });
+
+    it("保存失败保留脏标记，后端恢复后 flush 重试落盘", async () => {
+      // M-F1/TS1 回归：savePdfData 失败会 reject，persistDirtyHashes 捕获后
+      // 保留脏标记；若吞错，这次编辑将永久丢失（防抖不会再触发）。
+      const { invoke } = await import("@tauri-apps/api/core");
+      let failSave = true;
+      const invokeSpy = vi
+        .mocked(invoke)
+        .mockImplementation((command: string): Promise<any> => {
+          if (command === "load_pdf_data") {
+            return Promise.resolve({ annotations: [], sessionIds: [] });
+          }
+          if (command === "save_pdf_data") {
+            return failSave
+              ? Promise.reject(new Error("disk full"))
+              : Promise.resolve(null);
+          }
+          if (
+            ["save_session", "delete_session", "log_error"].includes(command)
+          ) {
+            return Promise.resolve(null);
+          }
+          return Promise.reject(
+            new Error(`No mock handler for command: ${command}`)
+          );
+        });
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={propsFor(tabA)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+      await act(async () => {});
+
+      act(() => {
+        hookRef!.handleAddComment(selection, "note");
+      });
+
+      // 防抖触发，保存失败：脏标记必须保留
+      await act(async () => {
+        vi.runAllTimers();
+      });
+      const failedCalls = invokeSpy.mock.calls.filter(
+        ([cmd]) => cmd === "save_pdf_data"
+      );
+      expect(failedCalls.length).toBeGreaterThan(0);
+
+      // 后端恢复后 flush：未重试则数据丢失
+      failSave = false;
+      await act(async () => {
+        await hookRef!.flushPendingSaves();
+      });
+
+      const saveCalls = invokeSpy.mock.calls.filter(
+        ([cmd, args]) =>
+          cmd === "save_pdf_data" &&
+          (args as { filePath?: string } | undefined)?.filePath === "/a.pdf"
+      );
+      expect(saveCalls.length).toBeGreaterThanOrEqual(2);
+      const lastData = (
+        saveCalls[saveCalls.length - 1][1] as {
+          data: { annotations: { text: string }[] };
+        }
+      ).data;
+      expect(lastData.annotations.some((a) => a.text === "note")).toBe(true);
+
+      // 重试成功脏标记已清：再推进计时器不应重复保存
+      invokeSpy.mockClear();
+      await act(async () => {
+        vi.runAllTimers();
+      });
+      expect(
+        invokeSpy.mock.calls.filter(([cmd]) => cmd === "save_pdf_data")
+      ).toHaveLength(0);
+    });
   });
 
   describe("agent loop", () => {
@@ -2146,6 +2297,146 @@ describe("usePersistence", () => {
       await waitFor(() => {
         expect(toolMocks.dispose).toHaveBeenCalledTimes(1);
       });
+    });
+
+    // M-F3 回归：agentLoopAbortRef 按 messageId 键控 + finishStreaming 守卫。
+    // 中止后立即追问（同一 session），旧 loop 迟到的 finishStreaming/finally
+    // 不得清掉新 loop 的流式状态、也不得误删新 loop 的 abort 回调。
+    it("中止后立即追问：旧 loop 迟到收尾不误伤新 loop", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      const signals: (AbortSignal | undefined)[] = [];
+      const releasers: (() => void)[] = [];
+      vi.mocked(streamChatCompletion).mockImplementation(
+        async function* (_messages, options) {
+          const idx = signals.length;
+          signals.push(options?.signal);
+          yield { type: "chunk" as const, content: `answer-${idx}` };
+          // 流挂起，由测试手动放行，模拟旧 loop 迟到收尾。
+          await new Promise<void>((resolve) => releasers.push(resolve));
+          yield { type: "done" as const };
+        }
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <TestHarness
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "first");
+      });
+      await waitFor(() => {
+        expect(signals.length).toBe(1);
+      });
+
+      // 中止旧 loop 并立即追问：新 loop 以新 messageId 启动
+      act(() => {
+        hookRef!.handleInterruptSession("session-explain");
+      });
+      expect(signals[0]!.aborted).toBe(true);
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "second");
+      });
+      await waitFor(() => {
+        expect(signals.length).toBe(2);
+      });
+      const newMessageId = hookRef!.sessions.find(
+        (s) => s.id === "session-explain"
+      )!.streamingMessageId;
+      expect(newMessageId).toBeDefined();
+
+      // 旧流此刻才结束：旧 loop 的 finishStreaming / finally 迟到执行
+      await act(async () => {
+        releasers[0]!();
+      });
+      await waitFor(() => {
+        expect(toolMocks.dispose).toHaveBeenCalledTimes(1);
+      });
+
+      // 新 loop 的流式状态未被旧收尾清掉
+      const session = hookRef!.sessions.find(
+        (s) => s.id === "session-explain"
+      )!;
+      expect(session.isStreaming).toBe(true);
+      expect(session.streamingMessageId).toBe(newMessageId);
+
+      // 新 loop 的 abort 回调未被旧 finally 删除：仍可中止
+      act(() => {
+        hookRef!.handleInterruptSession("session-explain");
+      });
+      expect(signals[1]!.aborted).toBe(true);
+
+      await act(async () => {
+        releasers[1]!();
+      });
+      await waitFor(() => {
+        expect(
+          hookRef!.sessions.find((s) => s.id === "session-explain")?.isStreaming
+        ).toBe(false);
+      });
+    });
+
+    // 回归（防御）：流式中的会话直接追问会被拒绝，避免两个 loop 在同一
+    // session 上交错写消息与流式状态。
+    it("流式中的会话追问被拒绝", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      const streamSpy = vi
+        .mocked(streamChatCompletion)
+        .mockImplementation(async function* () {
+          yield { type: "chunk" as const, content: "partial" };
+          // 流挂起保持 isStreaming
+          await new Promise(() => {});
+        });
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <TestHarness
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "first");
+      });
+      await waitFor(() => {
+        expect(streamSpy).toHaveBeenCalledTimes(1);
+      });
+      expect(
+        hookRef!.sessions.find((s) => s.id === "session-explain")?.isStreaming
+      ).toBe(true);
+
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "second");
+      });
+
+      // 未启动第二条流、未追加 user 消息（第一条追问自带一个 user 消息，
+      // 被拒绝的第二条不得再增加）
+      expect(streamSpy).toHaveBeenCalledTimes(1);
+      const session = hookRef!.sessions.find(
+        (s) => s.id === "session-explain"
+      )!;
+      expect(session.messages.filter((m) => m.role === "user")).toHaveLength(2);
+      expect(
+        session.messages.some(
+          (m) => m.role === "user" && m.content === "second"
+        )
+      ).toBe(false);
     });
 
     // 回归（防御）：历史遗留的悬空 toolCalls（中止修复前产生的脏数据）在
@@ -2818,6 +3109,72 @@ describe("usePersistence", () => {
         expect(session?.isStreaming).toBe(false);
       });
     });
+
+    // M-F17 回归：流式合批每 50ms 更新一次 sessions，会持续重置 500ms 保存
+    // 防抖，长流式期间零落盘、崩溃丢整段回答。距上次落盘超阈值（5s）后
+    // 防抖重建必须直接强制落盘，而不是无限推迟。
+    it("长流式期间保存防抖被持续重置时按阈值强制落盘", async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const invokeSpy = vi.mocked(invoke);
+      const { streamChatCompletion } = await import("../services/llm");
+      let yieldNext: (() => void) | null = null;
+      vi.mocked(streamChatCompletion).mockImplementation(async function* () {
+        // 持续输出的长流：每个 chunk 后挂起，由测试逐拍放行。
+        while (true) {
+          yield { type: "chunk" as const, content: "x" };
+          await new Promise<void>((resolve) => {
+            yieldNext = resolve;
+          });
+        }
+      });
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <TestHarness
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      await waitFor(() => {
+        expect(yieldNext).not.toBeNull();
+      });
+      invokeSpy.mockClear();
+
+      // 每拍放行一个 chunk 并推进 50ms：合批 flush 让 sessions 每拍变化，
+      // 500ms 防抖被持续重置永不触发；累计超 5s 阈值后必须强制落盘。
+      for (let i = 0; i < 130; i++) {
+        await act(async () => {
+          yieldNext!();
+          vi.advanceTimersByTime(50);
+        });
+      }
+
+      // 流仍在进行中，但会话已被强制落盘过
+      expect(
+        hookRef!.sessions.find((s) => s.id === "session-explain")?.isStreaming
+      ).toBe(true);
+      const sessionSaves = invokeSpy.mock.calls.filter(
+        ([cmd]) => cmd === "save_session"
+      );
+      expect(sessionSaves.length).toBeGreaterThan(0);
+
+      // 收尾：中止会话，避免悬挂流泄漏到后续用例
+      act(() => {
+        hookRef!.handleInterruptSession("session-explain");
+      });
+      await act(async () => {
+        yieldNext!();
+      });
+    });
   });
 
   describe("handleFreeQuestion（无选区自由提问）", () => {
@@ -3065,6 +3422,54 @@ describe("usePersistence", () => {
         data: { sessionIds: string[] };
       };
       expect(savedData.data.sessionIds).toContain(sessionId);
+    });
+
+    // T2 回归：自由提问会话 sources 为空，sources.tabId 关联判定覆盖不到；
+    // 关 tab 时必须经 anchorFileHash 匹配中止其进行中的流。
+    it("closing the anchored tab aborts an in-flight free-question session", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      let capturedSignal: AbortSignal | undefined;
+      vi.mocked(streamChatCompletion).mockImplementation(
+        async function* (_messages, options) {
+          capturedSignal = options?.signal;
+          yield { type: "chunk" as const, content: "partial" };
+          // 流挂起保持 isStreaming；中止后由 shouldAdvanceTime 放行结束。
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          yield { type: "done" as const };
+        }
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={freeQuestionProps(freeQuestionTab)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+
+      let sessionId: string | null = null;
+      act(() => {
+        sessionId = hookRef!.handleFreeQuestion("问题");
+      });
+
+      await waitFor(() => {
+        expect(capturedSignal).toBeDefined();
+      });
+      expect(capturedSignal!.aborted).toBe(false);
+      const session = hookRef!.sessions.find((s) => s.id === sessionId)!;
+      expect(session.sources).toEqual([]);
+      expect(session.isStreaming).toBe(true);
+
+      act(() => {
+        hookRef!.abortSessionsForTab("tab-a", "hash-a", []);
+      });
+
+      expect(capturedSignal!.aborted).toBe(true);
+      // 会话保留（重开 PDF 可恢复），仅流被中止
+      expect(hookRef!.sessions).toHaveLength(1);
+      expect(hookRef!.sessions[0].isStreaming).toBe(false);
     });
   });
 });

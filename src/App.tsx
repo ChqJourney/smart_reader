@@ -824,8 +824,9 @@ function App() {
 
   const handleTabClick = useCallback(
     (tabId: string) => {
+      // 点击当前激活 tab 是空操作：早退避免触发 activateTab 的状态重写
+      if (tabId === tabs.activeTabId) return;
       if (splitView.isSplitView) {
-        if (tabId === tabs.activeTabId) return;
         if (tabId === splitView.secondaryTabId) {
           // Swap primary and secondary tabs
           splitView.setSecondaryTabId(tabs.activeTabId);

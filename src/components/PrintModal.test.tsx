@@ -6,7 +6,7 @@ const defaultProps = {
   numPages: 10,
   currentPage: 3,
   onPrint: vi.fn().mockResolvedValue(undefined),
-  onExport: vi.fn().mockResolvedValue(undefined),
+  onExport: vi.fn().mockResolvedValue(true),
   onClose: vi.fn(),
 };
 
@@ -73,6 +73,20 @@ describe("PrintModal", () => {
       includeComments: true,
       pages: [1, 2, 4],
     });
+  });
+
+  it("stays open when the user cancels the export save dialog", async () => {
+    const onExport = vi.fn().mockResolvedValue(false);
+    render(<PrintModal {...defaultProps} onExport={onExport} />);
+    fireEvent.click(screen.getByRole("button", { name: "导出 PDF" }));
+    await waitFor(() => expect(onExport).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "导出 PDF" })).toBeEnabled()
+    );
+    expect(defaultProps.onClose).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText("生成打印文件失败，请查看日志")
+    ).not.toBeInTheDocument();
   });
 
   it("shows a friendly error when the action fails and stays open", async () => {

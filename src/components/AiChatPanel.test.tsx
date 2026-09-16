@@ -176,6 +176,52 @@ describe("AiChatPanel", () => {
     );
   });
 
+  it("does not auto-switch tabs on stash changes after a programmatic tabRequest switch", () => {
+    const stash1 = makeStash("stash-1", "first excerpt");
+    const stash2 = makeStash("stash-2", "second excerpt");
+    const baseProps = {
+      onRemoveStash: vi.fn(),
+      onClearStashes: vi.fn(),
+      onOpenCustomInterpret: vi.fn(),
+      onFollowUp: vi.fn(),
+    };
+
+    // 初始有暂存：自动停在暂存 tab。
+    const { rerender } = renderPanel({ stashes: [stash1], ...baseProps });
+    expect(screen.getByRole("tab", { name: /暂存区/i })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+
+    // PDF 侧发起解读：程序化切到解读记录 tab。
+    rerender(
+      <AiChatPanel
+        stashes={[stash1]}
+        sessions={[]}
+        tabRequest={{ tab: "sessions", nonce: 1 }}
+        {...baseProps}
+      />
+    );
+    expect(screen.getByRole("tab", { name: /解读记录/i })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+
+    // 之后 stashes.length 变化不再把面板拽回暂存 tab。
+    rerender(
+      <AiChatPanel
+        stashes={[stash1, stash2]}
+        sessions={[]}
+        tabRequest={{ tab: "sessions", nonce: 1 }}
+        {...baseProps}
+      />
+    );
+    expect(screen.getByRole("tab", { name: /解读记录/i })).toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+  });
+
   it("renders stash items with source info", () => {
     const stashes = [
       makeStash("stash-1", "first excerpt", {

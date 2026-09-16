@@ -195,14 +195,17 @@ export function beginToolSession(): ToolSession {
     return pdf;
   };
 
-  const getPageText = async (
+  // 缓存层存全文：截断只做在 read_pdf_page 的返回处。若缓存截断文本，
+  // search_in_pdf 会在截断文本上搜索，密集页 PAGE_TEXT_LIMIT 之后的匹配
+  // 会被静默漏报。
+  const getFullPageText = async (
     fileHash: string,
     pageNumber: number
   ): Promise<string> => {
     const loaded = docs.get(fileHash);
     if (!loaded) {
       await loadDoc(fileHash);
-      return getPageText(fileHash, pageNumber);
+      return getFullPageText(fileHash, pageNumber);
     }
     const cached = loaded.pageTextCache.get(pageNumber);
     if (cached) return cached;
@@ -220,14 +223,7 @@ export function beginToolSession(): ToolSession {
             }
           }
         }
-        const fullText = parts.join("");
-        if (fullText.length > PAGE_TEXT_LIMIT) {
-          return (
-            fullText.slice(0, PAGE_TEXT_LIMIT) +
-            `\n... [truncated, page has ${fullText.length} chars total]`
-          );
-        }
-        return fullText;
+        return parts.join("");
       } finally {
         page.cleanup();
       }
@@ -289,7 +285,13 @@ export function beginToolSession(): ToolSession {
               result: `Error: page ${pageNumber} out of range (1..${pdf.numPages})`,
             };
           }
-          const text = await getPageText(fileHash, pageNumber);
+          const fullText = await getFullPageText(fileHash, pageNumber);
+          // 截断只做在返回处，缓存与 search_in_pdf 始终用全文。
+          const text =
+            fullText.length > PAGE_TEXT_LIMIT
+              ? fullText.slice(0, PAGE_TEXT_LIMIT) +
+                `\n... [truncated, page has ${fullText.length} chars total]`
+              : fullText;
           return {
             summary: i18n.t("tools.callReadPage", { page: pageNumber }),
             result: text,
@@ -322,7 +324,7 @@ export function beginToolSession(): ToolSession {
             i <= pdf.numPages && results.length < maxResults;
             i++
           ) {
-            const text = await getPageText(fileHash, i);
+            const text = await getFullPageText(fileHash, i);
             const lowerText = text.toLowerCase();
             const idx = lowerText.indexOf(lowerQuery);
             if (idx !== -1) {

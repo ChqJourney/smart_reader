@@ -11,6 +11,7 @@ import {
   finishStreaming,
   deleteSession,
   loadSession,
+  saveSession,
   sortSessions,
   collectTurnProcess,
 } from "./sessions";
@@ -357,6 +358,30 @@ describe("sessions service", () => {
       const result = await loadSession("session-clean");
 
       expect(result).toEqual(clean);
+    });
+  });
+
+  describe("saveSession", () => {
+    beforeEach(() => {
+      mockInvoke.mockReset();
+    });
+
+    it("invokes save_session with the session payload", async () => {
+      mockInvoke.mockResolvedValue(null);
+      const session = createSession([makeStashItem("stash-1", "t")], "prompt");
+
+      await saveSession(session);
+
+      expect(mockInvoke).toHaveBeenCalledWith("save_session", { session });
+    });
+
+    it("rejects when the backend write fails so callers can retry", async () => {
+      // 保存失败必须抛出：persistChangedSessions 只有拿到 rejected promise
+      // 才会不更新已存快照、下次防抖/flush 重试；吞错会静默丢会话。
+      mockInvoke.mockRejectedValue(new Error("disk full"));
+      const session = createSession([makeStashItem("stash-1", "t")], "prompt");
+
+      await expect(saveSession(session)).rejects.toThrow("disk full");
     });
   });
 

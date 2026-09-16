@@ -74,6 +74,37 @@ describe("useRecentFiles", () => {
     expect(result.current.recentFiles).toEqual([entry("/a.pdf", 1)]);
   });
 
+  it("keeps files added while the initial load is still in flight", async () => {
+    // 加载竞态回归：load resolve 后整体覆盖会丢在飞期间的 addRecentFile。
+    let resolveLoad!: (files: RecentFile[]) => void;
+    mockTauriInvoke({
+      load_recent_files: () =>
+        new Promise<RecentFile[]>((resolve) => {
+          resolveLoad = resolve;
+        }),
+      save_recent_files: () => null,
+    });
+    const { useRecentFiles } = await import("../hooks/useRecentFiles");
+    const { result } = renderHook(() => useRecentFiles());
+
+    // load 尚未 resolve 时新增一条
+    act(() => result.current.addRecentFile("/inflight.pdf", "inflight.pdf"));
+    expect(result.current.recentFiles.map((f) => f.path)).toEqual([
+      "/inflight.pdf",
+    ]);
+
+    await act(async () => {
+      resolveLoad([entry("/a.pdf", 1)]);
+    });
+    await waitFor(() => expect(result.current.loaded).toBe(true));
+
+    // 在飞新增的条目不丢，loaded 的其余条目补齐
+    expect(result.current.recentFiles.map((f) => f.path)).toEqual([
+      "/inflight.pdf",
+      "/a.pdf",
+    ]);
+  });
+
   it("adds recent file to front and persists", async () => {
     const saved: { files: RecentFile[] }[] = [];
     const { result } = await setup([], saved);

@@ -925,7 +925,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     );
 
     const handlePrintExport = useCallback(
-      async (options: PrintOptions) => {
+      async (options: PrintOptions): Promise<boolean> => {
         const pdfBytes = await generatePrintPdf(
           {
             filePath,
@@ -936,7 +936,8 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           options
         );
         const baseName = fileName.replace(/\.pdf$/i, "");
-        await exportPrintPdf(pdfBytes, `${baseName}-print.pdf`);
+        // 透传导出结果：用户在保存对话框取消时返回 false，弹窗据此保持打开。
+        return exportPrintPdf(pdfBytes, `${baseName}-print.pdf`);
       },
       [filePath, fileHash, fileName, annotations, cachedBytes]
     );

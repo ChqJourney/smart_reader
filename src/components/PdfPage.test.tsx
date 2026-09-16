@@ -169,6 +169,46 @@ describe("PdfPage rendering resources", () => {
     });
   });
 
+  it("clamps the canvas bitmap to the pixel budget under extreme DPR and zoom", async () => {
+    // 高 DPR + 大 viewport 下位图像素（w*h*dpr²）会爆炸：超限时应按面积
+    // 比例降低生效 dpr，CSS 显示尺寸不变（M-F8）。
+    // makePdf 每单位 scale 为 100×200，scale=20 → viewport 2000×4000，
+    // dpr=4 时位图 8000×16000 = 128M 像素，远超 16M 预算。
+    const originalDpr = window.devicePixelRatio;
+    Object.defineProperty(window, "devicePixelRatio", {
+      value: 4,
+      configurable: true,
+    });
+    try {
+      const { container, pdf } = renderPage({
+        shouldRender: true,
+        pageViewport: { width: 2000, height: 4000, scale: 20 },
+        scale: 20,
+      });
+
+      const canvas = container.querySelector("canvas");
+      if (!canvas) throw new Error("canvas not found");
+      await waitFor(() => {
+        expect(pdf.page.render).toHaveBeenCalled();
+      });
+
+      // 生效 dpr = sqrt(16M / (2000*4000)) = √2
+      const budgetDpr = Math.sqrt(16_000_000 / (2000 * 4000));
+      expect(canvas.width).toBe(Math.floor(2000 * budgetDpr));
+      expect(canvas.height).toBe(Math.floor(4000 * budgetDpr));
+      expect(canvas.width).toBeGreaterThan(0);
+      expect(canvas.width * canvas.height).toBeLessThanOrEqual(16_000_000);
+      // CSS 显示尺寸不受位图降效影响
+      expect(canvas.style.width).toBe("2000px");
+      expect(canvas.style.height).toBe("4000px");
+    } finally {
+      Object.defineProperty(window, "devicePixelRatio", {
+        value: originalDpr,
+        configurable: true,
+      });
+    }
+  });
+
   it("zeroes the canvas bitmap when the page leaves the render window", async () => {
     // Offscreen pages used to keep their full (DPR-scaled) canvas bitmap
     // resident. Scrolling the page out of the render window must free it;

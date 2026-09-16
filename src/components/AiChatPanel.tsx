@@ -170,6 +170,9 @@ export default function AiChatPanel({
       expandedSessionId &&
       expandedSessionId !== prevExpandedSessionIdRef.current
     ) {
+      // marker 点击展开会话即用户意图：置手动切换标记，避免后续
+      // stashes.length 变化把面板从解读记录拽走。
+      hasUserManuallySwitchedTabRef.current = true;
       setActiveSessionId(expandedSessionId);
       setActiveTab("sessions");
     }
@@ -198,6 +201,9 @@ export default function AiChatPanel({
     if (!tabRequest) return;
     if (tabRequest.nonce === prevTabRequestNonceRef.current) return;
     prevTabRequestNonceRef.current = tabRequest.nonce;
+    // PDF 侧显式请求即用户意图：置手动切换标记，避免后续 stashes.length
+    // 变化触发的自动切换把面板拽走。
+    hasUserManuallySwitchedTabRef.current = true;
     setActiveTab(tabRequest.tab);
   }, [tabRequest]);
 
@@ -209,6 +215,8 @@ export default function AiChatPanel({
     if (expandSessionRequest.nonce === prevExpandSessionNonceRef.current)
       return;
     prevExpandSessionNonceRef.current = expandSessionRequest.nonce;
+    // 同为程序化切换：发起解读即用户意图，置标记避免被自动切换拽走。
+    hasUserManuallySwitchedTabRef.current = true;
     setActiveTab("sessions");
     setActiveSessionId(expandSessionRequest.id);
   }, [expandSessionRequest]);

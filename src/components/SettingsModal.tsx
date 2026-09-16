@@ -116,6 +116,8 @@ export default function SettingsModal({
    * the user has typed since the modal opened.
    */
   const draftApiKeysRef = useRef<Record<string, string>>({});
+  /** 测试连接序号：仅最新一次测试的结果允许落状态，在飞旧结果直接丢弃。 */
+  const testSeqRef = useRef(0);
   /** Tracks which platforms have an API key configured in keyring. */
   const [platformsWithKey, setPlatformsWithKey] = useState<Set<string>>(
     new Set()
@@ -312,11 +314,19 @@ export default function SettingsModal({
   };
 
   const updateLlm = (patch: Partial<AppSettings["llm"]>) => {
+    // 配置变更后旧的测试结果失效；递增序号同时作废在飞测试的迟到结果。
+    testSeqRef.current += 1;
+    setTestState("idle");
+    setTestResult(null);
     setSettings((s) => ({ ...s, llm: { ...s.llm, ...patch } }));
   };
 
   /** When platform changes, auto-fill baseUrl/model and restore any user-typed draft. */
   const handlePlatformChange = async (platformId: PlatformId) => {
+    // 切换平台后旧的测试结果失效（语义同 updateLlm）。
+    testSeqRef.current += 1;
+    setTestState("idle");
+    setTestResult(null);
     // Cache whatever the user has typed for the current platform (may be empty).
     draftApiKeysRef.current[settings.platformId] = settings.llm.apiKey;
 
@@ -363,6 +373,7 @@ export default function SettingsModal({
 
   /** Test the LLM connection with the current modal values (without saving). */
   const handleTestConnection = async () => {
+    const seq = ++testSeqRef.current;
     setTestState("testing");
     setTestResult(null);
     try {
@@ -372,6 +383,8 @@ export default function SettingsModal({
         model: settings.llm.model,
         apiKey: settings.llm.apiKey,
       });
+      // 已有更新的测试发起，或期间配置被修改：丢弃迟到结果。
+      if (seq !== testSeqRef.current) return;
       if (result.success) {
         setTestState("success");
         setTestResult(
@@ -392,6 +405,7 @@ export default function SettingsModal({
         );
       }
     } catch (err) {
+      if (seq !== testSeqRef.current) return;
       setTestState("error");
       // 原始错误进日志，UI 只给友好中文。
       error(`[Settings] 测试连接失败: ${String(err)}`);

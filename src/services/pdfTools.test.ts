@@ -208,6 +208,27 @@ describe("pdfTools", () => {
       expect(parsed[0].snippet).toContain("clause 6.2.2");
     });
 
+    it("finds matches beyond the read truncation limit", async () => {
+      // 回归：截断曾做进共享提取函数并进缓存，search_in_pdf 在截断文本上
+      // 搜索，8000 字符之后的匹配静默漏报。搜索必须基于全文，snippet 也从
+      // 全文切。
+      const longPrefix = "a".repeat(8500);
+      mocks.pdfjsPageText = {
+        1: [{ str: longPrefix + "needle-clause-9.9", hasEOL: false }],
+      };
+      const session = beginToolSession();
+      const { result } = await session.executeToolCall(
+        "search_in_pdf",
+        JSON.stringify({ file_hash: "hash-a", query: "needle-clause-9.9" })
+      );
+      await session.dispose();
+
+      const parsed = JSON.parse(result);
+      expect(parsed).toHaveLength(1);
+      expect(parsed[0].page).toBe(1);
+      expect(parsed[0].snippet).toContain("needle-clause-9.9");
+    });
+
     it("respects max_results and clamps it to 1..10", async () => {
       mocks.pdfjsPageText = {
         1: [{ str: "first hit", hasEOL: false }],

@@ -75,7 +75,8 @@ describe("useTabs", () => {
     });
 
     expect(result.current.tabs).toHaveLength(1);
-    // Re-activating the existing tab sets pendingGotoPage for restoration.
+    // 重复打开已激活的 tab 不再重写 pendingGotoPage；此处保留的是首次
+    // 激活时设置的恢复页码。
     expect(result.current.activeTab?.pendingGotoPage).toBe(1);
   });
 
@@ -440,6 +441,38 @@ describe("useTabs", () => {
 
     expect(result.current.activeTab?.id).toBe(tabId!);
     expect(result.current.activeTab?.pendingGotoPage).toBe(1);
+  });
+
+  it("clicking the current tab after gotoTabPage does not cancel the in-flight jump", async () => {
+    const { result } = renderHook(() => useTabs());
+
+    let tabId: string;
+    await act(async () => {
+      const tab = await result.current.openPdfByPath("/test/file.pdf");
+      tabId = tab!.id;
+    });
+
+    act(() => {
+      result.current.gotoTabPage(tabId!, 8);
+    });
+    expect(result.current.activeTab?.pendingGotoPage).toBe(8);
+
+    // viewer 消费 pending 开始跳转，滚动同步中途上报了中间页码 3
+    act(() => {
+      result.current.clearTabPendingGotoPage(tabId!);
+      result.current.handleViewerStateChange({ pageNum: 3, scale: 1 }, tabId!);
+    });
+
+    act(() => {
+      result.current.handleTabClick(tabId!);
+    });
+
+    // 旧行为会用当前 pageNum（3）重写 pendingGotoPage，useTabRestore 收到后
+    // 跳回第 3 页，在飞到第 8 页的跳转被取消。现在点击当前 tab 只刷新
+    // lastActivatedAt，不动 pendingGotoPage。
+    expect(result.current.activeTab?.id).toBe(tabId!);
+    expect(result.current.activeTab?.pendingGotoPage).toBeUndefined();
+    expect(result.current.activeTab?.pageNum).toBe(3);
   });
 
   it("preserves a background tab's page after selecting text in another tab", async () => {

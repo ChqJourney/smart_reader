@@ -297,7 +297,12 @@ export default function SetupWizard({
                 type="password"
                 className="wizard-input"
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  // 密钥变更后旧的测试结果失效（语义同 selectPlatform）。
+                  setTestState("idle");
+                  setTestError(null);
+                }}
                 placeholder={
                   hasExistingKey ? w("apiKeyPlaceholderKeep") : "sk-..."
                 }

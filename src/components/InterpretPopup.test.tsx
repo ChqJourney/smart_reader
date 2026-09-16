@@ -135,10 +135,11 @@ describe("InterpretPopup", () => {
     vi.unstubAllGlobals();
   });
 
-  it("shows the latest assistant answer inline with source text collapsed", () => {
+  it("shows the latest assistant answer inline with source text collapsed", async () => {
     renderPopup();
 
-    expect(screen.getByText(/这是解读结果/)).toBeInTheDocument();
+    // MarkdownRenderer 已改 React.lazy 懒加载，正文异步出现
+    expect(await screen.findByText(/这是解读结果/)).toBeInTheDocument();
     // 原文默认折叠
     expect(screen.queryByText("some english text")).not.toBeInTheDocument();
 

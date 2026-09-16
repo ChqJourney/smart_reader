@@ -472,23 +472,45 @@ fn open_print_file(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> R
     open_with_platform_viewer(&path)
 }
 
-/// 写入 print 临时文件并清理旧文件（每次只保留最新一份，避免无限堆积）。
+/// 打印临时文件清理的宽限期：只有 mtime 早于该时间的旧 pdf 才会被删除。
+/// `open_with_platform_viewer` 是异步 spawn，系统阅读器可能还没读完文件；
+/// 宽限期保护刚交出去（以及近期打印）的文件不被下一次打印删掉。
+const PRINT_TEMP_GRACE: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+
+/// 打印临时文件名的唯一序号，配合纳秒时间戳避免同毫秒连续打印互相覆盖。
+static PRINT_FILE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// 写入 print 临时文件并清理过期旧文件。改「先写后删 + 宽限期」：新文件
+/// 落盘后才清理，且只删 mtime 早于 PRINT_TEMP_GRACE 的旧 pdf——旧实现
+/// 「先全删再写」会在快速连续打印时删掉刚 spawn 给阅读器还没读完的文件。
 fn write_print_temp_file(dir: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
     std::fs::create_dir_all(dir).map_err(|e| format!("Failed to create print directory: {}", e))?;
-    if let Ok(entries) = std::fs::read_dir(dir) {
+    let nanos = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let seq = PRINT_FILE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let path = dir.join(format!("SpecReader-print-{}-{}.pdf", nanos, seq));
+    std::fs::write(&path, bytes).map_err(|e| format!("Failed to write print file: {}", e))?;
+    // 清理过期旧文件：除新文件外、mtime 早于宽限期的 pdf。mtime 读取失败
+    // 的条目保守保留。
+    let cutoff = SystemTime::now().checked_sub(PRINT_TEMP_GRACE);
+    if let (Ok(entries), Some(cutoff)) = (std::fs::read_dir(dir), cutoff) {
         for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().is_some_and(|ext| ext == "pdf") {
-                let _ = std::fs::remove_file(&path);
+            let old = entry.path();
+            if old == path || !old.extension().is_some_and(|ext| ext == "pdf") {
+                continue;
+            }
+            let too_old = entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .map(|m| m < cutoff)
+                .unwrap_or(false);
+            if too_old {
+                let _ = std::fs::remove_file(&old);
             }
         }
     }
-    let millis = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    let path = dir.join(format!("SpecReader-print-{}.pdf", millis));
-    std::fs::write(&path, bytes).map_err(|e| format!("Failed to write print file: {}", e))?;
     Ok(path)
 }
 
@@ -545,37 +567,61 @@ fn read_pdf_bytes_core(state: &AppState, file_path: &str) -> Result<Vec<u8>, Str
     std::fs::read(file_path).map_err(|e| format!("Failed to read PDF file: {}", e))
 }
 
+/// 文件元数据快照（mtime + size），作为 hash 缓存的一致性键。
+#[derive(Clone, Copy)]
+struct FileSnapshot {
+    modified: SystemTime,
+    size: u64,
+}
+
+/// stat 文件并取 mtime + size。`metadata()` 或 `modified()` 任一失败都返回
+/// None：拿不到可靠快照就无法构造可信的缓存键（去掉旧的 UNIX_EPOCH 回退，
+/// 那会让 mtime 不可用的文件永久信任缓存）。
+fn snapshot_file_metadata(file_path: &str) -> Option<FileSnapshot> {
+    let metadata = std::fs::metadata(file_path).ok()?;
+    let modified = metadata.modified().ok()?;
+    Some(FileSnapshot {
+        modified,
+        size: metadata.len(),
+    })
+}
+
 fn compute_pdf_hash_cached(
     cache: &Arc<Mutex<HashMap<PathBuf, CachedHash>>>,
     file_path: &str,
 ) -> Result<String, String> {
     let path = PathBuf::from(file_path);
-    let metadata =
-        std::fs::metadata(&path).map_err(|e| format!("Failed to read PDF metadata: {}", e))?;
-    let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-    let size = metadata.len();
+    // 取不到可靠快照时判脏不命中、直接全量计算且不写缓存。
+    let Some(pre) = snapshot_file_metadata(file_path) else {
+        return compute_pdf_hash(file_path);
+    };
 
     {
         let cached = cache.lock().unwrap();
         if let Some(entry) = cached.get(&path) {
             // size changes always invalidate; modified is a best-effort check.
             // FAT32 and similar low-precision filesystems are covered by size.
-            if entry.modified == modified && entry.size == size {
+            if entry.modified == pre.modified && entry.size == pre.size {
                 return Ok(entry.hash.clone());
             }
         }
     }
 
     let hash = compute_pdf_hash(file_path)?;
-    let mut cached = cache.lock().unwrap();
-    cached.insert(
-        path,
-        CachedHash {
-            hash: hash.clone(),
-            modified,
-            size,
-        },
-    );
+    // 计算期间文件可能被替换（TOCTOU）：复核快照一致才写缓存，
+    // 否则缓存会变成「新 metadata + 旧字节 hash」的错误映射。
+    let consistent = snapshot_file_metadata(file_path)
+        .is_some_and(|post| post.modified == pre.modified && post.size == pre.size);
+    if consistent {
+        cache.lock().unwrap().insert(
+            path,
+            CachedHash {
+                hash: hash.clone(),
+                modified: pre.modified,
+                size: pre.size,
+            },
+        );
+    }
     Ok(hash)
 }
 
@@ -583,25 +629,30 @@ fn compute_pdf_hash_cached(
 /// file's current metadata, so a subsequent `get_pdf_hash` on the same path
 /// only stats the file. Network-drive files then need a single transfer for
 /// the whole open chain (bytes + hash) instead of two full reads.
+///
+/// `pre_read` 必须是读字节**之前**取得的快照；读后复核不一致则放弃预热——
+/// 读期间文件被替换时，预热会缓存「新 metadata + 旧字节 hash」的错误映射。
 fn warm_pdf_hash_cache(
     cache: &Arc<Mutex<HashMap<PathBuf, CachedHash>>>,
     file_path: &str,
     bytes: &[u8],
+    pre_read: FileSnapshot,
 ) {
     use sha2::{Digest, Sha256};
 
-    let Ok(metadata) = std::fs::metadata(file_path) else {
-        // 拿不到 mtime/size 就无法构造可靠的缓存键，跳过预热（下次
-        // get_pdf_hash 走正常全量计算，行为不变）。
+    // 读后复核：mtime/size 任一变化都说明读到的字节可能已过期。
+    let consistent = snapshot_file_metadata(file_path)
+        .is_some_and(|post| post.modified == pre_read.modified && post.size == pre_read.size);
+    if !consistent {
         return;
-    };
+    }
     let hash = hex::encode(Sha256::digest(bytes));
     cache.lock().unwrap().insert(
         PathBuf::from(file_path),
         CachedHash {
             hash,
-            modified: metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH),
-            size: metadata.len(),
+            modified: pre_read.modified,
+            size: pre_read.size,
         },
     );
 }
@@ -616,9 +667,14 @@ async fn read_pdf_bytes(
     validate_pdf_access(&state, &file_path)?;
     let cache = state.pdf_hash_cache.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        // 读前先 stat 取快照，读完后由 warm_pdf_hash_cache 复核；
+        // 快照取不到（stat/mtime 失败）则不预热，行为退化为两遍读取。
+        let pre_read = snapshot_file_metadata(&file_path);
         let bytes =
             std::fs::read(&file_path).map_err(|e| format!("Failed to read PDF file: {}", e))?;
-        warm_pdf_hash_cache(&cache, &file_path, &bytes);
+        if let Some(pre_read) = pre_read {
+            warm_pdf_hash_cache(&cache, &file_path, &bytes, pre_read);
+        }
         Ok::<_, String>(tauri::ipc::Response::new(bytes))
     })
     .await
@@ -1055,21 +1111,42 @@ fn file_write_lock(path: &Path) -> Result<Arc<Mutex<()>>, String> {
         .clone())
 }
 
+/// 全局自增序号，配合 pid 保证同进程内 atomic_write 临时文件名唯一。
+static ATOMIC_WRITE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 /// Atomically write `content` to `path` by first writing to a temporary file
 /// in the same directory and then renaming it into place. This ensures that
 /// `path` is never in a partially-written state if the process crashes.
 ///
 /// Concurrent writes to the same destination are serialized; different files
 /// can be written concurrently.
+///
+/// 临时文件名保留完整原文件名（含扩展名）并追加 `{pid}-{自增序号}`：
+/// 旧实现用 `path.with_extension("tmp")`，同目录同 stem 不同扩展名的两个
+/// 导出（如 `报告.md` / `报告.pdf`）会共享同一 tmp 文件、两把不同的锁并发
+/// 写导致内容串位。写盘后经 `sync_all` fsync 再 rename，掉电不留半成品。
 fn atomic_write(path: &Path, content: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+
     let file_lock = file_write_lock(path)?;
 
     let _guard = file_lock
         .lock()
         .map_err(|e| format!("Failed to acquire file write lock: {}", e))?;
-    let tmp_path = path.with_extension("tmp");
-    std::fs::write(&tmp_path, content)
-        .map_err(|e| format!("Failed to write temporary file: {}", e))?;
+    let file_name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "atomic".to_string());
+    let seq = ATOMIC_WRITE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let tmp_path = path.with_file_name(format!("{}.tmp-{}-{}", file_name, std::process::id(), seq));
+    {
+        let mut tmp = std::fs::File::create(&tmp_path)
+            .map_err(|e| format!("Failed to create temporary file: {}", e))?;
+        tmp.write_all(content)
+            .map_err(|e| format!("Failed to write temporary file: {}", e))?;
+        tmp.sync_all()
+            .map_err(|e| format!("Failed to sync temporary file: {}", e))?;
+    }
     std::fs::rename(&tmp_path, path)
         .map_err(|e| format!("Failed to rename temporary file: {}", e))?;
     Ok(())
@@ -2289,17 +2366,45 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let print_dir = dir.path().join("print");
         std::fs::create_dir_all(&print_dir).unwrap();
-        let stale = print_dir.join("SpecReader-print-old.pdf");
+        // 过期旧文件：mtime 改到 1 小时前（早于 10 分钟宽限期），应被清理。
+        let stale = print_dir.join("SpecReader-print-stale.pdf");
         std::fs::write(&stale, b"old").unwrap();
+        let stale_mtime = SystemTime::now() - std::time::Duration::from_secs(3600);
+        std::fs::File::options()
+            .write(true)
+            .open(&stale)
+            .unwrap()
+            .set_modified(stale_mtime)
+            .unwrap();
+        // 近期文件（可能正被系统阅读器读取）：宽限期内必须保留。
+        let recent = print_dir.join("SpecReader-print-recent.pdf");
+        std::fs::write(&recent, b"recent").unwrap();
         let keep = print_dir.join("unrelated.txt");
         std::fs::write(&keep, b"keep").unwrap();
 
         let path = write_print_temp_file(&print_dir, b"%PDF-new").unwrap();
 
+        // 新文件保留且内容完整；过期旧文件删除；近期文件与非 pdf 保留。
         assert_eq!(std::fs::read(&path).unwrap(), b"%PDF-new");
         assert!(path.extension().is_some_and(|ext| ext == "pdf"));
         assert!(!stale.exists());
+        assert!(recent.exists());
         assert!(keep.exists());
+    }
+
+    /// 回归（M-B8）：同毫秒连续打印也生成不同文件名，不再互相覆盖。
+    #[test]
+    fn write_print_temp_file_names_are_unique() {
+        let dir = tempfile::tempdir().unwrap();
+        let print_dir = dir.path().join("print");
+
+        let first = write_print_temp_file(&print_dir, b"%PDF-1").unwrap();
+        let second = write_print_temp_file(&print_dir, b"%PDF-2").unwrap();
+
+        assert_ne!(first, second);
+        // 两份都在宽限期内，均保留。
+        assert_eq!(std::fs::read(&first).unwrap(), b"%PDF-1");
+        assert_eq!(std::fs::read(&second).unwrap(), b"%PDF-2");
     }
 
     #[test]
@@ -2331,8 +2436,42 @@ mod tests {
 
         atomic_write(&path, b"content").unwrap();
 
-        let tmp_path = path.with_extension("tmp");
-        assert!(!tmp_path.exists());
+        // tmp 命名已唯一化（`{文件名}.tmp-{pid}-{序号}`），断言目录内无任何
+        // `.tmp-` 残留或目标以外的文件。
+        let leftovers: Vec<String> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|name| name != "data.json")
+            .collect();
+        assert!(leftovers.is_empty(), "tmp 残留: {:?}", leftovers);
+    }
+
+    /// 回归（M-B2）：同 stem 不同扩展名的两个目标（`报告.md` / `报告.pdf`）
+    /// 各持有不同的写锁并发写，旧实现共享同一 `报告.tmp` 会内容串位；
+    /// tmp 名唯一化后并发写互不干扰。
+    #[test]
+    fn atomic_write_same_stem_different_extensions_do_not_collide() {
+        let dir = tempfile::tempdir().unwrap();
+        let md = dir.path().join("报告.md");
+        let pdf = dir.path().join("报告.pdf");
+
+        let md_clone = md.clone();
+        let t = std::thread::spawn(move || {
+            for _ in 0..50 {
+                atomic_write(&md_clone, b"markdown content").unwrap();
+            }
+        });
+        for _ in 0..50 {
+            atomic_write(&pdf, b"%PDF-binary-content").unwrap();
+        }
+        t.join().unwrap();
+
+        assert_eq!(std::fs::read(&md).unwrap(), b"markdown content");
+        assert_eq!(
+            std::fs::read(dir.path().join("报告.pdf")).unwrap(),
+            b"%PDF-binary-content"
+        );
     }
 
     #[test]
@@ -2382,13 +2521,42 @@ mod tests {
         std::fs::write(&path, b"pdf bytes").unwrap();
 
         let path_str = path.to_string_lossy().to_string();
+        let pre_read = snapshot_file_metadata(&path_str).unwrap();
         let bytes = std::fs::read(&path).unwrap();
-        warm_pdf_hash_cache(&state.pdf_hash_cache, &path_str, &bytes);
+        warm_pdf_hash_cache(&state.pdf_hash_cache, &path_str, &bytes, pre_read);
 
         // 预热后 compute_pdf_hash_cached 命中缓存（仅 metadata 校验），
         // 返回值与独立全量计算一致。
         let warmed = compute_pdf_hash_cached(&state.pdf_hash_cache, &path_str).unwrap();
         assert_eq!(warmed, compute_pdf_hash(&path_str).unwrap());
+    }
+
+    /// 回归（M-B3）：读字节期间文件被替换（读后复核快照不一致）时不得
+    /// 预热缓存——否则缓存会持有「新 metadata + 旧字节 hash」的错误映射。
+    #[test]
+    fn warm_pdf_hash_cache_skips_when_file_changed_during_read() {
+        let state = AppState::new();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("test.pdf");
+        std::fs::write(&path, b"pdf bytes").unwrap();
+
+        let path_str = path.to_string_lossy().to_string();
+        // 模拟 read_pdf_bytes 的顺序：读前 stat → 读 → 文件被替换（size 变）
+        // → warm 复核。
+        let pre_read = snapshot_file_metadata(&path_str).unwrap();
+        let bytes = std::fs::read(&path).unwrap();
+        std::fs::write(&path, b"pdf bytes replaced during read").unwrap();
+        warm_pdf_hash_cache(&state.pdf_hash_cache, &path_str, &bytes, pre_read);
+
+        // 未预热：缓存里没有该路径的条目。
+        assert!(!state.pdf_hash_cache.lock().unwrap().contains_key(&path));
+        // 随后的 compute_pdf_hash_cached 全量计算当前文件的真实 hash，
+        // 而不是读到一半的旧字节 hash。
+        use sha2::{Digest, Sha256};
+        let stale = hex::encode(Sha256::digest(b"pdf bytes"));
+        let current = compute_pdf_hash_cached(&state.pdf_hash_cache, &path_str).unwrap();
+        assert_eq!(current, compute_pdf_hash(&path_str).unwrap());
+        assert_ne!(current, stale);
     }
 
     #[test]

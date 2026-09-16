@@ -320,7 +320,10 @@ export async function saveSession(
   try {
     await invoke("save_session", { session });
   } catch (err) {
+    // 同 savePdfData：失败必须抛出，调用方（persistChangedSessions）据此
+    // 不更新已存快照，下次防抖/flush 时重试。
     error(`Failed to save session: ${err}`);
+    throw err;
   }
 }
 

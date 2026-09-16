@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import * as pdfjsLib from "pdfjs-dist";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 import { error as logError } from "../services/logs";
 
 /**
@@ -70,7 +70,7 @@ export function extractDestY(dest: unknown[]): number | null {
  * getDestination 查表）或直接数组；解析失败（坏引用、外部文件跳转）返回 null。
  */
 export async function resolveLinkDest(
-  pdf: pdfjsLib.PDFDocumentProxy,
+  pdf: PDFDocumentProxy,
   rawDest: unknown
 ): Promise<LinkPreviewTarget | null> {
   try {
@@ -127,12 +127,15 @@ export interface UseLinkPreviewsResult {
 export function useLinkPreviews({
   pdf,
 }: {
-  pdf: pdfjsLib.PDFDocumentProxy | null;
+  pdf: PDFDocumentProxy | null;
 }): UseLinkPreviewsResult {
   const [previews, setPreviews] = useState<LinkPreviewState[]>([]);
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const idCounterRef = useRef(0);
+  // 当前悬停目标：resolveLinkDest 是异步的，返回后需据此校验悬停是否仍然
+  // 有效——用户在 resolve 期间移开链接时直接丢弃结果，不再弹出幽灵预览。
+  const currentHoverRef = useRef<LinkHoverInfo | null>(null);
 
   // Live refs：定时器回调读最新值，保证 handleLinkHover 引用稳定
   // （PdfPage 是 memo 组件，回调身份变化会让所有页重渲染）。
@@ -173,6 +176,8 @@ export function useLinkPreviews({
       if (!doc) return;
       const target = await resolveLinkDest(doc, hover.dest);
       if (!target) return;
+      // resolve 期间用户可能已移开或移到其他链接：悬停不再指向本次目标则丢弃。
+      if (currentHoverRef.current !== hover) return;
       const key = previewKey(target);
       // 已存在同目标预览（无论固化与否）：不重复弹，仅取消可能的关闭计时。
       if (previewsRef.current.some((p) => p.key === key)) {
@@ -206,6 +211,7 @@ export function useLinkPreviews({
   const handleLinkHover = useCallback(
     (hover: LinkHoverInfo | null) => {
       clearHoverTimer();
+      currentHoverRef.current = hover;
       if (!hover) {
         scheduleCloseTransient();
         return;

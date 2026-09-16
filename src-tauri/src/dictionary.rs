@@ -152,6 +152,16 @@ fn parse_total_size(response: &reqwest::Response, fallback: u64) -> u64 {
     fallback
 }
 
+/// 解析 `Content-Range: bytes <start>-<end>/<total>` 的起始字节。
+/// 断点续传收到 206 时用它校验响应确实从请求的位置开始：代理 / 镜像
+/// 可能返回错位分段，起点不符还追加写会拼出损坏的 zip。
+/// 头缺失或畸形（如 `bytes */total`）返回 None，按忽略 Range 处理。
+fn parse_content_range_start(value: &str) -> Option<u64> {
+    let range = value.strip_prefix("bytes ")?.trim();
+    let (start, _) = range.split_once('-')?;
+    start.trim().parse::<u64>().ok()
+}
+
 fn format_bytes(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB"];
     let mut size = bytes as f64;
@@ -298,9 +308,30 @@ pub async fn download_dictionary(app_handle: tauri::AppHandle) -> Result<(), Str
         }
 
         if is_partial && start_from > 0 {
-            file.seek(std::io::SeekFrom::Start(start_from))
-                .await
-                .map_err(|e| format!("Failed to seek temp file: {}", e))?;
+            // 校验 206 响应的 Content-Range 起点：代理 / 镜像可能返回错位
+            // 分段，起点不符还 seek 追加写会拼出损坏的 zip。头缺失或解析
+            // 失败同样视为不可信，复用 reset 分支从头重下。
+            let range_start_ok = response
+                .headers()
+                .get(reqwest::header::CONTENT_RANGE)
+                .and_then(|v| v.to_str().ok())
+                .and_then(parse_content_range_start)
+                .is_some_and(|start| start == start_from);
+            if range_start_ok {
+                file.seek(std::io::SeekFrom::Start(start_from))
+                    .await
+                    .map_err(|e| format!("Failed to seek temp file: {}", e))?;
+            } else {
+                log::warn!(
+                    "Dictionary resume: Content-Range start mismatch (expected {}), restarting",
+                    start_from
+                );
+                file.set_len(0)
+                    .await
+                    .map_err(|e| format!("Failed to reset temp file: {}", e))?;
+                start_from = 0;
+                downloaded = 0;
+            }
         }
 
         let mut last_emit = downloaded;
@@ -515,6 +546,17 @@ fn extract_sqlite(
     extract_dir: &std::path::Path,
     final_path: &std::path::Path,
 ) -> Result<(), String> {
+    extract_sqlite_with_limit(zip_path, extract_dir, final_path, MAX_DICT_EXTRACT_BYTES)
+}
+
+/// `max_bytes` 抽成参数便于测试小上限变体；生产路径固定传
+/// MAX_DICT_EXTRACT_BYTES。
+fn extract_sqlite_with_limit(
+    zip_path: &std::path::Path,
+    extract_dir: &std::path::Path,
+    final_path: &std::path::Path,
+    max_bytes: u64,
+) -> Result<(), String> {
     let file = std::fs::File::open(zip_path).map_err(|e| format!("Failed to open zip: {}", e))?;
     let mut archive =
         zip::ZipArchive::new(file).map_err(|e| format!("Failed to read zip: {}", e))?;
@@ -523,11 +565,21 @@ fn extract_sqlite(
     // use non-UTF8 encodings (e.g. GBK) for Chinese file names.
     let mut extracted_size: u64 = 0;
     for i in 0..archive.len() {
-        let mut file = archive
+        let file = archive
             .by_index(i)
             .map_err(|e| format!("Failed to read zip entry: {}", e))?;
         if file.is_dir() {
             continue;
+        }
+
+        // 写盘前预检声明大小：超限直接拒绝，不开始解压该条目（旧实现整条目
+        // 写盘后才比较上限，zip 炸弹会先把磁盘打满）。
+        let remaining = max_bytes.saturating_sub(extracted_size);
+        if file.size() > remaining {
+            return Err(format!(
+                "Extracted dictionary entry exceeds the maximum allowed {} bytes",
+                max_bytes
+            ));
         }
 
         let out_path = extract_dir.join(format!("entry_{}", i));
@@ -537,21 +589,24 @@ fn extract_sqlite(
         }
         let mut out = std::fs::File::create(&out_path)
             .map_err(|e| format!("Failed to create extracted file: {}", e))?;
-        let copied = std::io::copy(&mut file, &mut out)
-            .map_err(|e| format!("Failed to extract file: {}", e))?;
-        if copied > MAX_DICT_EXTRACT_BYTES {
+        // 限量读兜底：声明大小可能被伪造，实际解压字节数同样受限；
+        // 超限即中止并删除半成品 out_path。
+        let mut limited = std::io::Read::take(file, remaining + 1);
+        let copied = match std::io::copy(&mut limited, &mut out) {
+            Ok(n) => n,
+            Err(e) => {
+                let _ = std::fs::remove_file(&out_path);
+                return Err(format!("Failed to extract file: {}", e));
+            }
+        };
+        if copied > remaining {
+            let _ = std::fs::remove_file(&out_path);
             return Err(format!(
                 "Extracted dictionary entry exceeds the maximum allowed {} bytes",
-                MAX_DICT_EXTRACT_BYTES
+                max_bytes
             ));
         }
         extracted_size += copied;
-        if extracted_size > MAX_DICT_EXTRACT_BYTES {
-            return Err(format!(
-                "Extracted dictionary archive exceeds the maximum allowed {} bytes",
-                MAX_DICT_EXTRACT_BYTES
-            ));
-        }
     }
 
     // Locate the SQLite file by its magic header.
@@ -726,5 +781,88 @@ mod tests {
         // 文件不存在时不应 panic。
         remove_corrupt_dict_file(&final_path);
         assert!(!final_path.exists());
+    }
+
+    #[test]
+    fn parse_content_range_start_parses_valid_headers() {
+        assert_eq!(parse_content_range_start("bytes 100-199/500"), Some(100));
+        assert_eq!(parse_content_range_start("bytes 0-99/500"), Some(0));
+        assert_eq!(
+            parse_content_range_start("bytes 1048576-2097151/12345678"),
+            Some(1048576)
+        );
+    }
+
+    #[test]
+    fn parse_content_range_start_rejects_malformed_headers() {
+        // 416 响应形态、单位不符、缺起始值、空串都视为不可信。
+        assert_eq!(parse_content_range_start("bytes */500"), None);
+        assert_eq!(parse_content_range_start("items 100-199/500"), None);
+        assert_eq!(parse_content_range_start("bytes -199/500"), None);
+        assert_eq!(parse_content_range_start("bytes abc-199/500"), None);
+        assert_eq!(parse_content_range_start(""), None);
+    }
+
+    /// 用 zip crate 在内存构造 zip 写入临时文件。
+    fn build_test_zip(dir: &tempfile::TempDir, entries: &[(&str, &[u8])]) -> std::path::PathBuf {
+        use std::io::Write;
+        let zip_path = dir.path().join("test.zip");
+        let file = std::fs::File::create(&zip_path).unwrap();
+        let mut writer = zip::ZipWriter::new(file);
+        let options = zip::write::SimpleFileOptions::default()
+            .compression_method(zip::CompressionMethod::Stored);
+        for (name, data) in entries {
+            writer.start_file(name, options).unwrap();
+            writer.write_all(data).unwrap();
+        }
+        writer.finish().unwrap();
+        zip_path
+    }
+
+    /// 回归（M-B7）：声明大小超限的条目在写盘前即被拒绝，且不产生最终文件。
+    #[test]
+    fn extract_sqlite_rejects_oversized_entry_before_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        let payload = [SQLITE_MAGIC, b"padding-padding-padding"].concat();
+        let zip_path = build_test_zip(&dir, &[("entry.bin", &payload)]);
+        let extract_dir = dir.path().join("extract");
+        std::fs::create_dir_all(&extract_dir).unwrap();
+        let final_path = dir.path().join("out.sqlite");
+
+        // 上限设为小于条目声明大小 → 预检直接拒绝。
+        let limit = payload.len() as u64 - 1;
+        let result = extract_sqlite_with_limit(&zip_path, &extract_dir, &final_path, limit);
+        assert!(result.is_err());
+        assert!(!final_path.exists());
+        // 预检发生在创建 out 文件之前，extract 目录内不留半成品。
+        assert!(std::fs::read_dir(&extract_dir).unwrap().next().is_none());
+    }
+
+    /// 多条目累计超限同样被拒绝（逐条预检的 remaining 会随已解压量收缩）。
+    #[test]
+    fn extract_sqlite_rejects_cumulative_size_over_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let zip_path = build_test_zip(&dir, &[("a.bin", &[b'a'; 8]), ("b.bin", &[b'b'; 8])]);
+        let extract_dir = dir.path().join("extract");
+        std::fs::create_dir_all(&extract_dir).unwrap();
+        let final_path = dir.path().join("out.sqlite");
+
+        let result = extract_sqlite_with_limit(&zip_path, &extract_dir, &final_path, 10);
+        assert!(result.is_err());
+        assert!(!final_path.exists());
+    }
+
+    /// 小上限下的正常路径：内容在上限内时解压成功并按魔数定位落盘。
+    #[test]
+    fn extract_sqlite_succeeds_within_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let payload = [SQLITE_MAGIC, b"ok"].concat();
+        let zip_path = build_test_zip(&dir, &[("entry.bin", &payload)]);
+        let extract_dir = dir.path().join("extract");
+        std::fs::create_dir_all(&extract_dir).unwrap();
+        let final_path = dir.path().join("out.sqlite");
+
+        extract_sqlite_with_limit(&zip_path, &extract_dir, &final_path, 1024).unwrap();
+        assert_eq!(std::fs::read(&final_path).unwrap(), payload);
     }
 }

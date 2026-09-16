@@ -129,6 +129,39 @@ describe("useLinkPreviews", () => {
     expect(result.current.previews).toHaveLength(0);
   });
 
+  it("does not show the preview when the mouse leaves while the destination is resolving", async () => {
+    let resolvePageIndex: ((pageIndex: number) => void) | null = null;
+    const pdf = {
+      getDestination: vi.fn(async () => null),
+      getPageIndex: vi.fn(
+        () =>
+          new Promise<number>((resolve) => {
+            resolvePageIndex = resolve;
+          })
+      ),
+    };
+    const { result } = setup(pdf as never);
+    act(() => result.current.handleLinkHover(makeHover(ARRAY_DEST)));
+    // 悬停计时触发，resolve 在飞（getPageIndex 尚未返回）。
+    act(() => {
+      vi.advanceTimersByTime(LINK_PREVIEW_HOVER_DELAY_MS);
+    });
+    expect(pdf.getPageIndex).toHaveBeenCalled();
+
+    // resolve 返回前移开链接：迟到的结果应被丢弃，不弹幽灵预览。
+    act(() => result.current.handleLinkHover(null));
+    await act(async () => {
+      resolvePageIndex!(11);
+    });
+    expect(result.current.previews).toHaveLength(0);
+
+    // 宽限期过后依然为空，预览不会常驻。
+    act(() => {
+      vi.advanceTimersByTime(LINK_PREVIEW_CLOSE_GRACE_MS * 2);
+    });
+    expect(result.current.previews).toHaveLength(0);
+  });
+
   it("keeps the preview open when the mouse enters the popup within the grace period", async () => {
     const { result } = setup();
     act(() => result.current.handleLinkHover(makeHover(ARRAY_DEST)));

@@ -13,8 +13,8 @@ interface PrintModalProps {
   currentPage: number;
   /** 生成打印 PDF 并用系统阅读器打开；抛错时由弹窗展示友好文案 */
   onPrint: (options: PrintOptions) => Promise<void>;
-  /** 生成打印 PDF 并弹系统保存对话框导出 */
-  onExport: (options: PrintOptions) => Promise<void>;
+  /** 生成打印 PDF 并弹系统保存对话框导出；返回 false 表示用户取消（弹窗保持打开） */
+  onExport: (options: PrintOptions) => Promise<boolean>;
   onClose: () => void;
 }
 
@@ -63,10 +63,12 @@ export default function PrintModal({
       const options = resolveOptions();
       if (kind === "print") {
         await onPrint(options);
+        onClose();
       } else {
-        await onExport(options);
+        // 用户在系统保存对话框取消（返回 false）时不关弹窗。
+        const ok = await onExport(options);
+        if (ok) onClose();
       }
-      onClose();
     } catch (err) {
       // 原始报错只进日志，UI 展示统一友好文案
       logError(`Print ${kind} failed: ${err}`);

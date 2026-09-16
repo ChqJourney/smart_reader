@@ -169,12 +169,14 @@ describe("annotations service", () => {
       });
     });
 
-    it("swallows backend errors", async () => {
+    it("rethrows backend errors so callers can keep dirty state and retry", async () => {
+      // 保存失败必须抛给上层：usePersistence.persistDirtyHashes 捕获后保留
+      // 脏标记、下次防抖/flush 重试；吞错会让上层误以为已落盘而清掉脏标记。
       mockInvoke.mockRejectedValue(new Error("fail"));
 
       await expect(
         savePdfData("/path/to/file.pdf", { annotations: [], sessionIds: [] })
-      ).resolves.toBeUndefined();
+      ).rejects.toThrow("fail");
     });
   });
 

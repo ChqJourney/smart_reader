@@ -1,12 +1,14 @@
 import { useTranslation } from "react-i18next";
-import { useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import { Annotation } from "../services/annotations";
 import { InterpretationSession } from "../services/sessions";
 import { llmErrorToMessage } from "../services/llmError";
 import Icon from "./Icon";
-import MarkdownRenderer from "./MarkdownRenderer";
 import { useClampedPopupPosition } from "../hooks/useClampedPopupPosition";
 import "./InterpretPopup.css";
+
+// Markdown 渲染链懒加载，见 AiChatPanel。
+const MarkdownRenderer = lazy(() => import("./MarkdownRenderer"));
 
 interface InterpretPopupProps {
   annotation: Annotation;
@@ -103,7 +105,11 @@ export default function InterpretPopup({
               </p>
             ) : (
               <>
-                {answer ? <MarkdownRenderer content={answer} /> : null}
+                {answer ? (
+                  <Suspense fallback={null}>
+                    <MarkdownRenderer content={answer} />
+                  </Suspense>
+                ) : null}
                 {isStreaming && (
                   <div
                     className={`interpret-popup-loading ${answer ? "with-content" : ""}`}

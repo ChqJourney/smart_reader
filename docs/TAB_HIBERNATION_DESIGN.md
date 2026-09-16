@@ -69,11 +69,12 @@
 
 ### 4.1 两条预算线（任一超限即触发休眠）
 
-1. **字节预算 `BYTE_BUDGET`**：记账值 = Σ（存活 tab 的文件大小 × 2）（pdfCacheRef 一份 + pdfjs 一份的经验系数）。
+1. **字节预算 `BYTE_BUDGET`**：记账值 = Σ（存活 tab 的文件大小 × 2）（pdfCacheRef 一份 + pdfjs 一份的经验系数）+ 存活 viewer 数 × `BITMAP_BYTES_PER_ALIVE_VIEWER`（canvas 位图估算 52MB/viewer：可见页 ±1 预加载共约 3 页 × A4@scale 1.5 × DPR 2 ≈ 17.5MB/页；单页受 `MAX_CANVAS_PIXELS` = 16M 像素 ≈ 64MB 封顶）。
    - 建议初值：macOS 400MB，Windows 800MB（WKWebView jetsam 更激进），实测后校准（见 §9）。
+   - 位图记账的影响：macOS 400MB 预算下约 7-8 个存活 viewer 即触发休眠，小文件多 tab 场景不再零记账。
 2. **存活 viewer 数上限 `ALIVE_VIEWER_BUDGET`**：存活 viewer（active + hidden + 分屏两屏）总数上限。
-   - 管的是字节记账管不到的开销：pdfjs 解析态、canvas 位图、O(页数) 的 DOM 与 IntersectionObserver（50 个 1MB 小文件碰不到字节线，但 50 套 DOM/observer 照样拖垮交互）。
-   - 建议初值 15，实测后校准。
+   - 管的是字节记账管不到的开销：pdfjs 解析态、O(页数) 的 DOM 与 IntersectionObserver（50 个 1MB 小文件的字节记账有限，但 50 套 DOM/observer 照样拖垮交互）。
+   - 建议初值 15，实测后校准。注意位图并入字节记账后，该线在默认预算下通常晚于字节线触发（16 个 viewer 仅位图估算即超 800MB），保留为防御性上限。
 
 ### 4.2 记账实现
 
@@ -191,13 +192,13 @@ tabs.tabs.map((tab) => (
 
 ### 9.2 验收指标
 
-| 指标                                  | 目标                                     | 测量                    |
-| ------------------------------------- | ---------------------------------------- | ----------------------- |
-| 记账值（Σ文件大小×2）                 | 永远 ≤ BYTE_BUDGET（单文件超限放行除外） | 单测断言 + 日志         |
-| 存活 viewer 数                        | 永远 ≤ ALIVE_VIEWER_BUDGET               | 单测断言                |
-| 唤醒延迟（激活休眠 tab → 首屏可交互） | 典型 < 500ms，10MB 文件 < 1s             | e2e 计时                |
-| 唤醒后状态保真                        | pageNum / scale / scrollTop 与休眠前一致 | 单测（useTabs 层）+ e2e |
-| 开 50 个 tab 后切活跃 tab             | < 150ms，无感知卡顿                      | e2e + 手动 soak         |
+| 指标                                          | 目标                                     | 测量                    |
+| --------------------------------------------- | ---------------------------------------- | ----------------------- |
+| 记账值（Σ文件大小×2 + 存活 viewer×52MB 位图） | 永远 ≤ BYTE_BUDGET（单文件超限放行除外） | 单测断言 + 日志         |
+| 存活 viewer 数                                | 永远 ≤ ALIVE_VIEWER_BUDGET               | 单测断言                |
+| 唤醒延迟（激活休眠 tab → 首屏可交互）         | 典型 < 500ms，10MB 文件 < 1s             | e2e 计时                |
+| 唤醒后状态保真                                | pageNum / scale / scrollTop 与休眠前一致 | 单测（useTabs 层）+ e2e |
+| 开 50 个 tab 后切活跃 tab                     | < 150ms，无感知卡顿                      | e2e + 手动 soak         |
 
 ### 9.3 测试要点
 

@@ -2,14 +2,23 @@
  * Tab 休眠的内存预算记账与 LRU 候选选择（纯函数，便于单测）。
  *
  * 设计见 docs/TAB_HIBERNATION_DESIGN.md §4/§5：
- * - 两条预算线任一超限即触发休眠：字节预算（Σ存活文件大小×2）与
- *   存活 viewer 数上限；
+ * - 两条预算线任一超限即触发休眠：字节预算（Σ存活文件大小×2 +
+ *   存活 viewer 数×位图估算）与存活 viewer 数上限；
  * - 记账确定性、不依赖 performance.memory；
  * - 候选耗尽仍超预算时放行（预算是体验保障不是访问控制）。
  */
 
 /** 字节记账经验系数：pdfCacheRef 一份 + pdfjs 一份。 */
 const BYTES_PER_FILE_MULTIPLIER = 2;
+
+/**
+ * 每个存活 viewer 的 canvas 位图记账估算：keep-alive 下可见页 ±1
+ * 预加载共约 3 页常驻位图，A4 612×792pt @ scale 1.5 × DPR 2
+ * ≈ 1836×2376 px × 4B ≈ 17.5MB/页 → 约 52MB/viewer。
+ * 单页位图受 PdfPage 的 MAX_CANVAS_PIXELS（16M 像素 ≈ 64MB）封顶，
+ * 深缩放 + 高 DPR 不会使该估算无限放大。
+ */
+export const BITMAP_BYTES_PER_ALIVE_VIEWER = 52 * 1024 * 1024;
 
 /** 字节预算：macOS WKWebView jetsam 更激进，取更保守的值（实测后再校准）。 */
 const BYTE_BUDGET_MACOS = 400 * 1024 * 1024;
@@ -44,7 +53,8 @@ export interface BudgetContext {
 }
 
 export interface BudgetUsage {
-  /** 记账字节数：Σ（存活 tab 文件大小 × 2），按 filePath 去重。 */
+  /** 记账字节数：Σ（存活 tab 文件大小 × 2，按 filePath 去重）
+   *  + 存活 viewer 数 × BITMAP_BYTES_PER_ALIVE_VIEWER（canvas 位图估算）。 */
   bytes: number;
   /** 存活 viewer 数（非休眠 tab 数）。 */
   aliveViewers: number;
@@ -72,7 +82,8 @@ export function getByteBudget(userAgent?: string): number {
 
 /**
  * 预测加入 newFile 后的记账值。同一路径多 tab 共享一份字节缓存，
- * 记账按 filePath 去重只计一份。
+ * 记账按 filePath 去重只计一份；每个存活 viewer（含 newFile 带来的）
+ * 另记一份 canvas 位图估算。
  */
 export function projectUsage(
   tabs: readonly BudgetTab[],
@@ -91,7 +102,7 @@ export function projectUsage(
     bytesByPath.set(newFile.filePath, newFile.fileSize ?? 0);
     aliveViewers += 1;
   }
-  let bytes = 0;
+  let bytes = aliveViewers * BITMAP_BYTES_PER_ALIVE_VIEWER;
   for (const size of bytesByPath.values()) {
     bytes += size * BYTES_PER_FILE_MULTIPLIER;
   }

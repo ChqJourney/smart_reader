@@ -6,11 +6,12 @@ import {
   useState,
   useCallback,
   useMemo,
+  lazy,
+  Suspense,
   forwardRef,
   useImperativeHandle,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import * as pdfjsLib from "pdfjs-dist";
 import { Annotation } from "../services/annotations";
 import { InterpretationSession } from "../services/sessions";
 import { AppSettings } from "../services/settings";
@@ -19,13 +20,7 @@ import Icon from "./Icon";
 import PdfPage from "./PdfPage";
 import PageRail from "./PageRail";
 import PageJumpPanel from "./PageJumpPanel";
-import PrintModal from "./PrintModal";
-import {
-  generatePrintPdf,
-  openPrintPreview,
-  exportPrintPdf,
-} from "../services/print";
-import { PrintOptions } from "../services/printPdf";
+import type { PrintOptions } from "../services/printPdf";
 import {
   computeFitToWidthScale,
   computeCenteredScrollLeft,
@@ -45,9 +40,9 @@ import { usePanScroll } from "../hooks/usePanScroll";
 import LinkPreviewPopup from "./LinkPreviewPopup";
 import "./PdfViewer.css";
 
-import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+// 打印链（pdf-lib + pdfjs 栅格兜底）与 PrintModal 懒加载：仅在用户发起
+// 打印时加载；workerSrc 由 services/pdfjs.ts 的 loadPdfjs 统一设置。
+const PrintModal = lazy(() => import("./PrintModal"));
 
 // PageViewportInfo now lives in useViewportManager (the single source of truth
 // for viewport entries). Re-exported here so PdfPage and existing tests can
@@ -908,8 +903,12 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
     // 打印：生成带批注贴图的 PDF（字节取 App 级缓存，未命中回退后端读取），
     // 再交给系统阅读器打印或导出。与 viewer 渲染生命周期解耦。
+    // 打印链（services/print → printPdf → pdf-lib）动态 import，仅在用户
+    // 发起打印时加载。
     const handlePrint = useCallback(
       async (options: PrintOptions) => {
+        const { generatePrintPdf, openPrintPreview } =
+          await import("../services/print");
         const pdfBytes = await generatePrintPdf(
           {
             filePath,
@@ -926,6 +925,8 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
     const handlePrintExport = useCallback(
       async (options: PrintOptions): Promise<boolean> => {
+        const { generatePrintPdf, exportPrintPdf } =
+          await import("../services/print");
         const pdfBytes = await generatePrintPdf(
           {
             filePath,
@@ -1392,13 +1393,15 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           )}
 
           {printOpen && numPages > 0 && (
-            <PrintModal
-              numPages={numPages}
-              currentPage={pageNum}
-              onPrint={handlePrint}
-              onExport={handlePrintExport}
-              onClose={() => setPrintOpen(false)}
-            />
+            <Suspense fallback={null}>
+              <PrintModal
+                numPages={numPages}
+                currentPage={pageNum}
+                onPrint={handlePrint}
+                onExport={handlePrintExport}
+                onClose={() => setPrintOpen(false)}
+              />
+            </Suspense>
           )}
 
           {flashPage !== null && (

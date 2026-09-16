@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { StashItem } from "../services/stash";
 import {
   InterpretationSession,
@@ -12,11 +12,14 @@ import { buildShareMarkdown, exportSessionMarkdown } from "../services/share";
 import { error } from "../services/logs";
 import Icon from "./Icon";
 import IconSelect from "./IconSelect";
-import MarkdownRenderer from "./MarkdownRenderer";
 import ThinkingIndicator from "./ThinkingIndicator";
 import ToolCallsIndicator from "./ToolCallsIndicator";
 import ContextWidget from "./ContextWidget";
 import "./AiChatPanel.css";
+
+// Markdown 渲染链（react-markdown + remark/rehype + katex）懒加载：
+// 首次出现 AI 文本时才加载对应 chunk，katex css 随异步 chunk 移出入口。
+const MarkdownRenderer = lazy(() => import("./MarkdownRenderer"));
 
 export type Tab = "stash" | "sessions";
 
@@ -601,7 +604,9 @@ export default function AiChatPanel({
                             onGotoStash={onGotoStash}
                           />
                         ) : (
-                          <MarkdownRenderer content={message.content} />
+                          <Suspense fallback={null}>
+                            <MarkdownRenderer content={message.content} />
+                          </Suspense>
                         )}
                         {message.role === "assistant" &&
                           message.content.trim() !== "" && (
@@ -998,7 +1003,9 @@ function UserMessageContent({
           ))}
         </div>
       )}
-      <MarkdownRenderer content={shown} />
+      <Suspense fallback={null}>
+        <MarkdownRenderer content={shown} />
+      </Suspense>
       {needsCollapse && (
         <button
           type="button"

@@ -569,8 +569,9 @@ describe("useTabs", () => {
 
 describe("useTabs 休眠（hibernation）", () => {
   const MB = 1024 * 1024;
-  // jsdom UA 不含 windows/mac → 走默认字节预算 400MB（×2 系数记账）。
-  const FILE_SIZE = 100 * MB; // 每个文件记账 200MB，3 个文件即超预算
+  // jsdom UA 不含 windows/mac → 走默认字节预算 400MB（文件 ×2 系数 + 每存活
+  // viewer 52MB 位图记账）。
+  const FILE_SIZE = 50 * MB; // 每存活 tab 记账 100MB+52MB=152MB，3 个存活即超预算（456MB）
   let now: number;
 
   function mockFileSize(size: number) {
@@ -633,7 +634,7 @@ describe("useTabs 休眠（hibernation）", () => {
 
     now += 10 * 60 * 1000;
     await openPath(result, "/test/b.pdf");
-    // a+b 记账 400MB，未超预算，不休眠
+    // a+b 记账 304MB，未超预算，不休眠
     expect(result.current.tabs.every((t) => !t.hibernated)).toBe(true);
 
     now += 10 * 60 * 1000;
@@ -653,7 +654,7 @@ describe("useTabs 休眠（hibernation）", () => {
 
     await openPath(result, "/test/a.pdf");
     await openPath(result, "/test/b.pdf");
-    await openPath(result, "/test/c.pdf"); // 600MB 超预算，但全部在保护窗口内
+    await openPath(result, "/test/c.pdf"); // 456MB 超预算，但全部在保护窗口内
 
     expect(result.current.tabs).toHaveLength(3);
     expect(result.current.tabs.every((t) => !t.hibernated)).toBe(true);
@@ -686,7 +687,8 @@ describe("useTabs 休眠（hibernation）", () => {
     expect(woken.hibernated).toBe(false);
     // 复位与 pendingGotoPage 同一次 setTabs 完成，挂载时 initialState 已就绪
     expect(woken.pendingGotoPage).toBe(3);
-    // 唤醒后 a+b+c 记账 600MB 超预算 → b 成为最久未激活的候选被休眠
+    // 唤醒后 a+b+c 记账 456MB 超预算 → b 成为最久未激活的候选被休眠
+    //（休眠 b 后 a+c 记账 304MB 回落，c 保持存活）
     expect(tabs[1].hibernated).toBe(true);
     expect(tabs[2].hibernated).toBeFalsy();
   });

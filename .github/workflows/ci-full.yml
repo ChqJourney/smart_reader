@@ -100,6 +100,27 @@ jobs:
         working-directory: ./src-tauri
         run: cargo audit
 
+  # Windows-only 代码（#[cfg(target_os = "windows")]：Edge 打印、
+  # open_default_apps_settings、single-instance 分支）在 ubuntu 上不参与编译，
+  # 这个 job 让它们在每次 master 集成时就被 cargo check 验证，不等发版才暴露。
+  rust-windows-check:
+    name: Rust check (windows target)
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo artifacts
+        uses: swatinem/rust-cache@v2
+
+      - name: Cargo check (no link, no WebView2 SDK needed)
+        working-directory: ./src-tauri
+        run: cargo check --locked
+
   e2e:
     name: E2E (chromium + webkit)
     runs-on: ubuntu-latest

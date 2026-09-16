@@ -56,7 +56,7 @@ describe("TranslatePopup", () => {
     expect(document.querySelector(".loading-spinner")).toBeInTheDocument();
   });
 
-  it("keeps loading spinner below existing content while streaming", () => {
+  it("keeps loading spinner below existing content while streaming", async () => {
     (streamChatCompletion as ReturnType<typeof vi.fn>).mockImplementation(
       async function* () {
         await new Promise<void>(() => {});
@@ -77,7 +77,8 @@ describe("TranslatePopup", () => {
       />
     );
 
-    expect(screen.getByText(/已有翻译内容/)).toBeInTheDocument();
+    // MarkdownRenderer 已改 React.lazy 懒加载，已有内容异步出现
+    expect(await screen.findByText(/已有翻译内容/)).toBeInTheDocument();
     expect(screen.getByText(/翻译中…/)).toBeInTheDocument();
     expect(document.querySelector(".loading-spinner")).toBeInTheDocument();
   });

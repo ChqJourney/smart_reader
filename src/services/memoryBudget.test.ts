@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ALIVE_VIEWER_BUDGET,
+  BITMAP_BYTES_PER_ALIVE_VIEWER,
   BudgetContext,
   BudgetTab,
   RECENT_ACTIVITY_WINDOW_MS,
@@ -11,6 +12,8 @@ import {
 
 const MB = 1024 * 1024;
 const NOW = 1_000_000_000;
+/** 每个存活 viewer 的位图记账（52MB），测试内简写。 */
+const BITMAP = BITMAP_BYTES_PER_ALIVE_VIEWER;
 
 function makeTab(partial: Partial<BudgetTab> & { id: string }): BudgetTab {
   return {
@@ -46,24 +49,24 @@ describe("projectUsage", () => {
       makeTab({ id: "d", filePath: "/sleeping.pdf", hibernated: true }),
     ];
     expect(projectUsage(tabs)).toEqual({
-      bytes: (10 + 5) * MB * 2,
+      bytes: (10 + 5) * MB * 2 + 3 * BITMAP,
       aliveViewers: 3,
     });
   });
 
-  it("fileSize 未知按 0 记账", () => {
+  it("fileSize 未知按 0 记账（位图仍按 viewer 记账）", () => {
     const tabs = [makeTab({ id: "a", fileSize: undefined })];
-    expect(projectUsage(tabs).bytes).toBe(0);
+    expect(projectUsage(tabs).bytes).toBe(BITMAP);
   });
 
   it("newFile 计入预测；与存活 tab 同路径时不重复计", () => {
     const tabs = [makeTab({ id: "a", filePath: "/same.pdf" })];
     expect(
       projectUsage(tabs, { filePath: "/new.pdf", fileSize: 20 * MB })
-    ).toEqual({ bytes: (10 + 20) * MB * 2, aliveViewers: 2 });
+    ).toEqual({ bytes: (10 + 20) * MB * 2 + 2 * BITMAP, aliveViewers: 2 });
     expect(
       projectUsage(tabs, { filePath: "/same.pdf", fileSize: 99 * MB })
-    ).toEqual({ bytes: 10 * MB * 2, aliveViewers: 1 });
+    ).toEqual({ bytes: 10 * MB * 2 + BITMAP, aliveViewers: 1 });
   });
 });
 
@@ -81,12 +84,13 @@ describe("selectHibernateCandidates", () => {
       makeTab({ id: "oldest", lastActivatedAt: NOW - 60 * 60 * 1000 }),
       makeTab({ id: "middle", lastActivatedAt: NOW - 30 * 60 * 1000 }),
     ];
-    // 3×10MB×2 = 60MB，预算 45MB：休眠 1 个最老的即可回落。
+    // 3×10MB×2 文件 + 3×52MB 位图 = 216MB，预算 150MB：休眠 1 个最老的
+    // （144MB）即可回落。
     const selected = selectHibernateCandidates(
       tabs,
       makeCtx(),
       undefined,
-      45 * MB
+      150 * MB
     );
     expect(selected).toEqual(["oldest"]);
   });
@@ -101,7 +105,7 @@ describe("selectHibernateCandidates", () => {
       tabs,
       makeCtx({ activeTabId: "active", secondaryTabId: "secondary" }),
       undefined,
-      25 * MB // 需休眠 1 个
+      150 * MB // 需休眠 1 个
     );
     expect(selected).toEqual(["victim"]);
   });
@@ -111,11 +115,12 @@ describe("selectHibernateCandidates", () => {
       makeTab({ id: "recent", lastActivatedAt: NOW - 60 * 1000 }),
       makeTab({ id: "old" }),
     ];
+    // 2 tab 记账 144MB，预算 100MB：recent 受保护，只能休眠 old（72MB）回落。
     const selected = selectHibernateCandidates(
       tabs,
       makeCtx(),
       undefined,
-      25 * MB
+      100 * MB
     );
     expect(selected).toEqual(["old"]);
   });
@@ -126,7 +131,7 @@ describe("selectHibernateCandidates", () => {
       tabs,
       makeCtx({ streamingTabIds: new Set(["streaming"]) }),
       undefined,
-      25 * MB
+      100 * MB
     );
     expect(selected).toEqual(["idle"]);
   });
@@ -137,11 +142,13 @@ describe("selectHibernateCandidates", () => {
       makeTab({ id: "shared2", filePath: "/same.pdf" }),
       makeTab({ id: "unique", filePath: "/unique.pdf" }),
     ];
+    // 文件去重后 40MB + 3×52MB 位图 = 196MB，预算 150MB：
+    // shared1/shared2 不可选，休眠 unique（124MB）回落。
     const selected = selectHibernateCandidates(
       tabs,
       makeCtx(),
       undefined,
-      25 * MB
+      150 * MB
     );
     expect(selected).toEqual(["unique"]);
   });
@@ -155,9 +162,9 @@ describe("selectHibernateCandidates", () => {
       tabs,
       makeCtx(),
       { filePath: "/new.pdf", fileSize: 10 * MB },
-      // newFile 与 samePath 同路径去重后记账 40MB，超预算；
-      // 休眠 samePath 不释放字节，只能休眠 other。
-      35 * MB
+      // newFile 与 samePath 同路径去重后记账 40MB 文件 + 2×52MB 位图 =
+      // 144MB，超预算；休眠 samePath 不释放字节，只能休眠 other。
+      100 * MB
     );
     expect(selected).toEqual(["other"]);
   });
@@ -183,13 +190,35 @@ describe("selectHibernateCandidates", () => {
       })
     );
     // t0 最老。存活 17 > 15，需休眠 2 个回落到 15。
+    // 位图记账后默认 400MB 预算下 ~8 个 viewer 即触字节线，本用例注入
+    // 足够大的字节预算，专测 viewer 数预算线本身。
+    const selected = selectHibernateCandidates(
+      tabs,
+      makeCtx(),
+      undefined,
+      2048 * MB
+    );
+    expect(selected).toEqual(["t0", "t1"]);
+  });
+
+  it("小文件多 tab：位图记账使字节预算提前触发休眠", () => {
+    // 文件本身仅 8×1MB×2 = 16MB，远低于 400MB 预算；
+    // 但每存活 viewer 位图记账 52MB，8×(2+52) = 432MB 超预算，
+    // 休眠 1 个最老 tab 后 7×54 = 378MB 回落。
+    const tabs = Array.from({ length: 8 }, (_, i) =>
+      makeTab({
+        id: `t${i}`,
+        fileSize: 1 * MB,
+        lastActivatedAt: NOW - RECENT_ACTIVITY_WINDOW_MS - 60_000 + i * 1000,
+      })
+    );
     const selected = selectHibernateCandidates(
       tabs,
       makeCtx(),
       undefined,
       BYTE_BUDGET
     );
-    expect(selected).toEqual(["t0", "t1"]);
+    expect(selected).toEqual(["t0"]);
   });
 
   it("唤醒场景：被唤醒 tab 作为 active 受到保护", () => {
@@ -201,7 +230,7 @@ describe("selectHibernateCandidates", () => {
       tabs,
       makeCtx({ activeTabId: "waking" }),
       undefined,
-      25 * MB
+      100 * MB
     );
     expect(selected).toEqual(["victim"]);
   });

@@ -12,7 +12,7 @@
 - **前端**：React 18 + TypeScript 5.6 + Vite 6
 - **PDF 渲染**：pdfjs-dist 4.8
 - **Markdown 渲染**：react-markdown
-- **AI 调用**：OpenAI 兼容 API，经 Rust 后端代理转发，API Key 存系统钥匙串、不进入 webview；多平台预设（DeepSeek / Kimi / 百炼 / GLM / 火山引擎 / OpenRouter / OpenAI / 自定义），默认平台 DeepSeek、默认模型 deepseek-v4-flash
+- **AI 调用**：OpenAI 兼容 API，经 Rust 后端代理转发，API Key 存系统钥匙串、不进入 webview；多平台预设（DeepSeek / Kimi / 小米 MiMo / 百炼 / GLM / 火山引擎 / OpenRouter / OpenAI / 自定义），默认平台 DeepSeek、默认模型 deepseek-v4-flash
 
 ## 开发环境要求
 
@@ -90,7 +90,7 @@ cd src-tauri && cargo test
 │   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录、追问）
 │   │   ├── SettingsModal.tsx / RecentFilesBar.tsx / CustomInterpretModal.tsx
 │   │   └── MarkdownRenderer.tsx / ContextWidget.tsx / ThinkingIndicator.tsx / Icon.tsx 等
-│   ├── hooks/                         # 可复用状态逻辑（18 个）
+│   ├── hooks/                         # 可复用状态逻辑（20 个）
 │   │   └── useTabs / usePersistence / useRecentFiles / useSplitView /
 │   │       usePdfDocument / useViewportManager / useZoomAnchor / useSearchDomain /
 │   │       useScrollPageSync / useTabRestore / useWordLookup / useDictionaryStatus /
@@ -112,7 +112,7 @@ cd src-tauri && cargo test
 │   ├── capabilities/                  # Tauri 权限配置
 │   ├── Cargo.toml
 │   └── tauri.conf.json
-├── e2e/                               # Playwright E2E 测试（6 个 spec + fixtures）
+├── e2e/                               # Playwright E2E 测试（12 个 spec + fixtures）
 ├── scripts/                           # 辅助脚本（版本同步、发版、测试 PDF 生成）
 ├── package.json / vite.config.ts / playwright.config.ts / tsconfig.json
 └── eslint.config.js
@@ -130,7 +130,7 @@ cd src-tauri && cargo test
 - 解读生成蓝色标记，并在右侧面板展示可点击跳转的解读记录，支持多轮追问。
 - 自定义解读：把多个暂存片段一次性发给 LLM。
 - **解读 / 自定义解读 / 追问时启用 Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文，辅助验证条款引用与跨页内容；轮次上限默认 20，超限优雅收尾并提示。
-- LLM 请求经 Rust 后端代理转发：API Key 只存系统钥匙串、按平台分条目，不再暴露给 webview；多平台预设（deepseek / kimi / bailian / glm / volcengine / openrouter / openai / custom）。
+- LLM 请求经 Rust 后端代理转发：API Key 只存系统钥匙串、按平台分条目，不再暴露给 webview；多平台预设（deepseek / kimi / xiaomimimo / bailian / glm / volcengine / openrouter / openai / custom）。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
 - 最近文件面板：置顶、搜索、失效置灰、上次读到的页码回写、分屏对照打开。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。

@@ -12,7 +12,7 @@ A desktop AI assistant for testing & certification engineers, designed to reduce
 - **Frontend**: React 18 + TypeScript 5.6 + Vite 6
 - **PDF rendering**: pdfjs-dist 4.8
 - **Markdown rendering**: react-markdown
-- **AI integration**: OpenAI-compatible APIs, proxied through the Rust backend — API keys live in the system keychain and never enter the webview. Presets for DeepSeek / Kimi / Bailian / GLM / Volcengine / OpenRouter / OpenAI / custom endpoints (default: DeepSeek, model `deepseek-v4-flash`)
+- **AI integration**: OpenAI-compatible APIs, proxied through the Rust backend — API keys live in the system keychain and never enter the webview. Presets for DeepSeek / Kimi / Xiaomi MiMo / Bailian / GLM / Volcengine / OpenRouter / OpenAI / custom endpoints (default: DeepSeek, model `deepseek-v4-flash`)
 
 ## Requirements
 
@@ -90,7 +90,7 @@ See [TESTING.md](./TESTING.md) for details.
 │   │   ├── AiChatPanel.tsx            # Right panel (stash, interpretation history, follow-ups)
 │   │   ├── SettingsModal.tsx / RecentFilesBar.tsx / CustomInterpretModal.tsx
 │   │   └── MarkdownRenderer.tsx / ContextWidget.tsx / ThinkingIndicator.tsx / Icon.tsx etc.
-│   ├── hooks/                         # Reusable state logic (18 hooks)
+│   ├── hooks/                         # Reusable state logic (20 hooks)
 │   │   └── useTabs / usePersistence / useRecentFiles / useSplitView /
 │   │       usePdfDocument / useViewportManager / useZoomAnchor / useSearchDomain /
 │   │       useScrollPageSync / useTabRestore / useWordLookup / useDictionaryStatus /
@@ -112,7 +112,7 @@ See [TESTING.md](./TESTING.md) for details.
 │   ├── capabilities/                  # Tauri permission config
 │   ├── Cargo.toml
 │   └── tauri.conf.json
-├── e2e/                               # Playwright E2E tests (6 specs + fixtures)
+├── e2e/                               # Playwright E2E tests (12 specs + fixtures)
 ├── scripts/                           # Helper scripts (version sync, release, sample PDF generation)
 ├── package.json / vite.config.ts / playwright.config.ts / tsconfig.json
 └── eslint.config.js

@@ -431,7 +431,7 @@ describe("AiChatPanel", () => {
     expect(onDeleteSession).toHaveBeenCalledWith("session-1");
   });
 
-  it("enters full-screen chatbox when clicking a session", () => {
+  it("enters full-screen chatbox when clicking a session", async () => {
     const sessions = [
       makeSession({
         id: "session-1",
@@ -447,7 +447,8 @@ describe("AiChatPanel", () => {
     fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
     fireEvent.click(screen.getByText(/source text/));
 
-    expect(screen.getByText(/回答/)).toBeInTheDocument();
+    // MarkdownRenderer 已改 React.lazy 懒加载，正文异步出现
+    expect(await screen.findByText(/回答/)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /返回解读记录/i })
     ).toBeInTheDocument();
@@ -456,7 +457,7 @@ describe("AiChatPanel", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("calls onGotoSession and still enters chatbox when clicking a session", () => {
+  it("calls onGotoSession and still enters chatbox when clicking a session", async () => {
     const sessions = [
       makeSession({
         id: "session-1",
@@ -475,10 +476,10 @@ describe("AiChatPanel", () => {
 
     expect(onGotoSession).toHaveBeenCalledTimes(1);
     expect(onGotoSession).toHaveBeenCalledWith(sessions[0]);
-    expect(screen.getByText(/回答/)).toBeInTheDocument();
+    expect(await screen.findByText(/回答/)).toBeInTheDocument();
   });
 
-  it("returns to session list when back button is clicked", () => {
+  it("returns to session list when back button is clicked", async () => {
     const sessions = [
       makeSession({
         id: "session-1",
@@ -493,7 +494,7 @@ describe("AiChatPanel", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
     fireEvent.click(screen.getByText(/source text/));
-    expect(screen.getByText(/回答/)).toBeInTheDocument();
+    expect(await screen.findByText(/回答/)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /返回解读记录/i }));
 
@@ -501,7 +502,7 @@ describe("AiChatPanel", () => {
     expect(screen.getByRole("tab", { name: /解读记录/i })).toBeInTheDocument();
   });
 
-  it("enters chatbox when expandedSessionId prop is provided", () => {
+  it("enters chatbox when expandedSessionId prop is provided", async () => {
     const sessions = [
       makeSession({
         id: "session-1",
@@ -527,13 +528,13 @@ describe("AiChatPanel", () => {
       />
     );
 
-    expect(screen.getByText(/回答/)).toBeInTheDocument();
+    expect(await screen.findByText(/回答/)).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /返回解读记录/i })
     ).toBeInTheDocument();
   });
 
-  it("enters the new session chatbox when expandSessionRequest nonce changes", () => {
+  it("enters the new session chatbox when expandSessionRequest nonce changes", async () => {
     const sessions = [
       makeSession({
         id: "session-1",
@@ -564,7 +565,7 @@ describe("AiChatPanel", () => {
         onFollowUp={vi.fn()}
       />
     );
-    expect(screen.getByText(/旧回答/)).toBeInTheDocument();
+    expect(await screen.findByText(/旧回答/)).toBeInTheDocument();
 
     // 用户又发起了一个解读：面板应直接切入新会话 chatbox
     rerender(
@@ -579,7 +580,7 @@ describe("AiChatPanel", () => {
         onFollowUp={vi.fn()}
       />
     );
-    expect(screen.getByText(/新回答/)).toBeInTheDocument();
+    expect(await screen.findByText(/新回答/)).toBeInTheDocument();
     expect(screen.queryByText(/旧回答/)).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /返回解读记录/i })
@@ -602,7 +603,7 @@ describe("AiChatPanel", () => {
     expect(screen.queryByText(/新回答/)).not.toBeInTheDocument();
   });
 
-  it("returns to list when active session is removed", () => {
+  it("returns to list when active session is removed", async () => {
     const sessions = [
       makeSession({
         id: "session-1",
@@ -614,7 +615,7 @@ describe("AiChatPanel", () => {
       sessions,
       expandedSessionId: "session-1",
     });
-    expect(screen.getByText(/问题/)).toBeInTheDocument();
+    expect(await screen.findByText(/问题/)).toBeInTheDocument();
 
     rerender(
       <AiChatPanel
@@ -660,7 +661,7 @@ describe("AiChatPanel", () => {
     ).toBeInTheDocument();
   });
 
-  it("collapses long first user message and shows source cards", () => {
+  it("collapses long first user message and shows source cards", async () => {
     const longPrompt = "模板提示词".repeat(60);
     const sessions = [
       makeSession({
@@ -680,10 +681,10 @@ describe("AiChatPanel", () => {
     // 来源片段卡片（点击跳原文）
     const sourceCard = screen.getByRole("button", { name: /file\.pdf/ });
     expect(sourceCard).toBeInTheDocument();
-    // 长 prompt 默认折叠，展开后可见全文
+    // 长 prompt 默认折叠，展开后可见全文（MarkdownRenderer 懒加载，异步出现）
     expect(screen.queryByText(longPrompt)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "展开" }));
-    expect(screen.getByText(longPrompt)).toBeInTheDocument();
+    expect(await screen.findByText(longPrompt)).toBeInTheDocument();
   });
 
   it("calls onFollowUp when submitting follow-up", () => {

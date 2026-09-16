@@ -1,4 +1,4 @@
-import * as pdfjsLib from "pdfjs-dist";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 import i18n from "i18next";
 import {
   getOpenFileHashes,
@@ -7,12 +7,7 @@ import {
   isAuthorized,
   setOpenPdfNumPages,
 } from "./pdfToolsRegistry";
-
-import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-
-// 与 PdfViewer / print.ts 同一处全局配置；幂等设置一次，保证无 viewer 环境
-// （如纯工具会话）下截图渲染也能工作。
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+import { loadPdfjs } from "./pdfjs";
 
 /** 截图区域：归一化坐标（0-1），原点在页面左上角。 */
 export interface ToolImageRegion {
@@ -47,7 +42,7 @@ export interface ToolSession {
 }
 
 interface LoadedDoc {
-  pdf: pdfjsLib.PDFDocumentProxy;
+  pdf: PDFDocumentProxy;
   pageTextCache: Map<number, Promise<string>>;
 }
 
@@ -97,7 +92,7 @@ function parseRegion(args: unknown): ToolImageRegion | null | string {
  * JPEG 无透明通道，先铺白底再渲染，否则页面空白处会编码成黑色。
  */
 async function renderPageImage(
-  pdf: pdfjsLib.PDFDocumentProxy,
+  pdf: PDFDocumentProxy,
   fileHash: string,
   fileName: string,
   pageNumber: number,
@@ -172,9 +167,7 @@ async function renderPageImage(
 export function beginToolSession(): ToolSession {
   const docs = new Map<string, LoadedDoc>();
 
-  const loadDoc = async (
-    fileHash: string
-  ): Promise<pdfjsLib.PDFDocumentProxy> => {
+  const loadDoc = async (fileHash: string): Promise<PDFDocumentProxy> => {
     const existing = docs.get(fileHash);
     if (existing) return existing.pdf;
 
@@ -188,7 +181,8 @@ export function beginToolSession(): ToolSession {
     }
 
     const bytes = await getPdfBytes(meta.filePath);
-    const loadingTask = pdfjsLib.getDocument({ data: bytes });
+    const { getDocument } = await loadPdfjs();
+    const loadingTask = getDocument({ data: bytes });
     const pdf = await loadingTask.promise;
     setOpenPdfNumPages(fileHash, pdf.numPages);
     docs.set(fileHash, { pdf, pageTextCache: new Map() });

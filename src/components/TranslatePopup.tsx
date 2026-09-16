@@ -1,8 +1,7 @@
 import { useTranslation } from "react-i18next";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Annotation } from "../services/annotations";
 import Icon from "./Icon";
-import MarkdownRenderer from "./MarkdownRenderer";
 import {
   buildSelectionPrompt,
   buildSystemPrompt,
@@ -13,6 +12,9 @@ import { useStreaming } from "../hooks/useStreaming";
 import { useClampedPopupPosition } from "../hooks/useClampedPopupPosition";
 import { useDrag } from "../hooks/useDrag";
 import "./TranslatePopup.css";
+
+// Markdown 渲染链懒加载，见 AiChatPanel。
+const MarkdownRenderer = lazy(() => import("./MarkdownRenderer"));
 
 interface TranslatePopupProps {
   annotation: Annotation;
@@ -192,7 +194,11 @@ export default function TranslatePopup({
           <p className="translate-popup-error">{error}</p>
         ) : (
           <>
-            {localContent ? <MarkdownRenderer content={localContent} /> : null}
+            {localContent ? (
+              <Suspense fallback={null}>
+                <MarkdownRenderer content={localContent} />
+              </Suspense>
+            ) : null}
             {isStreaming && (
               <div
                 className={`translate-popup-loading ${localContent ? "with-content" : ""}`}

@@ -17,7 +17,7 @@
 - 自定义标题栏（无边框窗口 `decorations: false`）：品牌区拖动 + 最近文件 / 打开 PDF（Ctrl/Cmd+O）/ 快捷键（「?」按钮）/ 设置 + 窗口控制按钮；中部为快捷状态区（TitleBarToggles）：悬停查词开关（仅词典已下载可用时可见）、智能文档查阅开关（仅当前平台已配置 API Key 时可见，开启前弹确认框提示 token 消耗大增，portal 到 body 避开标题栏 backdrop-filter 的 fixed 包含块）、当前平台/模型纯展示（仅已配置 Key 时可见），切换即时持久化到 settings。
 - 键盘快捷键速查浮层（ShortcutsModal）：`Ctrl/Cmd+/` 或标题栏「?」按钮开合，按页面导航 / 搜索 / 视图 / 面板分组以 kbd 样式列出全部快捷键；清单在 `ShortcutsModal.tsx` 的 `GROUPS` 常量中维护，新增快捷键需同步。
 - 首次启动配置向导（SetupWizard）：选平台 → 填 Key → 测试连接，全部平台未配置 Key 时才自动弹出，设置里可重跑。
-- 多 PDF Tab 同时打开（数量不设固定上限，由内存预算调度休眠，见下），单视图下存活 tab 的 PdfViewer **常驻挂载（keep-alive）**：切 tab 仅切换 `display:none`，canvas 位图 / 滚动位置 / 页码 / 工具栏状态全部保留，切换瞬时完成；隐藏 viewer 通过 `isActive` prop 冻结 IO 可见性上报与滚动页码同步，激活时带回的同页 `pendingGotoPage` 由 useTabRestore 直接清除不跳转。**Tab 休眠（hibernation）**：打开新 tab 时若预测超预算（字节预算 = Σ存活文件大小×2，macOS 400MB / Windows 800MB；或存活 viewer 数 > 15，`services/memoryBudget.ts`），自动休眠最久未激活的隐藏 tab——卸载其 viewer、释放 `pdfCacheRef` 字节缓存，tab 外壳与状态记录（pageNum / scale / scrollTop / fileSize / lastActivatedAt）保留；active / 分屏 secondary / 5 分钟内激活过 / 有流式会话 / 共享路径的 tab 受保护，候选耗尽仍超预算则放行。唤醒透明：激活休眠 tab 时同拍复位 `hibernated` + `pendingGotoPage`，viewer 重新挂载走现有冷启动恢复路径（useTabRestore），唤醒同样会按预算顶替休眠他人；另有纯防御性硬上限 100 个 tab。支持左右并排对照两份 PDF。进入并排的入口：鼠标拖拽非激活 tab 到阅读区（带 drop-zone 遮罩，释放在阅读区外等于取消）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter（目标 tab 休眠时先经 `wakeTab` 唤醒）。首次同时打开 ≥2 个 PDF 时显示一次性并排对照引导气泡（`.split-coachmark`，点「知道了」或 12 秒超时后写入 localStorage 不再复现；气泡本身 `pointer-events:none` 不遮挡操作）。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
+- 多 PDF Tab 同时打开（数量不设固定上限，由内存预算调度休眠，见下），单视图下存活 tab 的 PdfViewer **常驻挂载（keep-alive）**：切 tab 仅切换 `display:none`，canvas 位图 / 滚动位置 / 页码 / 工具栏状态全部保留，切换瞬时完成；隐藏 viewer 通过 `isActive` prop 冻结 IO 可见性上报与滚动页码同步，激活时带回的同页 `pendingGotoPage` 由 useTabRestore 直接清除不跳转。**Tab 休眠（hibernation）**：打开新 tab 时若预测超预算（字节预算 = Σ存活文件大小×2 + 存活 viewer 数×52MB（canvas 位图估算，`BITMAP_BYTES_PER_ALIVE_VIEWER`），macOS 400MB / Windows 800MB；或存活 viewer 数 > 15，`services/memoryBudget.ts`），自动休眠最久未激活的隐藏 tab——卸载其 viewer、释放 `pdfCacheRef` 字节缓存，tab 外壳与状态记录（pageNum / scale / scrollTop / fileSize / lastActivatedAt）保留；active / 分屏 secondary / 5 分钟内激活过 / 有流式会话 / 共享路径的 tab 受保护，候选耗尽仍超预算则放行。唤醒透明：激活休眠 tab 时同拍复位 `hibernated` + `pendingGotoPage`，viewer 重新挂载走现有冷启动恢复路径（useTabRestore），唤醒同样会按预算顶替休眠他人；另有纯防御性硬上限 100 个 tab。支持左右并排对照两份 PDF。进入并排的入口：鼠标拖拽非激活 tab 到阅读区（带 drop-zone 遮罩，释放在阅读区外等于取消）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter（目标 tab 休眠时先经 `wakeTab` 唤醒）。首次同时打开 ≥2 个 PDF 时显示一次性并排对照引导气泡（`.split-coachmark`，点「知道了」或 12 秒超时后写入 localStorage 不再复现；气泡本身 `pointer-events:none` 不遮挡操作）。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
 - PDF 本地渲染、文本选区、缩放、页码跳转、连续滚动阅读模式。
 - 拖拽 PDF 文件到窗口内直接打开（Tauri 系统级文件拖放，`hooks/useFileDrop.ts` 监听 `onDragDropEvent`，全窗口遮罩提示，非 PDF 静默忽略；复用 `openPdfByPath` 打开链路）。遮罩带看门狗：`enter`/`over` 事件喂定时器，事件流停顿 1.5s 或窗口 blur 时强制隐藏（慢网盘下原生 leave/drop 可能延迟或丢失）。打开链路为单遍读取：`addTab` 先 `read_pdf_bytes`（后端同遍算 SHA-256 预热 hash 缓存），随后 `get_pdf_hash` 仅 metadata 校验即命中，字节直接写入 App 级 `pdfCacheRef` 供 viewer 渲染——局域网文件从两遍网络传输降为一遍；路径去重优先于一切 I/O（重复拖入已打开文件零读盘）；在飞期间 `tabs.openingPaths` 驱动底部「正在打开」toast，失败经 `showMessage` 弹窗提示不再静默。注意：开启系统拖放后 WebView2 会接管页面内全部 HTML5 拖放事件，tab→分屏的拖拽因此是鼠标拖拽实现（mousedown + 阈值 + 全局 mousemove/mouseup，App.tsx 内局部实现），不是 HTML5 DnD。
 - 右侧页码滑轨（PageRail）：替代原生垂直滚动条（CSS 隐藏，水平滚动条保留），拖动 / 悬停时显示页码 tooltip；拖动直接驱动连续滚动的 scrollTop。
@@ -167,6 +167,7 @@ npm install
 │   │   ├── llm.ts                     # streamChatCompletion（Channel 桥接后端代理）、Prompt 模板（i18n 化）
 │   │   ├── llmError.ts                # LlmError → 友好中文文案的唯一入口（原始报错只进日志，不进 UI）
 │   │   ├── pdfToolsRegistry.ts        # 当前打开 PDF 的轻量元数据注册表（Agent Tools 授权数据源）
+│   │   ├── pdfjs.ts                   # pdfjs-dist 懒加载入口（loadPdfjs：动态 import + 一次性 workerSrc 设置，首屏不打入 pdfjs chunk）
 │   │   ├── print.ts                   # 打印编排（缓存优先取字节 → 生成 → 系统阅读器打开 / 保存对话框导出）
 │   │   ├── printPdf.ts                # 打印 PDF 生成（矢量直绘优先——同 context 不用 copyPages；解析失败、源文件加密或内容对象丢失时 pdfjs 整页栅格兜底）
 │   │   ├── printBoxRenderer.ts        # 批注浮层 canvas 光栅化为 PNG（复刻浮层样式，2x 清晰度，免嵌 CJK 字体）
@@ -261,7 +262,7 @@ npm run tauri build -- --no-bundle
    - 在 Windows runner 用 `tauri-action` 构建 NSIS 安装包，自动生成 `.sig` 与 `latest.json`，创建 **Draft Release**（notes 取自 CHANGELOG 对应段落），并附加独立 exe `SpecReader AI v{version}.exe`。
 4. 下载 Draft Release 中的安装包人工冒烟测试，确认无误后在 Release 页面点击 Publish。发布后 `latest.json` 生效，客户端启动 3 秒后自动检查发现新版本并提示下载重启。
 
-> 更新源：updater endpoints 按序回退——首选 GitHub Release 的 `latest.json`，备用 Gitee 固定 release（`https://gitee.com/patrickchq/SpecReader/releases/download/updater/latest.json`，tag 固定为 `updater`，由人工保证存在）。GitHub Release 点 Publish 后 `.github/workflows/gitee-sync.yml` 自动触发（也可手动 dispatch 补同步，tag 可不带 `v` 前缀）：全量下载 release 资产，由 `scripts/sync-gitee-release.mjs` 按「signature == `.sig` 文件内容」反查更新包文件名（Tauri v2 NSIS 更新包是 `-setup.exe` + `.sig`，不产 `.nsis.zip`），把 `latest.json` 的下载地址改写为 Gitee 附件直链，再通过 Gitee API 先删旧附件后上传。依赖 GitHub Secret `GITEE_TOKEN`（Gitee 私人令牌，projects 权限）。
+> 更新源：updater endpoints 按序回退——首选 Gitee 固定 release（`https://gitee.com/patrickchq/SpecReader/releases/download/updater/latest.json`，tag 固定为 `updater`，由人工保证存在；国内用户避免白等 GitHub 超时），备用 GitHub Release 的 `latest.json`。GitHub Release 点 Publish 后 `.github/workflows/gitee-sync.yml` 自动触发（也可手动 dispatch 补同步，tag 可不带 `v` 前缀）：全量下载 release 资产，由 `scripts/sync-gitee-release.mjs` 按「signature == `.sig` 文件内容」反查更新包文件名（Tauri v2 NSIS 更新包是 `-setup.exe` + `.sig`，不产 `.nsis.zip`），把 `latest.json` 的下载地址改写为 Gitee 附件直链，再通过 Gitee API 先删旧附件后上传。依赖 GitHub Secret `GITEE_TOKEN`（Gitee 私人令牌，projects 权限）。
 
 > 注意：Tauri 更新包签名私钥保存在 `~/.tauri/specreader.key`，需配置为 GitHub Secret `TAURI_SIGNING_PRIVATE_KEY`。
 
@@ -317,13 +318,13 @@ cd src-tauri && cargo test
 - `delete_session(sessionId: string)`：删除会话文件及关联的截图图片目录。
 - `save_session_image(sessionId: string, data: Vec<u8>)`：截图工具图片原子落盘到 `sessions/{session_id}/`（前端按 `Array.from(bytes)` 传输，同 `export_binary_file` 约定），返回文件名引用。
 - `read_session_image(sessionId: string, file: string)`：读回截图图片字节（`file` 仅允许纯文件名，防路径穿越），追问回放图片消息用。
-- `authorize_pdf_path(filePath: string)`：将用户通过对话框选择的 PDF 路径加入后端授权白名单，`read_pdf_bytes` / `get_pdf_hash` 会校验该白名单。
+- `authorize_pdf_path(filePath: string)`：将用户通过对话框选择的 PDF 路径加入后端授权白名单，`read_pdf_bytes` / `get_pdf_hash` 会校验该白名单；要求文件真实存在，白名单与校验两侧均以 canonicalize 后的路径比对（防符号链接 / `..` 别名绕过）。
 - `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表（`RecentFile` 含 `pinned` 置顶与 `lastPage` 阅读页码字段，旧数据通过 `#[serde(default)]` 兼容）。
 - `check_files_exist(paths: string[])`：批量检查文件是否仍存在于磁盘，最近文件面板用它置灰已移动/删除的条目。
-- `export_text_file(file_path: string, content: string)`：把用户经系统保存对话框选定的任意路径写入文本文件（解读分享导出 .md 使用，原子写入，不走 PDF 授权白名单）。
-- `export_binary_file(file_path: string, data: Vec<u8>)`：同上但写二进制（带批注打印 PDF 导出）；data 经 serde_json 数组传输（前端 `Array.from(bytes)`，嵌套 Uint8Array 会被序列化成对象不能用）。
-- `open_print_file(request: ipc::Request)`：接收 IPC 原始字节（前端 `invoke(cmd, bytes)`），落盘 `<AppData>/SpecReader/print/`（每次只保留最新一份）后用平台指定阅读器打开（macOS `open -a Preview` / Windows 经 `rundll32 url.dll,FileProtocolHandler` 调起 `microsoft-edge:` 协议打开 Edge——刻意不走 `cmd /c start`，cmd 的 %var% 变量扩展会吃掉 URL 中非 ASCII 用户名的百分号编码），不走系统默认 PDF 关联防止回环到本应用。
+- `export_text_file(file_path: string, content: string)`：把用户经系统保存对话框选定的路径写入文本文件（解读分享导出 .md 使用，原子写入，不走 PDF 授权白名单）；扩展名白名单 .md/.txt，拒绝写入 AppData 内部路径。
+- `export_binary_file(file_path: string, data: Vec<u8>)`：同上但写二进制（带批注打印 PDF 导出，扩展名白名单 .pdf）；data 经 serde_json 数组传输（前端 `Array.from(bytes)`，嵌套 Uint8Array 会被序列化成对象不能用）。
+- `open_print_file(request: ipc::Request)`：接收 IPC 原始字节（前端 `invoke(cmd, bytes)`），落盘 `<AppData>/SpecReader/print/`（文件名带纳秒+序号唯一后缀，先写新文件再清理 mtime 早于 10 分钟宽限期的旧 pdf，保护刚 spawn 给阅读器的文件）后用平台指定阅读器打开（macOS `open -a Preview` / Windows 经 `rundll32 url.dll,FileProtocolHandler` 调起 `microsoft-edge:` 协议打开 Edge——刻意不走 `cmd /c start`，cmd 的 %var% 变量扩展会吃掉 URL 中非 ASCII 用户名的百分号编码），不走系统默认 PDF 关联防止回环到本应用。
 - `open_path(path: string)`：仅允许打开 `http://` / `https://` URL，禁止本地文件路径与目录。
 - `open_logs_dir()`：打开应用日志目录，供用户导出排查。
 - `check_dictionary()`：检查本地 ECDICT 词典是否存在及大小。
@@ -338,7 +339,7 @@ cd src-tauri && cargo test
 
 ### 6.2 数据持久化
 
-后端将数据存在 **AppData** 目录下，根目录由 `src-tauri/src/paths.rs` 的 `app_data_dir()` 统一返回 `<AppData>/SpecReader`；因 bundle identifier 变更，首次访问会把旧目录 `<data_dir>/photonee/SpecReader` 递归迁移到新位置：
+后端将数据存在 **AppData** 目录下，根目录由 `src-tauri/src/paths.rs` 的 `app_data_dir()` 统一返回 `<AppData>/SpecReader`；因 bundle identifier 变更，首次访问会把旧目录 `<data_dir>/photonee/SpecReader` 事务化迁移到新位置（先整体拷到同级 `SpecReader.migrating-<pid>` 临时目录，全部成功后原子 rename；失败清理临时目录下次启动重试，符号链接指向文件则复制目标内容、指向目录或 dangling 则跳过不中止）：
 
 ```
 <AppData>/
@@ -355,7 +356,7 @@ cd src-tauri && cargo test
     ├── logs/
     │   └── app.log                # 应用运行日志（默认 Warn 级别，可在设置中调整，保留最近 3 个文件各 10 MB）
     ├── print/
-    │   └── SpecReader-print-{ts}.pdf  # 打印临时文件（open_print_file 每次清理旧文件，只留最新一份）
+    │   └── SpecReader-print-{nanos}-{seq}.pdf  # 打印临时文件（文件名唯一；open_print_file 先写新文件，再清理 mtime 早于 10 分钟宽限期的旧 pdf）
     ├── settings.json              # LLM 平台/模型 + 目标语言 + Agent Tools 开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式
     └── recent_files.json          # 最近打开文件列表
 ```
@@ -534,9 +535,10 @@ runSessionStream（usePersistence.ts）
 
 - **PDF 不上传云端**：文件仅在本地读取和渲染。
 - **仅主动选择的内容发送给 LLM**：翻译 / 解读只发送用户选中的文本片段，不会自动上传整篇文档。
-- **API Key 存储**：API Key 通过 Rust `keyring` crate 按平台分条目存入系统钥匙串（`llm_api_key_{platform_id}`，旧单条目自动迁移）；`settings.json` 中只保留空占位，且 `load_settings` 返回前强制 `apiKey=""`，Key 不回传 webview（LLM 请求走后端代理）。钥匙串不可用时 `save_settings` 会明确拒绝保存并返回错误，不回退明文存储。
+- **API Key 存储**：API Key 通过 Rust `keyring` crate 按平台分条目存入系统钥匙串（`llm_api_key_{platform_id}`，旧单条目自动迁移，迁移确认新条目写入成功后才删旧条目）；`settings.json` 中只保留空占位，且 `load_settings` 返回前强制 `apiKey=""`，Key 不回传 webview（LLM 请求走后端代理）。钥匙串不可用时 `save_settings` 会明确拒绝保存并返回错误，不回退明文存储。
+- **Base URL 强制 https**：后端发 LLM 请求前校验 baseUrl scheme，明文 `http://` 仅放行 localhost / 127.0.0.1 / ::1（本地网关），其余拒绝并以 `insecureBaseUrl` 错误提示（见 §6.3 与 `llmError.ts`）。
 - **不要在前端日志中打印 API Key 或完整文件内容**；`services/logs.ts` 的 `redactSensitiveInfo` 会统一脱敏 `sk-` / `Bearer` / 主目录路径。
-- Tauri CSP 已配置（`tauri.conf.json`：`default-src 'self'`；`connect-src 'self'` + localhost + `https:` 等），引入新的外部资源时需同步收紧。
+- Tauri CSP 已配置（`tauri.conf.json`：`default-src 'self'`；`connect-src 'self'` + localhost，不含 `https:`——webview 无任何外联需求，引入新的外部资源时需同步收紧）。webview 视为半信任面：导出命令限扩展名白名单 + 拒绝 AppData 内部路径，PDF 授权要求文件真实存在且按 canonicalize 路径比对。
 
 ## 10. 常见改动注意事项
 
@@ -589,12 +591,12 @@ runSessionStream（usePersistence.ts）
 
 CI 分层触发，避免每次 push 都跑全量：
 
-| Workflow       | 触发                               | 内容                                                                                                             |
-| -------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `ci-quick.yml` | 非 master 分支 push                | type-check / lint / 单元测试（目标 < 5 分钟）                                                                    |
-| `ci-full.yml`  | master push / PR                   | 上述全部 + 前端 build + cargo test / clippy / audit + 双浏览器 E2E + npm audit（三个 job 并行，Rust 依赖有缓存） |
-| `release.yml`  | 手动 dispatch（输入版本号）        | 一键发布，见 5.3 发版流程                                                                                        |
-| `landing.yml`  | master 上 `landing/**` 变更 / 手动 | 部署 GitHub Pages                                                                                                |
+| Workflow       | 触发                               | 内容                                                                                                                                                             |
+| -------------- | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ci-quick.yml` | 非 master 分支 push                | type-check / lint / 单元测试（目标 < 5 分钟）                                                                                                                    |
+| `ci-full.yml`  | master push / PR                   | 上述全部 + 前端 build + cargo test / clippy / audit + Windows cargo check（windows-latest 原生 job）+ 双浏览器 E2E + npm audit（四个 job 并行，Rust 依赖有缓存） |
+| `release.yml`  | 手动 dispatch（输入版本号）        | 一键发布，见 5.3 发版流程                                                                                                                                        |
+| `landing.yml`  | master 上 `landing/**` 变更 / 手动 | 部署 GitHub Pages                                                                                                                                                |
 
 约定：
 
@@ -623,7 +625,7 @@ cd src-tauri && cargo test
 
 ## 13. 版本信息
 
-- 前端版本：`0.9.11`
-- Tauri 应用版本：`0.9.11`
+- 前端版本：`1.0.0`
+- Tauri 应用版本：`1.0.0`
 - 产品名称：`SpecReader AI`
 - 应用标识：`com.photonee.specreader`

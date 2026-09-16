@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import * as pdfjsLib from "pdfjs-dist";
+import type { PDFDocumentLoadingTask, PDFDocumentProxy } from "pdfjs-dist";
 import { error as logError } from "../services/logs";
+import { loadPdfjs } from "../services/pdfjs";
 
 /**
  * Outline (bookmark) tree item, mirroring pdf.js' outline shape. Exported here
@@ -23,7 +24,7 @@ export interface UsePdfDocumentOptions {
 }
 
 export interface UsePdfDocumentResult {
-  pdf: pdfjsLib.PDFDocumentProxy | null;
+  pdf: PDFDocumentProxy | null;
   numPages: number;
   isLoading: boolean;
   error: string;
@@ -47,7 +48,7 @@ export function usePdfDocument({
   cachedBytes,
   onPdfLoaded,
 }: UsePdfDocumentOptions): UsePdfDocumentResult {
-  const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
+  const [pdf, setPdf] = useState<PDFDocumentProxy | null>(null);
   const [numPages, setNumPages] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
@@ -79,11 +80,13 @@ export function usePdfDocument({
     setIsLoading(true);
 
     let isCancelled = false;
-    let loadingTask: pdfjsLib.PDFDocumentLoadingTask | null = null;
-    let loadedPdf: pdfjsLib.PDFDocumentProxy | null = null;
+    let loadingTask: PDFDocumentLoadingTask | null = null;
+    let loadedPdf: PDFDocumentProxy | null = null;
 
     const loadPdf = async () => {
       try {
+        const pdfjsLib = await loadPdfjs();
+        if (isCancelled) return;
         let data: Uint8Array;
         if (cachedBytes) {
           // Copy before handing to PDF.js so its worker cannot detach the

@@ -26,6 +26,7 @@
       "panels": "面板与窗口"
     },
     "prevNextPage": "上一页 / 下一页",
+    "prevNextScreen": "上一屏 / 下一屏",
     "scrollPage": "上下滚动",
     "firstLast": "跳到文档开头 / 结尾",
     "gotoPage": "跳转到指定页",

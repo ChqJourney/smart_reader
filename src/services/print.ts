@@ -1,13 +1,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
-import * as pdfjsLib from "pdfjs-dist";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 import { Annotation } from "./annotations";
 import { buildPrintPdf, PageRasterizer, PrintOptions } from "./printPdf";
-
-import pdfjsWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-
-// 与 PdfViewer 同一处全局配置；在此幂等设置一次，保证打印路径独立可用。
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+import { loadPdfjs } from "./pdfjs";
 
 /**
  * 打印编排层：取 PDF 字节（App 级缓存优先，未命中回退后端读取）→ 生成
@@ -44,10 +40,13 @@ const PAGE_RASTER_SCALE = 2;
 function makeRasterizerFactory(
   pdfBytes: Uint8Array
 ): () => Promise<PageRasterizer> {
-  let docPromise: Promise<pdfjsLib.PDFDocumentProxy> | null = null;
-  const loadDoc = () => {
-    // slice() 防止 pdfjs worker 传输（detach）共享 buffer
-    docPromise ??= pdfjsLib.getDocument({ data: pdfBytes.slice() }).promise;
+  let docPromise: Promise<PDFDocumentProxy> | null = null;
+  const loadDoc = async () => {
+    if (!docPromise) {
+      const { getDocument } = await loadPdfjs();
+      // slice() 防止 pdfjs worker 传输（detach）共享 buffer
+      docPromise = getDocument({ data: pdfBytes.slice() }).promise;
+    }
     return docPromise;
   };
   return async () => {

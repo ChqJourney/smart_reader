@@ -70,5 +70,6 @@ export type LlmError =
   | { kind: "serverError"; status: number; detail: string }
   | { kind: "streamInterrupted"; partialContent: string }
   | { kind: "invalidConfig"; field: string; detail: string }
+  | { kind: "insecureBaseUrl"; detail: string }
   | { kind: "toolError"; toolName: string; detail: string }
   | { kind: "unknown"; status: number; body: string };

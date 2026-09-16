@@ -101,7 +101,10 @@ fn validate_pdf_access(state: &AppState, file_path: &str) -> Result<(), String> 
         );
         return Err(format!("Not a PDF file: {}", file_path));
     }
-    if !state.is_path_allowed(path) {
+    // 白名单中存的是 canonicalize 后的路径，比对前对传入路径做同样处理。
+    let canonical = std::fs::canonicalize(path)
+        .map_err(|_| format!("PDF file does not exist: {}", file_path))?;
+    if !state.is_path_allowed(&canonical) {
         log::warn!(
             "Security audit: unauthorized PDF access attempt: {}",
             sanitize_path_for_log(file_path)
@@ -329,52 +332,124 @@ async fn authorize_pdf_path(
     state: tauri::State<'_, AppState>,
     file_path: String,
 ) -> Result<(), String> {
-    if !is_pdf_path(&file_path) {
+    authorize_pdf_path_core(state.inner(), &file_path)
+}
+
+fn authorize_pdf_path_core(state: &AppState, file_path: &str) -> Result<(), String> {
+    if !is_pdf_path(file_path) {
         return Err(format!("Not a PDF file: {}", file_path));
     }
-    state.authorize_path(std::path::Path::new(&file_path));
+    let path = std::path::Path::new(file_path);
+    // 威胁模型：webview 视为半信任面（可能被 XSS 污染），授权命令自身收窄——
+    // 只授权磁盘上真实存在的 PDF 文件，并以 canonicalize 后的路径入白名单，
+    // 消除符号链接 / `..` 别名绕过。残余风险（把磁盘已有 PDF 读进 webview
+    // 内存）由 CSP 无外联通道（connect-src 不含 https:）兜底。
+    if !path.is_file() {
+        log::warn!(
+            "Security audit: authorize attempt for non-existent/non-file path: {}",
+            sanitize_path_for_log(file_path)
+        );
+        return Err(format!("PDF file does not exist: {}", file_path));
+    }
+    let canonical =
+        std::fs::canonicalize(path).map_err(|e| format!("Failed to resolve PDF path: {}", e))?;
+    state.authorize_path(&canonical);
     Ok(())
 }
 
 /// 导出用户可见文本文件（如分享出去的解读 Markdown）到系统保存对话框选定的
-/// 任意路径。与批注/会话写入不同，该路径由用户显式选择，不走 PDF 授权白名单。
+/// 路径。与批注/会话写入不同，该路径由用户显式选择，不走 PDF 授权白名单；
+/// 但 webview 是半信任面，命令仍收窄：扩展名白名单（.md / .txt）+
+/// 拒绝 AppData 内部路径（防止覆写应用自身数据），见 export_target_guard。
 #[tauri::command]
-fn export_text_file(file_path: String, content: String) -> Result<(), String> {
-    export_text_file_core(&file_path, &content)
+fn export_text_file(
+    app: tauri::AppHandle,
+    file_path: String,
+    content: String,
+) -> Result<(), String> {
+    let app_data_dir = paths::app_data_dir(&app)?;
+    export_text_file_core(&file_path, &content, &app_data_dir)
 }
 
-fn export_text_file_core(file_path: &str, content: &str) -> Result<(), String> {
-    let path = PathBuf::from(file_path);
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() && !parent.exists() {
-            return Err(format!(
-                "Export directory does not exist: {}",
-                parent.display()
-            ));
-        }
-    }
-    atomic_write(&path, content.as_bytes()).map_err(|e| format!("Failed to export file: {}", e))
+fn export_text_file_core(
+    file_path: &str,
+    content: &str,
+    app_data_dir: &Path,
+) -> Result<(), String> {
+    export_target_guard(file_path, &["md", "txt"], app_data_dir)?;
+    atomic_write(&PathBuf::from(file_path), content.as_bytes())
+        .map_err(|e| format!("Failed to export file: {}", e))
 }
 
-/// 导出二进制文件（如带批注的打印 PDF）到系统保存对话框选定的任意路径。
-/// 与 export_text_file 同一安全模型：路径由用户显式选择，不走 PDF 授权白名单。
+/// 导出二进制文件（如带批注的打印 PDF）到系统保存对话框选定的路径。
+/// 与 export_text_file 同一安全模型：扩展名白名单（.pdf）+ 拒绝 AppData 内部路径。
 /// data 经 serde_json 数组传输（前端 Array.from(bytes)）。
 #[tauri::command]
-fn export_binary_file(file_path: String, data: Vec<u8>) -> Result<(), String> {
-    export_binary_file_core(&file_path, &data)
+fn export_binary_file(
+    app: tauri::AppHandle,
+    file_path: String,
+    data: Vec<u8>,
+) -> Result<(), String> {
+    let app_data_dir = paths::app_data_dir(&app)?;
+    export_binary_file_core(&file_path, &data, &app_data_dir)
 }
 
-fn export_binary_file_core(file_path: &str, data: &[u8]) -> Result<(), String> {
+fn export_binary_file_core(
+    file_path: &str,
+    data: &[u8],
+    app_data_dir: &Path,
+) -> Result<(), String> {
+    export_target_guard(file_path, &["pdf"], app_data_dir)?;
+    atomic_write(&PathBuf::from(file_path), data)
+        .map_err(|e| format!("Failed to export file: {}", e))
+}
+
+/// 导出目标的共同防线：父目录必须存在、扩展名在白名单内、目标不得落在
+/// AppData 目录内部（防止被污染的 webview 覆写 settings / annotations 等
+/// 应用自身数据）。拒绝时记安全审计日志。
+fn export_target_guard(
+    file_path: &str,
+    allowed_exts: &[&str],
+    app_data_dir: &Path,
+) -> Result<(), String> {
     let path = PathBuf::from(file_path);
-    if let Some(parent) = path.parent() {
-        if !parent.as_os_str().is_empty() && !parent.exists() {
+    let ext_ok = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| allowed_exts.iter().any(|a| ext.eq_ignore_ascii_case(a)))
+        .unwrap_or(false);
+    if !ext_ok {
+        log::warn!(
+            "Security audit: rejected export with disallowed extension: {}",
+            sanitize_path_for_log(file_path)
+        );
+        return Err(format!(
+            "Export only allows {} files: {}",
+            allowed_exts.join("/."),
+            file_path
+        ));
+    }
+    let parent = path.parent().filter(|p| !p.as_os_str().is_empty());
+    if let Some(parent) = parent {
+        if !parent.exists() {
             return Err(format!(
                 "Export directory does not exist: {}",
                 parent.display()
             ));
         }
+        let canonical_parent = std::fs::canonicalize(parent)
+            .map_err(|e| format!("Failed to resolve export directory: {}", e))?;
+        let canonical_app_data =
+            std::fs::canonicalize(app_data_dir).unwrap_or_else(|_| app_data_dir.to_path_buf());
+        if canonical_parent.starts_with(&canonical_app_data) {
+            log::warn!(
+                "Security audit: rejected export into app data directory: {}",
+                sanitize_path_for_log(file_path)
+            );
+            return Err("Export into the application data directory is not allowed".to_string());
+        }
     }
-    atomic_write(&path, data).map_err(|e| format!("Failed to export file: {}", e))
+    Ok(())
 }
 
 /// 把前端生成的打印 PDF 落盘到 AppData 的 print/ 目录，并用平台指定阅读器
@@ -2079,13 +2154,38 @@ mod tests {
     }
 
     #[test]
+    fn authorize_pdf_path_rejects_nonexistent_file() {
+        let state = AppState::new();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("missing.pdf");
+
+        let result = authorize_pdf_path_core(&state, path.to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("does not exist"));
+        assert!(!state.is_path_allowed(&path));
+    }
+
+    #[test]
+    fn authorize_pdf_path_accepts_real_pdf_and_validates() {
+        let state = AppState::new();
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("real.pdf");
+        std::fs::write(&path, b"pdf bytes").unwrap();
+
+        authorize_pdf_path_core(&state, path.to_str().unwrap()).unwrap();
+        // 授权后 validate_pdf_access 用同一路径字符串应放行（canonicalize 对齐）。
+        assert!(validate_pdf_access(&state, path.to_str().unwrap()).is_ok());
+    }
+
+    #[test]
     fn validate_pdf_access_accepts_authorized_pdf() {
         let state = AppState::new();
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("test.pdf");
         std::fs::write(&path, b"pdf bytes").unwrap();
 
-        state.authorize_path(&path);
+        // 白名单存 canonicalize 后路径（与 authorize_pdf_path 命令一致）。
+        state.authorize_path(&std::fs::canonicalize(&path).unwrap());
         let result = validate_pdf_access(&state, path.to_str().unwrap());
         assert!(result.is_ok());
     }
@@ -2106,9 +2206,10 @@ mod tests {
     #[test]
     fn export_text_file_writes_content_to_user_selected_path() {
         let dir = tempfile::tempdir().unwrap();
+        let app_data = tempfile::tempdir().unwrap();
         let path = dir.path().join("分享 解读.md");
 
-        export_text_file_core(path.to_str().unwrap(), "# 标题\n\n正文").unwrap();
+        export_text_file_core(path.to_str().unwrap(), "# 标题\n\n正文", app_data.path()).unwrap();
 
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "# 标题\n\n正文");
         assert!(!path.with_extension("tmp").exists());
@@ -2117,19 +2218,45 @@ mod tests {
     #[test]
     fn export_text_file_rejects_missing_directory() {
         let dir = tempfile::tempdir().unwrap();
+        let app_data = tempfile::tempdir().unwrap();
         let path = dir.path().join("no-such-dir").join("out.md");
 
-        let result = export_text_file_core(path.to_str().unwrap(), "content");
+        let result = export_text_file_core(path.to_str().unwrap(), "content", app_data.path());
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("does not exist"));
     }
 
     #[test]
+    fn export_text_file_rejects_disallowed_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        let app_data = tempfile::tempdir().unwrap();
+        let path = dir.path().join("evil.exe");
+
+        let result = export_text_file_core(path.to_str().unwrap(), "content", app_data.path());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("only allows"));
+        assert!(!path.exists());
+    }
+
+    #[test]
+    fn export_text_file_rejects_app_data_directory() {
+        let app_data = tempfile::tempdir().unwrap();
+        let path = app_data.path().join("settings.md");
+
+        let result = export_text_file_core(path.to_str().unwrap(), "content", app_data.path());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("application data directory"));
+        assert!(!path.exists());
+    }
+
+    #[test]
     fn export_binary_file_writes_bytes_to_user_selected_path() {
         let dir = tempfile::tempdir().unwrap();
+        let app_data = tempfile::tempdir().unwrap();
         let path = dir.path().join("print.pdf");
 
-        export_binary_file_core(path.to_str().unwrap(), b"%PDF-1.7 bytes").unwrap();
+        export_binary_file_core(path.to_str().unwrap(), b"%PDF-1.7 bytes", app_data.path())
+            .unwrap();
 
         assert_eq!(std::fs::read(&path).unwrap(), b"%PDF-1.7 bytes");
     }
@@ -2137,11 +2264,24 @@ mod tests {
     #[test]
     fn export_binary_file_rejects_missing_directory() {
         let dir = tempfile::tempdir().unwrap();
+        let app_data = tempfile::tempdir().unwrap();
         let path = dir.path().join("no-such-dir").join("print.pdf");
 
-        let result = export_binary_file_core(path.to_str().unwrap(), b"bytes");
+        let result = export_binary_file_core(path.to_str().unwrap(), b"bytes", app_data.path());
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("does not exist"));
+    }
+
+    #[test]
+    fn export_binary_file_rejects_non_pdf_extension() {
+        let dir = tempfile::tempdir().unwrap();
+        let app_data = tempfile::tempdir().unwrap();
+        let path = dir.path().join("payload.dll");
+
+        let result = export_binary_file_core(path.to_str().unwrap(), b"bytes", app_data.path());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("only allows"));
+        assert!(!path.exists());
     }
 
     #[test]
@@ -2217,7 +2357,7 @@ mod tests {
         // Authorize the path so validation passes, then verify the core logic
         // returns the exact bytes.
         let path_str = path.to_string_lossy().to_string();
-        state.authorize_path(&path);
+        state.authorize_path(&std::fs::canonicalize(&path).unwrap());
         let bytes = read_pdf_bytes_core(&state, &path_str).unwrap();
         assert_eq!(bytes, b"pdf bytes");
     }

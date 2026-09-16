@@ -59,6 +59,9 @@ describe("llmErrorToMessage", () => {
       })
     ).toContain("baseUrl");
     expect(
+      llmErrorToMessage({ kind: "insecureBaseUrl", detail: "must be https" })
+    ).toContain("https");
+    expect(
       llmErrorToMessage({
         kind: "toolError",
         toolName: "read_pdf_page",

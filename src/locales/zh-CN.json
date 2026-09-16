@@ -360,6 +360,7 @@
       "streamInterrupted": "响应中断，请重试。",
       "interruptedOnExit": "上次生成未结束（应用已关闭），回答可能不完整，可直接继续追问。",
       "invalidConfig": "配置项 {{field}} 无效，请检查设置。",
+      "insecureBaseUrl": "Base URL 必须使用 https 加密连接（本地 localhost 除外），请到「设置 → 模型设置」修改。",
       "toolError": "查阅文档时出错（{{toolName}}），请重试。",
       "unknown": "请求失败，请稍后重试。",
       "apiKeyMissing": "API 密钥未配置，请先前往「设置 → 模型设置」填写。",

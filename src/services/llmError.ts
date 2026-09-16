@@ -29,6 +29,8 @@ export function llmErrorToMessage(err: LlmError): string {
       return i18n.t("llm.error.streamInterrupted");
     case "invalidConfig":
       return i18n.t("llm.error.invalidConfig", { field: err.field });
+    case "insecureBaseUrl":
+      return i18n.t("llm.error.insecureBaseUrl");
     case "toolError":
       return i18n.t("llm.error.toolError", { toolName: err.toolName });
     case "unknown":

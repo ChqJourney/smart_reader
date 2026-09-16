@@ -52,9 +52,21 @@ impl ApiKeyStorage for KeyringStorage {
                     let legacy = keyring::Entry::new(SERVICE, "llm_api_key");
                     if let Ok(legacy_entry) = legacy {
                         if let Ok(password) = legacy_entry.get_password() {
-                            // Migrate: store in new per-platform entry, delete old
-                            let _ = self.store(platform_id, &password);
-                            let _ = legacy_entry.delete_credential();
+                            // Migrate: only delete the legacy entry after the new
+                            // per-platform entry is confirmed written; otherwise a
+                            // failed store would permanently lose the key.
+                            match self.store(platform_id, &password) {
+                                Ok(()) => {
+                                    let _ = legacy_entry.delete_credential();
+                                }
+                                Err(e) => {
+                                    log::warn!(
+                                        "Failed to migrate legacy API key for {}: {}",
+                                        platform_id,
+                                        e
+                                    );
+                                }
+                            }
                             return Ok(Some(password));
                         }
                     }

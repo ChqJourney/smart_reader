@@ -360,6 +360,7 @@
       "streamInterrupted": "The response was interrupted. Please try again.",
       "interruptedOnExit": "Generation did not finish (the app was closed). The answer may be incomplete; you can continue the conversation.",
       "invalidConfig": "Configuration field {{field}} is invalid. Check your settings.",
+      "insecureBaseUrl": "Base URL must use an encrypted https connection (localhost excepted). Update it in Settings → Model.",
       "toolError": "Error while looking up the document ({{toolName}}). Please try again.",
       "unknown": "Request failed. Please try again later.",
       "apiKeyMissing": "API key is not configured. Go to Settings → Model Settings to fill it in.",

@@ -36,6 +36,22 @@ fn build_http_client() -> Result<reqwest::Client, String> {
         .map_err(|e| format!("Failed to create HTTP client: {}", e))
 }
 
+/// 校验 baseUrl 必须使用加密连接：https 一律放行；http 仅放行 localhost /
+/// 127.0.0.1 / ::1（本地代理网关场景）。自定义平台若配置明文 http 外网地址，
+/// API Key 与选中文本会明文过网，因此在发请求前于后端强制拦截。
+fn validate_base_url_scheme(base_url: &str) -> Result<(), String> {
+    let url = reqwest::Url::parse(base_url)
+        .map_err(|_| "Base URL 不是合法 URL，请检查设置".to_string())?;
+    match url.scheme() {
+        "https" => Ok(()),
+        "http" => match url.host_str() {
+            Some("localhost") | Some("127.0.0.1") | Some("[::1]") | Some("::1") => Ok(()),
+            _ => Err("Base URL 必须使用 https:// 加密连接（本地 localhost 除外）".to_string()),
+        },
+        _ => Err("Base URL 仅支持 http(s):// 协议".to_string()),
+    }
+}
+
 /// Thinking mode control.
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -137,6 +153,9 @@ pub enum LlmError {
     },
     InvalidConfig {
         field: String,
+        detail: String,
+    },
+    InsecureBaseUrl {
         detail: String,
     },
     ToolError {
@@ -681,6 +700,13 @@ pub async fn chat_completions_stream(
         });
         return Ok(());
     }
+    if let Err(detail) = validate_base_url_scheme(&base_url) {
+        cleanup();
+        let _ = on_event.send(StreamEvent::Error {
+            error: LlmError::InsecureBaseUrl { detail },
+        });
+        return Ok(());
+    }
     if model.is_empty() {
         cleanup();
         let _ = on_event.send(StreamEvent::Error {
@@ -979,6 +1005,13 @@ pub async fn test_connection(
     };
 
     let base_url = base_url.trim_end_matches('/').to_string();
+    if let Err(detail) = validate_base_url_scheme(&base_url) {
+        return Ok(serde_json::json!({
+            "success": false,
+            "model": model,
+            "error": LlmError::InsecureBaseUrl { detail },
+        }));
+    }
     let api_key = match api_key {
         Some(k) => k,
         None => {
@@ -1046,6 +1079,31 @@ pub async fn test_connection(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn validate_base_url_scheme_accepts_https() {
+        assert!(validate_base_url_scheme("https://api.deepseek.com/v1").is_ok());
+    }
+
+    #[test]
+    fn validate_base_url_scheme_rejects_plain_http_remote() {
+        let result = validate_base_url_scheme("http://api.example.com/v1");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("https"));
+    }
+
+    #[test]
+    fn validate_base_url_scheme_allows_local_http() {
+        assert!(validate_base_url_scheme("http://localhost:8080/v1").is_ok());
+        assert!(validate_base_url_scheme("http://127.0.0.1:11434/v1").is_ok());
+        assert!(validate_base_url_scheme("http://[::1]:3000/v1").is_ok());
+    }
+
+    #[test]
+    fn validate_base_url_scheme_rejects_invalid_or_exotic() {
+        assert!(validate_base_url_scheme("not-a-url").is_err());
+        assert!(validate_base_url_scheme("ftp://example.com/v1").is_err());
+    }
 
     #[test]
     fn build_request_body_auto_thinking_omits_param() {

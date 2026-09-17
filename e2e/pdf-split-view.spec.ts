@@ -15,11 +15,10 @@ async function openTwoPdfs(page: Page) {
   await expect(page.getByLabel("页码")).toBeVisible();
   await openBtn.click();
   await expect(page.locator(".tab-item")).toHaveCount(2);
-  // 等第二个 viewer 挂载恢复完成（含状态回写）再操作：
-  // viewer 初始化期间的 tab 状态写入会重渲染 App，使 tab 拖拽的
-  // 全局 mousemove/mouseup 监听被 effect 清理误摘（拖拽中途监听器失效、
-  // 遮罩卡住）。注意必须用 :visible —— keep-alive 下非激活 tab 的 viewer
-  // 仍在 DOM 中（display:none），.first() 会抓到隐藏 overlay。
+  // 等第二个 viewer 挂载恢复完成（含状态回写）再操作，避免 viewer 初始化
+  // 期间的 tab 状态写入与后续拖拽手势交错。注意必须用 :visible ——
+  // keep-alive 下非激活 tab 的 viewer 仍在 DOM 中（display:none），
+  // .first() 会抓到隐藏 overlay。
   await expect(
     page.locator(".pdf-selection-overlay:visible").first()
   ).toBeVisible();

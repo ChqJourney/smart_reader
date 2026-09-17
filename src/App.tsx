@@ -521,23 +521,30 @@ function App() {
     [layout.mainRef]
   );
 
-  const handleTabDragMouseMove = useCallback(
-    (e: MouseEvent) => {
-      const drag = tabDragRef.current;
-      if (!drag) return;
-      if (!drag.started) {
-        // 阈值内视为单击准备阶段，不进入拖拽态（保住 onClick 激活 tab）
-        if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 5) {
-          return;
-        }
-        drag.started = true;
-        document.body.style.userSelect = "none";
-        document.body.style.cursor = "grabbing";
+  // window 监听器引用必须恒定：监听在 mousedown 注册、mouseup 摘除。若
+  // handler 随重渲染换身份，下方卸载兜底 effect 的清理会在 deps 变化时把
+  // 在飞的拖拽监听误摘（拖拽静默死亡、遮罩卡住），故最新依赖一律经 ref 读取。
+  const dragDepsRef = useRef({ isPointInMainArea, tabs, splitView });
+  useEffect(() => {
+    dragDepsRef.current = { isPointInMainArea, tabs, splitView };
+  });
+
+  const handleTabDragMouseMove = useCallback((e: MouseEvent) => {
+    const drag = tabDragRef.current;
+    if (!drag) return;
+    if (!drag.started) {
+      // 阈值内视为单击准备阶段，不进入拖拽态（保住 onClick 激活 tab）
+      if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < 5) {
+        return;
       }
-      setIsDragOver(isPointInMainArea(e.clientX, e.clientY));
-    },
-    [isPointInMainArea]
-  );
+      drag.started = true;
+      document.body.style.userSelect = "none";
+      document.body.style.cursor = "grabbing";
+    }
+    setIsDragOver(
+      dragDepsRef.current.isPointInMainArea(e.clientX, e.clientY)
+    );
+  }, []);
 
   const handleTabDragMouseUp = useCallback(
     (e: MouseEvent) => {
@@ -552,6 +559,7 @@ function App() {
       // 未过阈值 = 单击，交由 tab 的 onClick 处理；释放在阅读区外 = 取消拖拽
       if (!drag.started) return;
       const droppedTabId = drag.tabId;
+      const { isPointInMainArea, tabs, splitView } = dragDepsRef.current;
       if (!isPointInMainArea(e.clientX, e.clientY)) return;
       if (droppedTabId === tabs.activeTabId) return;
       if (!tabs.tabs.some((t) => t.id === droppedTabId)) return;
@@ -559,7 +567,7 @@ function App() {
       tabs.wakeTab(droppedTabId);
       splitView.enterSplitView(droppedTabId);
     },
-    [handleTabDragMouseMove, isPointInMainArea, tabs, splitView]
+    [handleTabDragMouseMove]
   );
 
   const handleTabDragMouseDown = useCallback(

@@ -1,6 +1,10 @@
 import { test, expect } from "@playwright/test";
 import fs from "fs";
 import path from "path";
+import {
+  BITMAP_BYTES_PER_ALIVE_VIEWER,
+  getByteBudget,
+} from "../src/services/memoryBudget";
 
 /**
  * Tab 休眠（hibernation）e2e：内存预算触发休眠 + 唤醒恢复回归，
@@ -180,12 +184,13 @@ test.describe("Tab hibernation（休眠/唤醒回归）", () => {
   test("多 tab 小文件：位图记账使字节预算提前触发休眠，tab 数量不受限", async ({
     page,
   }) => {
-    // 位图记账（每存活 viewer 52MB）后，1MB 小文件每 tab 记 54MB：
-    // 第 15 个 tab 起每开 1 个休眠 1 个最久未用 tab，存活 viewer 收敛
-    // 到 14（Playwright Desktop Chrome 的 UA 固定为 Windows，预算走
-    // 800MB 线：15×54=810>800、14×54=756≤800，macOS/Linux CI 同样如此，
-    // 行为确定）。viewer 数预算线（>15）在 52MB 位图记账下不再能单独
-    // 触发（16 个 viewer 仅位图即 832MB，超任何平台预算），该预算线由
+    // 位图记账（每存活 viewer BITMAP_BYTES_PER_ALIVE_VIEWER）后，1MB 小文件
+    // 每存活 tab 记 1MB×2 + 52MB = 54MB，存活 viewer 数收敛到
+    // floor(字节预算 / 54MB)，其余休眠。字节预算随 UA 平台走
+    // （Chromium UA 含 Windows → 800MB → 存活 14；WebKit UA 含 Macintosh
+    // → 400MB → 存活 7），期望值按页面真实 UA 推导，不写死。
+    // viewer 数预算线（>15）在 52MB 位图记账下不再能单独触发
+    // （16 个 viewer 仅位图即 832MB，超任何平台预算），该预算线由
     // memoryBudget.test.ts 注入大字节预算的单测覆盖。
     await setupBudgetTauriMock(page, {
       fileSizeMB: 1,
@@ -193,6 +198,12 @@ test.describe("Tab hibernation（休眠/唤醒回归）", () => {
       tabCount: 17,
     });
     await page.goto("/");
+
+    const ua = await page.evaluate(() => navigator.userAgent);
+    const byteBudget = getByteBudget(ua);
+    // 单 tab 记账 = fileSize×2（BYTES_PER_FILE_MULTIPLIER）+ 位图估算
+    const perTabBytes = 1 * 1024 * 1024 * 2 + BITMAP_BYTES_PER_ALIVE_VIEWER;
+    const expectedHibernated = 17 - Math.floor(byteBudget / perTabBytes);
 
     for (let i = 0; i < 17; i++) {
       await page.getByTestId("open-pdf-btn").click();
@@ -202,15 +213,18 @@ test.describe("Tab hibernation（休眠/唤醒回归）", () => {
     }
 
     await expect(page.locator(".tab-item")).toHaveCount(17);
-    // 第 15-17 次打开各休眠 1 个最久未用 tab，存活 viewer 收敛到 14
-    await expect(page.locator(".hibernated-placeholder")).toHaveCount(3);
+    await expect(page.locator(".hibernated-placeholder")).toHaveCount(
+      expectedHibernated
+    );
 
     // 切回最早打开的 tab：唤醒恢复，占位数量不变（他人被顶替休眠）
     await page.locator(".tab-item", { hasText: "budget-0.pdf" }).click();
     await expect(activePanel(page).getByLabel("页码")).toBeVisible({
       timeout: 5000,
     });
-    await expect(page.locator(".hibernated-placeholder")).toHaveCount(3);
+    await expect(page.locator(".hibernated-placeholder")).toHaveCount(
+      expectedHibernated
+    );
   });
 });
 

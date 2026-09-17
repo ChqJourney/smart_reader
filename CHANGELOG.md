@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-17
+
 ### Changed
 
 - Windows 安装包改为内嵌 WebView2 引导程序（embedBootstrapper）：未预装 WebView2 的 Windows 10 机器安装后可直接自举运行，不再装完即死。

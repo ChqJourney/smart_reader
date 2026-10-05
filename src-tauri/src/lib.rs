@@ -979,7 +979,7 @@ impl Default for AppSettings {
             llm: LlmConfig {
                 base_url: "https://api.deepseek.com/v1".to_string(),
                 api_key: "".to_string(),
-                model: "deepseek-v4-flash".to_string(),
+                model: "deepseek-flash".to_string(),
             },
             platform_id: default_platform_id(),
             thinking: default_thinking(),
@@ -1734,7 +1734,7 @@ mod tests {
             llm: LlmConfig {
                 base_url: "https://api.example.com/v1".to_string(),
                 api_key: "sk-test".to_string(),
-                model: "deepseek-v4-flash".to_string(),
+                model: "deepseek-flash".to_string(),
             },
             platform_id: "deepseek".to_string(),
             thinking: "auto".to_string(),
@@ -2565,7 +2565,7 @@ mod tests {
         let loaded = load_settings_from_disk(base.path()).unwrap();
         assert_eq!(loaded, AppSettings::default());
         assert_eq!(loaded.target_language, "中文");
-        assert_eq!(loaded.llm.model, "deepseek-v4-flash");
+        assert_eq!(loaded.llm.model, "deepseek-flash");
         assert!(!loaded.system_prompts.translate.is_empty());
         assert!(!loaded.system_prompts.explain.is_empty());
     }

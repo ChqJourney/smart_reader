@@ -399,7 +399,7 @@
 | ------- | ------ | ------------------------------------------------ |
 | baseUrl | String | API Base URL，默认 `https://api.deepseek.com/v1` |
 | apiKey  | String | API Key（存系统钥匙串，不落盘）                  |
-| model   | String | 对话模型，默认 `deepseek-v4-flash`               |
+| model   | String | 对话模型，默认 `deepseek-flash`                  |
 
 ### 8.1 完整目标架构数据模型（后续版本）
 

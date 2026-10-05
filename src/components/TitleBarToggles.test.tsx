@@ -53,12 +53,12 @@ describe("TitleBarToggles", () => {
       <TitleBarToggles
         {...baseProps}
         showAgentTools
-        modelDisplay="DeepSeek · deepseek-v4-flash"
+        modelDisplay="DeepSeek · deepseek-flash"
       />
     );
     expect(screen.getByTestId("toggle-agent-tools")).toBeInTheDocument();
     expect(screen.getByTestId("titlebar-model-display")).toHaveTextContent(
-      "DeepSeek · deepseek-v4-flash"
+      "DeepSeek · deepseek-flash"
     );
   });
 

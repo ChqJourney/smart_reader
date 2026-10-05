@@ -6,7 +6,7 @@ const DEFAULT_SETTINGS = {
   llm: {
     baseUrl: "https://api.deepseek.com/v1",
     apiKey: "",
-    model: "deepseek-v4-flash",
+    model: "deepseek-flash",
   },
   platformId: "deepseek",
   thinking: "auto",
@@ -50,7 +50,7 @@ describe("settings service", () => {
         llm: {
           baseUrl: "https://custom.example.com",
           apiKey: "sk-test",
-          model: "deepseek-v4-flash",
+          model: "deepseek-flash",
         },
         targetLanguage: "English",
       }),
@@ -70,7 +70,7 @@ describe("settings service", () => {
         llm: {
           baseUrl: "https://api.openai.com/v1",
           apiKey: "sk-test",
-          model: "deepseek-v4-flash",
+          model: "deepseek-flash",
         },
         targetLanguage: "中文",
       }),
@@ -88,7 +88,7 @@ describe("settings service", () => {
         llm: {
           baseUrl: "https://api.deepseek.com/v1",
           apiKey: "",
-          model: "deepseek-v4-flash",
+          model: "deepseek-flash",
         },
         targetLanguage: "中文",
       }),
@@ -131,10 +131,10 @@ describe("settings service", () => {
     expect(settings.llm.apiKey).toBe("legacy-key");
     // legacy-model is not a valid DeepSeek model id, so it is migrated to the
     // platform default.
-    expect(settings.llm.model).toBe("deepseek-v4-flash");
+    expect(settings.llm.model).toBe("deepseek-flash");
     expect(savedSettings).not.toBeNull();
     expect(savedSettings.llm.apiKey).toBe("legacy-key");
-    expect(savedSettings.llm.model).toBe("deepseek-v4-flash");
+    expect(savedSettings.llm.model).toBe("deepseek-flash");
     expect(localStorage.getItem("standardread-llm-config")).toBeNull();
   });
 
@@ -174,10 +174,10 @@ describe("settings service", () => {
     const { loadSettings } = await import("../services/settings");
     const settings = await loadSettings();
     expect(settings.platformId).toBe("deepseek");
-    expect(settings.llm.model).toBe("deepseek-v4-flash");
+    expect(settings.llm.model).toBe("deepseek-flash");
     expect(settings.llm.baseUrl).toBe("https://api.deepseek.com/v1");
     expect(savedSettings).not.toBeNull();
-    expect(savedSettings.llm.model).toBe("deepseek-v4-flash");
+    expect(savedSettings.llm.model).toBe("deepseek-flash");
   });
 
   it("keeps custom platform model unchanged", async () => {
@@ -211,7 +211,7 @@ describe("settings service", () => {
         llm: {
           baseUrl: "https://api.example.com",
           apiKey: "",
-          model: "deepseek-v4-flash",
+          model: "deepseek-flash",
         },
         targetLanguage: "中文",
       }),
@@ -238,7 +238,7 @@ describe("settings service", () => {
     const { loadSettings } = await import("../services/settings");
     const settings = await loadSettings();
     expect(settings.llm.apiKey).toBe("legacy-key");
-    expect(settings.llm.model).toBe("deepseek-v4-flash");
+    expect(settings.llm.model).toBe("deepseek-flash");
     expect(settings.targetLanguage).toBe("中文");
   });
 

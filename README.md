@@ -12,7 +12,7 @@ A desktop AI assistant for testing & certification engineers, designed to reduce
 - **Frontend**: React 18 + TypeScript 5.6 + Vite 6
 - **PDF rendering**: pdfjs-dist 4.8
 - **Markdown rendering**: react-markdown
-- **AI integration**: OpenAI-compatible APIs, proxied through the Rust backend — API keys live in the system keychain and never enter the webview. Presets for DeepSeek / Kimi / Xiaomi MiMo / Bailian / GLM / Volcengine / OpenRouter / OpenAI / custom endpoints (default: DeepSeek, model `deepseek-v4-flash`)
+- **AI integration**: OpenAI-compatible APIs, proxied through the Rust backend — API keys live in the system keychain and never enter the webview. Presets for DeepSeek / Kimi / Xiaomi MiMo / Bailian / GLM / Volcengine / OpenRouter / OpenAI / custom endpoints (default: DeepSeek, model `deepseek-flash`)
 
 ## Requirements
 

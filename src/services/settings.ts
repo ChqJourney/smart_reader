@@ -99,7 +99,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   llm: {
     baseUrl: "https://api.deepseek.com/v1",
     apiKey: "",
-    model: "deepseek-v4-flash",
+    model: "deepseek-flash",
   },
   platformId: "deepseek",
   thinking: "auto",

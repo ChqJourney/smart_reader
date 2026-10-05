@@ -375,7 +375,7 @@ LLM 流量已整体改为 **Rust 后端代理**（`src-tauri/src/llm_proxy.rs`�
 - Prompt 模板（`buildSelectionPrompt` 翻译/解读、`buildCustomInterpretPrompt` 自定义解读、`buildSystemPrompt`）仍在 `services/llm.ts`，已 i18n 化（走 `i18n.t`，模板文案在 locales JSON）；均接收 `targetLanguage` 参数。启用 Agent Tools 时 system prompt 追加 `llm.toolsSystemAddendum` 工具使用引导段（与用户可编辑 system prompt 解耦）。
 - 用户可见的 LLM 错误文案统一由 `services/llmError.ts` 的 `llmErrorToMessage()` 产出（配置向导 / 设置页 / 解读 / 翻译共用同一份友好中文，文案在 locales 的 `llm.error.*` 段）；后端原始报错（常为英文）只经 `services/logs.ts` 写日志，不进 UI。新增 LlmError kind 时需同步 `llmError.ts` 与两边 locales。
 - LLM 配置与目标语言通过 `services/settings.ts` 持久化到后端 AppData；首次启动时会从旧的 `localStorage` 键 `standardread-llm-config` 迁移一次。
-- 平台预设集中在 `src/data/platformPresets.ts`（9 个：`deepseek` / `kimi` / `xiaomimimo` / `bailian` / `glm` / `volcengine` / `openrouter` / `openai` / `custom`，含 `supportsTools` / `supportsThinking` / `supportsVision` / `contextWindow` / `apiKeyHelpUrl` 等字段）；`PlatformId` 联合类型就在本文件定义，`services/settings.ts` re-export。`supportsVision` 为模型级标记（视觉能力），仅 6 个国内平台的文档确认型号标记为 true（deepseek 需选 `deepseek-v4-flash-vision-exp`，glm 需选 `glm-4.6v`），决定 agent loop 是否注入页面截图工具；判定走 `modelSupportsVision()`。默认平台 `deepseek`、默认模型 `deepseek-v4-flash`，默认目标语言为 `中文`。
+- 平台预设集中在 `src/data/platformPresets.ts`（9 个：`deepseek` / `kimi` / `xiaomimimo` / `bailian` / `glm` / `volcengine` / `openrouter` / `openai` / `custom`，含 `supportsTools` / `supportsThinking` / `supportsVision` / `contextWindow` / `apiKeyHelpUrl` 等字段）；`PlatformId` 联合类型就在本文件定义，`services/settings.ts` re-export。`supportsVision` 为模型级标记（视觉能力），仅 6 个国内平台的文档确认型号标记为 true（deepseek 需选 `deepseek-flash`，glm 需选 `glm-4.6v`），决定 agent loop 是否注入页面截图工具；判定走 `modelSupportsVision()`。默认平台 `deepseek`、默认模型 `deepseek-flash`，默认目标语言为 `中文`。
 
 ### 6.4 核心状态流
 

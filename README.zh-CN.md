@@ -12,7 +12,7 @@
 - **前端**：React 18 + TypeScript 5.6 + Vite 6
 - **PDF 渲染**：pdfjs-dist 4.8
 - **Markdown 渲染**：react-markdown
-- **AI 调用**：OpenAI 兼容 API，经 Rust 后端代理转发，API Key 存系统钥匙串、不进入 webview；多平台预设（DeepSeek / Kimi / 小米 MiMo / 百炼 / GLM / 火山引擎 / OpenRouter / OpenAI / 自定义），默认平台 DeepSeek、默认模型 deepseek-v4-flash
+- **AI 调用**：OpenAI 兼容 API，经 Rust 后端代理转发，API Key 存系统钥匙串、不进入 webview；多平台预设（DeepSeek / Kimi / 小米 MiMo / 百炼 / GLM / 火山引擎 / OpenRouter / OpenAI / 自定义），默认平台 DeepSeek、默认模型 deepseek-flash
 
 ## 开发环境要求
 

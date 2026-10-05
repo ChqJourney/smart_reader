@@ -1116,13 +1116,13 @@ mod tests {
         }];
         let body = build_request_body(
             &messages,
-            "deepseek-v4-flash",
+            "deepseek-flash",
             &ThinkingMode::Auto,
             false,
             false,
         );
         assert!(body.get("thinking").is_none());
-        assert_eq!(body["model"], "deepseek-v4-flash");
+        assert_eq!(body["model"], "deepseek-flash");
         assert_eq!(body["stream"], true);
         assert_eq!(body["stream_options"]["include_usage"], true);
     }
@@ -1172,7 +1172,7 @@ mod tests {
         }];
         let body = build_request_body(
             &messages,
-            "deepseek-v4-flash",
+            "deepseek-flash",
             &ThinkingMode::Auto,
             true,
             false,

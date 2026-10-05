@@ -49,7 +49,7 @@ const defaultSettings = {
   llm: {
     baseUrl: "https://api.deepseek.com/v1",
     apiKey: "",
-    model: "deepseek-v4-flash",
+    model: "deepseek-flash",
   },
   platformId: "deepseek" as const,
   thinking: "auto" as const,
@@ -105,7 +105,7 @@ describe("SettingsModal", () => {
         return Promise.resolve(false);
       }
       if (command === "test_connection") {
-        return Promise.resolve({ success: true, model: "deepseek-v4-flash" });
+        return Promise.resolve({ success: true, model: "deepseek-flash" });
       }
       return Promise.reject(
         new Error(`No mock handler for command: ${command}`)
@@ -135,7 +135,7 @@ describe("SettingsModal", () => {
     );
     expect(screen.getByLabelText(/API 密钥/)).toHaveValue("");
     expect(screen.getByLabelText("模型名称")).toHaveTextContent(
-      "DeepSeek V4 Flash（快速，便宜）"
+      "DeepSeek Flash（快速，便宜，支持看图）"
     );
   });
 
@@ -386,7 +386,7 @@ describe("SettingsModal", () => {
     // 旧测试迟到返回成功：不得覆盖 idle 状态。
     await waitFor(() => expect(resolveTest).not.toBeNull());
     await act(async () => {
-      resolveTest!({ success: true, model: "deepseek-v4-flash" });
+      resolveTest!({ success: true, model: "deepseek-flash" });
     });
     expect(screen.queryByText(/连接成功/)).not.toBeInTheDocument();
   });
@@ -449,7 +449,7 @@ describe("SettingsModal", () => {
 
     expect(onSave).toHaveBeenCalled();
     const saved = onSave.mock.calls[0][0];
-    expect(saved.llm.model).toBe("deepseek-v4-flash");
+    expect(saved.llm.model).toBe("deepseek-flash");
     expect(saved.systemPrompts.translate).toContain("翻译助手");
   });
 

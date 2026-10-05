@@ -13,7 +13,7 @@ const defaultSettings: AppSettings = {
   llm: {
     baseUrl: "https://api.deepseek.com/v1",
     apiKey: "",
-    model: "deepseek-v4-flash",
+    model: "deepseek-flash",
   },
   platformId: "deepseek",
   thinking: "auto",
@@ -44,7 +44,7 @@ describe("SetupWizard", () => {
         return Promise.resolve(undefined);
       }
       if (command === "test_connection") {
-        return Promise.resolve({ success: true, model: "deepseek-v4-flash" });
+        return Promise.resolve({ success: true, model: "deepseek-flash" });
       }
       return Promise.reject(
         new Error(`No mock handler for command: ${command}`)

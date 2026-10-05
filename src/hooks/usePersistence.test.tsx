@@ -2628,7 +2628,16 @@ describe("usePersistence", () => {
       let hookRef: UsePersistenceReturn;
       render(
         <StrictMode>
-          <TestHarness
+          <ConfigurableHarness
+            props={{
+              ...makeVisionProps(),
+              settings: {
+                ...DEFAULT_SETTINGS,
+                agentToolsEnabled: true,
+                platformId: "deepseek",
+                llm: { ...DEFAULT_SETTINGS.llm, model: "deepseek-v4-pro" },
+              },
+            }}
             onHook={(hook) => {
               hookRef = hook;
             }}
@@ -2646,7 +2655,7 @@ describe("usePersistence", () => {
       await waitFor(() => {
         expect(calls.length).toBeGreaterThan(0);
       });
-      // TestHarness 默认 deepseek-v4-flash，非视觉模型
+      // deepseek-v4-pro 为纯文本模型（视觉由 deepseek-flash 承担）
       expect(calls[0].options?.enableTools).toBe(true);
       expect(calls[0].options?.enableVision).toBe(false);
     });

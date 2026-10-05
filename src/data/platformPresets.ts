@@ -7,8 +7,9 @@
  * 注意：
  * - 这里只收录「在线推理 API」（按量计费），不收录 Coding Plan / Token Plan 等订阅套餐
  *   （条款禁止第三方应用使用）。
- * - DeepSeek 老模型 deepseek-chat / deepseek-reasoner 将于 2026/07/24 弃用，
- *   已替换为 deepseek-v4-flash / deepseek-v4-pro。
+ * - DeepSeek 当前仅余 deepseek-flash / deepseek-v4-pro 两个模型；
+ *   旧模型名 deepseek-v4-flash / deepseek-v4-flash-vision-exp 仍可调用，
+ *   但对应模型已下线，请求均由 DeepSeek-V4.1-Flash 承接（deepseek-flash 原生支持图片输入）。
  */
 
 export type PlatformId =
@@ -64,27 +65,21 @@ export const PLATFORM_PRESETS: Record<PlatformId, PlatformPreset> = {
     baseUrl: "https://api.deepseek.com/v1",
     models: [
       {
-        id: "deepseek-v4-flash",
-        label: "DeepSeek V4 Flash（快速，便宜）",
+        // DeepSeek 官方：deepseek-flash 为当前唯一推荐调用名，原生支持图片输入
+        id: "deepseek-flash",
+        label: "DeepSeek Flash（快速，便宜，支持看图）",
         supportsThinking: true,
-        contextWindow: 128000,
+        contextWindow: 1048576,
+        supportsVision: true,
       },
       {
         id: "deepseek-v4-pro",
         label: "DeepSeek V4 Pro（旗舰，最强）",
         supportsThinking: true,
-        contextWindow: 128000,
-      },
-      {
-        // DeepSeek 官方文档：目前仅此型号接受图片输入
-        id: "deepseek-v4-flash-vision-exp",
-        label: "DeepSeek V4 Flash Vision（视觉实验版）",
-        supportsThinking: false,
-        contextWindow: 128000,
-        supportsVision: true,
+        contextWindow: 1048576,
       },
     ],
-    defaultModelId: "deepseek-v4-flash",
+    defaultModelId: "deepseek-flash",
     apiKeyHelpUrl: "https://platform.deepseek.com/api_keys",
     supportsTools: true,
   },

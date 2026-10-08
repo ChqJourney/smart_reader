@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-10-08
+
 ### Changed
 
 - DeepSeek 平台预设跟随官方调整：模型列表更新为 `deepseek-flash`（新默认，原生支持图片输入，Agent Tools 下可用页面截图工具）与 `deepseek-v4-pro`，两者均为 1M 上下文；已下线的 `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` 移出预设（旧名仍可调用，由 V4.1-Flash 承接），已保存旧模型名的配置会自动迁移到新默认模型。

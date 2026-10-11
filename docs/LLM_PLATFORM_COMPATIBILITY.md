@@ -1,6 +1,7 @@
 # LLM 平台兼容性调研报告
 
 > 日期：2026-07-15
+> 更新：2026-10-11 按各平台官方文档重新核对模型名单与预设表（§1.1、§4.2），与 `src/data/platformPresets.ts` 当前口径一致；方案 B（后端代理）与 Settings 平台预设下拉均已落地，§三～§六保留为设计依据存档。
 > 目的：为方案 B（Rust 后端代理 LLM 请求）的设计提供依据，评估主流 LLM 平台的兼容性，并给出 Settings Modal 的简化建议。
 > 背景：dev 状态下 DeepSeek 调用正常，火山引擎 Coding Plan 报 `TypeError: Load failed`。根因是火山引擎 Coding Plan 端点 CORS 不允许 `authorization` 头。
 
@@ -10,15 +11,15 @@
 
 ### 1.1 在线推理 API（按量计费，第三方应用合规使用）
 
-| 平台            | Base URL                                                                     | 认证                               | 模型名示例                                           | OpenAI 兼容 | 备注                                           |
-| --------------- | ---------------------------------------------------------------------------- | ---------------------------------- | ---------------------------------------------------- | ----------- | ---------------------------------------------- |
-| DeepSeek        | `https://api.deepseek.com` 或 `/v1`                                          | `Bearer sk-...`                    | `deepseek-chat`、`deepseek-reasoner`                 | ✅ 完整     | 国内最便宜之一                                 |
-| Kimi (Moonshot) | `https://api.moonshot.cn/v1`（国内）<br>`https://api.moonshot.ai/v1`（国际） | `Bearer sk-...`                    | `kimi-k2.6`、`moonshot-v1-8k`                        | ✅ 完整     | 长上下文优势                                   |
-| 阿里云百炼      | `https://dashscope.aliyuncs.com/compatible-mode/v1`                          | `Bearer sk-...`                    | `qwen-plus`、`qwen-max`、`deepseek-v3`、`kimi-k2`    | ✅ 完整     | 聚合 Qwen/DeepSeek/Kimi/GLM/MiniMax 等多家模型 |
-| 智谱 GLM        | `https://open.bigmodel.cn/api/paas/v4/`（**末尾斜杠不能省**）                | `Bearer xxxxxx.yyyyyyyy`（含点号） | `glm-5`、`glm-5.2`、`glm-4-flash`                    | ✅ 完整     | API Key 是两段式，含点号                       |
-| 火山引擎方舟    | `https://ark.cn-beijing.volces.com/api/v3`                                   | `Bearer sk-...`                    | `doubao-seed-2-0-pro-260215`、`deepseek-v3-2-251201` | ✅ 完整     | 模型名是「Model ID」长串，不是模型品牌名       |
-| OpenRouter      | `https://openrouter.ai/api/v1`                                               | `Bearer sk-or-...`                 | `openai/gpt-4o`、`anthropic/claude-sonnet-4`         | ✅ 完整     | 聚合 300+ 模型，模型名是 `provider/model` 格式 |
-| OpenAI 官方     | `https://api.openai.com/v1`                                                  | `Bearer sk-...`                    | `gpt-4o-mini`、`gpt-4o`                              | ✅ 完整     | 默认配置                                       |
+| 平台            | Base URL                                                                     | 认证                               | 模型名示例（2026-10 核对）                                     | OpenAI 兼容 | 备注                                                                               |
+| --------------- | ---------------------------------------------------------------------------- | ---------------------------------- | -------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------- |
+| DeepSeek        | `https://api.deepseek.com` 或 `/v1`                                          | `Bearer sk-...`                    | `deepseek-flash`、`deepseek-v4-pro`                            | ✅ 完整     | 国内最便宜之一；`deepseek-chat`/`deepseek-reasoner` 已于 2026-07 下线              |
+| Kimi (Moonshot) | `https://api.moonshot.cn/v1`（国内）<br>`https://api.moonshot.ai/v1`（国际） | `Bearer sk-...`                    | `kimi-k3`、`kimi-k2.6`                                         | ✅ 完整     | 长上下文优势；`moonshot-v1` 系列已于 2026-08-31 下线，控制台迁至 platform.kimi.com |
+| 阿里云百炼      | `https://dashscope.aliyuncs.com/compatible-mode/v1`                          | `Bearer sk-...`                    | `qwen3.8-max`、`qwen3.7-plus`、`qwen-flash`、`deepseek-v4-pro` | ✅ 完整     | 聚合 Qwen/DeepSeek/Kimi/GLM/MiniMax 等多家模型；`qwen-turbo` 2026-07 停止调用      |
+| 智谱 GLM        | `https://open.bigmodel.cn/api/paas/v4/`（**末尾斜杠不能省**）                | `Bearer xxxxxx.yyyyyyyy`（含点号） | `glm-5.3`、`glm-5.3-flash`、`glm-4.7-flash`                    | ✅ 完整     | API Key 是两段式，含点号；GLM-5.3 系列 thinking 只接受 `enabled`                   |
+| 火山引擎方舟    | `https://ark.cn-beijing.volces.com/api/v3`                                   | `Bearer sk-...`                    | `doubao-seed-2-1-pro-260915`、`doubao-seed-2-1-lite-260915`    | ✅ 完整     | 模型名是「Model ID」长串，不是模型品牌名；seed-2.0 已于 2026-10/11 分批下线        |
+| OpenRouter      | `https://openrouter.ai/api/v1`                                               | `Bearer sk-or-...`                 | `openai/gpt-5-mini`、`anthropic/claude-sonnet-4.5`             | ✅ 完整     | 聚合 300+ 模型，模型名是 `provider/model` 格式                                     |
+| OpenAI 官方     | `https://api.openai.com/v1`                                                  | `Bearer sk-...`                    | `gpt-5.6-terra`、`gpt-5.6-sol`、`gpt-5.6-luna`                 | ✅ 完整     | gpt-6.x 的 tool calling 仅支持 Responses API，不走 Chat Completions                |
 
 ### 1.2 订阅套餐 API（Coding Plan / Token Plan 等）
 
@@ -111,9 +112,11 @@ enum StreamEvent {
 
 ## 四、Settings Modal 简化建议（面向非程序员）
 
-### 4.1 当前 UI 的问题
+### 4.1 当时 UI 的问题
 
-当前 SettingsModal 模型设置页（`src/components/SettingsModal.tsx:335-373`）是三个文本框：
+> 注：本节描述的「三个文本框」UI 已被平台预设方案取代并落地（`SettingsModal.tsx` + `src/data/platformPresets.ts`），保留作为设计动机的记录。
+
+当时的 SettingsModal 模型设置页是三个文本框：
 
 1. API Base URL（placeholder: `https://api.openai.com/v1`）
 2. Model（placeholder: `gpt-4o-mini`）
@@ -144,14 +147,16 @@ enum StreamEvent {
 
 #### 选定平台后的行为
 
-| 字段     | 行为                                                                           |
-| -------- | ------------------------------------------------------------------------------ |
-| Base URL | 自动填入预设值，默认只读（点击"高级"可编辑，给特殊需求）                       |
-| 模型     | 变成下拉选择，列出该平台常用模型（含简短说明，如"qwen-plus — 性能均衡，推荐"） |
-| API Key  | 仍是文本框，旁边显示「如何获取 API Key?」链接，跳转该平台控制台                |
-| 连接测试 | 新增「测试连接」按钮，发送最小请求验证三项配置是否正确                         |
+| 字段     | 行为                                                                        |
+| -------- | --------------------------------------------------------------------------- |
+| Base URL | 自动填入预设值，默认只读（点击"高级"可编辑，给特殊需求）                    |
+| 模型     | 变成下拉选择，列出该平台常用模型（含简短说明，如"qwen3.7-plus — 官方首选"） |
+| API Key  | 仍是文本框，旁边显示「如何获取 API Key?」链接，跳转该平台控制台             |
+| 连接测试 | 新增「测试连接」按钮，发送最小请求验证三项配置是否正确                      |
 
-#### 预设配置表（建议内置）
+#### 预设配置表（已落地，以下为 2026-10-11 快照）
+
+实际数据源在 `src/data/platformPresets.ts`（含 `supportsThinking` / `supportsVision` / `contextWindow` 等字段），此处仅列 id/label 示意：
 
 ```typescript
 const PLATFORM_PRESETS = {
@@ -159,11 +164,8 @@ const PLATFORM_PRESETS = {
     label: "DeepSeek",
     baseUrl: "https://api.deepseek.com/v1",
     models: [
-      { id: "deepseek-chat", label: "DeepSeek Chat（日常对话，便宜）" },
-      {
-        id: "deepseek-reasoner",
-        label: "DeepSeek Reasoner（带思考链，慢但准）",
-      },
+      { id: "deepseek-flash", label: "DeepSeek Flash（快速，便宜，支持看图）" },
+      { id: "deepseek-v4-pro", label: "DeepSeek V4 Pro（旗舰，最强）" },
     ],
     apiKeyHelpUrl: "https://platform.deepseek.com/api_keys",
   },
@@ -171,22 +173,28 @@ const PLATFORM_PRESETS = {
     label: "Kimi（月之暗面）",
     baseUrl: "https://api.moonshot.cn/v1",
     models: [
-      { id: "kimi-k2.6", label: "Kimi K2.6（最新，最强）" },
-      { id: "moonshot-v1-8k", label: "Moonshot V1 8K（短上下文，便宜）" },
-      { id: "moonshot-v1-32k", label: "Moonshot V1 32K（中等上下文）" },
-      { id: "moonshot-v1-128k", label: "Moonshot V1 128K（超长上下文）" },
+      { id: "kimi-k3", label: "Kimi K3（最新旗舰，1M 上下文，支持看图）" },
+      { id: "kimi-k2.6", label: "Kimi K2.6（通用，256K 上下文，支持看图）" },
     ],
-    apiKeyHelpUrl: "https://platform.moonshot.cn/console/api-keys",
+    apiKeyHelpUrl: "https://platform.kimi.com/console/api-keys",
   },
   bailian: {
     label: "阿里云百炼（通义千问等）",
     baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
     models: [
-      { id: "qwen-plus", label: "Qwen Plus（性能均衡，推荐）" },
-      { id: "qwen-max", label: "Qwen Max（旗舰，最强）" },
-      { id: "qwen-turbo", label: "Qwen Turbo（最快，最便宜）" },
-      { id: "deepseek-v3", label: "DeepSeek V3（百炼直供）" },
-      { id: "kimi-k2", label: "Kimi K2（百炼直供）" },
+      {
+        id: "qwen3.7-plus",
+        label: "Qwen3.7 Plus（官方首选，1M 上下文，支持看图）",
+      },
+      {
+        id: "qwen3.8-max",
+        label: "Qwen3.8 Max（最新旗舰，1M 上下文，支持看图）",
+      },
+      { id: "qwen-flash", label: "Qwen Flash（最快，最便宜，1M 上下文）" },
+      {
+        id: "deepseek-v4-pro",
+        label: "DeepSeek V4 Pro（百炼直供，1M 上下文）",
+      },
     ],
     apiKeyHelpUrl: "https://bailian.console.aliyun.com/?apiKey=1",
   },
@@ -194,10 +202,15 @@ const PLATFORM_PRESETS = {
     label: "智谱 GLM",
     baseUrl: "https://open.bigmodel.cn/api/paas/v4/",
     models: [
-      { id: "glm-5.2", label: "GLM-5.2（最新旗舰）" },
-      { id: "glm-4-flash", label: "GLM-4 Flash（轻量，免费）" },
+      { id: "glm-5.3", label: "GLM-5.3（最新旗舰，1M 上下文）" },
+      {
+        id: "glm-5.3-flash",
+        label: "GLM-5.3 Flash（原生多模态，1M 上下文，支持看图）",
+      },
+      { id: "glm-4.6v", label: "GLM-4.6V（视觉，128K 上下文）" },
+      { id: "glm-4.7-flash", label: "GLM-4.7 Flash（轻量，免费）" },
     ],
-    apiKeyHelpUrl: "https://open.bigmodel.cn/usercenter/apikeys",
+    apiKeyHelpUrl: "https://open.bigmodel.cn/apikey/platform",
     apiKeyHint: "API Key 是两段式（含点号），请完整复制",
   },
   volcengine: {
@@ -205,14 +218,13 @@ const PLATFORM_PRESETS = {
     baseUrl: "https://ark.cn-beijing.volces.com/api/v3",
     models: [
       {
-        id: "doubao-seed-2-0-pro-260215",
-        label: "Doubao Seed 2.0 Pro（旗舰）",
+        id: "doubao-seed-2-1-pro-260915",
+        label: "Doubao Seed 2.1 Pro（旗舰，支持看图）",
       },
       {
-        id: "doubao-seed-2-0-lite-260215",
-        label: "Doubao Seed 2.0 Lite（轻量）",
+        id: "doubao-seed-2-1-lite-260915",
+        label: "Doubao Seed 2.1 Lite（轻量，支持看图）",
       },
-      { id: "deepseek-v3-2-251201", label: "DeepSeek V3.2（方舟直供）" },
     ],
     apiKeyHelpUrl:
       "https://console.volcengine.com/ark/region:ark+cn-beijing/apikey",
@@ -223,9 +235,15 @@ const PLATFORM_PRESETS = {
     label: "OpenRouter（聚合多家模型）",
     baseUrl: "https://openrouter.ai/api/v1",
     models: [
-      { id: "openai/gpt-4o-mini", label: "GPT-4o mini（便宜）" },
-      { id: "anthropic/claude-sonnet-4", label: "Claude Sonnet 4（强）" },
-      { id: "deepseek/deepseek-chat", label: "DeepSeek Chat" },
+      { id: "openai/gpt-5-mini", label: "GPT-5 mini（便宜，支持看图）" },
+      {
+        id: "anthropic/claude-sonnet-4.5",
+        label: "Claude Sonnet 4.5（强，1M 上下文，支持看图）",
+      },
+      {
+        id: "deepseek/deepseek-v4.1-flash",
+        label: "DeepSeek V4.1 Flash（1M 上下文，支持看图）",
+      },
     ],
     apiKeyHelpUrl: "https://openrouter.ai/keys",
     apiKeyHint: "OpenRouter 的 Key 以 sk-or- 开头",
@@ -233,9 +251,11 @@ const PLATFORM_PRESETS = {
   openai: {
     label: "OpenAI 官方",
     baseUrl: "https://api.openai.com/v1",
+    // 不收录 gpt-6.x：其 tool calling 仅支持 Responses API，与 Chat Completions 代理不兼容
     models: [
-      { id: "gpt-4o-mini", label: "GPT-4o mini（便宜，推荐）" },
-      { id: "gpt-4o", label: "GPT-4o（旗舰）" },
+      { id: "gpt-5.6-terra", label: "GPT-5.6 Terra（均衡，推荐，支持看图）" },
+      { id: "gpt-5.6-sol", label: "GPT-5.6 Sol（旗舰，支持看图）" },
+      { id: "gpt-5.6-luna", label: "GPT-5.6 Luna（最便宜，支持看图）" },
     ],
     apiKeyHelpUrl: "https://platform.openai.com/api-keys",
   },
@@ -243,7 +263,7 @@ const PLATFORM_PRESETS = {
     label: "自定义（高级）",
     baseUrl: "",
     models: [],
-    // 回退到当前的三文本框模式
+    // 回退到三文本框模式
   },
 };
 ```

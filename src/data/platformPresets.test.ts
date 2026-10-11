@@ -8,35 +8,45 @@ import {
 describe("modelSupportsVision", () => {
   it("官方文档确认的视觉模型被标记", () => {
     expect(modelSupportsVision("deepseek", "deepseek-flash")).toBe(true);
+    expect(modelSupportsVision("kimi", "kimi-k3")).toBe(true);
     expect(modelSupportsVision("kimi", "kimi-k2.6")).toBe(true);
-    expect(modelSupportsVision("xiaomimimo", "mimo-v2.5")).toBe(true);
-    expect(modelSupportsVision("bailian", "qwen-plus")).toBe(true);
+    expect(modelSupportsVision("xiaomimimo", "mimo-v2.6-pro")).toBe(true);
+    expect(modelSupportsVision("xiaomimimo", "mimo-v2.6-flash")).toBe(true);
+    expect(modelSupportsVision("bailian", "qwen3.7-plus")).toBe(true);
+    expect(modelSupportsVision("bailian", "qwen3.8-max")).toBe(true);
+    expect(modelSupportsVision("glm", "glm-5.3-flash")).toBe(true);
     expect(modelSupportsVision("glm", "glm-4.6v")).toBe(true);
     expect(
-      modelSupportsVision("volcengine", "doubao-seed-2-0-pro-260215")
+      modelSupportsVision("volcengine", "doubao-seed-2-1-pro-260915")
     ).toBe(true);
     expect(
-      modelSupportsVision("volcengine", "doubao-seed-2-0-lite-260215")
+      modelSupportsVision("volcengine", "doubao-seed-2-1-lite-260915")
+    ).toBe(true);
+    expect(modelSupportsVision("openai", "gpt-5.6-terra")).toBe(true);
+    expect(modelSupportsVision("openrouter", "openai/gpt-5-mini")).toBe(true);
+    expect(
+      modelSupportsVision("openrouter", "anthropic/claude-sonnet-4.5")
     ).toBe(true);
   });
 
   it("纯文本 / 未收录 / 自定义平台模型一律视为不支持", () => {
     expect(modelSupportsVision("deepseek", "deepseek-v4-pro")).toBe(false);
-    // GLM-5.2 是纯文本旗舰（视觉由 4.6V 系列承担）
-    expect(modelSupportsVision("glm", "glm-5.2")).toBe(false);
-    expect(modelSupportsVision("xiaomimimo", "mimo-v2.5-pro")).toBe(false);
-    // openrouter / openai / custom 不提供截图工具
-    expect(modelSupportsVision("openai", "gpt-4o")).toBe(false);
-    expect(modelSupportsVision("openrouter", "openai/gpt-4o-mini")).toBe(false);
+    // GLM-5.3 是纯文本旗舰（视觉由 5.3-Flash / 4.6V 承担）
+    expect(modelSupportsVision("glm", "glm-5.3")).toBe(false);
+    expect(modelSupportsVision("bailian", "deepseek-v4-pro")).toBe(false);
     expect(modelSupportsVision("custom", "any-model")).toBe(false);
     // 未收录的模型 id（含已下线的旧名）
     expect(modelSupportsVision("deepseek", "deepseek-v4-flash")).toBe(false);
+    expect(modelSupportsVision("kimi", "moonshot-v1-8k")).toBe(false);
+    expect(modelSupportsVision("bailian", "qwen-turbo")).toBe(false);
     expect(modelSupportsVision("kimi", "no-such-model")).toBe(false);
   });
 
   it("新增的视觉模型条目存在于预设模型列表中", () => {
     expect(findModel("deepseek", "deepseek-flash")).not.toBeNull();
     expect(findModel("glm", "glm-4.6v")).not.toBeNull();
+    expect(findModel("kimi", "kimi-k3")).not.toBeNull();
+    expect(findModel("xiaomimimo", "mimo-v2.6-pro")).not.toBeNull();
   });
 
   it("各平台默认模型仍存在于模型列表中", () => {

@@ -11,6 +11,11 @@
 ### Changed
 
 - 大纲点击与全文搜索跳转从「只到目标页页首」升级为精确滚动到目标位置：大纲解析 dest 的 Y 坐标（XYZ / FitH 形态，复用条款链接预览的解析；Fit 等无坐标形态仍退化页首），搜索跳转携带匹配行的 PDF 坐标；目标上方保留 80px 上下文，且目标已在视口内时不再滚动，同页连续切换搜索匹配不再顿挫。
+- 全平台模型预设按各官方文档重新核对更新：Kimi 默认升级为 `kimi-k3`（1M 上下文、原生视觉），已下线的 `moonshot-v1` 全系列移出预设；Xiaomi MiMo 升级为 `mimo-v2.6-pro` / `mimo-v2.6-flash`（v2.5 系列已于 2026-10-21 失效）；阿里云百炼升级为 `qwen3.7-plus`（新默认）/ `qwen3.8-max` / `qwen-flash` / `deepseek-v4-pro`（均 1M 上下文），移除已停止调用的 `qwen-turbo` 与已下架的 `deepseek-v3`；智谱 GLM 默认升级为 `glm-5.3`（1M），新增原生多模态 `glm-5.3-flash` 与免费模型 `glm-4.7-flash`，`glm-4.6v` 上下文修正为 128K；火山引擎升级为 Seed 2.1 系列（`doubao-seed-2-1-pro/lite-260915`，256K，seed-2.0 已分批下线）；OpenAI 升级为 GPT-5.6 系列（terra / sol / luna，均支持图片输入）；OpenRouter 更新为 `gpt-5-mini` / `claude-sonnet-4.5` / `deepseek-v4.1-flash`；Kimi 的 API Key 帮助链接迁至 platform.kimi.com 新域名。已保存旧模型名的配置会自动迁移到各平台新默认模型。
+
+### Fixed
+
+- GLM-5.3 系列的 thinking 参数只接受 `enabled`，后端对 `glm-5.3*` 模型的「关闭思考」请求静默省略该参数，避免翻译、会话摘要等强制关闭思考的链路在选用 GLM-5.3 时被平台拒绝。
 
 ## [1.2.0] - 2026-10-11
 

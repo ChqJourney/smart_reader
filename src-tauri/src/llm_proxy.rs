@@ -277,12 +277,19 @@ fn chat_message_to_wire(msg: &ChatMessage) -> serde_json::Value {
     out
 }
 
+/// GLM-5.3 系列（含 flash/flashx）的 thinking.type 只接受 "enabled"，
+/// 发送 disabled 会被平台拒绝；对这些模型静默省略参数，退化为模型默认。
+fn thinking_cannot_be_disabled(model: &str) -> bool {
+    model.starts_with("glm-5.3")
+}
+
 /// Build the JSON request body for the chat completions API.
 ///
 /// Platform-specific thinking parameter handling:
-/// - DeepSeek: sends `thinking: {type:"enabled"}` + `reasoning_effort: "high"`
+/// - Enabled: sends `thinking: {type:"enabled"}` + `reasoning_effort: "high"`
 ///   (DeepSeek v4 models support thinking via parameter, not model name switch)
-/// - Other platforms: sends `thinking: {type:"enabled"|"disabled"}` top-level
+/// - Disabled: sends `thinking: {type:"disabled"}` top-level, except for model
+///   families whose API only accepts "enabled" (see thinking_cannot_be_disabled)
 /// - Auto: omits the parameter entirely (uses model default)
 /// - Always sends `stream_options: {include_usage: true}` to get token counts
 fn build_request_body(
@@ -307,7 +314,9 @@ fn build_request_body(
             body["reasoning_effort"] = serde_json::json!("high");
         }
         ThinkingMode::Disabled => {
-            body["thinking"] = serde_json::json!({"type": "disabled"});
+            if !thinking_cannot_be_disabled(model) {
+                body["thinking"] = serde_json::json!({"type": "disabled"});
+            }
         }
         ThinkingMode::Auto => {
             // Don't send the parameter; use model default
@@ -1159,6 +1168,26 @@ mod tests {
         );
         assert_eq!(body["thinking"]["type"], "disabled");
         assert!(body.get("reasoning_effort").is_none());
+    }
+
+    #[test]
+    fn build_request_body_disabled_thinking_omitted_for_glm53() {
+        // GLM-5.3 系列 thinking 只接受 enabled，disabled 请求静默省略参数
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            content: "hi".into(),
+            tool_call_id: None,
+            tool_calls: None,
+            reasoning_content: None,
+        }];
+        for model in ["glm-5.3", "glm-5.3-flash"] {
+            let body = build_request_body(&messages, model, &ThinkingMode::Disabled, false, false);
+            assert!(body.get("thinking").is_none(), "model={model}");
+            assert!(body.get("reasoning_effort").is_none(), "model={model}");
+        }
+        // GLM-5.2 等旧系列仍可正常关闭思考
+        let body = build_request_body(&messages, "glm-5.2", &ThinkingMode::Disabled, false, false);
+        assert_eq!(body["thinking"]["type"], "disabled");
     }
 
     #[test]

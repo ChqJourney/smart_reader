@@ -541,9 +541,7 @@ function App() {
       document.body.style.userSelect = "none";
       document.body.style.cursor = "grabbing";
     }
-    setIsDragOver(
-      dragDepsRef.current.isPointInMainArea(e.clientX, e.clientY)
-    );
+    setIsDragOver(dragDepsRef.current.isPointInMainArea(e.clientX, e.clientY));
   }, []);
 
   const handleTabDragMouseUp = useCallback(
@@ -1150,9 +1148,8 @@ function App() {
     }
   }, []);
 
-  const showBoth = layout.leftVisible && layout.rightVisible;
-  const showOnlyLeft = layout.leftVisible && !layout.rightVisible;
-  const showOnlyRight = !layout.leftVisible && layout.rightVisible;
+  const showBoth = layout.rightVisible;
+  const showOnlyLeft = !layout.rightVisible;
 
   const openFilePaths = useMemo(
     () => tabs.tabs.map((tab) => tab.filePath),
@@ -1442,25 +1439,18 @@ function App() {
               </button>
             )}
           </>
-        ) : layout.leftVisible ? (
+        ) : (
           <>
             {tabs.tabs.length === 0 ? (
               <div
                 className={`pdf-panel ${showOnlyLeft ? "expanded" : ""}`}
-                style={
-                  showBoth
-                    ? { width: `${layout.leftPct}%` }
-                    : showOnlyLeft
-                      ? { flex: 1 }
-                      : undefined
-                }
+                style={showBoth ? { width: `${layout.leftPct}%` } : { flex: 1 }}
               >
                 <PdfViewer
                   ref={pdfViewerRef}
                   filePath=""
                   onPdfLoaded={handlePdfLoaded}
                   onSelection={handleSelection}
-                  onToggleVisibility={layout.toggleLeft}
                   onStateChange={tabs.handleViewerStateChange}
                   onAnnotationUpdate={persistence.handleAnnotationUpdate}
                   onAnnotationDelete={persistence.handleAnnotationDelete}
@@ -1484,11 +1474,7 @@ function App() {
                       isActiveTab ? "" : "viewer-hidden"
                     }`}
                     style={
-                      showBoth
-                        ? { width: `${layout.leftPct}%` }
-                        : showOnlyLeft
-                          ? { flex: 1 }
-                          : undefined
+                      showBoth ? { width: `${layout.leftPct}%` } : { flex: 1 }
                     }
                   >
                     {tab.hibernated ? (
@@ -1507,9 +1493,6 @@ function App() {
                         cachedBytes={pdfCacheRef.current.get(tab.filePath)}
                         onPdfLoaded={handlePdfLoaded}
                         onSelection={handleSelection}
-                        onToggleVisibility={
-                          isActiveTab ? layout.toggleLeft : undefined
-                        }
                         initialState={{
                           pageNum: tab.pageNum,
                           scale: tab.scale,
@@ -1542,65 +1525,9 @@ function App() {
             )}
             {layout.rightVisible ? (
               <div
-                className={`right-panel ${showOnlyRight ? "expanded" : ""}`}
-                style={
-                  showBoth
-                    ? { width: `${layout.rightPct}%` }
-                    : showOnlyRight
-                      ? { flex: 1 }
-                      : undefined
-                }
+                className="right-panel"
+                style={{ width: `${layout.rightPct}%` }}
               >
-                <AiChatPanel
-                  stashes={persistence.visibleTabStashes}
-                  sessions={persistence.visibleTabSessions}
-                  allSessions={persistence.sessions}
-                  expandedSessionId={persistence.findSessionIdByAnnotationId(
-                    tabs.activeTab?.highlightedAnnotationId ?? ""
-                  )}
-                  onRemoveStash={persistence.handleRemoveStash}
-                  onUpdateStash={persistence.handleUpdateStash}
-                  onClearStashes={persistence.handleClearStashes}
-                  onOpenCustomInterpret={handleOpenCustomInterpret}
-                  onFreeQuestion={persistenceHandleFreeQuestion}
-                  canAsk={!!focusedTab?.fileHash}
-                  agentToolsEnabled={settings.agentToolsEnabled}
-                  onGotoStash={handleGotoStash}
-                  onGotoSession={handleGotoSession}
-                  onFollowUp={persistence.handleFollowUp}
-                  onInterrupt={persistence.handleInterruptSession}
-                  onDeleteSession={persistence.handleDeleteSession}
-                  onToggleVisibility={layout.toggleRight}
-                  contextWindow={contextWindow}
-                  sessionSortMode={settings.sessionSortMode}
-                  onSessionSortModeChange={handleSessionSortModeChange}
-                  tabRequest={panelTabRequest}
-                  expandSessionRequest={expandSessionRequest}
-                />
-              </div>
-            ) : (
-              <button
-                className="icon-btn panel-toggle collapsed right"
-                onClick={layout.toggleRight}
-                aria-label={t("app.showAiAssistant")}
-                title={t("app.showAiAssistant")}
-              >
-                <Icon name="panel-expand-right" size={16} />
-              </button>
-            )}
-          </>
-        ) : (
-          <>
-            <button
-              className="icon-btn panel-toggle collapsed left"
-              onClick={layout.toggleLeft}
-              aria-label={t("app.showPdf")}
-              title={t("app.showPdf")}
-            >
-              <Icon name="panel-expand-left" size={16} />
-            </button>
-            {layout.rightVisible ? (
-              <div className="right-panel expanded" style={{ flex: 1 }}>
                 <AiChatPanel
                   stashes={persistence.visibleTabStashes}
                   sessions={persistence.visibleTabSessions}

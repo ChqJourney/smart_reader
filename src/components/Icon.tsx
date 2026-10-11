@@ -25,8 +25,6 @@ export type IconName =
   | "edit"
   | "panel-left"
   | "panel-right"
-  | "panel-collapse-left"
-  | "panel-expand-left"
   | "panel-collapse-right"
   | "panel-expand-right"
   | "fit-to-width"
@@ -407,44 +405,6 @@ const ICON_PATHS: Record<IconName, React.ReactNode> = {
         stroke="currentColor"
         strokeWidth="1.5"
         strokeLinecap="round"
-      />
-    </>
-  ),
-  "panel-collapse-left": (
-    <>
-      <path
-        d="M3 6h8M3 10h8M3 14h8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M15 6l-4 4 4 4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </>
-  ),
-  "panel-expand-left": (
-    <>
-      <path
-        d="M3 6h8M3 10h8M3 14h8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-      <path
-        d="M11 6l4 4-4 4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
       />
     </>
   ),

@@ -21,18 +21,6 @@ test.describe("App E2E", () => {
     await expect(page.getByTestId("open-pdf-btn")).toBeVisible();
   });
 
-  test("toggles PDF panel", async ({ page }) => {
-    const hidePdfButton = page.getByTitle("隐藏 PDF 面板");
-    await expect(hidePdfButton).toBeVisible();
-
-    await hidePdfButton.click();
-    await expect(hidePdfButton).not.toBeVisible();
-    await expect(page.getByTitle("显示 PDF")).toBeVisible();
-
-    await page.getByTitle("显示 PDF").click();
-    await expect(page.getByTitle("隐藏 PDF 面板")).toBeVisible();
-  });
-
   test("toggles AI panel", async ({ page }) => {
     const hideAiButton = page.getByTitle("隐藏面板");
     await expect(hideAiButton).toBeVisible();

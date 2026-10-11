@@ -108,13 +108,11 @@
   outline: none;
 }
 
-.pdf-hide-btn,
 .pdf-outline-toggle,
 .pdf-search-toggle {
   color: var(--text-secondary);
 }
 
-.pdf-hide-btn:hover,
 .pdf-outline-toggle:hover,
 .pdf-search-toggle:hover {
   background: var(--surface-hover);

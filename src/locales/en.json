@@ -7,7 +7,6 @@
     "exitSplit": "Exit Split",
     "enterSplitView": "Side by Side",
     "dropToSplit": "Release to open side by side",
-    "showPdf": "Show PDF",
     "showAiAssistant": "Show AI Assistant",
     "minimize": "Minimize",
     "toggleMaximize": "Maximize / Restore",
@@ -64,7 +63,6 @@
     "overlayHint": "Release to open PDF"
   },
   "pdf": {
-    "hidePanel": "Hide PDF Panel",
     "previousPage": "Previous Page (PageUp)",
     "nextPage": "Next Page (PageDown)",
     "pageNumber": "Page Number",

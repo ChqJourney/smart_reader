@@ -82,7 +82,6 @@ vi.mock("./components/PdfViewer", () => ({
         tabId,
         filePath,
         onSelection,
-        onToggleVisibility,
         onStateChange,
         initialState,
         annotations,
@@ -96,7 +95,6 @@ vi.mock("./components/PdfViewer", () => ({
           page: number,
           position: { x: number; y: number; pdfX: number; pdfY: number }
         ) => void;
-        onToggleVisibility?: () => void;
         onStateChange?: (state: { pageNum?: number }) => void;
         initialState?: { pageNum?: number };
         annotations?: {
@@ -165,11 +163,6 @@ vi.mock("./components/PdfViewer", () => ({
               </div>
             );
           })}
-          {onToggleVisibility && (
-            <button title="隐藏 PDF 面板" onClick={onToggleVisibility}>
-              隐藏
-            </button>
-          )}
         </div>
       );
     }
@@ -420,16 +413,8 @@ describe("App", () => {
     });
   });
 
-  it("toggles left and right panels", () => {
+  it("toggles the right AI panel", () => {
     renderApp();
-
-    const hidePdfBtn = screen.getByTitle(/隐藏 PDF/i);
-    fireEvent.click(hidePdfBtn);
-    expect(screen.queryByTestId("pdf-viewer")).not.toBeInTheDocument();
-
-    const showPdfBtn = screen.getByTitle(/显示 PDF/i);
-    fireEvent.click(showPdfBtn);
-    expect(screen.getByTestId("pdf-viewer")).toBeInTheDocument();
 
     const hideAiBtn = screen.getByTitle(/隐藏面板/i);
     fireEvent.click(hideAiBtn);

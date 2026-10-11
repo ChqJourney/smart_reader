@@ -78,7 +78,6 @@ interface PdfViewerProps {
       height?: number;
     }
   ) => void;
-  onToggleVisibility?: () => void;
   initialState?: Partial<PdfViewerState & { pendingGotoPage?: number }>;
   /**
    * 上报 viewer 状态。keep-alive 下多个 viewer 同时挂载，必须携带 tabId，
@@ -187,7 +186,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       cachedBytes,
       onPdfLoaded,
       onSelection,
-      onToggleVisibility,
       initialState,
       onStateChange,
       onClearPendingGotoPage,
@@ -1110,16 +1108,6 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
       <div className="pdf-viewer">
         <div className="pdf-controls">
           <div className="pdf-controls-left">
-            {onToggleVisibility && (
-              <button
-                onClick={onToggleVisibility}
-                className="icon-btn pdf-hide-btn"
-                aria-label={t("pdf.hidePanel")}
-                title={t("pdf.hidePanel")}
-              >
-                <Icon name="panel-collapse-left" size={16} />
-              </button>
-            )}
             <button
               onClick={() => setOutlineOpen((v) => !v)}
               className={`icon-btn pdf-outline-toggle ${outlineOpen ? "active" : ""}`}

@@ -500,6 +500,9 @@ body {
 .split-view-enter {
   margin-left: auto;
   flex-shrink: 0;
+  /* tab 栏横向溢出滚动时钉在可视区右缘，避免被容器右边缘裁掉 */
+  position: sticky;
+  right: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -703,11 +706,6 @@ body {
   box-shadow: none;
 }
 
-.panel-toggle.collapsed.left {
-  border-left: none;
-  border-right: 1px solid var(--border-default);
-}
-
 .panel-toggle.collapsed.right {
   border-right: none;
   border-left: 1px solid var(--border-default);
@@ -752,4 +750,21 @@ body {
 
 .split-coachmark-close:hover {
   background: rgba(255, 255, 255, 0.35);
+}
+
+/* ── 窄窗口降级（必须置于文件末尾：同优先级下媒体查询不加分，
+     写在基础规则之前会被后者覆盖而失效） ───────────────────
+   窗口收窄时并排对照按钮隐去文字只留图标（title/aria-label 仍提供
+   完整提示）。断点 1024px 需大于窗口最小宽度 minWidth=1000
+   （tauri.conf.json），否则永远无法触发。 */
+@media (max-width: 1024px) {
+  .split-view-enter span,
+  .split-view-exit span {
+    display: none;
+  }
+
+  .split-view-enter,
+  .split-view-exit {
+    padding: 5px 8px;
+  }
 }

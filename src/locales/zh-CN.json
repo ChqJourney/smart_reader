@@ -7,7 +7,6 @@
     "exitSplit": "退出并排",
     "enterSplitView": "并排对照",
     "dropToSplit": "松开以并排打开",
-    "showPdf": "显示 PDF",
     "showAiAssistant": "显示 AI 助手",
     "minimize": "最小化",
     "toggleMaximize": "最大化 / 还原",
@@ -64,7 +63,6 @@
     "overlayHint": "松开以打开 PDF"
   },
   "pdf": {
-    "hidePanel": "隐藏 PDF 面板",
     "previousPage": "上一页（PageUp）",
     "nextPage": "下一页（PageDown）",
     "pageNumber": "页码",

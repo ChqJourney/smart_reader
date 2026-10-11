@@ -14,11 +14,9 @@ export interface RightPanelLayout {
 
 export interface UseRightPanelLayoutReturn {
   mainRef: React.RefObject<HTMLElement>;
-  leftVisible: boolean;
   rightVisible: boolean;
   rightPanelWidth: number;
   setRightPanelWidth: (width: number) => void;
-  toggleLeft: () => void;
   toggleRight: () => void;
   openRightPanel: () => void;
   startResize: () => void;
@@ -35,7 +33,6 @@ export function useRightPanelLayout(
   const initialLayoutRef = useRef(initialLayout);
   const rightPanelWidthRef = useRef(initialLayout.width);
 
-  const [leftVisible, setLeftVisible] = useState(true);
   const [rightVisible, setRightVisible] = useState(initialLayout.visible);
   const [rightPanelWidth, setRightPanelWidthState] = useState<number>(
     Math.round(initialLayout.width)
@@ -188,7 +185,6 @@ export function useRightPanelLayout(
     document.body.style.userSelect = "none";
   }, []);
 
-  const toggleLeft = useCallback(() => setLeftVisible((v) => !v), []);
   const toggleRight = useCallback(() => setRightVisible((v) => !v), []);
   const openRightPanel = useCallback(() => setRightVisible(true), []);
 
@@ -218,11 +214,9 @@ export function useRightPanelLayout(
   return useMemo(
     () => ({
       mainRef,
-      leftVisible,
       rightVisible,
       rightPanelWidth,
       setRightPanelWidth,
-      toggleLeft,
       toggleRight,
       openRightPanel,
       startResize,
@@ -231,11 +225,9 @@ export function useRightPanelLayout(
       rightPct,
     }),
     [
-      leftVisible,
       rightVisible,
       rightPanelWidth,
       setRightPanelWidth,
-      toggleLeft,
       toggleRight,
       openRightPanel,
       startResize,

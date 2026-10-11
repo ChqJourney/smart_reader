@@ -8,6 +8,7 @@ import {
 } from "@testing-library/react";
 import PdfViewer, {
   computeContinuousScrollTop,
+  JUMP_TARGET_TOP_MARGIN,
   PageViewportInfo,
 } from "./PdfViewer";
 import { invoke } from "@tauri-apps/api/core";
@@ -85,17 +86,18 @@ function createMockPdf() {
     getOutline: vi.fn(() => Promise.resolve([])),
     getPage: vi.fn(async (pageNum: number) => {
       const height = PAGE_HEIGHTS[pageNum - 1] ?? 300;
-      const viewport = {
-        width: 200 * SCALE,
-        height: height * SCALE,
-        scale: SCALE,
-        convertToViewportPoint: (x: number, y: number) => [
-          x * SCALE,
-          y * SCALE,
-        ],
-      };
       return {
-        getViewport: () => viewport,
+        // Honor the requested scale: outline dest resolution converts with a
+        // scale=1 viewport while the viewer layout uses the live scale.
+        getViewport: ({ scale = 1 }: { scale?: number } = {}) => ({
+          width: 200 * scale,
+          height: height * scale,
+          scale,
+          convertToViewportPoint: (x: number, y: number) => [
+            x * scale,
+            y * scale,
+          ],
+        }),
         render: () => ({ promise: Promise.resolve() }),
         getTextContent: () => Promise.resolve({ items: [] }),
         getAnnotations: () => Promise.resolve([]),
@@ -739,6 +741,117 @@ describe("PdfViewer continuous mode page jump", () => {
       expect(screen.getByText("Section 1")).toBeInTheDocument();
       expect(screen.getByText("Section 2")).toBeInTheDocument();
     });
+  });
+
+  it("jumps to the outline destination's exact Y position, not just the page top", async () => {
+    // dest 为 XYZ 形态，带用户空间 Y=400；mock 的 scale=1 viewport 转换后
+    // pdfY 同为 400，跳转应滚到「页首 + 400 × live scale − 上方留白」。
+    const DEST_USER_Y = 400;
+    const outlineItems = [
+      {
+        title: "Deep Section",
+        dest: [{ num: 5, gen: 0 }, { name: "XYZ" }, 0, DEST_USER_Y, 0],
+        url: null,
+        items: [],
+      },
+    ];
+
+    const mockPdfWithOutline = {
+      ...createMockPdf(),
+      getOutline: vi.fn(() => Promise.resolve(outlineItems)),
+      getPageIndex: vi.fn(() => Promise.resolve(4)), // → 第 5 页
+    };
+
+    mockGetDocument.mockReturnValue({
+      promise: Promise.resolve(mockPdfWithOutline),
+    });
+
+    const { container } = render(
+      <PdfViewer filePath="/fake/test.pdf" settings={DEFAULT_SETTINGS} />
+    );
+
+    const pageInput = await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
+      if (!input || input.disabled) {
+        throw new Error("page input not ready yet");
+      }
+      return input;
+    });
+    await waitForViewportsReady(container);
+
+    fireEvent.click(screen.getByLabelText("目录"));
+    fireEvent.click(await screen.findByText("Deep Section"));
+
+    const canvasContainer = container.querySelector(
+      ".pdf-canvas-container.continuous"
+    ) as HTMLDivElement;
+    expect(canvasContainer).not.toBeNull();
+
+    await waitFor(() => {
+      expect(canvasContainer.scrollTop).toBe(
+        expectedScrollTopForPage(5) +
+          DEST_USER_Y * SCALE -
+          JUMP_TARGET_TOP_MARGIN
+      );
+    });
+    expect(pageInput.textContent).toBe("5");
+  });
+
+  it("does not scroll when the jump target is already inside the viewport", async () => {
+    // dest 指向第 1 页中部（pdfY=200 → live 坐标 300px），容器高 800px：
+    // 目标已在视口舒适区内，跳转应只更新页码、不触发滚动。
+    const outlineItems = [
+      {
+        title: "Top Section",
+        dest: [{ num: 1, gen: 0 }, { name: "XYZ" }, 0, 200, 0],
+        url: null,
+        items: [],
+      },
+    ];
+
+    const mockPdfWithOutline = {
+      ...createMockPdf(),
+      getOutline: vi.fn(() => Promise.resolve(outlineItems)),
+      getPageIndex: vi.fn(() => Promise.resolve(0)),
+    };
+
+    mockGetDocument.mockReturnValue({
+      promise: Promise.resolve(mockPdfWithOutline),
+    });
+
+    const { container } = render(
+      <PdfViewer filePath="/fake/test.pdf" settings={DEFAULT_SETTINGS} />
+    );
+
+    await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
+      if (!input || input.disabled) {
+        throw new Error("page input not ready yet");
+      }
+      return input;
+    });
+    await waitForViewportsReady(container);
+
+    const canvasContainer = container.querySelector(
+      ".pdf-canvas-container.continuous"
+    ) as HTMLDivElement;
+    expect(canvasContainer).not.toBeNull();
+    Object.defineProperty(canvasContainer, "clientHeight", {
+      value: 800,
+      configurable: true,
+    });
+
+    fireEvent.click(screen.getByLabelText("目录"));
+    scrollToSpy.mockClear();
+    fireEvent.click(await screen.findByText("Top Section"));
+
+    // 让大纲点击的异步 dest 解析链跑完。
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(scrollToSpy).not.toHaveBeenCalled();
   });
 
   it("auto fits to width after mount restore when autoFitToWidth is set, keeping the page number", async () => {

@@ -29,8 +29,9 @@ export interface SearchMatch {
   id: string;
   page: number;
   /**
-   * Bounding box of the first contributing text item. Kept for compatibility
-   * with consumers that use a match as a page-navigation target.
+   * Bounding box of the first contributing text item. Doubles as the
+   * page-navigation target: the viewer scrolls to (page, pdfY) so the active
+   * match line lands in view instead of the page top.
    */
   pdfX: number;
   pdfY: number;
@@ -138,8 +139,11 @@ export interface UseSearchDomainOptions {
    * changes — which happens whenever `pageViewports` updates and is the root
    * cause of the "search pulls the user back to the active match page" loop
    * (issue 10.2).
+   *
+   * The second parameter carries the match's PDF-space Y so the viewer can
+   * scroll to the exact match line instead of the page top.
    */
-  goToPageRef: React.RefObject<(page: number) => void>;
+  goToPageRef: React.RefObject<(page: number, pdfY?: number) => void>;
 }
 
 export interface UseSearchDomainResult {
@@ -261,11 +265,14 @@ export function useSearchDomain({
   // depends only on [searchActiveIndex, searchMatches] — NOT on goToPage's
   // identity. This breaks the "pageViewports update → goToPage changes →
   // effect re-runs → pulls user back" loop (issue 10.2).
+  // match.pdfY (scale=1 viewport coords) lets the viewer scroll precisely to
+  // the match line instead of the page top; the viewer skips the scroll when
+  // the target is already comfortably inside the viewport.
   useEffect(() => {
     if (searchActiveIndex < 0 || searchActiveIndex >= searchMatches.length)
       return;
     const match = searchMatches[searchActiveIndex];
-    goToPageRef.current?.(match.page);
+    goToPageRef.current?.(match.page, match.pdfY);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchActiveIndex, searchMatches]);
 

@@ -206,7 +206,7 @@ describe("useSearchDomain", () => {
     expect(h2.y).toBe(16); // (20-12)*2 = 16
   });
 
-  it("jumps to the active match via goToPageRef, not re-jumping on identity change (10.2)", async () => {
+  it("jumps to the active match via goToPageRef with the match Y, not re-jumping on identity change (10.2)", async () => {
     const pdf = makeMockPdf([
       [{ str: "hello", x: 10, y: 20, width: 50, height: 12 }],
     ]);
@@ -226,8 +226,10 @@ describe("useSearchDomain", () => {
       result.current.setSearchQuery("hello");
     });
     await waitFor(() => expect(result.current.searchMatches.length).toBe(1));
-    // active-match effect fires once for the initial active index
-    await waitFor(() => expect(goToPage1).toHaveBeenCalledWith(1));
+    // active-match effect fires once for the initial active index, carrying
+    // the match's PDF-space Y (baseline 20 − height 12 = 8) so the viewer
+    // can scroll to the exact match line instead of the page top.
+    await waitFor(() => expect(goToPage1).toHaveBeenCalledWith(1, 8));
 
     // Simulate pageViewports updating → PdfViewer rebuilds goToPage (new
     // identity). The active effect must NOT re-run (deps unchanged).

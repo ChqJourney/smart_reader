@@ -35,7 +35,7 @@ import {
 } from "../hooks/useViewportManager";
 import { useScrollPageSync } from "../hooks/useScrollPageSync";
 import { useTabRestore } from "../hooks/useTabRestore";
-import { useLinkPreviews } from "../hooks/useLinkPreviews";
+import { useLinkPreviews, resolveLinkDest } from "../hooks/useLinkPreviews";
 import { usePanScroll } from "../hooks/usePanScroll";
 import LinkPreviewPopup from "./LinkPreviewPopup";
 import "./PdfViewer.css";
@@ -56,7 +56,11 @@ export interface PdfViewerState {
 }
 
 export interface PdfViewerHandle {
-  goToPage: (page: number) => void;
+  /**
+   * 跳转到指定页。可选 pdfY（scale=1 viewport 坐标，与搜索匹配 / 批注
+   * position 同一坐标系）把滚动位置精确到页内该行，缺省滚到页首。
+   */
+  goToPage: (page: number, pdfY?: number) => void;
 }
 
 interface PdfViewerProps {
@@ -123,6 +127,11 @@ interface PdfViewerProps {
 const SCROLL_STEP = 80; // px for arrow keys
 const CONTAINER_PADDING_TOP = 24; // must match .pdf-canvas-container.continuous padding-top
 const PAGE_SPACING = 24; // must match .pdf-page-wrapper margin-bottom
+/**
+ * 页内精确跳转（搜索匹配 / 大纲 dest）目标位置上方的留白：不顶死视口上沿，
+ * 给目标行留出上下文。同时用作「目标已在视口内则不滚动」判定的舒适边距。
+ */
+export const JUMP_TARGET_TOP_MARGIN = 80;
 
 export function computeContinuousScrollTop(
   targetPage: number,
@@ -361,7 +370,9 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // so the active-match effect does NOT depend on its identity — breaking the
     // "pageViewports update → goToPage changes → effect re-runs → pulls user
     // back" loop (issue 10.2). The ref is populated after goToPage is defined.
-    const goToPageRef = useRef<(page: number) => void>(() => {});
+    const goToPageRef = useRef<(page: number, pdfY?: number) => void>(
+      () => {}
+    );
     const {
       searchOpen,
       setSearchOpen,
@@ -405,7 +416,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
 
     // Expose imperative goToPage for external triggers (e.g. annotation goto)
     useImperativeHandle(ref, () => ({
-      goToPage: (target: number) => goToPage(target),
+      goToPage: (target: number, pdfY?: number) => goToPage(target, pdfY),
     }));
 
     // Ensure any temporary scroll listener registered by goToPage is removed when
@@ -748,7 +759,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     }, [captureCursorAnchor, isZoomingRef]);
 
     const goToPage = useCallback(
-      (target: number) => {
+      (target: number, pdfY?: number) => {
         if (numPages === 0) return;
         const page = Math.max(1, Math.min(numPages, target));
         setPageNum(page);
@@ -758,7 +769,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
           // 会用第一次跳转的目标页配上当前 scrollTop 上报过期状态，并提前
           // 释放第二次跳转的保护锁。
           jumpScrollCleanupRef.current?.();
-          const top = computeContinuousScrollTop(
+          const pageTop = computeContinuousScrollTop(
             page,
             container,
             (p) => pageWrapperRefs.current[p - 1],
@@ -769,6 +780,23 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
             pageViewportsRef.current,
             scaleRef.current
           );
+          let top = pageTop;
+          if (pdfY != null) {
+            // 页内精确跳转（搜索匹配 / 大纲 dest）：pdfY 为 scale=1 viewport
+            // 坐标，× live scale 得到目标行在容器内容坐标系中的位置。
+            const targetTop = pageTop + pdfY * scaleRef.current;
+            const viewTop = container.scrollTop;
+            const viewBottom = viewTop + container.clientHeight;
+            // 目标已落在视口舒适区内：只更新页码、不动滚动位置——同页连续
+            // 切换搜索匹配时页面不顿挫。
+            if (
+              targetTop >= viewTop + JUMP_TARGET_TOP_MARGIN &&
+              targetTop <= viewBottom - JUMP_TARGET_TOP_MARGIN
+            ) {
+              return;
+            }
+            top = targetTop - JUMP_TARGET_TOP_MARGIN;
+          }
           // Set the jump lock synchronously so any scroll events fired by the
           // following scrollTo() are ignored. React state would not be committed
           // in time, so a ref is required.
@@ -883,16 +911,24 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         } catch (err) {
           logError(`Failed to open outline URL: ${err}`);
         }
-      } else if (item.dest) {
+      } else if (item.dest && pdf) {
         try {
-          const dest =
-            typeof item.dest === "string"
-              ? await pdf!.getDestination(item.dest)
-              : item.dest;
-          if (!dest || !Array.isArray(dest)) return;
-          const ref = dest[0];
-          const pageIndex = await pdf!.getPageIndex(ref);
-          goToPage(pageIndex + 1);
+          // 复用条款链接预览的 dest 解析（具名 dest 查表、XYZ/FitH 取 Y，
+          // 坏引用返回 null），把跳转从页首精确到目标章节所在行。
+          const target = await resolveLinkDest(pdf, item.dest);
+          if (!target) return;
+          let pdfY: number | undefined;
+          if (target.destY !== null) {
+            // destY 是 PDF 用户空间坐标（原点左下），转成 scale=1 viewport
+            // 坐标（原点左上，与搜索匹配 / 批注同一坐标系）；
+            // convertToViewportPoint 已处理页面旋转。
+            const page = await pdf.getPage(target.page);
+            const [, vy] = page
+              .getViewport({ scale: 1 })
+              .convertToViewportPoint(0, target.destY);
+            pdfY = vy;
+          }
+          goToPage(target.page, pdfY);
         } catch (err) {
           logError(`Failed to navigate to outline destination: ${err}`);
         }

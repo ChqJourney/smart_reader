@@ -22,8 +22,8 @@
 - 拖拽 PDF 文件到窗口内直接打开（Tauri 系统级文件拖放，`hooks/useFileDrop.ts` 监听 `onDragDropEvent`，全窗口遮罩提示，非 PDF 静默忽略；复用 `openPdfByPath` 打开链路）。遮罩带看门狗：`enter`/`over` 事件喂定时器，事件流停顿 1.5s 或窗口 blur 时强制隐藏（慢网盘下原生 leave/drop 可能延迟或丢失）。打开链路为单遍读取：`addTab` 先 `read_pdf_bytes`（后端同遍算 SHA-256 预热 hash 缓存），随后 `get_pdf_hash` 仅 metadata 校验即命中，字节直接写入 App 级 `pdfCacheRef` 供 viewer 渲染——局域网文件从两遍网络传输降为一遍；路径去重优先于一切 I/O（重复拖入已打开文件零读盘）；在飞期间 `tabs.openingPaths` 驱动底部「正在打开」toast，失败经 `showMessage` 弹窗提示不再静默。注意：开启系统拖放后 WebView2 会接管页面内全部 HTML5 拖放事件，tab→分屏的拖拽因此是鼠标拖拽实现（mousedown + 阈值 + 全局 mousemove/mouseup，App.tsx 内局部实现），不是 HTML5 DnD。
 - 右侧页码滑轨（PageRail）：替代原生垂直滚动条（CSS 隐藏，水平滚动条保留），拖动 / 悬停时显示页码 tooltip；拖动直接驱动连续滚动的 scrollTop。
 - Cmd/Ctrl+G 跳页面板（PageJumpPanel）：手动输入页码回车跳转，跳转时阅读区中央闪现大数字页码闪卡（600ms 定时清除）；工具栏页码显示为按钮，点击同样打开跳页面板。
-- 全文搜索（Ctrl / Cmd + F，支持跨 text item 短语匹配，结果逐页高亮、Enter / Shift+Enter 前后跳转）。
-- 大纲 / 目录导航面板（PDF 自带 outline 时可用，点击跳转章节）。
+- 全文搜索（Ctrl / Cmd + F，支持跨 text item 短语匹配，结果逐页高亮、Enter / Shift+Enter 前后跳转，跳转精确滚动到匹配所在行——goToPage 携带匹配 pdfY，目标已在视口内则不滚动）。
+- 大纲 / 目录导航面板（PDF 自带 outline 时可用，点击跳转章节，复用 useLinkPreviews 的 resolveLinkDest 解析 dest：XYZ / FitH 取 Y 精确滚动到目标行，其余形态退化页首）。
 - 选中文本后浮动工具条：加入暂存、解读、自定义解读（暂存所选并直达弹窗）、翻译、复制、批注（comment 浮层，可拖动编辑）。
 - 翻译生成可拖动 / 隐藏 / 删除的浮层批注。
 - 解读生成蓝色标记（生成中带呼吸态），点击标记打开 InterpretPopup 内联展示解读结果（流式/错误态、原文折叠、查看解读/重新解读/删除）；发起解读 / 自定义解读发送 / 重新解读后右侧面板直接进入新会话 chatbox 观看流式输出（`expandSessionRequest`，与自由提问一致）；右侧面板展示可点击跳转的解读记录（页码+类型徽章+LLM 一句话摘要，支持「当前文档/全部文档」过滤、排序下拉（最近活动/创建时间/按页码，按页码仅当前文档范围可选，选择持久化到 settings）与面板内删除会话），支持多轮追问。
@@ -200,6 +200,7 @@ npm install
 │   ├── app.spec.ts                    # 主布局 / 面板显隐 / 设置
 │   ├── multi-tab-state.spec.ts        # 多 tab 状态隔离
 │   ├── pdf-large-doc.spec.ts          # 大文档 fit 不偏移 / 深度缩放页码稳定 / 快速切 tab 恢复
+│   ├── pdf-outline-jump.spec.ts       # 大纲点击精确跳转到 dest 所在行（sample-outline.pdf，XYZ dest 已知坐标）
 │   ├── pdf-page-jump.spec.ts          # 连续滚动页码跳转 / Cmd+G 跳页面板 / 右侧滑轨拖动
 │   ├── pdf-rapid-zoom.spec.ts         # 快速缩放回归
 │   ├── pdf-selection-translate.spec.ts # 选区翻译流程
@@ -210,6 +211,7 @@ npm install
 │   ├── gen-sample-short-pdf.mjs       # 生成短页测试 PDF
 │   ├── gen-sample-long-pdf.mjs        # 生成 60 页大文档测试 PDF
 │   ├── gen-sample-link-pdf.mjs        # 生成带内部交叉引用链接的演示 PDF（画中画录制素材）
+│   ├── gen-sample-outline-pdf.mjs     # 生成带大纲（XYZ dest 指向已知行）的测试 PDF
 │   ├── bump-version.mjs               # 同步 package.json / Cargo.toml / Cargo.lock / tauri.conf.json 版本号
 │   └── prepare-release.mjs            # 发布前固化 CHANGELOG 版本段落并提取 Release notes
 ├── CHANGELOG.md                       # 版本变更记录（GitHub Release notes 来源）
@@ -513,9 +515,10 @@ runSessionStream（usePersistence.ts）
 
 ### 8.2 E2E 测试
 
-- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 8 个 spec：
+- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 9 个 spec：
   - `app.spec.ts`：主布局、顶部最近文件入口、设置 Modal、面板显隐。
   - `pdf-page-jump.spec.ts`：连续滚动模式下页码跳转正确性、Cmd/Ctrl+G 跳页面板（输入回车跳转 + 闪卡）、右侧滑轨拖动跳页，使用 mock 的 Tauri `invoke` 返回 PDF 字节。
+  - `pdf-outline-jump.spec.ts`：大纲点击精确跳转到 dest 所在行（fixtures `sample-outline.pdf` 由 `gen-sample-outline-pdf.mjs` 生成，XYZ dest 指向已知行位置，断言 scrollTop = 页首 + pdfY×scale − 留白）。
   - `multi-tab-state.spec.ts`：多 tab 页码/批注隔离、关闭 tab 后状态保持。
   - `pdf-large-doc.spec.ts`：>50 页大文档回归——适合宽度不横向偏移、深度缩放页码不抖动、快速切换 tab 恢复页码（fixtures 含 `gen-sample-long-pdf.mjs` 生成的 60 页 PDF）。
   - `pdf-rapid-zoom.spec.ts`：快速缩放回归。

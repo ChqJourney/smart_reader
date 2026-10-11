@@ -45,7 +45,7 @@ landing/
 
 本页面通过 `.github/workflows/landing.yml` 自动部署到 GitHub Pages。
 
-- 触发条件：`main` 分支下 `landing/` 目录有变更时自动触发，也可手动触发。
+- 触发条件：`master` 分支下 `landing/` 目录有变更时自动触发，也可手动触发。
 - 访问地址：`https://chqjourney.github.io/smart_reader/`
 
 ## 替换 GIF

@@ -13,14 +13,21 @@
 │   └── test/                     # 测试工具与全局 mock
 │       ├── setup.ts              # Vitest 全局 setup
 │       └── mocks/tauri.ts        # Tauri invoke mock 辅助
-├── e2e/                          # Playwright E2E 测试（6 个 spec）
-│   ├── fixtures/                 # 测试用 PDF（gen-sample-*.mjs 生成，含 60 页大文档）
+├── e2e/                          # Playwright E2E 测试（13 个 spec）
+│   ├── fixtures/                 # 测试用 PDF（gen-sample-*.mjs 生成，含 60 页大文档与带大纲/内链的 PDF）
 │   ├── app.spec.ts
-│   ├── pdf-page-jump.spec.ts
 │   ├── multi-tab-state.spec.ts
+│   ├── pdf-interpret-stream.spec.ts
 │   ├── pdf-large-doc.spec.ts
+│   ├── pdf-link-preview.spec.ts
+│   ├── pdf-outline-jump.spec.ts
+│   ├── pdf-page-jump.spec.ts
 │   ├── pdf-rapid-zoom.spec.ts
-│   └── pdf-selection-translate.spec.ts
+│   ├── pdf-search.spec.ts
+│   ├── pdf-selection-translate.spec.ts
+│   ├── pdf-space-pan.spec.ts
+│   ├── pdf-split-view.spec.ts
+│   └── pdf-tab-budget.spec.ts
 ├── playwright.config.ts          # Playwright 配置
 ├── vite.config.ts                # Vitest 配置
 └── src-tauri/src/                # Rust 源码与测试（lib.rs / secure_storage.rs / llm_proxy.rs）
@@ -91,7 +98,7 @@ Vitest 配置位于 `vite.config.ts`：
 
 ### 测试范围
 
-E2E 测试通过 mock Tauri `invoke` 返回 PDF 字节，fixtures 目录包含 `scripts/gen-sample-*.mjs` 生成的三个测试 PDF（含 60 页大文档 `sample-long.pdf`）。
+E2E 测试通过 mock Tauri `invoke` 返回 PDF 字节，fixtures 目录包含 `scripts/gen-sample-*.mjs` 生成的五个测试 PDF（含 60 页大文档 `sample-long.pdf`、带大纲的 `sample-outline.pdf`、带内链的 `sample-links.pdf`）。
 
 `e2e/app.spec.ts` 覆盖：
 
@@ -123,6 +130,34 @@ E2E 测试通过 mock Tauri `invoke` 返回 PDF 字节，fixtures 目录包含 `
 `e2e/pdf-selection-translate.spec.ts` 覆盖：
 
 - 选中文本 → 浮动工具条 → 翻译流程。
+
+`e2e/pdf-interpret-stream.spec.ts` 覆盖：
+
+- 发起解读后自动进入会话 chatbox 并流式输出回答。
+
+`e2e/pdf-search.spec.ts` 覆盖：
+
+- 全文搜索命中高亮并滚动到所在页，Enter / Shift+Enter 在匹配间跳转，无匹配空态。
+
+`e2e/pdf-outline-jump.spec.ts` 覆盖：
+
+- 点击大纲条目精确滚动到 dest 所在行（含页中部行，非仅页首）。
+
+`e2e/pdf-link-preview.spec.ts` 覆盖：
+
+- 悬停文档内链接弹出目标页预览小窗，移开后自动关闭。
+
+`e2e/pdf-space-pan.spec.ts` 覆盖：
+
+- 连续滚动模式下 Space+拖拽 pan 画布（松开后位置不弹回），不按 Space 时拖拽仍是文字选择。
+
+`e2e/pdf-split-view.spec.ts` 覆盖：
+
+- 并排对照：tab 栏按钮进入/退出分屏、拖拽 tab 到阅读区进入分屏、释放在阅读区外取消。
+
+`e2e/pdf-tab-budget.spec.ts` 覆盖：
+
+- 字节预算/位图记账超限休眠最久未用 tab，切回唤醒后页码恢复；per-tab 内存成本测量。
 
 ### keep-alive 选择器约定
 

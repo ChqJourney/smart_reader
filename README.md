@@ -112,7 +112,7 @@ See [TESTING.md](./TESTING.md) for details.
 │   ├── capabilities/                  # Tauri permission config
 │   ├── Cargo.toml
 │   └── tauri.conf.json
-├── e2e/                               # Playwright E2E tests (12 specs + fixtures)
+├── e2e/                               # Playwright E2E tests (13 specs + fixtures)
 ├── scripts/                           # Helper scripts (version sync, release, sample PDF generation)
 ├── package.json / vite.config.ts / playwright.config.ts / tsconfig.json
 └── eslint.config.js

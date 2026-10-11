@@ -516,7 +516,7 @@ runSessionStream（usePersistence.ts）
 
 ### 8.2 E2E 测试
 
-- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 9 个 spec：
+- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 13 个 spec：
   - `app.spec.ts`：主布局、顶部最近文件入口、设置 Modal、面板显隐。
   - `pdf-page-jump.spec.ts`：连续滚动模式下页码跳转正确性、Cmd/Ctrl+G 跳页面板（输入回车跳转 + 闪卡）、右侧滑轨拖动跳页，使用 mock 的 Tauri `invoke` 返回 PDF 字节。
   - `pdf-outline-jump.spec.ts`：大纲点击精确跳转到 dest 所在行（fixtures `sample-outline.pdf` 由 `gen-sample-outline-pdf.mjs` 生成，XYZ dest 指向已知行位置，断言 scrollTop = 页首 + pdfY×scale − 留白）。
@@ -524,6 +524,10 @@ runSessionStream（usePersistence.ts）
   - `pdf-large-doc.spec.ts`：>50 页大文档回归——适合宽度不横向偏移、深度缩放页码不抖动、快速切换 tab 恢复页码（fixtures 含 `gen-sample-long-pdf.mjs` 生成的 60 页 PDF）。
   - `pdf-rapid-zoom.spec.ts`：快速缩放回归。
   - `pdf-selection-translate.spec.ts`：选区翻译流程。
+  - `pdf-interpret-stream.spec.ts`：发起解读后自动进入会话 chatbox 并流式输出回答。
+  - `pdf-search.spec.ts`：全文搜索命中高亮并滚动到所在页、Enter / Shift+Enter 匹配间跳转、无匹配空态。
+  - `pdf-link-preview.spec.ts`：条款链接悬停预览（悬停弹窗渲染目标页、移开自动关闭）。
+  - `pdf-split-view.spec.ts`：并排对照（tab 栏按钮进入/退出分屏、拖拽 tab 到阅读区进入分屏、释放在阅读区外取消）。
   - `pdf-space-pan.spec.ts`：Space 按住拖拽 pan（连续滚动模式下滚动位置不弹回、不按 Space 时拖拽仍是文字选择）。
   - `pdf-tab-budget.spec.ts`：Tab 休眠/唤醒回归（字节预算与存活 viewer 数两条预算线、唤醒后页码恢复）+ per-tab 内存成本测量；init script 在每次 `get_pdf_hash` 时拨快假时间 6 分钟，越过 5 分钟休眠保护窗口。
 - 单实例与文件关联需在打包后的安装包上手动验证，E2E 较难覆盖。
@@ -624,12 +628,13 @@ cd src-tauri && cargo test
 - `docs/AGENT_TOOLS_DESIGN.md`：完整目标架构（Tools、Clause 索引、术语表、测试清单、表格多模态读取）。
 - `docs/TAB_HIBERNATION_DESIGN.md`：Tab 休眠设计（取消固定个数上限、双预算线、LRU 候选选择、唤醒恢复路径）。
 - `docs/LLM_PLATFORM_COMPATIBILITY.md`：各 LLM 平台 OpenAI 兼容性调研（平台预设参考）。
+- `docs/BACKLOG.md`：未修复工程项与未实施产品建议（整理自已删除的历史评审文档）。
 - `TESTING.md`：详细测试说明与已发现的 bug 修复记录。
 - `README.md`：快速开始与项目简介（英文主文档，中文版为 `README.zh-CN.md`）。
 
 ## 13. 版本信息
 
-- 前端版本：`1.0.0`
-- Tauri 应用版本：`1.0.0`
+- 前端版本：`1.2.0`
+- Tauri 应用版本：`1.2.0`
 - 产品名称：`SpecReader AI`
 - 应用标识：`com.photonee.specreader`

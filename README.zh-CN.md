@@ -112,7 +112,7 @@ cd src-tauri && cargo test
 │   ├── capabilities/                  # Tauri 权限配置
 │   ├── Cargo.toml
 │   └── tauri.conf.json
-├── e2e/                               # Playwright E2E 测试（12 个 spec + fixtures）
+├── e2e/                               # Playwright E2E 测试（13 个 spec + fixtures）
 ├── scripts/                           # 辅助脚本（版本同步、发版、测试 PDF 生成）
 ├── package.json / vite.config.ts / playwright.config.ts / tsconfig.json
 └── eslint.config.js

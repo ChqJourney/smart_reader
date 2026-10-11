@@ -510,7 +510,7 @@
 - PDF 文件内容不上传云端，仅在本地解析和存储。
 - 仅用户主动发起的 AI 请求会发送文本片段给用户配置的 LLM API。
 - 表格截图仅在用户需要精确读取时发送给支持视觉的多模态 LLM。
-- API Key 本地加密存储（系统 Keychain 或安全存储）。当前「超轻量版」暂未实现，仅保存在前端 `localStorage`。
+- API Key 本地加密存储：按平台分条目存入系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），LLM 请求经 Rust 后端代理，Key 不进入 webview。
 - 首次启动明确告知数据处理方式，需用户同意。
 
 ### 9.4 可扩展性

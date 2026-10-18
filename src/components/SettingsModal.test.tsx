@@ -55,6 +55,7 @@ const defaultSettings = {
   thinking: "auto" as const,
   maxToolRounds: 20,
   agentToolsEnabled: true,
+  webSearchEnabled: false,
   targetLanguage: "中文",
   systemPrompts: {
     translate: "翻译提示词 {targetLanguage}",
@@ -259,6 +260,7 @@ describe("SettingsModal", () => {
       thinking: "auto",
       maxToolRounds: 20,
       agentToolsEnabled: true,
+      webSearchEnabled: false,
       targetLanguage: "English",
       systemPrompts: defaultSettings.systemPrompts,
       hoverTranslate: false,

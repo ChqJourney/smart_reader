@@ -890,6 +890,34 @@ export default function SettingsModal({
 
                   <section className="settings-section">
                     <div className="settings-section-title">
+                      {t("settings.webSearch")}
+                    </div>
+                    <div className="settings-section-hint">
+                      {t("settings.webSearchHint")}
+                    </div>
+                    <label className="settings-toggle">
+                      <input
+                        type="checkbox"
+                        checked={settings.webSearchEnabled}
+                        onChange={(e) =>
+                          setSettings((s) => ({
+                            ...s,
+                            webSearchEnabled: e.target.checked,
+                          }))
+                        }
+                      />
+                      {t("settings.enableWebSearch")}
+                    </label>
+                    {settings.webSearchEnabled &&
+                      !platformsWithKey.has("deepseek") && (
+                        <p className="settings-status-error">
+                          {t("settings.webSearchNoKey")}
+                        </p>
+                      )}
+                  </section>
+
+                  <section className="settings-section">
+                    <div className="settings-section-title">
                       {t("settings.systemPrompts")}
                     </div>
                     <div className="settings-section-hint">

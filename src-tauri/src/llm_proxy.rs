@@ -210,6 +210,11 @@ pub struct StreamParams {
     /// 是否启用视觉能力（截图工具）。仅对视觉模型开启。
     #[serde(default)]
     pub enable_vision: bool,
+    /// 是否启用联网搜索/网页抓取工具（web_search / web_fetch，由 DeepSeek
+    /// Search/Fetch API 执行）。独立于 enable_tools：enable_tools 关闭时
+    /// 也可单独下发这组工具（「联网搜索」与「智能查阅文档」是两个独立开关）。
+    #[serde(default)]
+    pub enable_web_search: bool,
     #[serde(default)]
     #[allow(dead_code)] // reserved for future tool-call file_hash whitelist (Phase 6)
     pub authorized_file_hashes: Vec<String>,
@@ -298,6 +303,7 @@ fn build_request_body(
     thinking: &ThinkingMode,
     enable_tools: bool,
     enable_vision: bool,
+    enable_web_search: bool,
 ) -> serde_json::Value {
     let wire_messages: Vec<serde_json::Value> = messages.iter().map(chat_message_to_wire).collect();
     let mut body = serde_json::json!({
@@ -323,12 +329,20 @@ fn build_request_body(
         }
     }
 
+    // PDF 文档工具（enable_tools）与联网搜索工具（enable_web_search）是
+    // 两个独立开关，按各自门控组装；任一非空才下发 tools 字段。
+    let mut tools: Vec<serde_json::Value> = Vec::new();
     if enable_tools {
         // 视觉模型额外提供截图工具；非视觉模型保持原有 3 个工具不变。
-        let mut tools: Vec<serde_json::Value> = builtin_tools().to_vec();
+        tools.extend_from_slice(builtin_tools());
         if enable_vision {
             tools.extend_from_slice(vision_tools());
         }
+    }
+    if enable_web_search {
+        tools.extend_from_slice(web_tools());
+    }
+    if !tools.is_empty() {
         body["tools"] = serde_json::Value::Array(tools);
     }
 
@@ -416,6 +430,47 @@ pub fn vision_tools() -> &'static [serde_json::Value] {
                 }
             }
         })]
+    })
+}
+
+/// 联网搜索/网页抓取工具集（web_search / web_fetch），由前端经
+/// `web_tools_search` / `web_tools_fetch` 命令调用 DeepSeek Search/Fetch API
+/// 执行（按次计费）。与 PDF 文档工具相互独立，仅 enable_web_search 时注入。
+pub fn web_tools() -> &'static [serde_json::Value] {
+    static TOOLS: std::sync::OnceLock<Vec<serde_json::Value>> = std::sync::OnceLock::new();
+    TOOLS.get_or_init(|| {
+        vec![
+            serde_json::json!({
+                "type": "function",
+                "function": {
+                    "name": "web_search",
+                    "description": "Search the web for up-to-date information (e.g. latest standard editions, news, references not present in the open documents). Returns a list of results with title, url, date and summary. Supports search operators in the query: site:example.com, lang:zh,en, after:2025, before:2026, \"exact phrase\", -excluded. Each call is billed by the search provider; do not repeat identical queries.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {"type": "string", "description": "Search query, 1-128 characters. May include search operators like site:, lang:, after:, before:."},
+                            "count": {"type": "integer", "default": 5, "description": "Number of results to return, 1-50. Default 5."},
+                            "need_content": {"type": "boolean", "default": false, "description": "Also return the full page content of each result. Consumes significantly more tokens; prefer false and use web_fetch on the most relevant result instead."}
+                        },
+                        "required": ["query"]
+                    }
+                }
+            }),
+            serde_json::json!({
+                "type": "function",
+                "function": {
+                    "name": "web_fetch",
+                    "description": "Fetch a single web page and return its content as Markdown. Use this to read the full text of a page found via web_search or referenced by the user. Each call is billed by the provider.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "url": {"type": "string", "description": "The http/https URL of the page to fetch (no credentials in the URL)."}
+                        },
+                        "required": ["url"]
+                    }
+                }
+            }),
+        ]
     })
 }
 
@@ -758,6 +813,7 @@ pub async fn chat_completions_stream(
         &params.thinking,
         params.enable_tools,
         params.enable_vision,
+        params.enable_web_search,
     );
 
     log::info!("llmRequestStarted: model={} url={}", model, base_url);
@@ -1129,6 +1185,7 @@ mod tests {
             &ThinkingMode::Auto,
             false,
             false,
+            false,
         );
         assert!(body.get("thinking").is_none());
         assert_eq!(body["model"], "deepseek-flash");
@@ -1145,7 +1202,7 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
         }];
-        let body = build_request_body(&messages, "qwen-plus", &ThinkingMode::Enabled, false, false);
+        let body = build_request_body(&messages, "qwen-plus", &ThinkingMode::Enabled, false, false, false);
         assert_eq!(body["thinking"]["type"], "enabled");
         assert_eq!(body["reasoning_effort"], "high");
     }
@@ -1165,6 +1222,7 @@ mod tests {
             &ThinkingMode::Disabled,
             false,
             false,
+            false,
         );
         assert_eq!(body["thinking"]["type"], "disabled");
         assert!(body.get("reasoning_effort").is_none());
@@ -1181,12 +1239,12 @@ mod tests {
             reasoning_content: None,
         }];
         for model in ["glm-5.3", "glm-5.3-flash"] {
-            let body = build_request_body(&messages, model, &ThinkingMode::Disabled, false, false);
+            let body = build_request_body(&messages, model, &ThinkingMode::Disabled, false, false, false);
             assert!(body.get("thinking").is_none(), "model={model}");
             assert!(body.get("reasoning_effort").is_none(), "model={model}");
         }
         // GLM-5.2 等旧系列仍可正常关闭思考
-        let body = build_request_body(&messages, "glm-5.2", &ThinkingMode::Disabled, false, false);
+        let body = build_request_body(&messages, "glm-5.2", &ThinkingMode::Disabled, false, false, false);
         assert_eq!(body["thinking"]["type"], "disabled");
     }
 
@@ -1205,6 +1263,7 @@ mod tests {
             &ThinkingMode::Auto,
             true,
             false,
+            false,
         );
         assert!(body.get("tools").is_some());
         let tools = body["tools"].as_array().unwrap();
@@ -1220,7 +1279,7 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
         }];
-        let body = build_request_body(&messages, "qwen-vl-plus", &ThinkingMode::Auto, true, true);
+        let body = build_request_body(&messages, "qwen-vl-plus", &ThinkingMode::Auto, true, true, false);
         let tools = body["tools"].as_array().unwrap();
         let names: Vec<&str> = tools
             .iter()
@@ -1239,7 +1298,7 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
         }];
-        let body = build_request_body(&messages, "qwen-plus", &ThinkingMode::Auto, true, false);
+        let body = build_request_body(&messages, "qwen-plus", &ThinkingMode::Auto, true, false, false);
         let tools = body["tools"].as_array().unwrap();
         let names: Vec<&str> = tools
             .iter()
@@ -1259,7 +1318,7 @@ mod tests {
             tool_calls: None,
             reasoning_content: None,
         }];
-        let body = build_request_body(&messages, "qwen-vl-plus", &ThinkingMode::Auto, false, true);
+        let body = build_request_body(&messages, "qwen-vl-plus", &ThinkingMode::Auto, false, true, false);
         assert!(body.get("tools").is_none());
     }
 
@@ -1317,6 +1376,7 @@ mod tests {
             &ThinkingMode::Auto,
             false,
             false,
+            false,
         );
         let wire = body["messages"].as_array().unwrap();
         // Text → JSON string
@@ -1356,7 +1416,7 @@ mod tests {
                 reasoning_content: None,
             },
         ];
-        let body = build_request_body(&messages, "qwen-plus", &ThinkingMode::Auto, false, false);
+        let body = build_request_body(&messages, "qwen-plus", &ThinkingMode::Auto, false, false, false);
         let wire = body["messages"].as_array().unwrap();
         assert_eq!(wire[0]["role"], "assistant");
         assert_eq!(wire[0]["content"], "");
@@ -1453,6 +1513,95 @@ mod tests {
         assert!(names.contains(&"list_open_pdfs"));
         assert!(names.contains(&"read_pdf_page"));
         assert!(names.contains(&"search_in_pdf"));
+    }
+
+    #[test]
+    fn web_tools_has_search_and_fetch() {
+        let tools = web_tools();
+        assert_eq!(tools.len(), 2);
+        let names: Vec<&str> = tools
+            .iter()
+            .map(|t| t["function"]["name"].as_str().unwrap())
+            .collect();
+        assert!(names.contains(&"web_search"));
+        assert!(names.contains(&"web_fetch"));
+    }
+
+    #[test]
+    fn build_request_body_web_search_only_injects_web_tools() {
+        // 独立开关语义：enable_tools=false 时 enable_web_search 仍下发 web 工具。
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            content: "hi".into(),
+            tool_call_id: None,
+            tool_calls: None,
+            reasoning_content: None,
+        }];
+        let body = build_request_body(
+            &messages,
+            "deepseek-flash",
+            &ThinkingMode::Auto,
+            false,
+            false,
+            true,
+        );
+        let tools = body["tools"].as_array().unwrap();
+        let names: Vec<&str> = tools
+            .iter()
+            .map(|t| t["function"]["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(tools.len(), 2);
+        assert!(names.contains(&"web_search"));
+        assert!(names.contains(&"web_fetch"));
+        assert!(!names.contains(&"read_pdf_page"));
+    }
+
+    #[test]
+    fn build_request_body_all_tool_sets_combined() {
+        // PDF 工具（含截图）+ web 工具同开：3 + 1 + 2 = 6 个。
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            content: "hi".into(),
+            tool_call_id: None,
+            tool_calls: None,
+            reasoning_content: None,
+        }];
+        let body = build_request_body(
+            &messages,
+            "deepseek-flash",
+            &ThinkingMode::Auto,
+            true,
+            true,
+            true,
+        );
+        let tools = body["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), 6);
+    }
+
+    #[test]
+    fn build_request_body_no_web_search_omits_web_tools() {
+        let messages = vec![ChatMessage {
+            role: "user".into(),
+            content: "hi".into(),
+            tool_call_id: None,
+            tool_calls: None,
+            reasoning_content: None,
+        }];
+        let body = build_request_body(
+            &messages,
+            "qwen-plus",
+            &ThinkingMode::Auto,
+            true,
+            false,
+            false,
+        );
+        let tools = body["tools"].as_array().unwrap();
+        let names: Vec<&str> = tools
+            .iter()
+            .map(|t| t["function"]["name"].as_str().unwrap())
+            .collect();
+        assert!(!names.contains(&"web_search"));
+        assert!(!names.contains(&"web_fetch"));
     }
 
     fn test_channel() -> (Channel<StreamEvent>, Arc<Mutex<Vec<StreamEvent>>>) {

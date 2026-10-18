@@ -12,6 +12,7 @@ const DEFAULT_SETTINGS = {
   thinking: "auto",
   maxToolRounds: 20,
   agentToolsEnabled: false,
+  webSearchEnabled: false,
   targetLanguage: "中文",
   systemPrompts: {
     translate:
@@ -298,6 +299,7 @@ describe("settings service", () => {
       thinking: "auto",
       maxToolRounds: 20,
       agentToolsEnabled: true,
+      webSearchEnabled: false,
       targetLanguage: "中文",
       systemPrompts: {
         translate: "translate prompt",

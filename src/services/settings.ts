@@ -34,6 +34,9 @@ export interface AppSettings {
   maxToolRounds: number;
   /** Whether the agent can use PDF tools during interpretation */
   agentToolsEnabled: boolean;
+  /** 联网搜索开关：解读/提问时可让 AI 经 web_search / web_fetch 联网检索
+   *（DeepSeek Search/Fetch API 执行，按次计费，复用 DeepSeek 平台 Key） */
+  webSearchEnabled: boolean;
   targetLanguage: string;
   systemPrompts: SystemPrompts;
   hoverTranslate: boolean;
@@ -105,6 +108,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   thinking: "auto",
   maxToolRounds: 20,
   agentToolsEnabled: false,
+  webSearchEnabled: false,
   targetLanguage: "中文",
   systemPrompts: DEFAULT_SYSTEM_PROMPTS,
   hoverTranslate: false,
@@ -141,6 +145,8 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
     maxToolRounds: value.maxToolRounds ?? DEFAULT_SETTINGS.maxToolRounds,
     agentToolsEnabled:
       value.agentToolsEnabled ?? DEFAULT_SETTINGS.agentToolsEnabled,
+    webSearchEnabled:
+      value.webSearchEnabled ?? DEFAULT_SETTINGS.webSearchEnabled,
     targetLanguage: value.targetLanguage ?? DEFAULT_SETTINGS.targetLanguage,
     systemPrompts: {
       translate:

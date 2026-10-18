@@ -628,6 +628,15 @@ export function usePersistence({
           page: args.page_number ?? "?",
         });
       }
+      if (name === "web_search") {
+        return i18n.t("tools.callWebSearch", { query: args.query ?? "?" });
+      }
+      if (name === "web_fetch") {
+        const url = String(args.url ?? "?");
+        return i18n.t("tools.callWebFetch", {
+          url: url.length > 60 ? `${url.slice(0, 60)}…` : url,
+        });
+      }
     } catch {
       // fall through
     }
@@ -643,14 +652,19 @@ export function usePersistence({
       });
       const currentSettings = settingsRef.current;
       const preset = PLATFORM_PRESETS[currentSettings.platformId];
-      const toolsEnabled =
-        currentSettings.agentToolsEnabled &&
-        (preset?.supportsTools ?? false) &&
-        (sessionRef.current.action === "explain" ||
-          sessionRef.current.action === "custom");
+      const supportsTools = preset?.supportsTools ?? false;
+      const isAgentAction =
+        sessionRef.current.action === "explain" ||
+        sessionRef.current.action === "custom";
+      // PDF 文档工具与联网搜索是两个独立开关；任一开启即进入 agent loop。
+      const pdfToolsEnabled =
+        currentSettings.agentToolsEnabled && supportsTools && isAgentAction;
+      const webSearchEnabled =
+        currentSettings.webSearchEnabled && supportsTools && isAgentAction;
+      const toolsEnabled = pdfToolsEnabled || webSearchEnabled;
       // 视觉门控：仅当前模型标记为视觉模型时，后端才会注入页面截图工具
       const visionEnabled =
-        toolsEnabled &&
+        pdfToolsEnabled &&
         modelSupportsVision(
           currentSettings.platformId,
           currentSettings.llm.model
@@ -669,20 +683,31 @@ export function usePersistence({
         sessionRef.current.action === "custom" &&
         sessionRef.current.sources.length === 0;
 
+      // 工具引导按开启的工具集分别追加：PDF 文档工具一段、联网搜索一段。
+      const buildToolsAddendum = () => {
+        const addenda: string[] = [];
+        if (pdfToolsEnabled) addenda.push(i18n.t("llm.toolsSystemAddendum"));
+        if (webSearchEnabled)
+          addenda.push(i18n.t("llm.webSearchSystemAddendum"));
+        return addenda.join("\n\n");
+      };
+
       const buildSystemContent = () => {
         if (isFreeQuestion) {
-          return i18n.t(
+          const base = i18n.t(
             toolsEnabled ? "llm.askWithToolsPrompt" : "llm.askNoToolsPrompt",
             { targetLanguage: currentSettings.targetLanguage }
           );
+          const addendum = buildToolsAddendum();
+          return addendum ? `${base}\n\n${addendum}` : base;
         }
         const base = buildSystemPrompt(
           sessionRef.current.action ?? "explain",
           currentSettings.targetLanguage,
           currentSettings.systemPrompts
         );
-        if (!toolsEnabled) return base;
-        return `${base}\n\n${i18n.t("llm.toolsSystemAddendum")}`;
+        const addendum = buildToolsAddendum();
+        return addendum ? `${base}\n\n${addendum}` : base;
       };
 
       /**
@@ -846,7 +871,7 @@ export function usePersistence({
       const runOneRound = async (
         round: number,
         messages: ChatMessage[],
-        enableTools: boolean
+        toolFlags: { enableTools: boolean; enableWebSearch: boolean }
       ): Promise<{
         content: string;
         reasoning: string;
@@ -1004,8 +1029,9 @@ export function usePersistence({
             },
             {
               thinking: currentSettings.thinking,
-              enableTools,
-              enableVision: visionEnabled,
+              enableTools: toolFlags.enableTools,
+              enableVision: visionEnabled && toolFlags.enableTools,
+              enableWebSearch: toolFlags.enableWebSearch,
               authorizedFileHashes: getOpenFileHashes(),
             }
           );
@@ -1164,11 +1190,10 @@ export function usePersistence({
                 ? buildFinalNoToolsMessages(messages)
                 : messages;
             const { content, reasoning, toolCalls, usage, aborted, hadError } =
-              await runOneRound(
-                round,
-                roundMessages,
-                toolsEnabled && !isLastChance
-              );
+              await runOneRound(round, roundMessages, {
+                enableTools: pdfToolsEnabled && !isLastChance,
+                enableWebSearch: webSearchEnabled && !isLastChance,
+              });
 
             if (usage) {
               if (!totalUsage) {

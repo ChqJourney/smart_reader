@@ -35,7 +35,7 @@
 - 最近文件下拉面板：置顶常用标准、按文件名/路径搜索、显示目录/相对时间/上次读到的页码、失效文件置灰、单条移除与两段式清空、从列表直接在分屏打开对照（快捷键 Ctrl/Cmd+Shift+O 开合面板）。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
 - 条款链接悬停预览（画中画）：默认关闭，设置「功能设置」页开启。悬停在 PDF 自带的文档内链接（条款号引用，带内部 dest）上 2 秒弹出小窗，复用 viewer 的 PDF 代理渲染目标页并自动滚动到 dest Y 位置（XYZ / FitH 取 Y，其余形态退化页首）；小窗 portal 到 body，可拖动（复用 useDrag）、右下角调大小（拖动中 canvas CSS 拉伸、松手按新宽度重渲）、内容区原生滚动；右上角图钉固化后不随鼠标移出关闭，可多个并存（上限 10 个），未固化预览同时只保留一个、鼠标离开 400ms 宽限后自动关闭；同目标（页码+destY）去重，外部 url 链接不参与；悬停链接时抑制悬停查词 tooltip。状态管理在 `hooks/useLinkPreviews.ts`，窗口组件 `components/LinkPreviewPopup.tsx`，PdfPage 仅上报悬停目标（`onLinkHover`），PdfViewer 按 `settings.linkPreviewEnabled` 门控上报并在开关关闭时清空已弹出窗口。
-- 解读 / 自定义解读 / 追问时启用 **Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文（`list_open_pdfs`、`read_pdf_page`、`search_in_pdf`），辅助验证条款引用与跨页内容；视觉模型额外提供 `screenshot_pdf_page` 页面截图工具（整页或归一化区域，图像作为合成 user 消息发给模型，见 6.5）。
+- 解读 / 自定义解读 / 追问时启用 **Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文（`list_open_pdfs`、`read_pdf_page`、`search_in_pdf`），辅助验证条款引用与跨页内容；视觉模型额外提供 `screenshot_pdf_page` 页面截图工具（整页或归一化区域，图像作为合成 user 消息发给模型，见 6.5）。另有独立开关的联网工具 `web_search` / `web_fetch`（DeepSeek Search/Fetch API，按次计费，复用 DeepSeek 平台钥匙串 Key，与当前聊天平台无关；设置「功能设置」页开关，默认关闭）。
 - LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 按平台分条目存放于系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不再落入 `settings.json`。
 - LLM 请求整体后端代理化（`llm_proxy.rs`）：前端不再直接发起 HTTP 请求，API Key 不进入 webview。
 - 软件自动更新：启动 3 秒后自动检查，设置「关于」页可手动检查；失败仅记日志。
@@ -171,7 +171,8 @@ npm install
 │   │   ├── print.ts                   # 打印编排（缓存优先取字节 → 生成 → 系统阅读器打开 / 保存对话框导出）
 │   │   ├── printPdf.ts                # 打印 PDF 生成（矢量直绘优先——同 context 不用 copyPages；解析失败、源文件加密或内容对象丢失时 pdfjs 整页栅格兜底）
 │   │   ├── printBoxRenderer.ts        # 批注浮层 canvas 光栅化为 PNG（复刻浮层样式，2x 清晰度，免嵌 CJK 字体）
-│   │   ├── pdfTools.ts                # Agent Tools 执行层（瞬态 ToolSession）
+│   │   ├── pdfTools.ts                # Agent Tools 执行层（瞬态 ToolSession，web 工具路由到 webTools.ts）
+│   │   ├── webTools.ts                # 联网搜索/网页抓取工具执行层（web_search / web_fetch，结果格式化与上下文截断）
 │   │   ├── recentFiles.ts             # 最近文件 CRUD + 文件存在性检查
 │   │   ├── sessions.ts                # 解读会话数据结构与管理 + sortSessions 列表排序（纯函数）
 │   │   ├── share.ts                   # 会话分享：buildShareMarkdown 纯函数（引用块原文+来源行+正文）+ 导出 .md
@@ -187,6 +188,7 @@ npm install
 │   ├── src/
 │   │   ├── lib.rs                     # Tauri 命令注册与数据持久化（见 6.1）
 │   │   ├── llm_proxy.rs               # LLM 请求后端代理（chat_completions_stream 等）+ 工具 schema
+│   │   ├── web_tools.rs               # DeepSeek Search/Fetch API 代理（web_tools_search / web_tools_fetch）
 │   │   ├── dictionary.rs              # ECDICT 本地词典下载（断点续传）、解压、查询
 │   │   ├── paths.rs                   # AppData 路径（app_data_dir()）+ 旧目录递归迁移
 │   │   ├── secure_storage.rs          # ApiKeyStorage trait + KeyringStorage / MemoryStorage（API Key 按平台分条目）
@@ -321,7 +323,7 @@ cd src-tauri && cargo test
 - `save_session_image(sessionId: string, data: Vec<u8>)`：截图工具图片原子落盘到 `sessions/{session_id}/`（前端按 `Array.from(bytes)` 传输，同 `export_binary_file` 约定），返回文件名引用。
 - `read_session_image(sessionId: string, file: string)`：读回截图图片字节（`file` 仅允许纯文件名，防路径穿越），追问回放图片消息用。
 - `authorize_pdf_path(filePath: string)`：将用户通过对话框选择的 PDF 路径加入后端授权白名单，`read_pdf_bytes` / `get_pdf_hash` 会校验该白名单；要求文件真实存在，白名单与校验两侧均以 canonicalize 后的路径比对（防符号链接 / `..` 别名绕过）。
-- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
+- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 联网搜索开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表（`RecentFile` 含 `pinned` 置顶与 `lastPage` 阅读页码字段，旧数据通过 `#[serde(default)]` 兼容）。
 - `check_files_exist(paths: string[])`：批量检查文件是否仍存在于磁盘，最近文件面板用它置灰已移动/删除的条目。
 - `export_text_file(file_path: string, content: string)`：把用户经系统保存对话框选定的路径写入文本文件（解读分享导出 .md 使用，原子写入，不走 PDF 授权白名单）；扩展名白名单 .md/.txt，拒绝写入 AppData 内部路径。
@@ -336,6 +338,7 @@ cd src-tauri && cargo test
 - `check_api_key(platform_id)` / `delete_api_key(platform_id)`：按平台检查 / 删除钥匙串中的 API Key；key 按平台分条目存储（`llm_api_key_{platform_id}`，`secure_storage.rs`），旧单条目 `llm_api_key` 透明迁移。
 - `chat_completions_stream(params, onEvent: Channel<StreamEvent>)`：LLM 请求后端代理（`llm_proxy.rs`），见 6.3。
 - `cancel_chat_completions(request_id)`：中止进行中的 LLM 流。
+- `web_tools_search(query, count, need_content)` / `web_tools_fetch(url)`：DeepSeek Search/Fetch API 代理（`web_tools.rs`），Key 固定取钥匙串 `deepseek` 平台条目；fetch 校验 URL scheme/host/凭据，402/429/404/401 等错误分类为面向模型的文案且不回显响应体（防 Key 泄漏）。
 - `test_connection(...)`：测试当前平台配置连通性（配置向导与设置页使用）。
 - `take_pending_open_pdfs()`：返回并清空后端缓存的冷启动待打开 PDF 路径（前端在 `open-pdf` listener 注册完成后调用一次）。
 
@@ -359,7 +362,7 @@ cd src-tauri && cargo test
     │   └── app.log                # 应用运行日志（默认 Warn 级别，可在设置中调整，保留最近 3 个文件各 10 MB）
     ├── print/
     │   └── SpecReader-print-{nanos}-{seq}.pdf  # 打印临时文件（文件名唯一；open_print_file 先写新文件，再清理 mtime 早于 10 分钟宽限期的旧 pdf）
-    ├── settings.json              # LLM 平台/模型 + 目标语言 + Agent Tools 开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式
+    ├── settings.json              # LLM 平台/模型 + 目标语言 + Agent Tools 开关 + 联网搜索开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式
     └── recent_files.json          # 最近打开文件列表
 ```
 
@@ -437,13 +440,14 @@ SettingsModal.tsx
 
 ```
 runSessionStream（usePersistence.ts）
-├── toolsEnabled = agentToolsEnabled && preset.supportsTools && action ∈ {explain, custom}
-├── 若启用：beginToolSession() 创建瞬态 ToolSession（finally 中 dispose）
-├── 每轮 streamChatCompletion 可能返回 toolCall 事件
+├── pdfToolsEnabled = agentToolsEnabled && preset.supportsTools && action ∈ {explain, custom}
+├── webSearchEnabled = settings.webSearchEnabled && preset.supportsTools && action ∈ {explain, custom}（独立开关）
+├── toolsEnabled = pdfToolsEnabled || webSearchEnabled；若启用：beginToolSession() 创建瞬态 ToolSession（finally 中 dispose）
+├── 每轮 streamChatCompletion 可能返回 toolCall 事件（options 分别传 enableTools / enableWebSearch，后端据此组装工具集）
 │   └── onToolCall 更新最终 assistant 消息的 toolEvents（running）
 ├── 轮次结束有 toolCalls 且未达 maxToolRounds：
 │   ├── 插入 assistant(toolCalls + reasoningContent) 消息并落盘
-│   ├── 执行 toolSession.executeToolCall（同参去重，错误转文本）
+│   ├── 执行 toolSession.executeToolCall（web_search / web_fetch 路由到 webTools.ts，其余走 PDF 工具；同参去重，错误转文本）
 │   ├── 更新 toolEvents 为 done
 │   └── 插入 tool(toolCallId, content) 消息并落盘 → 进入下一轮
 └── 无 toolCalls 或达轮次上限：收尾，写入累计 usage，finishStreaming
@@ -454,8 +458,9 @@ runSessionStream（usePersistence.ts）
 - 工具消息（assistant-tool + tool result）会持久化到会话，追问时原样回放，并携带 `toolCalls` / `toolCallId` / `reasoningContent`。
 - 页面截图工具 `screenshot_pdf_page`（仅视觉模型，`modelSupportsVision` 门控，经 `StreamParams.enableVision` 让后端注入 schema）：前端把页面渲染成 JPEG（≤144 DPI、最长边 2048px、铺白底、quality 0.85，支持 0-1 归一化区域裁剪、原点左上），先 `save_session_image` 落盘，tool 消息只持久化 `images` 文件名引用；图片以合成 user 消息（content parts：`llm.toolImageContext` 文本 + base64 data URL）发给模型——各平台视觉 API 都只允许 user 消息带图，且同一批 toolCalls 的全部 tool 响应必须紧跟 assistant 消息（DeepSeek 会校验 adjacency），因此合成图片消息一律插在该批 tool 响应的末尾。合成消息不落盘，追问/重载时由 `buildApiMessages` + `read_session_image` 从引用重建（文件缺失则跳过图片）；同参去重命中只复用文本、不重复注入图片；落盘失败降级为纯文本结果。后端 `ChatMessage.content` 为 untagged enum（string 或 parts 数组），图片 parts 原样透传。
 - 轮次上限：`settings.maxToolRounds`（默认 **20**，见 `settings.ts` 的 `DEFAULT_SETTINGS`；UI 输入最小值 1）。
+- 联网工具 `web_search` / `web_fetch`：独立于「智能文档查阅」的开关 `settings.webSearchEnabled`（默认关闭），schema 由后端 `web_tools()` 在 `enable_web_search` 时注入（即使 `enable_tools=false`）；前端执行层 `services/webTools.ts` 经 `web_tools_search` / `web_tools_fetch` 命令走 DeepSeek Search/Fetch API（Key 固定取 deepseek 平台钥匙串条目，与当前聊天平台无关），结果截断（单条 content 4000 / 搜索整体 16000 / fetch 正文 12000 字符）后作为 tool 消息回喂；未配置 Key 或计费/限流等错误都转为引导性 result 文本，不中断会话。system prompt 按开关分别追加 `llm.toolsSystemAddendum`（PDF 工具）与 `llm.webSearchSystemAddendum`（联网工具）。
 - 超限优雅收尾：最后一轮把 tool 消息改写为 user 上下文、剥掉 assistant `toolCalls` 并追加 system 指令（i18n key `llm.toolLimitFinalInstruction`）；若模型仍返回 toolCalls 且无正文，用 `llm.toolLimitReachedFallback` 文案兜底。
-- 降级：总开关关闭或平台 `supportsTools=false` 时行为同未启用工具的旧流程。
+- 降级：两个开关都关闭或平台 `supportsTools=false` 时行为同未启用工具的旧流程。
 
 ## 7. 代码组织约定
 
@@ -546,7 +551,7 @@ runSessionStream（usePersistence.ts）
 - **API Key 存储**：API Key 通过 Rust `keyring` crate 按平台分条目存入系统钥匙串（`llm_api_key_{platform_id}`，旧单条目自动迁移，迁移确认新条目写入成功后才删旧条目）；`settings.json` 中只保留空占位，且 `load_settings` 返回前强制 `apiKey=""`，Key 不回传 webview（LLM 请求走后端代理）。钥匙串不可用时 `save_settings` 会明确拒绝保存并返回错误，不回退明文存储。
 - **Base URL 强制 https**：后端发 LLM 请求前校验 baseUrl scheme，明文 `http://` 仅放行 localhost / 127.0.0.1 / ::1（本地网关），其余拒绝并以 `insecureBaseUrl` 错误提示（见 §6.3 与 `llmError.ts`）。
 - **不要在前端日志中打印 API Key 或完整文件内容**；`services/logs.ts` 的 `redactSensitiveInfo` 会统一脱敏 `sk-` / `Bearer` / 主目录路径。
-- Tauri CSP 已配置（`tauri.conf.json`：`default-src 'self'`；`connect-src 'self'` + localhost，不含 `https:`——webview 无任何外联需求，引入新的外部资源时需同步收紧）。webview 视为半信任面：导出命令限扩展名白名单 + 拒绝 AppData 内部路径，PDF 授权要求文件真实存在且按 canonicalize 路径比对。
+- Tauri CSP 已配置（`tauri.conf.json`：`default-src 'self'`；`connect-src 'self'` + localhost，不含 `https:`——webview 无任何外联需求，引入新的外部资源时需同步收紧）。webview 视为半信任面：导出命令限扩展名白名单 + 拒绝 AppData 内部路径，PDF 授权要求文件真实存在且按 canonicalize 路径比对。联网搜索/抓取请求同样只经后端 `web_tools.rs` 代理发出（DeepSeek Key 不进 webview），webview CSP 无需放开。
 
 ## 10. 常见改动注意事项
 
@@ -588,12 +593,12 @@ runSessionStream（usePersistence.ts）
 
 ### 10.6 修改 Agent Tools
 
-- 工具 schema 与累积逻辑在后端 `src-tauri/src/llm_proxy.rs`；工具名固定 snake_case（`list_open_pdfs` / `read_pdf_page` / `search_in_pdf` / `screenshot_pdf_page`，前三个定义在 `builtin_tools()`，截图工具在 `vision_tools()` 且仅 `enable_vision` 时注入），新增/修改工具需同步前端 `pdfTools.ts`。
-- 前端工具实现在 `src/services/pdfTools.ts`；任何错误都应捕获并转为 result 文本，不得向 loop 抛异常。
+- 工具 schema 与累积逻辑在后端 `src-tauri/src/llm_proxy.rs`；工具名固定 snake_case（`list_open_pdfs` / `read_pdf_page` / `search_in_pdf` / `screenshot_pdf_page` / `web_search` / `web_fetch`，前三个定义在 `builtin_tools()`，截图工具在 `vision_tools()` 且仅 `enable_vision` 时注入，联网工具在 `web_tools()` 且仅 `enable_web_search` 时注入），新增/修改工具需同步前端 `pdfTools.ts`（web 工具进一步路由到 `webTools.ts`）。
+- 前端工具实现在 `src/services/pdfTools.ts`（PDF 工具）与 `src/services/webTools.ts`（联网工具，后端命令在 `src-tauri/src/web_tools.rs`）；任何错误都应捕获并转为 result 文本，不得向 loop 抛异常。
 - 授权与元数据在 `src/services/pdfToolsRegistry.ts`；`App.tsx` 通过 `syncOpenPdfs(tabs, getCachedBytes)` 同步当前打开 tab。修改注册表接口时需同步 `App.tsx` 调用点与 `pdfToolsRegistry.test.ts`。
 - Agent loop 在 `hooks/usePersistence.ts` 的 `runSessionStream`；修改轮次、去重、收尾逻辑时需同步 `usePersistence.test.tsx`。
 - UI 状态组件为 `components/ToolCallsIndicator.tsx`。
-- 相关 i18n key 在 `locales/zh-CN.json` / `en.json` 的 `tools.*` 与 `llm.toolsSystemAddendum` 段，修改后需两边同步。
+- 相关 i18n key 在 `locales/zh-CN.json` / `en.json` 的 `tools.*`、`settings.webSearch*` 与 `llm.toolsSystemAddendum` / `llm.webSearchSystemAddendum` 段，修改后需两边同步。
 
 ## 11. 持续集成
 

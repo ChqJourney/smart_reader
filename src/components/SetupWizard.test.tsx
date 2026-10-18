@@ -19,6 +19,7 @@ const defaultSettings: AppSettings = {
   thinking: "auto",
   maxToolRounds: 20,
   agentToolsEnabled: true,
+  webSearchEnabled: false,
   targetLanguage: "中文",
   systemPrompts: {
     translate: "翻译提示词 {targetLanguage}",

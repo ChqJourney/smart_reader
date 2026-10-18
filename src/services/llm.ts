@@ -33,6 +33,8 @@ export interface StreamOptions {
   enableTools?: boolean;
   /** 当前模型为视觉模型时开启：后端会额外注入页面截图工具 */
   enableVision?: boolean;
+  /** 联网搜索开关：后端注入 web_search / web_fetch 工具（DeepSeek Search/Fetch API 执行，按次计费）。独立于 enableTools */
+  enableWebSearch?: boolean;
   authorizedFileHashes?: string[];
   signal?: AbortSignal;
 }
@@ -159,6 +161,7 @@ export async function* streamChatCompletion(
         thinking: options?.thinking ?? "auto",
         enableTools: options?.enableTools ?? false,
         enableVision: options?.enableVision ?? false,
+        enableWebSearch: options?.enableWebSearch ?? false,
         authorizedFileHashes: options?.authorizedFileHashes ?? [],
         requestId,
       },

@@ -2115,6 +2115,65 @@ describe("usePersistence", () => {
       expect(toolMocks.beginToolSession).not.toHaveBeenCalled();
     });
 
+    it("enables web tools independently of agentToolsEnabled", async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      const optionsList: {
+        enableTools?: boolean;
+        enableWebSearch?: boolean;
+      }[] = [];
+      vi.mocked(streamChatCompletion).mockImplementation(
+        async function* (_messages, options) {
+          optionsList.push({
+            enableTools: options?.enableTools,
+            enableWebSearch: options?.enableWebSearch,
+          });
+          yield { type: "chunk" as const, content: "answer" };
+          yield { type: "done" as const };
+        }
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <StrictMode>
+          <ConfigurableHarness
+            props={{
+              activeTab: null,
+              activeTabId: null,
+              secondaryTab: null,
+              isSplitView: false,
+              focusedTab: null,
+              openRightPanel: vi.fn(),
+              settings: {
+                ...DEFAULT_SETTINGS,
+                agentToolsEnabled: false,
+                webSearchEnabled: true,
+              },
+            }}
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        </StrictMode>
+      );
+
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+
+      act(() => {
+        hookRef!.handleFollowUp("session-explain", "追问");
+      });
+
+      await waitFor(() => {
+        expect(optionsList.length).toBeGreaterThan(0);
+      });
+
+      // 联网搜索独立开关：PDF 工具关闭时仍下发 web 工具，agent loop 照常启用
+      expect(optionsList[0].enableTools).toBe(false);
+      expect(optionsList[0].enableWebSearch).toBe(true);
+      expect(toolMocks.beginToolSession).toHaveBeenCalledTimes(1);
+    });
+
     it("disposes the tool session when the stream errors", async () => {
       const { streamChatCompletion } = await import("../services/llm");
       vi.mocked(streamChatCompletion).mockImplementation(async function* () {
@@ -3383,8 +3442,8 @@ describe("usePersistence", () => {
       });
       const system = calls[0][0];
       expect(system.role).toBe("system");
-      // tools 开启时：明确引导模型主动查阅当前打开的文档
-      expect(system.content as string).toContain("list_open_pdfs");
+      // tools 开启时：明确引导模型主动使用工具查证（具体工具说明在 addendum 中）
+      expect(system.content as string).toContain("主动使用可用的工具");
       expect(system.content as string).toContain("search_in_pdf");
 
       act(() => {

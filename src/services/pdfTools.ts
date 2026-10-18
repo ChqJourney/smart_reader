@@ -8,6 +8,7 @@ import {
   setOpenPdfNumPages,
 } from "./pdfToolsRegistry";
 import { loadPdfjs } from "./pdfjs";
+import { executeWebToolCall } from "./webTools";
 
 /** 截图区域：归一化坐标（0-1），原点在页面左上角。 */
 export interface ToolImageRegion {
@@ -386,6 +387,12 @@ export function beginToolSession(): ToolSession {
           return { summary, result: `Error: ${err}` };
         }
       }
+
+      // 联网搜索/网页抓取：与 PDF 文档无关，委托给 webTools 执行层
+      //（后端经 DeepSeek Search/Fetch API 完成，见 webTools.ts）。
+      case "web_search":
+      case "web_fetch":
+        return executeWebToolCall(name, argsJson);
 
       default:
         return {

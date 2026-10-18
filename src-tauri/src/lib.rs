@@ -13,6 +13,7 @@ mod dictionary;
 mod llm_proxy;
 mod paths;
 mod secure_storage;
+mod web_tools;
 
 const OPEN_PDF_EVENT: &str = "open-pdf";
 
@@ -251,7 +252,9 @@ pub fn run() {
             lookup_word,
             llm_proxy::chat_completions_stream,
             llm_proxy::cancel_chat_completions,
-            llm_proxy::test_connection
+            llm_proxy::test_connection,
+            web_tools::web_tools_search,
+            web_tools::web_tools_fetch
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -907,6 +910,10 @@ struct AppSettings {
     /// Whether the agent can use PDF tools during interpretation.
     #[serde(default = "default_agent_tools_enabled")]
     agent_tools_enabled: bool,
+    /// 联网搜索开关：agent loop 额外下发 web_search / web_fetch 工具，
+    /// 由后端经 DeepSeek Search/Fetch API 执行（使用 deepseek 平台的钥匙串 Key）。
+    #[serde(default)]
+    web_search_enabled: bool,
     #[serde(default = "default_target_language")]
     target_language: String,
     #[serde(default)]
@@ -985,6 +992,7 @@ impl Default for AppSettings {
             thinking: default_thinking(),
             max_tool_rounds: default_max_tool_rounds(),
             agent_tools_enabled: default_agent_tools_enabled(),
+            web_search_enabled: false,
             target_language: default_target_language(),
             system_prompts: SystemPrompts::default(),
             hover_translate: false,
@@ -1740,6 +1748,7 @@ mod tests {
             thinking: "auto".to_string(),
             max_tool_rounds: 20,
             agent_tools_enabled: true,
+            web_search_enabled: false,
             target_language: "中文".to_string(),
             system_prompts: SystemPrompts::default(),
             hover_translate: false,

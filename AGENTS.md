@@ -72,7 +72,7 @@
 ## 3. 开发环境要求
 
 - Node.js >= 18
-- Rust >= 1.77.2
+- Rust >= 1.88（zip 9 的 MSRV）
 - Tauri CLI（可选，项目内已有 `@tauri-apps/cli`）
 
 安装前端依赖：

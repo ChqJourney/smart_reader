@@ -1,0 +1,13 @@
+# cargo audit 配置（CI「Audit Rust dependencies」与本机 `cargo audit` 共用）。
+
+[advisories]
+# 以下三条 zip 解压公告仅针对 tauri-plugin-updater 的传递依赖 zip 4.x：
+# 最新 updater（2.14.0）仍锁定 zip ^4，上游未迁移，无法通过升级消除。
+# 实际风险低：updater 只解压经 minisign 签名校验的更新包；应用自身的词典解压
+# 不调用 extract()（手动按条目限量读，见 dictionary.rs），且直依赖已升至 zip 9.x。
+# 上游迁移到 zip >= 9 后应移除此 ignore。
+ignore = [
+    "RUSTSEC-2026-0367",
+    "RUSTSEC-2026-0368",
+    "RUSTSEC-2026-0369",
+]

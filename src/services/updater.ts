@@ -1,37 +1,17 @@
 import { check, Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { ask } from "@tauri-apps/plugin-dialog";
 import { getVersion } from "@tauri-apps/api/app";
-import { error as logError } from "./logs";
 
 /**
- * Check for Tauri application updates and prompt the user to install.
+ * Tauri updater 封装。
  *
  * The updater endpoint is configured in `tauri.conf.json` and points to the
- * GitHub Release `latest.json` manifest. The downloaded archive is verified
- * against the embedded public key before extraction.
+ * GitHub Release `latest.json` manifest (Gitee mirror first). The downloaded
+ * archive is verified against the embedded public key before extraction.
+ *
+ * `latest.json` 的 `notes` 字段即当次版本的 changelog 段落（release.yml 从
+ * CHANGELOG.md 提取并写入），经 `Update.body` 暴露给前端展示更新内容。
  */
-export async function checkForUpdate(): Promise<void> {
-  try {
-    const update = await check();
-    if (!update?.available) {
-      return;
-    }
-
-    const yes = await ask(
-      `发现新版本 ${update.version}，是否立即下载并重启安装？`,
-      { title: "SpecReader AI 更新", kind: "info" }
-    );
-
-    if (yes) {
-      await update.downloadAndInstall();
-      await relaunch();
-    }
-  } catch (error) {
-    logError(`[updater] 检查更新失败: ${error}`);
-    throw error;
-  }
-}
 
 /**
  * Raw update info returned by the Tauri updater.

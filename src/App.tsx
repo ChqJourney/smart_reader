@@ -45,9 +45,17 @@ import { copyToClipboard } from "./utils/clipboard";
 import { getBasename } from "./utils/path";
 import { showMessage } from "./services/dialog";
 import { useDictionaryStatus } from "./hooks/useDictionaryStatus";
-import { checkForUpdate } from "./services/updater";
+import {
+  checkUpdateInfo,
+  installUpdate,
+  type UpdateInfo,
+} from "./services/updater";
+import { getVersion } from "@tauri-apps/api/app";
 import { error } from "./services/logs";
 import { syncOpenPdfs } from "./services/pdfToolsRegistry";
+import { extractVersionSection } from "./utils/changelog";
+import WhatsNewModal from "./components/WhatsNewModal";
+import changelogRaw from "../CHANGELOG.md?raw";
 import "./App.css";
 
 const RIGHT_PANEL_SPLIT_FRACTION = 0.2;
@@ -125,6 +133,16 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // 启动检查发现新版本时弹出带更新内容的确认弹窗。
+  const [startupUpdate, setStartupUpdate] = useState<{
+    update: UpdateInfo;
+    version: string;
+  } | null>(null);
+  // 升级后首次启动的「本次更新内容」弹窗（内容取自打包的 CHANGELOG 段落）。
+  const [whatsNew, setWhatsNew] = useState<{
+    version: string;
+    content: string;
+  } | null>(null);
   const dictionaryStatus = useDictionaryStatus();
 
   // Ctrl/Cmd+/ 开合快捷键速查浮层（Esc 关闭由 ShortcutsModal 的 useModal 处理）。
@@ -233,16 +251,86 @@ function App() {
 
   // Check for application updates shortly after startup. Errors are ignored
   // so that a missing network or non-Tauri test environment does not break
-  // the app launch flow.
+  // the app launch flow. 有更新时弹出自定义弹窗展示 update.body（latest.json
+  // 的 notes 字段，即当次版本 changelog 段落），不再是纯文本确认框。
   useEffect(() => {
     const timer = setTimeout(() => {
-      checkForUpdate().catch((err) => {
-        // 更新检查失败不应打断启动流程，但保留日志便于排查。
-        error(`[App] 启动时更新检查失败: ${err}`);
-      });
+      checkUpdateInfo()
+        .then((result) => {
+          if (result.available && result.update && result.version) {
+            setStartupUpdate({
+              update: result.update,
+              version: result.version,
+            });
+          }
+        })
+        .catch((err) => {
+          // 更新检查失败不应打断启动流程，但保留日志便于排查。
+          error(`[App] 启动时更新检查失败: ${err}`);
+        });
     }, 3000);
     return () => clearTimeout(timer);
   }, []);
+
+  // 升级后首次启动：当前版本与 lastSeenVersion 不一致时弹「本次更新内容」，
+  // 内容取自打包进应用的 CHANGELOG.md 对应版本段落（离线可用，不经网络）。
+  // 首次安装（lastSeenVersion 为空）不弹，直接记录当前版本。
+  useEffect(() => {
+    if (!settingsLoaded) return;
+    let cancelled = false;
+    getVersion()
+      .then((current) => {
+        if (cancelled || settings.lastSeenVersion === current) return;
+        const section = extractVersionSection(changelogRaw, current);
+        if (settings.lastSeenVersion !== "" && section) {
+          // 弹窗场景：lastSeenVersion 在弹窗关闭时落盘（handleWhatsNewClose）。
+          setWhatsNew({ version: current, content: section });
+          return;
+        }
+        // 无需弹窗（首次安装 / 该版本无 changelog 段落）：立即记录，避免重复检查。
+        setSettings((prev) => {
+          if (prev.lastSeenVersion === current) return prev;
+          const next = { ...prev, lastSeenVersion: current };
+          saveSettings(next).catch((err) =>
+            error(`[App] 记录已读版本失败: ${err}`)
+          );
+          return next;
+        });
+      })
+      .catch((err) => {
+        // 非 Tauri 环境（浏览器测试）getVersion 会失败，静默跳过。
+        error(`[App] 获取应用版本失败: ${err}`);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // settings 在加载完成那一刻读取一次即可，不跟随后续变更重跑。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settingsLoaded]);
+
+  const handleWhatsNewClose = useCallback(() => {
+    if (!whatsNew) return;
+    const version = whatsNew.version;
+    setWhatsNew(null);
+    setSettings((prev) => {
+      if (prev.lastSeenVersion === version) return prev;
+      const next = { ...prev, lastSeenVersion: version };
+      saveSettings(next).catch((err) =>
+        error(`[App] 记录已读版本失败: ${err}`)
+      );
+      return next;
+    });
+  }, [whatsNew]);
+
+  const handleStartupUpgrade = useCallback(() => {
+    if (!startupUpdate) return;
+    installUpdate(startupUpdate.update).catch((err) => {
+      // 原始报错只进日志，UI 显示友好中文。
+      error(`[App] 安装更新失败: ${err}`);
+      setStartupUpdate(null);
+      showMessage("SpecReader AI", t("updater.installFailed")).catch(() => {});
+    });
+  }, [startupUpdate, t]);
 
   const secondaryTab = useMemo(
     () => tabs.tabs.find((t) => t.id === splitView.secondaryTabId) || null,
@@ -1632,6 +1720,26 @@ function App() {
       )}
       {shortcutsOpen && (
         <ShortcutsModal onClose={() => setShortcutsOpen(false)} />
+      )}
+      {startupUpdate && (
+        <WhatsNewModal
+          title={t("updater.newVersionTitle", {
+            version: startupUpdate.version,
+          })}
+          content={startupUpdate.update.body ?? ""}
+          onClose={() => setStartupUpdate(null)}
+          primaryAction={{
+            label: t("settings.upgradeNow"),
+            onClick: handleStartupUpgrade,
+          }}
+        />
+      )}
+      {whatsNew && (
+        <WhatsNewModal
+          title={t("whatsNew.title", { version: whatsNew.version })}
+          content={whatsNew.content}
+          onClose={handleWhatsNewClose}
+        />
       )}
     </div>
   );

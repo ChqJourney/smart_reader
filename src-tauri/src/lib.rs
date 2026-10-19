@@ -938,6 +938,9 @@ struct AppSettings {
     /// 界面主题："system" | "light" | "dark"
     #[serde(default = "default_theme")]
     theme: String,
+    /// 上次已展示过「本次更新内容」的版本号；空串表示首次安装（不弹更新日志）。
+    #[serde(default)]
+    last_seen_version: String,
 }
 
 fn default_platform_id() -> String {
@@ -1002,6 +1005,7 @@ impl Default for AppSettings {
             right_panel_width: default_right_panel_width(),
             session_sort_mode: default_session_sort_mode(),
             theme: default_theme(),
+            last_seen_version: String::new(),
         }
     }
 }
@@ -1758,6 +1762,7 @@ mod tests {
             right_panel_width: 0,
             session_sort_mode: "recentActivity".to_string(),
             theme: "system".to_string(),
+            last_seen_version: String::new(),
         }
     }
 
@@ -2612,6 +2617,19 @@ mod tests {
             raw.contains("\"systemPrompts\":"),
             "serialized settings should use camelCase systemPrompts"
         );
+    }
+
+    #[test]
+    fn settings_without_last_seen_version_defaults_to_empty() {
+        // 旧版 settings.json 没有 lastSeenVersion 字段，反序列化应回退为空串
+        //（空串语义 = 首次安装，不弹「本次更新内容」）。
+        let raw = r#"{
+            "llm": {"baseUrl": "https://api.example.com/v1", "apiKey": "", "model": "deepseek-flash"},
+            "platformId": "deepseek",
+            "targetLanguage": "中文"
+        }"#;
+        let settings: AppSettings = serde_json::from_str(raw).unwrap();
+        assert_eq!(settings.last_seen_version, "");
     }
 
     // H-10: API key must be stored in secure storage, never in the JSON file.

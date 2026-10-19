@@ -1,0 +1,85 @@
+.whats-new-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(var(--backdrop-rgb), 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.whats-new-modal {
+  width: 520px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  background: var(--surface-content);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(var(--ink-rgb), 0.2);
+}
+
+.whats-new-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.whats-new-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.whats-new-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  color: var(--text-tertiary);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.whats-new-close:hover {
+  background: rgba(var(--ink-rgb), 0.06);
+  color: var(--text-primary);
+}
+
+.whats-new-body {
+  overflow-y: auto;
+  font-size: 0.85rem;
+  color: var(--text-body);
+}
+
+.whats-new-body h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 12px 0 6px;
+}
+
+.whats-new-body h3:first-child {
+  margin-top: 0;
+}
+
+.whats-new-body ul {
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.whats-new-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}

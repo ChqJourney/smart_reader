@@ -32,6 +32,7 @@ const defaultSettings: AppSettings = {
   rightPanelWidth: 0,
   sessionSortMode: "recentActivity",
   theme: "system",
+  lastSeenVersion: "",
 };
 
 describe("SetupWizard", () => {

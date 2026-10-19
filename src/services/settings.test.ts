@@ -27,6 +27,7 @@ const DEFAULT_SETTINGS = {
   rightPanelWidth: 0,
   sessionSortMode: "recentActivity",
   theme: "system",
+  lastSeenVersion: "",
 };
 
 describe("settings service", () => {
@@ -63,6 +64,23 @@ describe("settings service", () => {
     expect(settings.llm.apiKey).toBe("");
     expect(settings.targetLanguage).toBe("English");
     expect(settings.systemPrompts).toEqual(DEFAULT_SETTINGS.systemPrompts);
+  });
+
+  it("defaults lastSeenVersion to empty when backend data predates the field", async () => {
+    mockTauriInvoke({
+      load_settings: () => ({
+        llm: {
+          baseUrl: "https://api.deepseek.com/v1",
+          apiKey: "",
+          model: "deepseek-flash",
+        },
+        targetLanguage: "中文",
+      }),
+      check_api_key: () => true,
+    });
+    const { loadSettings } = await import("../services/settings");
+    const settings = await loadSettings();
+    expect(settings.lastSeenVersion).toBe("");
   });
 
   it("fills default system prompts when backend returns old format", async () => {
@@ -312,6 +330,7 @@ describe("settings service", () => {
       rightPanelWidth: 0,
       sessionSortMode: "recentActivity",
       theme: "system",
+      lastSeenVersion: "",
     };
     await saveSettings(settings);
     expect(saved).toEqual(settings);

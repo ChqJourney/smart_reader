@@ -1,8 +1,19 @@
 import { useTranslation } from "react-i18next";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import Icon from "./Icon";
 import IconSelect from "./IconSelect";
+import WhatsNewModal from "./WhatsNewModal";
+import { extractVersionSection } from "../utils/changelog";
+import changelogRaw from "../../CHANGELOG.md?raw";
 import {
   AppSettings,
   DEFAULT_SETTINGS,
@@ -33,6 +44,9 @@ import {
 } from "../services/updater";
 import "./CustomInterpretModal.css";
 import "./SettingsModal.css";
+
+// Markdown/KaTeX 走代码分割按需加载，与 AiChatPanel 一致，不进首屏 chunk。
+const MarkdownRenderer = lazy(() => import("./MarkdownRenderer"));
 
 type PromptTab = "translate" | "explain";
 type SettingsPage = "model" | "feature" | "system" | "about";
@@ -104,6 +118,8 @@ export default function SettingsModal({
     "check" | "install" | null
   >(null);
   const [pendingUpdate, setPendingUpdate] = useState<UpdateInfo | null>(null);
+  // 「查看更新日志」弹窗开关；内容为打包的 CHANGELOG 中当前版本段落。
+  const [changelogOpen, setChangelogOpen] = useState(false);
   const dictionaryStatus = useDictionaryStatus();
   const [testState, setTestState] = useState<
     "idle" | "testing" | "success" | "error"
@@ -291,6 +307,12 @@ export default function SettingsModal({
       setUpdateErrorKind("install");
     }
   }, [pendingUpdate]);
+
+  // 当前版本在 CHANGELOG 中的段落；找不到（如 hotfix 未记录）时隐藏入口。
+  const currentVersionSection = useMemo(
+    () => extractVersionSection(changelogRaw, version),
+    [version]
+  );
 
   // Stabilize onClose so useModal's useEffect doesn't re-run on every render
   // (which would steal focus from <select> dropdowns).
@@ -1141,6 +1163,16 @@ export default function SettingsModal({
                         </button>
                       </div>
                     )}
+                    {updateState === "available" && pendingUpdate?.body && (
+                      <div className="settings-update-notes">
+                        <div className="settings-update-notes-title">
+                          {t("settings.updateNotes")}
+                        </div>
+                        <Suspense fallback={null}>
+                          <MarkdownRenderer content={pendingUpdate.body} />
+                        </Suspense>
+                      </div>
+                    )}
                     {updateState === "installing" && (
                       <span className="settings-status-info">
                         {t("settings.installingUpdate")}
@@ -1157,6 +1189,15 @@ export default function SettingsModal({
                           ? t("settings.installUpdateError")
                           : t("settings.updateError")}
                       </span>
+                    )}
+                    {currentVersionSection && (
+                      <button
+                        type="button"
+                        className="settings-text-btn settings-view-changelog"
+                        onClick={() => setChangelogOpen(true)}
+                      >
+                        {t("settings.viewChangelog")}
+                      </button>
                     )}
                   </section>
 
@@ -1225,6 +1266,13 @@ export default function SettingsModal({
             </div>
           </div>
         </div>
+      )}
+      {changelogOpen && currentVersionSection && (
+        <WhatsNewModal
+          title={t("whatsNew.title", { version })}
+          content={currentVersionSection}
+          onClose={() => setChangelogOpen(false)}
+        />
       )}
     </div>
   );

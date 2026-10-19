@@ -524,6 +524,44 @@
   background: var(--accent-hover);
 }
 
+.settings-update-notes {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  font-size: 0.8rem;
+  color: var(--text-body);
+}
+
+.settings-update-notes-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  margin-bottom: 6px;
+}
+
+.settings-update-notes h3 {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 8px 0 4px;
+}
+
+.settings-update-notes ul {
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings-view-changelog {
+  margin-top: 8px;
+  font-size: 0.85rem;
+}
+
 .settings-status-info {
   font-size: 0.8rem;
   color: var(--text-secondary);

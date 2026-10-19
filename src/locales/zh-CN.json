@@ -329,6 +329,8 @@
     "noUpdateAvailable": "当前已是最新版本",
     "updateAvailable": "发现新版本 {{version}}",
     "upgradeNow": "马上升级",
+    "viewChangelog": "查看更新日志",
+    "updateNotes": "更新内容",
     "installingUpdate": "正在下载并安装更新，完成后将自动重启…",
     "noUpdateForPlatform": "当前暂无适用于本系统的更新包",
     "updateError": "检查更新失败，请检查网络连接后重试。",
@@ -341,6 +343,15 @@
       "translate": "你是一位检测认证行业标准文档翻译助手，擅长把英文标准条款准确翻译成{targetLanguage}。请保持专业术语准确，首次出现关键术语时保留原文，不要编造片段中未提及的条款或页码。",
       "explain": "你是一位检测认证行业标准文档阅读助手，擅长把复杂的英文标准条款解释得清晰易懂。请基于用户提供的文档片段用{targetLanguage}回答，不要编造片段中未提及的条款或页码。"
     }
+  },
+  "whatsNew": {
+    "title": "本次更新内容（v{{version}}）",
+    "gotIt": "知道了"
+  },
+  "updater": {
+    "newVersionTitle": "发现新版本 {{version}}",
+    "later": "稍后",
+    "installFailed": "安装更新失败，请重试。"
   },
   "dictionary": {
     "querying": "查询中…",

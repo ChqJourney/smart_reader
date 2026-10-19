@@ -51,6 +51,8 @@ export interface AppSettings {
   sessionSortMode: SessionSortMode;
   /** 界面主题：跟随系统 / 浅色 / 深色 */
   theme: ThemeMode;
+  /** 上次已展示过「本次更新内容」的版本号；空串表示首次安装（不弹更新日志）。 */
+  lastSeenVersion: string;
 }
 
 const LEGACY_STORAGE_KEY = "standardread-llm-config";
@@ -118,6 +120,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   rightPanelWidth: 0,
   sessionSortMode: "recentActivity",
   theme: "system",
+  lastSeenVersion: "",
 };
 
 function isValidSettings(value: unknown): value is Partial<AppSettings> {
@@ -166,6 +169,7 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
       ? value.sessionSortMode
       : DEFAULT_SETTINGS.sessionSortMode,
     theme: isThemeMode(value.theme) ? value.theme : DEFAULT_SETTINGS.theme,
+    lastSeenVersion: value.lastSeenVersion ?? DEFAULT_SETTINGS.lastSeenVersion,
   };
 }
 

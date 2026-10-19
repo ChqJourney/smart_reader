@@ -38,7 +38,7 @@
 - 解读 / 自定义解读 / 追问时启用 **Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文（`list_open_pdfs`、`read_pdf_page`、`search_in_pdf`），辅助验证条款引用与跨页内容；视觉模型额外提供 `screenshot_pdf_page` 页面截图工具（整页或归一化区域，图像作为合成 user 消息发给模型，见 6.5）。另有独立开关的联网工具 `web_search` / `web_fetch`（DeepSeek Search/Fetch API，按次计费，复用 DeepSeek 平台钥匙串 Key，与当前聊天平台无关；设置「功能设置」页开关，默认关闭）。
 - LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 按平台分条目存放于系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不再落入 `settings.json`。
 - LLM 请求整体后端代理化（`llm_proxy.rs`）：前端不再直接发起 HTTP 请求，API Key 不进入 webview。
-- 软件自动更新：启动 3 秒后自动检查，设置「关于」页可手动检查；失败仅记日志。
+- 软件自动更新：启动 3 秒后自动检查，设置「关于」页可手动检查；失败仅记日志。发现新版本时弹窗与「关于」页展示该版本更新内容（更新源 latest.json 的 `notes` 字段，发版时由 CHANGELOG.md 提取，`Update.body` 读取）；升级后首次启动弹「本次更新内容」弹窗（WhatsNewModal，内容取自打包进前端的 CHANGELOG.md 对应版本段落——`CHANGELOG.md?raw` 导入 + `utils/changelog.ts` 的 `extractVersionSection` 解析，离线可用），关闭后把当前版本写入 settings 的 `lastSeenVersion` 不再复现，首次安装（空串）不弹；「关于」页有「查看更新日志」入口可随时重看当前版本更新内容。
 - 单实例 + 文件关联：通过 `open-pdf` 系统事件打开 PDF（如双击 .pdf 文件）；冷启动时丢失的 emit 由后端缓存，前端 listener 就绪后通过 `take_pending_open_pdfs` 取回并打开。
 - i18n 框架接入（i18next + react-i18next）：当前 `lng` 硬编码 `zh-CN`、界面不可切换语言，`en.json` 为预埋；`targetLanguage` 是 LLM 输出语言，与 UI 语言无关。
 
@@ -117,6 +117,7 @@ npm install
 │   │   ├── RecentFilesBar.tsx         # 最近文件：触发按钮 + 下拉面板（置顶/搜索/分屏打开）
 │   │   ├── CustomInterpretModal.tsx   # 自定义解读弹窗（片段勾选清单 + 解读方式预设下拉，App 层统一渲染）
 │   │   ├── ShortcutsModal.tsx         # 键盘快捷键速查浮层（Ctrl/Cmd+/ 或标题栏「?」开合，分组 kbd 清单）
+│   │   ├── WhatsNewModal.tsx          # 更新内容弹窗（更新前「发现新版本」带升级按钮 / 更新后「本次更新内容」，MarkdownRenderer 渲染 changelog 段落）
 │   │   ├── ToolCallsIndicator.tsx     # 一轮对话内全部工具调用的气泡（工具阶段自动展开明细，正文输出后自动收拢）
 │   │   ├── LinkPreviewPopup.tsx       # 条款链接悬停预览小窗（画中画：渲染目标页、拖动/调大小/固化，portal 到 body）
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
@@ -157,6 +158,7 @@ npm install
 │   │   ├── pageRail.ts                # 滑轨 pct↔页码映射、scrollTop→页码反查（viewport 缺失时按均高估算）
 │   │   ├── popupPosition.ts           # 浮层定位 clamp 计算
 │   │   ├── clipboard.ts               # 复制到剪贴板（navigator.clipboard + execCommand 回退）
+│   │   ├── changelog.ts               # CHANGELOG.md 版本段落解析（extractVersionSection，供更新内容弹窗/关于页）
 │   │   ├── time.ts                    # 相对时间格式化（最近文件列表）
 │   │   └── path.ts                    # 路径工具（basename/dirname/中间省略）
 │   ├── services/                      # 业务逻辑与 Tauri 命令封装
@@ -180,7 +182,7 @@ npm install
 │   │   ├── selection.ts               # SelectionState 类型
 │   │   ├── dialog.ts                  # plugin-dialog 确认/消息框封装
 │   │   ├── logs.ts                    # plugin-log 五级日志（所有消息先经 redactSensitiveInfo 脱敏 sk-/Bearer/主目录路径）
-│   │   └── updater.ts                 # plugin-updater + plugin-process：checkForUpdate/checkUpdateInfo/installUpdate
+│   │   └── updater.ts                 # plugin-updater + plugin-process：checkUpdateInfo/installUpdate（latest.json 的 notes 经 Update.body 暴露更新内容）
 │   └── test/                          # 测试工具
 │       ├── setup.ts                   # Vitest 全局 setup / mock
 │       └── mocks/tauri.ts             # mockTauriInvoke 辅助函数
@@ -207,6 +209,7 @@ npm install
 │   ├── pdf-rapid-zoom.spec.ts         # 快速缩放回归
 │   ├── pdf-selection-translate.spec.ts # 选区翻译流程
 │   ├── pdf-space-pan.spec.ts          # Space 按住拖拽 pan（连续滚动模式 + 不按 Space 时选择不受影响）
+│   ├── whats-new.spec.ts              # 升级后首启弹「本次更新内容」（mock 版本号与 lastSeenVersion 不一致）+ 关闭后写回已读版本
 │   └── pdf-tab-budget.spec.ts         # Tab 休眠/唤醒回归 + per-tab 内存成本测量（init script 拨快假时间越过 5 分钟保护窗口）
 ├── scripts/                           # 辅助脚本
 │   ├── gen-sample-pdf.mjs             # 生成测试 PDF
@@ -323,7 +326,7 @@ cd src-tauri && cargo test
 - `save_session_image(sessionId: string, data: Vec<u8>)`：截图工具图片原子落盘到 `sessions/{session_id}/`（前端按 `Array.from(bytes)` 传输，同 `export_binary_file` 约定），返回文件名引用。
 - `read_session_image(sessionId: string, file: string)`：读回截图图片字节（`file` 仅允许纯文件名，防路径穿越），追问回放图片消息用。
 - `authorize_pdf_path(filePath: string)`：将用户通过对话框选择的 PDF 路径加入后端授权白名单，`read_pdf_bytes` / `get_pdf_hash` 会校验该白名单；要求文件真实存在，白名单与校验两侧均以 canonicalize 后的路径比对（防符号链接 / `..` 别名绕过）。
-- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 联网搜索开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
+- `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 联网搜索开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式 + 界面主题 + lastSeenVersion）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表（`RecentFile` 含 `pinned` 置顶与 `lastPage` 阅读页码字段，旧数据通过 `#[serde(default)]` 兼容）。
 - `check_files_exist(paths: string[])`：批量检查文件是否仍存在于磁盘，最近文件面板用它置灰已移动/删除的条目。
 - `export_text_file(file_path: string, content: string)`：把用户经系统保存对话框选定的路径写入文本文件（解读分享导出 .md 使用，原子写入，不走 PDF 授权白名单）；扩展名白名单 .md/.txt，拒绝写入 AppData 内部路径。
@@ -362,7 +365,7 @@ cd src-tauri && cargo test
     │   └── app.log                # 应用运行日志（默认 Warn 级别，可在设置中调整，保留最近 3 个文件各 10 MB）
     ├── print/
     │   └── SpecReader-print-{nanos}-{seq}.pdf  # 打印临时文件（文件名唯一；open_print_file 先写新文件，再清理 mtime 早于 10 分钟宽限期的旧 pdf）
-    ├── settings.json              # LLM 平台/模型 + 目标语言 + Agent Tools 开关 + 联网搜索开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式
+    ├── settings.json              # LLM 平台/模型 + 目标语言 + Agent Tools 开关 + 联网搜索开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式 + 界面主题 + lastSeenVersion（已读过更新内容的版本号）
     └── recent_files.json          # 最近打开文件列表
 ```
 
@@ -402,7 +405,8 @@ App.tsx（编排层，具体状态已下沉到 hooks）
 App.tsx 还接入：
 ├── TitleBar            # 自定义标题栏（品牌区 data-tauri-drag-region + RecentFilesBar + 打开PDF/设置 + 窗口控制）
 ├── SetupWizard         # 首次启动配置向导
-├── updater             # 启动 3 秒后 checkForUpdate，失败仅记日志；设置「关于」页可手动检查
+├── updater             # 启动 3 秒后 checkUpdateInfo，有更新弹 WhatsNewModal（展示 notes 更新内容 + 马上升级/稍后），失败仅记日志；设置「关于」页可手动检查
+├── whatsnew            # settingsLoaded 后比对 getVersion 与 settings.lastSeenVersion，不一致且 CHANGELOG 有对应段落则弹「本次更新内容」（首次安装不弹直接记录），关闭时写回 lastSeenVersion
 └── `open-pdf` 系统事件监听 + `take_pending_open_pdfs`（单实例 / 文件关联打开 PDF，含冷启动补取）
 （main.tsx 顶层以 ErrorBoundary 包裹整个应用）
 
@@ -521,7 +525,7 @@ runSessionStream（usePersistence.ts）
 
 ### 8.2 E2E 测试
 
-- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 13 个 spec：
+- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 14 个 spec：
   - `app.spec.ts`：主布局、顶部最近文件入口、设置 Modal、面板显隐。
   - `pdf-page-jump.spec.ts`：连续滚动模式下页码跳转正确性、Cmd/Ctrl+G 跳页面板（输入回车跳转 + 闪卡）、右侧滑轨拖动跳页，使用 mock 的 Tauri `invoke` 返回 PDF 字节。
   - `pdf-outline-jump.spec.ts`：大纲点击精确跳转到 dest 所在行（fixtures `sample-outline.pdf` 由 `gen-sample-outline-pdf.mjs` 生成，XYZ dest 指向已知行位置，断言 scrollTop = 页首 + pdfY×scale − 留白）。
@@ -535,6 +539,7 @@ runSessionStream（usePersistence.ts）
   - `pdf-split-view.spec.ts`：并排对照（tab 栏按钮进入/退出分屏、拖拽 tab 到阅读区进入分屏、释放在阅读区外取消）。
   - `pdf-space-pan.spec.ts`：Space 按住拖拽 pan（连续滚动模式下滚动位置不弹回、不按 Space 时拖拽仍是文字选择）。
   - `pdf-tab-budget.spec.ts`：Tab 休眠/唤醒回归（字节预算与存活 viewer 数两条预算线、唤醒后页码恢复）+ per-tab 内存成本测量；init script 在每次 `get_pdf_hash` 时拨快假时间 6 分钟，越过 5 分钟休眠保护窗口。
+  - `whats-new.spec.ts`：升级后首次启动弹「本次更新内容」（mock `plugin:app|version` 与 settings 的 `lastSeenVersion` 不一致），断言内容取自 CHANGELOG 对应版本段落、关闭后 `save_settings` 写回当前版本；版本一致时不弹。
 - 单实例与文件关联需在打包后的安装包上手动验证，E2E 较难覆盖。
 
 ### 8.3 后端测试
@@ -639,7 +644,7 @@ cd src-tauri && cargo test
 
 ## 13. 版本信息
 
-- 前端版本：`1.2.0`
-- Tauri 应用版本：`1.2.0`
+- 前端版本：`1.4.0`
+- Tauri 应用版本：`1.4.0`
 - 产品名称：`SpecReader AI`
 - 应用标识：`com.photonee.specreader`

@@ -329,6 +329,8 @@
     "noUpdateAvailable": "You're up to date",
     "updateAvailable": "New version {{version}} available",
     "upgradeNow": "Upgrade Now",
+    "viewChangelog": "View Changelog",
+    "updateNotes": "Release Notes",
     "installingUpdate": "Downloading and installing update; the app will restart automatically…",
     "noUpdateForPlatform": "No update package is available for this system",
     "updateError": "Update check failed. Check your network connection and try again.",
@@ -341,6 +343,15 @@
       "translate": "You are an assistant specializing in translating testing and certification industry standard documents. Accurately translate English standard clauses into {targetLanguage}. Keep professional terminology accurate, retain the original text when key terms first appear, and do not make up clauses or page numbers not mentioned in the excerpt.",
       "explain": "You are an assistant for reading testing and certification industry standard documents, skilled at explaining complex English standard clauses clearly. Answer in {targetLanguage} based on the document excerpt provided by the user, and do not make up clauses or page numbers not mentioned in the excerpt."
     }
+  },
+  "whatsNew": {
+    "title": "What's New in v{{version}}",
+    "gotIt": "Got It"
+  },
+  "updater": {
+    "newVersionTitle": "New version {{version}} available",
+    "later": "Later",
+    "installFailed": "Failed to install the update. Please try again."
   },
   "dictionary": {
     "querying": "Looking up…",

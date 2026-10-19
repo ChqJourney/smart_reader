@@ -68,6 +68,7 @@ const defaultSettings = {
   rightPanelWidth: 0,
   sessionSortMode: "recentActivity" as const,
   theme: "system" as const,
+  lastSeenVersion: "",
 };
 
 function switchToFeaturePage() {
@@ -270,6 +271,7 @@ describe("SettingsModal", () => {
       rightPanelWidth: 0,
       sessionSortMode: "recentActivity",
       theme: "system",
+      lastSeenVersion: "",
     });
   });
 

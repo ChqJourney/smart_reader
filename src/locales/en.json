@@ -98,6 +98,8 @@
     "pin": "Pin preview (stays open when the mouse leaves)",
     "unpin": "Unpin",
     "close": "Close preview",
+    "zoomIn": "Zoom in (Ctrl/Cmd+wheel)",
+    "zoomOut": "Zoom out (Ctrl/Cmd+wheel)",
     "loading": "Loading...",
     "loadFailed": "Failed to load preview"
   },
@@ -270,7 +272,7 @@
     "hoverTranslateHint": "Show translations from the local ECDICT English-Chinese dictionary when hovering over English words.",
     "enableHoverTranslate": "Enable Hover Translation",
     "linkPreview": "Clause Link Hover Preview",
-    "linkPreviewHint": "Hover over a clause reference link in the PDF for 2 seconds to open a picture-in-picture window showing the target clause. The window can be moved, resized, and pinned for comparison.",
+    "linkPreviewHint": "Hover over a clause reference link in the PDF for 2 seconds to open a picture-in-picture window showing the target clause. The window can be moved, resized, zoomed (Ctrl/Cmd+wheel), and pinned for comparison.",
     "enableLinkPreview": "Enable Clause Link Hover Preview",
     "agentTools": "Smart Document Lookup",
     "agentToolsHint": "Allow AI to automatically look up content in currently open PDFs during interpretation, to verify referenced clauses, tables, or definitions.",

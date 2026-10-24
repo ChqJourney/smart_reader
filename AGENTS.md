@@ -34,7 +34,7 @@
 - 解读 / 自定义解读会话可分享：会话头部「分享」下拉支持复制结构化 Markdown 到剪贴板或导出 .md 文件（原文片段以引用块 + 来源行展示，有来源时跳过模板 prompt、无来源的自由提问会话保留首条提问，tool 消息 / 思考内容一律跳过，见 `services/share.ts`）。
 - 最近文件下拉面板：置顶常用标准、按文件名/路径搜索、显示目录/相对时间/上次读到的页码、失效文件置灰、单条移除与两段式清空、从列表直接在分屏打开对照（快捷键 Ctrl/Cmd+Shift+O 开合面板）。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
-- 条款链接悬停预览（画中画）：默认关闭，设置「功能设置」页开启。悬停在 PDF 自带的文档内链接（条款号引用，带内部 dest）上 2 秒弹出小窗，复用 viewer 的 PDF 代理渲染目标页并自动滚动到 dest Y 位置（XYZ / FitH 取 Y，其余形态退化页首）；小窗 portal 到 body，可拖动（复用 useDrag）、右下角调大小（拖动中 canvas CSS 拉伸、松手按新宽度重渲）、内容区原生滚动；右上角图钉固化后不随鼠标移出关闭，可多个并存（上限 10 个），未固化预览同时只保留一个、鼠标离开 400ms 宽限后自动关闭；同目标（页码+destY）去重，外部 url 链接不参与；悬停链接时抑制悬停查词 tooltip。状态管理在 `hooks/useLinkPreviews.ts`，窗口组件 `components/LinkPreviewPopup.tsx`，PdfPage 仅上报悬停目标（`onLinkHover`），PdfViewer 按 `settings.linkPreviewEnabled` 门控上报并在开关关闭时清空已弹出窗口。
+- 条款链接悬停预览（画中画）：默认关闭，设置「功能设置」页开启。悬停在 PDF 自带的文档内链接（条款号引用，带内部 dest）上 2 秒弹出小窗，复用 viewer 的 PDF 代理渲染目标页并自动滚动到 dest Y 位置（XYZ / FitH 取 Y，其余形态退化页首）；小窗 portal 到 body，可拖动（复用 useDrag）、右下角调大小（拖动中 canvas CSS 拉伸、松手按新宽度重渲）、内容区原生滚动、内容可缩放（头部 ± 按钮或 Ctrl/Cmd+滚轮，0.5x–3x 步进 1.2、接近 1 时吸附回 1，缩放按内容比例锚定滚动位置；zoom=1 时 canvas CSS width:100% 跟随窗口拉伸，放大后按视口像素定宽走内容区滚动）、左键拖拽平移内容（复用 usePanScroll 常开，仅溢出时启动，grab/grabbing 手型）；右上角图钉固化后不随鼠标移出关闭，可多个并存（上限 10 个），未固化预览同时只保留一个、鼠标离开 400ms 宽限后自动关闭；同目标（页码+destY）去重，外部 url 链接不参与；悬停链接时抑制悬停查词 tooltip。状态管理在 `hooks/useLinkPreviews.ts`，窗口组件 `components/LinkPreviewPopup.tsx`，PdfPage 仅上报悬停目标（`onLinkHover`），PdfViewer 按 `settings.linkPreviewEnabled` 门控上报并在开关关闭时清空已弹出窗口。
 - 解读 / 自定义解读 / 追问时启用 **Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文（`list_open_pdfs`、`read_pdf_page`、`search_in_pdf`），辅助验证条款引用与跨页内容；视觉模型额外提供 `screenshot_pdf_page` 页面截图工具（整页或归一化区域，图像作为合成 user 消息发给模型，见 6.5）。另有独立开关的联网工具 `web_search` / `web_fetch`（DeepSeek Search/Fetch API，按次计费，复用 DeepSeek 平台钥匙串 Key，与当前聊天平台无关；设置「功能设置」页开关，默认关闭）。
 - LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 按平台分条目存放于系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不再落入 `settings.json`。
 - LLM 请求整体后端代理化（`llm_proxy.rs`）：前端不再直接发起 HTTP 请求，API Key 不进入 webview。
@@ -119,7 +119,7 @@ npm install
 │   │   ├── ShortcutsModal.tsx         # 键盘快捷键速查浮层（Ctrl/Cmd+/ 或标题栏「?」开合，分组 kbd 清单）
 │   │   ├── WhatsNewModal.tsx          # 更新内容弹窗（更新前「发现新版本」带升级按钮 / 更新后「本次更新内容」，MarkdownRenderer 渲染 changelog 段落）
 │   │   ├── ToolCallsIndicator.tsx     # 一轮对话内全部工具调用的气泡（工具阶段自动展开明细，正文输出后自动收拢）
-│   │   ├── LinkPreviewPopup.tsx       # 条款链接悬停预览小窗（画中画：渲染目标页、拖动/调大小/固化，portal 到 body）
+│   │   ├── LinkPreviewPopup.tsx       # 条款链接悬停预览小窗（画中画：渲染目标页、拖动/调大小/缩放/固化，portal 到 body）
 │   │   ├── WordTooltip.tsx            # 悬停单词翻译 tooltip
 │   │   ├── HibernatedPlaceholder.tsx  # 休眠 tab 在 keep-alive 树里的占位（空 div，保持 key 稳定）
 │   │   ├── ErrorBoundary.tsx          # 顶层错误边界

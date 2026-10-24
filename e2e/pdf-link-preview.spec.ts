@@ -55,4 +55,73 @@ test.describe("PDF clause link hover preview", () => {
     await page.mouse.move(box.x - 150, box.y + box.height / 2, { steps: 3 });
     await expect(popup).toBeHidden({ timeout: 3000 });
   });
+
+  test("preview content zooms via Ctrl+wheel and header buttons", async ({
+    page,
+  }) => {
+    await page.getByTestId("open-pdf-btn").click();
+    await expect(page.getByLabel("页码")).toBeVisible();
+
+    await page.getByLabel("页码").click();
+    const jumpInput = page.getByLabel("跳转到页");
+    await jumpInput.fill("2");
+    await jumpInput.press("Enter");
+    await expect(page.getByLabel("页码")).toHaveText("2");
+
+    const indicator = page
+      .locator('.pdf-page-wrapper[data-page="2"] .pdf-link-indicator')
+      .first();
+    await indicator.scrollIntoViewIfNeeded();
+    const box = (await indicator.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    const popup = page.locator(".link-preview-popup");
+    await expect(popup).toBeVisible({ timeout: 6000 });
+    await expect(popup.locator(".link-preview-status")).toBeHidden({
+      timeout: 6000,
+    });
+
+    const canvas = popup.locator(".link-preview-body canvas");
+    const canvasWidth = () =>
+      canvas.evaluate((el) => (el as HTMLCanvasElement).width);
+    const widthBefore = await canvasWidth();
+    expect(widthBefore).toBeGreaterThan(0);
+
+    // 移入预览窗（进入窗口取消宽限关闭计时），Ctrl+滚轮放大两档（1.2²=1.44x）。
+    const bodyBox = (await popup.locator(".link-preview-body").boundingBox())!;
+    await page.mouse.move(
+      bodyBox.x + bodyBox.width / 2,
+      bodyBox.y + bodyBox.height / 2,
+      { steps: 3 }
+    );
+    await page.keyboard.down("Control");
+    await page.mouse.wheel(0, -240);
+    await page.keyboard.up("Control");
+    await expect.poll(canvasWidth).toBeGreaterThan(widthBefore * 1.3);
+
+    // 放大后内容横向溢出：左键拖拽内容区平移（手型，scrollLeft 从 0 增大）。
+    const body = popup.locator(".link-preview-body");
+    const centerX = bodyBox.x + bodyBox.width / 2;
+    const centerY = bodyBox.y + bodyBox.height / 2;
+    await page.mouse.move(centerX, centerY);
+    await page.mouse.down();
+    await page.mouse.move(centerX - 80, centerY, { steps: 4 });
+    await page.mouse.up();
+    await expect
+      .poll(() => body.evaluate((el) => el.scrollLeft))
+      .toBeGreaterThan(0);
+
+    // 头部「-」按钮缩回一档（1.44/1.2=1.2x），再缩一档回到 fit-to-width。
+    const zoomOut = popup.getByRole("button", {
+      name: "缩小（Ctrl/Cmd+滚轮）",
+    });
+    await zoomOut.click();
+    const zoomedWidth = await canvasWidth();
+    expect(zoomedWidth).toBeGreaterThan(widthBefore * 1.1);
+    await zoomOut.click();
+    await expect
+      .poll(async () =>
+        canvas.evaluate((el) => (el as HTMLCanvasElement).style.width === "")
+      )
+      .toBe(true);
+  });
 });

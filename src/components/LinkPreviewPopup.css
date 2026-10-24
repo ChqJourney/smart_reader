@@ -61,6 +61,13 @@
   flex: 1;
   overflow: auto;
   background: var(--surface-titlebar-alt);
+  /* 内容区左键拖拽平移（手型工具），usePanScroll 仅在内容溢出时启动。 */
+  cursor: grab;
+}
+
+.link-preview-body.panning {
+  cursor: grabbing;
+  user-select: none;
 }
 
 .link-preview-body canvas {

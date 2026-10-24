@@ -134,4 +134,99 @@ describe("LinkPreviewPopup", () => {
     renderPopup(makePdf({ renderError: true }));
     expect(await screen.findByText("预览加载失败")).toBeInTheDocument();
   });
+
+  it("zooms via header buttons and re-renders at the new scale", async () => {
+    const pdf = makePdf();
+    renderPopup(pdf);
+    await waitFor(() => {
+      expect(pdf.page.render).toHaveBeenCalledTimes(1);
+    });
+    const canvas = document.querySelector(
+      ".link-preview-body canvas"
+    ) as HTMLCanvasElement;
+    // fit-to-width：jsdom clientWidth=0 → 回退 committedWidth 520，scale 5.2。
+    expect(canvas.width).toBe(520);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "放大（Ctrl/Cmd+滚轮）" })
+    );
+    await waitFor(() => {
+      expect(pdf.page.render).toHaveBeenCalledTimes(2);
+    });
+    // 5.2 × 1.2 ≈ 6.24 → 位图 624px。
+    expect(canvas.width).toBe(624);
+    // zoom≠1 时按视口像素定宽，超出部分走内容区原生滚动。
+    expect(parseFloat(canvas.style.width)).toBeCloseTo(624, 5);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "缩小（Ctrl/Cmd+滚轮）" })
+    );
+    await waitFor(() => {
+      expect(pdf.page.render).toHaveBeenCalledTimes(3);
+    });
+    expect(canvas.width).toBe(520);
+    // 回到 zoom=1 恢复 CSS width:100% 跟随窗口拉伸。
+    expect(canvas.style.width).toBe("");
+  });
+
+  it("zooms with Ctrl+wheel over the preview body; plain wheel does not zoom", async () => {
+    const pdf = makePdf();
+    renderPopup(pdf);
+    await waitFor(() => {
+      expect(pdf.page.render).toHaveBeenCalledTimes(1);
+    });
+    const body = document.querySelector(".link-preview-body") as HTMLDivElement;
+    const canvas = document.querySelector(
+      ".link-preview-body canvas"
+    ) as HTMLCanvasElement;
+
+    // 累积阈值 100：一次 deltaY -120 跨阈值放大一档。
+    fireEvent.wheel(body, { deltaY: -120, ctrlKey: true });
+    await waitFor(() => {
+      expect(pdf.page.render).toHaveBeenCalledTimes(2);
+    });
+    expect(canvas.width).toBe(624);
+
+    // 不带修饰键的滚轮保持原生滚动，不触发缩放重渲。
+    fireEvent.wheel(body, { deltaY: -240 });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(pdf.page.render).toHaveBeenCalledTimes(2);
+  });
+
+  it("pans the content by dragging the body (grab hand)", async () => {
+    const pdf = makePdf();
+    renderPopup(pdf);
+    await waitFor(() => {
+      expect(pdf.page.render).toHaveBeenCalled();
+    });
+    const body = document.querySelector(".link-preview-body") as HTMLDivElement;
+    // jsdom 无布局：桩出溢出尺寸让 usePanScroll 的溢出门控通过。
+    Object.defineProperty(body, "scrollWidth", {
+      value: 1000,
+      configurable: true,
+    });
+    Object.defineProperty(body, "clientWidth", {
+      value: 500,
+      configurable: true,
+    });
+    Object.defineProperty(body, "scrollHeight", {
+      value: 2000,
+      configurable: true,
+    });
+    Object.defineProperty(body, "clientHeight", {
+      value: 400,
+      configurable: true,
+    });
+
+    // 初次渲染已自动滚动到 dest（688），重置一个已知基线再拖拽。
+    body.scrollTop = 100;
+    fireEvent.mouseDown(body, { button: 0, clientX: 200, clientY: 200 });
+    // 手型惯例：内容跟随光标——光标左上移，视口右下移。
+    fireEvent.mouseMove(window, { clientX: 180, clientY: 170 });
+    expect(body.classList.contains("panning")).toBe(true);
+    expect(body.scrollLeft).toBe(20);
+    expect(body.scrollTop).toBe(130);
+    fireEvent.mouseUp(window);
+    expect(body.classList.contains("panning")).toBe(false);
+  });
 });

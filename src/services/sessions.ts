@@ -30,14 +30,15 @@ export interface SessionImageRegion {
 }
 
 /**
- * 截图工具图片的持久化引用。图片本体落盘在
+ * 会话图片的持久化引用。图片本体落盘在
  * `<AppData>/SpecReader/annotations/sessions/{sessionId}/{file}`，
  * session JSON 里只存这个引用，避免 base64 撑爆会话文件。
  */
 export interface SessionImageRef {
   /** 图片文件名（不含目录，位于 sessions/{sessionId}/ 下） */
   file: string;
-  page: number;
+  /** 来源页码：仅截图工具填写；用户上传图片无页码概念不填 */
+  page?: number;
   region?: SessionImageRegion;
 }
 
@@ -60,7 +61,7 @@ export interface InterpretationMessage {
   toolCalls?: ToolCall[];
   /** UI-facing summary of tool calls executed for this assistant message */
   toolEvents?: ToolEvent[];
-  /** 截图工具图片引用（仅 role === "tool" 的截图结果消息） */
+  /** 图片引用：role === "tool" 的截图结果、role === "user" 的用户上传图片 */
   images?: SessionImageRef[];
 }
 

@@ -3,10 +3,16 @@ import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { StashItem } from "../services/stash";
 import {
   InterpretationSession,
+  SessionImageRef,
   SessionSortMode,
   collectTurnProcess,
+  readSessionImage,
   sortSessions,
 } from "../services/sessions";
+import {
+  ImageAttachments,
+  useImageAttachments,
+} from "../hooks/useImageAttachments";
 import { copyToClipboard } from "../utils/clipboard";
 import { buildShareMarkdown, exportSessionMarkdown } from "../services/share";
 import { error } from "../services/logs";
@@ -39,12 +45,14 @@ interface AiChatPanelProps {
   onGotoStash?: (stash: StashItem) => void;
   onGotoSession?: (session: InterpretationSession) => void;
   /** 无选区自由提问：返回新会话 id 供面板直接切入 chatbox；无可锚定文档时返回 null */
-  onFreeQuestion?: (prompt: string) => string | null;
+  onFreeQuestion?: (prompt: string, images: Uint8Array[]) => string | null;
   /** 是否可以发起自由提问（有已打开 PDF 可锚定） */
   canAsk?: boolean;
   /** Agent Tools 是否开启：关闭时提问框下方提示「开启后可查阅原文」 */
   agentToolsEnabled?: boolean;
-  onFollowUp: (sessionId: string, prompt: string) => void;
+  /** 当前模型是否支持视觉：决定提问/追问框是否显示图片附件入口 */
+  visionCapable?: boolean;
+  onFollowUp: (sessionId: string, prompt: string, images: Uint8Array[]) => void;
   onInterrupt?: (sessionId: string) => void;
   /** 面板内删除会话（连带删除 PDF 上的对应标记） */
   onDeleteSession?: (sessionId: string) => void;
@@ -76,6 +84,7 @@ export default function AiChatPanel({
   onFreeQuestion,
   canAsk = true,
   agentToolsEnabled,
+  visionCapable = false,
   onFollowUp,
   onInterrupt,
   onDeleteSession,
@@ -601,6 +610,8 @@ export default function AiChatPanel({
                             content={message.content}
                             isFirst={message.id === activeFirstUserMessageId}
                             sources={activeSession.sources}
+                            sessionId={activeSession.id}
+                            images={message.images}
                             onGotoStash={onGotoStash}
                           />
                         ) : (
@@ -634,7 +645,10 @@ export default function AiChatPanel({
             <FollowUpInput
               session={activeSession}
               sendDisabled={activeSession.isStreaming}
-              onSend={(text) => onFollowUp(activeSession.id, text)}
+              visionCapable={visionCapable}
+              onSend={(text, images) =>
+                onFollowUp(activeSession.id, text, images)
+              }
               onInterrupt={() => onInterrupt?.(activeSession.id)}
             />
           </div>
@@ -934,8 +948,9 @@ export default function AiChatPanel({
                   )}
                   <AskInput
                     disabled={!canAsk}
-                    onSend={(text) => {
-                      const id = onFreeQuestion(text);
+                    visionCapable={visionCapable}
+                    onSend={(text, images) => {
+                      const id = onFreeQuestion(text, images);
                       // 直接切入新会话的 chatbox 观看流式输出
                       if (id) setActiveSessionId(id);
                     }}
@@ -957,16 +972,21 @@ const SOURCE_CARD_TEXT_LEN = 60;
 /**
  * user 消息内容：首条是模板拼装的 prompt（含片段原文），默认折叠为摘要并
  * 带来源片段卡片（点击跳原文）；追问消息是用户手写短文本，原样展示。
+ * 附带图片（images 引用）时先渲染缩略图组。
  */
 function UserMessageContent({
   content,
   isFirst,
   sources,
+  sessionId,
+  images,
   onGotoStash,
 }: {
   content: string;
   isFirst: boolean;
   sources: StashItem[];
+  sessionId: string;
+  images?: SessionImageRef[];
   onGotoStash?: (stash: StashItem) => void;
 }) {
   const { t } = useTranslation();
@@ -978,6 +998,9 @@ function UserMessageContent({
       : content;
   return (
     <>
+      {images && images.length > 0 && (
+        <MessageImages sessionId={sessionId} images={images} />
+      )}
       {isFirst && sources.length > 0 && (
         <div className="ai-chat-source-cards">
           {sources.map((s) => (
@@ -1019,28 +1042,142 @@ function UserMessageContent({
   );
 }
 
+/**
+ * user 消息附带的图片缩略图组：按文件名引用从 AppData 读回字节转 object URL。
+ * 读取失败的图显示占位块，不影响文本展示。
+ */
+function MessageImages({
+  sessionId,
+  images,
+}: {
+  sessionId: string;
+  images: SessionImageRef[];
+}) {
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    const created: string[] = [];
+    void (async () => {
+      for (const ref of images) {
+        const bytes = await readSessionImage(sessionId, ref.file);
+        if (!bytes || cancelled) continue;
+        const url = URL.createObjectURL(new Blob([bytes as BlobPart]));
+        created.push(url);
+        setUrls((prev) => ({ ...prev, [ref.file]: url }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+      for (const url of created) URL.revokeObjectURL(url);
+    };
+    // images 引用来自会话状态，file 列表变化才需要重读
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId, images.map((ref) => ref.file).join(",")]);
+  return (
+    <div className="ai-chat-msg-images">
+      {images.map((ref) =>
+        urls[ref.file] ? (
+          <img
+            key={ref.file}
+            className="ai-chat-msg-image"
+            src={urls[ref.file]}
+            alt=""
+          />
+        ) : (
+          <span key={ref.file} className="ai-chat-msg-image placeholder" />
+        )
+      )}
+    </div>
+  );
+}
+
+/**
+ * 已选图片缩略图预览条（右上角 × 删除）：仅在有图片时由父组件渲染。
+ */
+function ImageAttachThumbs({ attachments }: { attachments: ImageAttachments }) {
+  const { t } = useTranslation();
+  return (
+    <div className="attach-bar">
+      {attachments.images.map((img) => (
+        <span key={img.id} className="attach-thumb">
+          <img src={img.previewUrl} alt="" />
+          <button
+            type="button"
+            className="attach-thumb-remove"
+            onClick={() => attachments.remove(img.id)}
+            aria-label={t("chat.removeImage")}
+            title={t("chat.removeImage")}
+          >
+            <Icon name="close" size={10} />
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * 输入框行内的图片添加按钮（+ 图标）：视觉模型且未达上限时显示，
+ * 点击打开系统文件对话框选择图片。
+ */
+function ImageAttachButton({ attachments }: { attachments: ImageAttachments }) {
+  const { t } = useTranslation();
+  if (!attachments.canAdd) return null;
+  return (
+    <button
+      type="button"
+      className="attach-inline-btn"
+      onClick={() => void attachments.addFromDialog()}
+      aria-label={t("chat.askAddImage")}
+      title={t("chat.askAddImage")}
+    >
+      <Icon name="plus" size={16} />
+    </button>
+  );
+}
+
+/** 消费剪贴板里的图片文件；返回是否有图片被消费（用于 preventDefault） */
+function pasteClipboardImages(
+  e: React.ClipboardEvent<HTMLTextAreaElement>,
+  attachments: ImageAttachments
+): boolean {
+  const files = Array.from(e.clipboardData.files).filter((f) =>
+    f.type.startsWith("image/")
+  );
+  if (files.length === 0) return false;
+  for (const file of files) void attachments.addFromPaste(file);
+  return true;
+}
+
 interface FollowUpInputProps {
   session: InterpretationSession;
   sendDisabled: boolean;
-  onSend: (text: string) => void;
+  visionCapable: boolean;
+  onSend: (text: string, images: Uint8Array[]) => void;
   onInterrupt: () => void;
 }
 
 function FollowUpInput({
   session,
   sendDisabled,
+  visionCapable,
   onSend,
   onInterrupt,
 }: FollowUpInputProps) {
   const { t } = useTranslation();
   const [text, setText] = useState("");
+  const attachments = useImageAttachments();
   const isStreaming = session.isStreaming;
 
   const handleSend = () => {
     const trimmed = text.trim();
-    if (!trimmed || sendDisabled) return;
-    onSend(trimmed);
+    if (sendDisabled || (!trimmed && attachments.images.length === 0)) return;
+    onSend(
+      trimmed,
+      attachments.images.map((img) => img.data)
+    );
     setText("");
+    attachments.clear();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1055,25 +1192,44 @@ function FollowUpInput({
   };
 
   return (
-    <div className="follow-up-input">
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={
-          isStreaming
-            ? t("chat.generatingPlaceholder")
-            : t("chat.followUpPlaceholder")
-        }
-        rows={2}
-      />
-      <button
-        onClick={isStreaming ? onInterrupt : handleSend}
-        disabled={!isStreaming && !text.trim()}
-        className={isStreaming ? "interrupt" : ""}
-      >
-        {isStreaming ? t("common.stop") : t("common.send")}
-      </button>
+    <div className="follow-up-input-wrap">
+      <div className="follow-up-input">
+        {visionCapable && attachments.images.length > 0 && (
+          <ImageAttachThumbs attachments={attachments} />
+        )}
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onPaste={(e) => {
+            if (visionCapable && pasteClipboardImages(e, attachments)) {
+              e.preventDefault();
+            }
+          }}
+          placeholder={
+            isStreaming
+              ? t("chat.generatingPlaceholder")
+              : t("chat.followUpPlaceholder")
+          }
+          rows={2}
+        />
+        <div className="composer-toolbar">
+          {visionCapable ? (
+            <ImageAttachButton attachments={attachments} />
+          ) : (
+            <span />
+          )}
+          <button
+            className={`composer-send-btn ${isStreaming ? "interrupt" : ""}`}
+            onClick={isStreaming ? onInterrupt : handleSend}
+            disabled={
+              !isStreaming && !text.trim() && attachments.images.length === 0
+            }
+          >
+            {isStreaming ? t("common.stop") : t("common.send")}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1081,23 +1237,29 @@ function FollowUpInput({
 interface AskInputProps {
   /** 无打开 PDF 可锚定时禁用（含 hint 文案） */
   disabled: boolean;
-  onSend: (text: string) => void;
+  visionCapable: boolean;
+  onSend: (text: string, images: Uint8Array[]) => void;
 }
 
 /**
  * 解读记录列表态底部的自由提问输入框。与 FollowUpInput 同交互
- * （Enter 发送 / Shift+Enter 换行 / 空文本禁用发送），但面向「新会话」，
+ * （Enter 发送 / Shift+Enter 换行 / 空文本且无图禁用发送），但面向「新会话」，
  * 不持有 session 上下文。
  */
-function AskInput({ disabled, onSend }: AskInputProps) {
+function AskInput({ disabled, visionCapable, onSend }: AskInputProps) {
   const { t } = useTranslation();
   const [text, setText] = useState("");
+  const attachments = useImageAttachments();
 
   const handleSend = () => {
     const trimmed = text.trim();
-    if (!trimmed || disabled) return;
-    onSend(trimmed);
+    if (disabled || (!trimmed && attachments.images.length === 0)) return;
+    onSend(
+      trimmed,
+      attachments.images.map((img) => img.data)
+    );
     setText("");
+    attachments.clear();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1109,20 +1271,43 @@ function AskInput({ disabled, onSend }: AskInputProps) {
   };
 
   return (
-    <div className="follow-up-input ask-input">
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={
-          disabled ? t("chat.askDisabledHint") : t("chat.askPlaceholder")
-        }
-        disabled={disabled}
-        rows={2}
-      />
-      <button onClick={handleSend} disabled={disabled || !text.trim()}>
-        {t("common.send")}
-      </button>
+    <div className="follow-up-input-wrap">
+      <div className="follow-up-input ask-input">
+        {visionCapable && attachments.images.length > 0 && (
+          <ImageAttachThumbs attachments={attachments} />
+        )}
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onPaste={(e) => {
+            if (visionCapable && pasteClipboardImages(e, attachments)) {
+              e.preventDefault();
+            }
+          }}
+          placeholder={
+            disabled ? t("chat.askDisabledHint") : t("chat.askPlaceholder")
+          }
+          disabled={disabled}
+          rows={2}
+        />
+        <div className="composer-toolbar">
+          {visionCapable ? (
+            <ImageAttachButton attachments={attachments} />
+          ) : (
+            <span />
+          )}
+          <button
+            className="composer-send-btn"
+            onClick={handleSend}
+            disabled={
+              disabled || (!text.trim() && attachments.images.length === 0)
+            }
+          >
+            {t("common.send")}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -38,6 +38,7 @@ import {
 } from "./services/settings";
 import {
   getContextWindow,
+  modelSupportsVision,
   PLATFORM_LIST,
   PLATFORM_PRESETS,
 } from "./data/platformPresets";
@@ -404,6 +405,11 @@ function App() {
 
   const contextWindow = useMemo(
     () => getContextWindow(settings.platformId, settings.llm.model),
+    [settings.platformId, settings.llm.model]
+  );
+
+  const visionCapable = useMemo(
+    () => modelSupportsVision(settings.platformId, settings.llm.model),
     [settings.platformId, settings.llm.model]
   );
 
@@ -1502,6 +1508,7 @@ function App() {
                     onFreeQuestion={persistenceHandleFreeQuestion}
                     canAsk={!!focusedTab?.fileHash}
                     agentToolsEnabled={settings.agentToolsEnabled}
+                    visionCapable={visionCapable}
                     onGotoStash={handleGotoStash}
                     onGotoSession={handleGotoSession}
                     onFollowUp={persistence.handleFollowUp}
@@ -1630,6 +1637,7 @@ function App() {
                   onFreeQuestion={persistenceHandleFreeQuestion}
                   canAsk={!!focusedTab?.fileHash}
                   agentToolsEnabled={settings.agentToolsEnabled}
+                  visionCapable={visionCapable}
                   onGotoStash={handleGotoStash}
                   onGotoSession={handleGotoSession}
                   onFollowUp={persistence.handleFollowUp}

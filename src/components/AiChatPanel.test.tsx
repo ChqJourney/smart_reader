@@ -16,6 +16,19 @@ vi.mock("../services/llm", async () => {
   };
 });
 
+// 图片附件 hook：默认空状态，具体用例按需改写 mockAttachments 字段
+const mockAttachments = {
+  images: [] as { id: string; data: Uint8Array; previewUrl: string }[],
+  canAdd: true,
+  addFromDialog: vi.fn(),
+  addFromPaste: vi.fn(),
+  remove: vi.fn(),
+  clear: vi.fn(),
+};
+vi.mock("../hooks/useImageAttachments", () => ({
+  useImageAttachments: () => mockAttachments,
+}));
+
 function makeSource(overrides: Partial<StashSource> = {}): StashSource {
   return {
     tabId: "tab-1",
@@ -72,6 +85,8 @@ function makeSession(
 describe("AiChatPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAttachments.images = [];
+    mockAttachments.canAdd = true;
   });
 
   const renderPanel = (
@@ -708,7 +723,7 @@ describe("AiChatPanel", () => {
     fireEvent.change(input, { target: { value: "追问内容" } });
     fireEvent.click(screen.getByRole("button", { name: /发送/i }));
 
-    expect(onFollowUp).toHaveBeenCalledWith("session-1", "追问内容");
+    expect(onFollowUp).toHaveBeenCalledWith("session-1", "追问内容", []);
   });
 
   it("shows interrupt button when session is streaming", () => {
@@ -929,7 +944,7 @@ describe("AiChatPanel", () => {
       fireEvent.change(textarea, { target: { value: "爬电距离的要求？" } });
       fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
 
-      expect(onFreeQuestion).toHaveBeenCalledWith("爬电距离的要求？");
+      expect(onFreeQuestion).toHaveBeenCalledWith("爬电距离的要求？", []);
       // 切入 chatbox：显示返回按钮与会话内容
       expect(
         screen.getByRole("button", { name: "返回解读记录" })
@@ -997,6 +1012,127 @@ describe("AiChatPanel", () => {
       });
 
       expect(screen.getByText("爬电距离？")).toBeInTheDocument();
+    });
+  });
+
+  describe("image attachments（图片附件）", () => {
+    it("hides the attach button when the model is not vision-capable", () => {
+      renderPanel({ onFreeQuestion: vi.fn() });
+
+      expect(screen.queryByRole("button", { name: /插入图片/ })).toBeNull();
+    });
+
+    it("shows the attach button in the ask input when vision-capable", () => {
+      renderPanel({ onFreeQuestion: vi.fn(), visionCapable: true });
+
+      expect(
+        screen.getByRole("button", { name: /插入图片/ })
+      ).toBeInTheDocument();
+    });
+
+    it("hides the add button at the image limit", () => {
+      mockAttachments.canAdd = false;
+      mockAttachments.images = [
+        { id: "img-1", data: new Uint8Array([1]), previewUrl: "blob:1" },
+        { id: "img-2", data: new Uint8Array([2]), previewUrl: "blob:2" },
+        { id: "img-3", data: new Uint8Array([3]), previewUrl: "blob:3" },
+      ];
+      renderPanel({ onFreeQuestion: vi.fn(), visionCapable: true });
+
+      expect(screen.queryByRole("button", { name: /插入图片/ })).toBeNull();
+      expect(screen.getAllByRole("button", { name: /移除图片/ })).toHaveLength(
+        3
+      );
+    });
+
+    it("removes a thumbnail via its delete button before sending", () => {
+      mockAttachments.images = [
+        { id: "img-1", data: new Uint8Array([1]), previewUrl: "blob:1" },
+      ];
+      renderPanel({ onFreeQuestion: vi.fn(), visionCapable: true });
+
+      fireEvent.click(screen.getByRole("button", { name: /移除图片/ }));
+
+      expect(mockAttachments.remove).toHaveBeenCalledWith("img-1");
+    });
+
+    it("sends image bytes with the question and clears attachments", () => {
+      const bytes = new Uint8Array([9, 8, 7]);
+      mockAttachments.images = [
+        { id: "img-1", data: bytes, previewUrl: "blob:1" },
+      ];
+      const onFreeQuestion = vi.fn(() => "session-chat");
+      renderPanel({
+        onFreeQuestion,
+        visionCapable: true,
+        sessions: [makeSession({ id: "session-chat" })],
+      });
+
+      const textarea = screen.getByPlaceholderText("就当前文档向 AI 提问…");
+      fireEvent.change(textarea, { target: { value: "看图说话" } });
+      fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+      expect(onFreeQuestion).toHaveBeenCalledWith("看图说话", [bytes]);
+      expect(mockAttachments.clear).toHaveBeenCalled();
+    });
+
+    it("allows sending images without any text", () => {
+      mockAttachments.images = [
+        { id: "img-1", data: new Uint8Array([1]), previewUrl: "blob:1" },
+      ];
+      const onFreeQuestion = vi.fn(() => "session-chat");
+      renderPanel({
+        onFreeQuestion,
+        visionCapable: true,
+        sessions: [makeSession({ id: "session-chat" })],
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: /发送/i }));
+
+      expect(onFreeQuestion).toHaveBeenCalledWith("", [new Uint8Array([1])]);
+    });
+
+    it("shows the attach button in the follow-up input when vision-capable", () => {
+      renderPanel({
+        visionCapable: true,
+        sessions: [
+          makeSession({
+            messages: [
+              makeMessage({ id: "msg-1", role: "user", content: "问题" }),
+              makeMessage({ id: "msg-2", role: "assistant", content: "回答" }),
+            ],
+          }),
+        ],
+        expandedSessionId: "session-1",
+      });
+
+      expect(
+        screen.getByRole("button", { name: /插入图片/ })
+      ).toBeInTheDocument();
+    });
+
+    it("renders image placeholders for user messages with image refs", () => {
+      const { container } = renderPanel({
+        sessions: [
+          makeSession({
+            messages: [
+              makeMessage({
+                id: "msg-1",
+                role: "user",
+                content: "看下这张图",
+                images: [{ file: "a.jpg" }, { file: "b.jpg" }],
+              }),
+              makeMessage({ id: "msg-2", role: "assistant", content: "回答" }),
+            ],
+          }),
+        ],
+        expandedSessionId: "session-1",
+      });
+
+      // readSessionImage 在无 Tauri 环境下返回 null，渲染占位块
+      expect(
+        container.querySelectorAll(".ai-chat-msg-image.placeholder")
+      ).toHaveLength(2);
     });
   });
 });

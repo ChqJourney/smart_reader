@@ -44,6 +44,12 @@ export function buildShareMarkdown(session: InterpretationSession): string {
         firstUserMessageSkipped = true;
         continue;
       }
+      // 用户附带的图片不进 markdown，用占位行标明数量
+      if (message.images?.length) {
+        parts.push(
+          i18n.t("share.imagesLine", { count: message.images.length })
+        );
+      }
       parts.push(
         i18n.t(
           firstUserMessageSkipped || skipFirstUserMessage

@@ -29,6 +29,7 @@
 - 解读生成蓝色标记（生成中带呼吸态），点击标记打开 InterpretPopup 内联展示解读结果（流式/错误态、原文折叠、查看解读/重新解读/删除）；发起解读 / 自定义解读发送 / 重新解读后右侧面板直接进入新会话 chatbox 观看流式输出（`expandSessionRequest`，与自由提问一致）；右侧面板展示可点击跳转的解读记录（页码+类型徽章+LLM 一句话摘要，支持「当前文档/全部文档」过滤、排序下拉（最近活动/创建时间/按页码，按页码仅当前文档范围可选，选择持久化到 settings）与面板内删除会话），支持多轮追问。
 - 自定义解读：把多个暂存片段一次性发给 LLM。暂存区按钮常驻显示片段数量并直达弹窗；解读要求弹窗内置可勾选片段清单（默认全选）与解读方式预设下拉（选中即把预定义 prompt 填入输入框，可继续编辑，手动编辑后回到「自由提问」，模板文案在 locales 的 `customInterpret.presets.*` 段），仅能通过「取消」/「发送」关闭；暂存不落盘为有意设计。
 - 无选区自由提问：解读记录 tab 列表态底部常驻提问输入框（Enter 发送，无打开 PDF 时禁用），创建 `action: "custom"` + 空 `sources` 的会话并直接切入 chatbox 流式输出；会话经 `anchorFileHash`/`anchorFileName`（创建时 focused tab 快照）锚定到当前文档——归属过滤（`sessionBelongsToHashes`）、sessionIds 持久化反查、列表「提问」徽章与来源行回退都认锚点；Agent Tools 门控天然放行（action 为 custom）。system prompt 走专用模板（`llm.askWithToolsPrompt` / `llm.askNoToolsPrompt`，按 toolsEnabled 分流）：开启时引导模型主动 `list_open_pdfs` / `search_in_pdf` 查证当前文档，关闭时声明无法访问文档并引导用户开启；tools 关闭时提问框下方还有一行 UI 提示（`chat.askToolsHint`）。
+- 提问 / 追问图片附件：仅当前平台模型 `modelSupportsVision()` 为 true 时提问框（AskInput）与追问框（FollowUpInput）显示图片入口（`visionCapable` prop，App 层计算）；支持系统对话框选择（png/jpg/jpeg/webp/gif/bmp，经 `read_user_image` 读字节）与剪贴板粘贴截图，最多 3 张，缩略图可单张删除，允许只发图（空文本用 `chat.askImageOnly` 兜底 prompt）。图片统一 canvas 转码 JPEG（铺白底、最长边 2048、quality 0.85，与截图工具参数一致），经 `save_session_image` 落盘 sessions 目录，user 消息持久化 `images` 文件名引用；发送时 `buildApiMessages` 的 userImageSpots 异步读盘把 content 改写为 parts（`hydrateUserImages`，图片只能出现在 user 消息），追问/重载同样回放；chatbox 中 user 消息渲染缩略图组（MessageImages），分享导出以 `share.imagesLine` 占位行标注数量。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
 - 打印（工具栏按钮 / Ctrl/Cmd+P）：弹窗可选页码范围（全部 / 当前页 / 自定义范围）与上纸内容（翻译批注、批注，均可独立勾选，默认都开）；生成带批注贴图的新 PDF（优先矢量直绘保留原页面，pdf-lib 解析失败、源文件加密（pdf-lib 无解密能力，重存会带出密文与 /Encrypt 尾条款）或内容对象丢失时自动降级为 pdfjs 整页栅格化，保证任何能打开的 PDF 都能正确打印；批注按屏幕浮层样式与位置 canvas 光栅化贴入，含用户拖动过的位置），用平台指定阅读器打开打印（macOS 预览 / Windows Edge，刻意不走系统默认 PDF 关联——若默认阅读器是本应用自身会回环成新 tab），也可导出带批注的 PDF 文件。
 - 解读 / 自定义解读会话可分享：会话头部「分享」下拉支持复制结构化 Markdown 到剪贴板或导出 .md 文件（原文片段以引用块 + 来源行展示，有来源时跳过模板 prompt、无来源的自由提问会话保留首条提问，tool 消息 / 思考内容一律跳过，见 `services/share.ts`）。
@@ -145,6 +146,7 @@ npm install
 │   │   ├── useStreaming.ts            # LLM 流式输出状态
 │   │   ├── useLinkPreviews.ts         # 条款链接悬停预览状态（2s 悬停计时、同目标去重、单 transient + 多固化、400ms 宽限关闭、上限 10）
 │   │   ├── usePanScroll.ts            # Space 按住临时 pan（手型工具拖拽滚动画布，仅溢出时生效，复用 useDrag）
+│   │   ├── useImageAttachments.ts     # 提问/追问图片附件状态（≤3 张、上限提示、remove/clear 释放 object URL）
 │   │   └── useModal.ts                # Modal 通用逻辑
 │   ├── i18n/                          # i18next 初始化（index.ts，lng 硬编码 zh-CN）
 │   ├── locales/                       # zh-CN.json / en.json（顶层 key 分组一致，en 为预埋）
@@ -175,6 +177,7 @@ npm install
 │   │   ├── printBoxRenderer.ts        # 批注浮层 canvas 光栅化为 PNG（复刻浮层样式，2x 清晰度，免嵌 CJK 字体）
 │   │   ├── pdfTools.ts                # Agent Tools 执行层（瞬态 ToolSession，web 工具路由到 webTools.ts）
 │   │   ├── webTools.ts                # 联网搜索/网页抓取工具执行层（web_search / web_fetch，结果格式化与上下文截断）
+│   │   ├── imageAttachments.ts        # 提问/追问图片附件：对话框选图（read_user_image）+ 统一 JPEG 转码（白底/最长边 2048/q0.85）
 │   │   ├── recentFiles.ts             # 最近文件 CRUD + 文件存在性检查
 │   │   ├── sessions.ts                # 解读会话数据结构与管理 + sortSessions 列表排序（纯函数）
 │   │   ├── share.ts                   # 会话分享：buildShareMarkdown 纯函数（引用块原文+来源行+正文）+ 导出 .md
@@ -323,8 +326,9 @@ cd src-tauri && cargo test
 - `load_session(sessionId: string)`：加载单个会话 JSON。
 - `save_session(session: InterpretationSession)`：保存会话 JSON。
 - `delete_session(sessionId: string)`：删除会话文件及关联的截图图片目录。
-- `save_session_image(sessionId: string, data: Vec<u8>)`：截图工具图片原子落盘到 `sessions/{session_id}/`（前端按 `Array.from(bytes)` 传输，同 `export_binary_file` 约定），返回文件名引用。
-- `read_session_image(sessionId: string, file: string)`：读回截图图片字节（`file` 仅允许纯文件名，防路径穿越），追问回放图片消息用。
+- `save_session_image(sessionId: string, data: Vec<u8>)`：会话图片（截图工具 / 用户上传附件）原子落盘到 `sessions/{session_id}/`（前端按 `Array.from(bytes)` 传输，同 `export_binary_file` 约定），返回文件名引用。
+- `read_session_image(sessionId: string, file: string)`：读回会话图片字节（`file` 仅允许纯文件名，防路径穿越），追问回放图片消息与 chatbox 缩略图用。
+- `read_user_image(filePath: string)`：读取用户经系统对话框选择的图片字节（提问/追问附件用）；扩展名白名单 png/jpg/jpeg/webp/gif/bmp + 20MB 上限（metadata 先查），不走 PDF 授权白名单。
 - `authorize_pdf_path(filePath: string)`：将用户通过对话框选择的 PDF 路径加入后端授权白名单，`read_pdf_bytes` / `get_pdf_hash` 会校验该白名单；要求文件真实存在，白名单与校验两侧均以 canonicalize 后的路径比对（防符号链接 / `..` 别名绕过）。
 - `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 联网搜索开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式 + 界面主题 + lastSeenVersion）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表（`RecentFile` 含 `pinned` 置顶与 `lastPage` 阅读页码字段，旧数据通过 `#[serde(default)]` 兼容）。
@@ -355,8 +359,8 @@ cd src-tauri && cargo test
     ├── annotations/
     │   ├── {pdf_hash}.json        # 批注 + 关联 session ids
     │   └── sessions/
-    │       ├── {session_id}.json  # 解读会话详情（截图只存文件名引用）
-    │       └── {session_id}/      # 截图工具图片（delete_session 连带清理）
+    │       ├── {session_id}.json  # 解读会话详情（图片只存文件名引用）
+    │       └── {session_id}/      # 会话图片（截图工具 + 用户上传附件，delete_session 连带清理）
     │           └── {ts}-{seq}.jpg
     ├── dict/
     │   ├── ecdict.sqlite          # ECDICT 本地离线词典（首次启用悬停翻译时下载）

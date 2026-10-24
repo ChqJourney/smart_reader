@@ -41,7 +41,7 @@ import {
   ChatMessage,
   ToolCall,
 } from "../services/llm";
-import type { TokenUsage } from "../types/llm";
+import type { ContentPart, TokenUsage } from "../types/llm";
 import { AppSettings } from "../services/settings";
 import { PLATFORM_PRESETS, modelSupportsVision } from "../data/platformPresets";
 import { PdfTab } from "./useTabs";
@@ -111,15 +111,20 @@ export interface UsePersistenceReturn {
     prompt: string,
     visibleStashes: StashItem[]
   ) => string | null;
-  /** 无选区自由提问：创建空 sources 的锚定会话，返回新会话 id（无锚定文档时 null） */
-  handleFreeQuestion: (prompt: string) => string | null;
+  /** 无选区自由提问：创建空 sources 的锚定会话，返回新会话 id（无锚定文档时 null）；
+   *  images 为归一化后的 JPEG 字节（视觉模型限定，空文本时允许只发图） */
+  handleFreeQuestion: (prompt: string, images?: Uint8Array[]) => string | null;
   /** 选区动作：explain 时返回新会话 id 供面板切入 chatbox，其余动作返回 null */
   handleSelectionAction: (
     selection: SelectionState,
     action: SelectionAction,
     text: string
   ) => string | null;
-  handleFollowUp: (sessionId: string, prompt: string) => void;
+  handleFollowUp: (
+    sessionId: string,
+    prompt: string,
+    images?: Uint8Array[]
+  ) => void;
   handleInterruptSession: (sessionId: string) => void;
   handleSessionUpdate: (updatedSession: InterpretationSession) => void;
   handleAnnotationUpdate: (
@@ -240,6 +245,11 @@ export function usePersistence({
   // 并存旧 loop（迟到收尾）与新 loop，按 session 键控会被旧 loop 的 finally
   // 误删新 loop 的回调。
   const agentLoopAbortRef = useRef<Map<string, () => void>>(new Map());
+  // 待落盘的用户图片（sessionId → 归一化 JPEG 字节）：handleFreeQuestion /
+  // handleFollowUp 在启动流之前同步登记，runSessionStream 的 agent loop
+  // 启动时先落盘并把文件名引用写到最新 user 消息上，保证 buildApiMessages
+  // 读得到引用（saveSessionImage 是异步 invoke，无法在同步创建链路里完成）。
+  const pendingUserImagesRef = useRef<Map<string, Uint8Array[]>>(new Map());
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -734,12 +744,15 @@ export function usePersistence({
 
       /**
        * 同步构建 API 消息；带截图引用的 tool 消息把图片位置记录到
-       * imageSpots，由 replaySessionImages 异步读盘补齐。拆分同步/异步是为
-       * 了无截图的会话保持 loop 同步启动（已有测试依赖该时序）。
+       * imageSpots，由 replaySessionImages 异步读盘补齐；带图片引用的
+       * user 消息记录到 userImageSpots，由 hydrateUserImages 异步把
+       * content 改写为 parts。拆分同步/异步是为了无图片的会话保持 loop
+       * 同步启动（已有测试依赖该时序）。
        */
       const buildApiMessages = (): {
         messages: ChatMessage[];
         imageSpots: { afterIndex: number; ref: SessionImageRef }[];
+        userImageSpots: { messageIndex: number; refs: SessionImageRef[] }[];
       } => {
         const sourceMessages = sessionRef.current.messages.filter(
           (m) => !(m.role === "assistant" && m.id === messageId)
@@ -755,6 +768,10 @@ export function usePersistence({
         );
         const repaired: ChatMessage[] = [];
         const imageSpots: { afterIndex: number; ref: SessionImageRef }[] = [];
+        const userImageSpots: {
+          messageIndex: number;
+          refs: SessionImageRef[];
+        }[] = [];
         for (const m of sourceMessages) {
           repaired.push({
             role: m.role,
@@ -779,18 +796,63 @@ export function usePersistence({
               imageSpots.push({ afterIndex: repaired.length - 1, ref });
             }
           }
+          if (m.role === "user" && m.images?.length) {
+            userImageSpots.push({
+              messageIndex: repaired.length - 1,
+              refs: m.images,
+            });
+          }
         }
         return {
           messages: [
             { role: "system", content: buildSystemContent() },
             ...repaired,
           ],
-          // afterIndex 相对 repaired；加上 system 消息的偏移 1
+          // afterIndex / messageIndex 相对 repaired；加上 system 消息的偏移 1
           imageSpots: imageSpots.map((s) => ({
             afterIndex: s.afterIndex + 1,
             ref: s.ref,
           })),
+          userImageSpots: userImageSpots.map((s) => ({
+            messageIndex: s.messageIndex + 1,
+            refs: s.refs,
+          })),
         };
+      };
+
+      /**
+       * 把 user 消息上的图片引用从磁盘读回，content 改写为 parts
+       * （文本 + image_url）。user 消息位置天然合法（视觉 API 只允许 user
+       * 消息带图），原地替换即可，无需像截图那样调整插入点。文件缺失的图
+       * 跳过；全部缺失时保留纯文本，不阻塞提问。
+       */
+      const hydrateUserImages = async (
+        base: ChatMessage[],
+        userImageSpots: { messageIndex: number; refs: SessionImageRef[] }[]
+      ): Promise<ChatMessage[]> => {
+        const result = [...base];
+        for (const spot of userImageSpots) {
+          const target = result[spot.messageIndex];
+          if (!target || typeof target.content !== "string") continue;
+          const parts: ContentPart[] = [{ type: "text", text: target.content }];
+          for (const ref of spot.refs) {
+            const bytes = await readSessionImage(
+              sessionRef.current.id,
+              ref.file
+            );
+            if (!bytes) continue;
+            parts.push({
+              type: "image_url",
+              image_url: {
+                url: `data:image/jpeg;base64,${bytesToBase64(bytes)}`,
+              },
+            });
+          }
+          if (parts.length > 1) {
+            result[spot.messageIndex] = { ...target, content: parts };
+          }
+        }
+        return result;
       };
 
       /** 把 imageSpots 记录的截图从磁盘读回，重建合成 user 图片消息。 */
@@ -1169,13 +1231,56 @@ export function usePersistence({
         );
       };
 
+      /**
+       * 把登记的用户图片落盘，文件名引用写到最新一条 user 消息（提问/追问
+       * 刚追加的那条）。同步更新 sessionRef（buildApiMessages 的数据源）与
+       * 全局会话状态（持久化/UI 缩略图）。全部落盘失败时按纯文本继续。
+       */
+      const attachPendingUserImages = async () => {
+        const pending = pendingUserImagesRef.current.get(sessionRef.current.id);
+        pendingUserImagesRef.current.delete(sessionRef.current.id);
+        if (!pending || pending.length === 0) return;
+        const refs: SessionImageRef[] = [];
+        for (const data of pending) {
+          const file = await saveSessionImage(sessionRef.current.id, data);
+          if (file) refs.push({ file });
+        }
+        if (refs.length === 0) return;
+        const withImages = (
+          s: InterpretationSession
+        ): InterpretationSession => {
+          const messages = [...s.messages];
+          for (let i = messages.length - 1; i >= 0; i--) {
+            if (messages[i].role === "user") {
+              messages[i] = { ...messages[i], images: refs };
+              break;
+            }
+          }
+          return { ...s, messages };
+        };
+        sessionRef.current = withImages(sessionRef.current);
+        setSessions((prev) =>
+          prev.map((s) => (s.id === sessionRef.current.id ? withImages(s) : s))
+        );
+      };
+
       const runAgentLoop = async () => {
+        // has() 同步预检：无待落盘图片时不引入额外 microtask（已有测试依赖
+        // 无图片会话的同步启动时序）。
+        if (pendingUserImagesRef.current.has(sessionRef.current.id)) {
+          await attachPendingUserImages();
+        }
         const built = buildApiMessages();
-        // 无截图引用的会话保持同步启动（不引入额外 microtask）
-        let messages =
-          built.imageSpots.length > 0
-            ? await replaySessionImages(built.messages, built.imageSpots)
-            : built.messages;
+        // 无图片引用的会话保持同步启动（不引入额外 microtask）。
+        // 先 hydrate（原地替换 user 消息 content，不改变数组长度），
+        // 再 replay 截图（按索引插入，索引基于同一 base，不受 hydrate 影响）。
+        let messages = built.messages;
+        if (built.userImageSpots.length > 0) {
+          messages = await hydrateUserImages(messages, built.userImageSpots);
+        }
+        if (built.imageSpots.length > 0) {
+          messages = await replaySessionImages(messages, built.imageSpots);
+        }
         const seenCalls = new Map<string, string>();
         let totalUsage: TokenUsage | undefined;
         try {
@@ -1418,9 +1523,15 @@ export function usePersistence({
       prompt: string,
       sources: StashItem[],
       action: SessionAction = "explain",
-      anchor?: { fileHash: string; fileName: string }
+      anchor?: { fileHash: string; fileName: string },
+      userImages?: Uint8Array[]
     ) => {
       const session = createSession(sources, prompt, action, anchor);
+      // 用户图片：流启动前同步登记（key 为 session id），agent loop 启动时
+      // 落盘并回填引用——见 pendingUserImagesRef 注释。
+      if (userImages?.length) {
+        pendingUserImagesRef.current.set(session.id, userImages);
+      }
       const streamingSession = startAssistantResponse(session);
       const sessionId = streamingSession.id;
       const messageId = streamingSession.streamingMessageId!;
@@ -1629,14 +1740,33 @@ export function usePersistence({
   // 不套 buildCustomInterpretPrompt 模板——没有片段可填，模板只会稀释问题；
   // action 复用 "custom"，Agent Tools 门控（action ∈ {explain, custom}）零改动放行。
   // 返回新会话 id 供面板直接切入 chatbox；无可锚定文档时返回 null。
+  /** 视觉模型防御门控：UI 已隐藏入口，这里再挡一次（如旧会话追问链路）。 */
+  const filterUserImages = useCallback(
+    (images?: Uint8Array[]): Uint8Array[] | undefined => {
+      if (!images?.length) return undefined;
+      const { platformId, llm } = settingsRef.current;
+      return modelSupportsVision(platformId, llm.model) ? images : undefined;
+    },
+    []
+  );
+
   const handleFreeQuestion = useCallback(
-    (prompt: string): string | null => {
+    (prompt: string, images?: Uint8Array[]): string | null => {
       const trimmed = prompt.trim();
-      if (!trimmed || !focusedTab?.fileHash) return null;
-      const { sessionId } = startSessionFromStashes(trimmed, [], "custom", {
-        fileHash: focusedTab.fileHash,
-        fileName: focusedTab.fileName,
-      });
+      const usableImages = filterUserImages(images);
+      if ((!trimmed && !usableImages) || !focusedTab?.fileHash) return null;
+      // 只发图无文本时用兜底 prompt，避免空 user 消息
+      const effectivePrompt = trimmed || i18n.t("chat.askImageOnly");
+      const { sessionId } = startSessionFromStashes(
+        effectivePrompt,
+        [],
+        "custom",
+        {
+          fileHash: focusedTab.fileHash,
+          fileName: focusedTab.fileName,
+        },
+        usableImages
+      );
       // 自由提问不产生批注变更，锚定 hash 不会因 setAnnotationsByHash 标脏；
       // 不主动标脏则 persistDirtyHashes 永不写回该文件的 sessionIds，
       // 会话 JSON 虽已落盘但重开 PDF 后无人引用它，等于丢失。
@@ -1645,7 +1775,7 @@ export function usePersistence({
       dirtyHashesRef.current.add(focusedTab.fileHash);
       return sessionId;
     },
-    [focusedTab, startSessionFromStashes]
+    [focusedTab, startSessionFromStashes, filterUserImages]
   );
 
   const handleSelectionAction = useCallback(
@@ -1718,7 +1848,7 @@ export function usePersistence({
   );
 
   const handleFollowUp = useCallback(
-    (sessionId: string, prompt: string) => {
+    (sessionId: string, prompt: string, images?: Uint8Array[]) => {
       // Compute the updated session outside the state updater so the side effect
       // of starting a stream is not duplicated when React StrictMode double-
       // invokes updater functions in development.
@@ -1727,8 +1857,18 @@ export function usePersistence({
       // 进行中的旧 loop 在同一 session 上交错写消息与流式状态）。
       if (!session || session.isStreaming) return;
 
-      const withUserMessage = appendUserMessage(session, prompt);
+      const trimmed = prompt.trim();
+      const usableImages = filterUserImages(images);
+      // 文本与图片全空时不发起追问（面板入口已禁用，这里防御）
+      if (!trimmed && !usableImages) return;
+      const effectivePrompt = trimmed || i18n.t("chat.askImageOnly");
+      const withUserMessage = appendUserMessage(session, effectivePrompt);
       const streamingSession = startAssistantResponse(withUserMessage);
+
+      // 用户图片在流启动前同步登记，agent loop 启动时落盘并回填引用
+      if (usableImages) {
+        pendingUserImagesRef.current.set(sessionId, usableImages);
+      }
 
       setSessions((prev) => {
         // Guard against the session having been removed since we read the ref.
@@ -1740,7 +1880,7 @@ export function usePersistence({
         runSessionStream(streamingSession, streamingSession.streamingMessageId);
       }
     },
-    [runSessionStream]
+    [runSessionStream, filterUserImages]
   );
 
   const handleInterruptSession = useCallback(

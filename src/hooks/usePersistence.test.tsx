@@ -3540,4 +3540,301 @@ describe("usePersistence", () => {
       expect(hookRef!.sessions[0].isStreaming).toBe(false);
     });
   });
+
+  describe("用户图片附件（提问/追问带图）", () => {
+    const imageTab: PdfTab = {
+      id: "tab-a",
+      filePath: "/a.pdf",
+      fileName: "a.pdf",
+      fileHash: "hash-a",
+    };
+
+    function imageProps(
+      tab: PdfTab | null,
+      model = "deepseek-flash"
+    ): UsePersistenceProps {
+      return {
+        activeTab: tab,
+        activeTabId: tab?.id ?? null,
+        secondaryTab: null,
+        isSplitView: false,
+        focusedTab: tab,
+        openRightPanel: vi.fn(),
+        settings: {
+          ...DEFAULT_SETTINGS,
+          llm: { ...DEFAULT_SETTINGS.llm, model },
+        },
+      };
+    }
+
+    /** 追加图片存取命令 mock，返回恢复函数。 */
+    const mockImageCommands = async (saveImpl: () => Promise<string>) => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const invokeMock = vi.mocked(invoke);
+      const defaultImpl = invokeMock.getMockImplementation()!;
+      invokeMock.mockImplementation(((command: string, args?: unknown) => {
+        if (command === "save_session_image") return saveImpl();
+        if (command === "read_session_image") return Promise.resolve([1, 2, 3]);
+        return defaultImpl(command, args as Record<string, unknown>);
+      }) as typeof invoke);
+      return () => invokeMock.mockImplementation(defaultImpl);
+    };
+
+    const captureStreamCalls = async () => {
+      const { streamChatCompletion } = await import("../services/llm");
+      const calls: { role: string; content: unknown }[][] = [];
+      vi.mocked(streamChatCompletion).mockImplementation(
+        async function* (messages) {
+          calls.push(messages as (typeof calls)[number]);
+          yield { type: "chunk" as const, content: "answer" };
+          yield { type: "done" as const };
+        }
+      );
+      return calls;
+    };
+
+    it("自由提问带图：落盘后引用写入 user 消息并作为 parts 发给模型", async () => {
+      const calls = await captureStreamCalls();
+      const restore = await mockImageCommands(() =>
+        Promise.resolve("img-1.jpg")
+      );
+      try {
+        let hookRef: UsePersistenceReturn;
+        render(
+          <ConfigurableHarness
+            props={imageProps(imageTab)}
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        );
+
+        let sessionId: string | null = null;
+        act(() => {
+          sessionId = hookRef!.handleFreeQuestion("看图", [
+            new Uint8Array([9, 9]),
+          ]);
+        });
+        expect(sessionId).not.toBeNull();
+
+        await waitFor(() => {
+          expect(calls.length).toBeGreaterThan(0);
+        });
+
+        const { invoke } = await import("@tauri-apps/api/core");
+        expect(
+          vi
+            .mocked(invoke)
+            .mock.calls.some(([cmd]) => cmd === "save_session_image")
+        ).toBe(true);
+
+        // 引用写入会话首条 user 消息（持久化/UI 缩略图数据源）
+        const session = hookRef!.sessions.find((s) => s.id === sessionId)!;
+        expect(session.messages[0].images).toEqual([{ file: "img-1.jpg" }]);
+
+        // API 消息：user content 改写为 parts（文本 + image_url data URL）
+        const userMsg = calls[0].find((m) => m.role === "user")!;
+        expect(Array.isArray(userMsg.content)).toBe(true);
+        const parts = userMsg.content as {
+          type: string;
+          text?: string;
+          image_url?: { url: string };
+        }[];
+        expect(parts[0]).toEqual({ type: "text", text: "看图" });
+        expect(parts[1]).toEqual({
+          type: "image_url",
+          image_url: { url: "data:image/jpeg;base64,AQID" },
+        });
+
+        act(() => {
+          vi.runAllTimers();
+        });
+      } finally {
+        restore();
+      }
+    });
+
+    it("空文本只发图：使用兜底 prompt", async () => {
+      const calls = await captureStreamCalls();
+      const restore = await mockImageCommands(() =>
+        Promise.resolve("img-1.jpg")
+      );
+      try {
+        let hookRef: UsePersistenceReturn;
+        render(
+          <ConfigurableHarness
+            props={imageProps(imageTab)}
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        );
+
+        let sessionId: string | null = null;
+        act(() => {
+          sessionId = hookRef!.handleFreeQuestion("   ", [new Uint8Array([1])]);
+        });
+        expect(sessionId).not.toBeNull();
+
+        await waitFor(() => {
+          expect(calls.length).toBeGreaterThan(0);
+        });
+        const session = hookRef!.sessions.find((s) => s.id === sessionId)!;
+        expect(session.messages[0].content).toBe("请解读这张图片");
+
+        act(() => {
+          vi.runAllTimers();
+        });
+      } finally {
+        restore();
+      }
+    });
+
+    it("非视觉模型忽略图片（不落盘、按纯文本发送）", async () => {
+      const calls = await captureStreamCalls();
+      const restore = await mockImageCommands(() =>
+        Promise.resolve("img-1.jpg")
+      );
+      try {
+        let hookRef: UsePersistenceReturn;
+        render(
+          <ConfigurableHarness
+            // deepseek-v4-pro 为纯文本模型
+            props={imageProps(imageTab, "deepseek-v4-pro")}
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        );
+
+        let sessionId: string | null = null;
+        act(() => {
+          sessionId = hookRef!.handleFreeQuestion("看图", [
+            new Uint8Array([9]),
+          ]);
+        });
+        expect(sessionId).not.toBeNull();
+
+        await waitFor(() => {
+          expect(calls.length).toBeGreaterThan(0);
+        });
+
+        const { invoke } = await import("@tauri-apps/api/core");
+        expect(
+          vi
+            .mocked(invoke)
+            .mock.calls.some(([cmd]) => cmd === "save_session_image")
+        ).toBe(false);
+        const session = hookRef!.sessions.find((s) => s.id === sessionId)!;
+        expect(session.messages[0].images).toBeUndefined();
+        const userMsg = calls[0].find((m) => m.role === "user")!;
+        expect(userMsg.content).toBe("看图");
+
+        act(() => {
+          vi.runAllTimers();
+        });
+      } finally {
+        restore();
+      }
+    });
+
+    it("图片落盘全部失败时降级为纯文本发送", async () => {
+      const calls = await captureStreamCalls();
+      const restore = await mockImageCommands(() =>
+        Promise.reject(new Error("disk full"))
+      );
+      try {
+        let hookRef: UsePersistenceReturn;
+        render(
+          <ConfigurableHarness
+            props={imageProps(imageTab)}
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        );
+
+        let sessionId: string | null = null;
+        act(() => {
+          sessionId = hookRef!.handleFreeQuestion("看图", [
+            new Uint8Array([9]),
+          ]);
+        });
+        expect(sessionId).not.toBeNull();
+
+        await waitFor(() => {
+          expect(calls.length).toBeGreaterThan(0);
+        });
+        const session = hookRef!.sessions.find((s) => s.id === sessionId)!;
+        expect(session.messages[0].images).toBeUndefined();
+        const userMsg = calls[0].find((m) => m.role === "user")!;
+        expect(userMsg.content).toBe("看图");
+
+        act(() => {
+          vi.runAllTimers();
+        });
+      } finally {
+        restore();
+      }
+    });
+
+    it("追问带图：引用写入新 user 消息并作为 parts 回放", async () => {
+      const calls = await captureStreamCalls();
+      const restore = await mockImageCommands(() =>
+        Promise.resolve("img-2.jpg")
+      );
+      try {
+        let hookRef: UsePersistenceReturn;
+        render(
+          <ConfigurableHarness
+            props={imageProps(null)}
+            onHook={(hook) => {
+              hookRef = hook;
+            }}
+          />
+        );
+
+        act(() => {
+          hookRef!.setSessions([makeExplainSession()]);
+        });
+        act(() => {
+          hookRef!.handleFollowUp("session-explain", "追问", [
+            new Uint8Array([7]),
+          ]);
+        });
+
+        await waitFor(() => {
+          expect(calls.length).toBeGreaterThan(0);
+        });
+
+        const session = hookRef!.sessions.find(
+          (s) => s.id === "session-explain"
+        )!;
+        const followUpMsg = session.messages.find(
+          (m) => m.role === "user" && m.content === "追问"
+        )!;
+        expect(followUpMsg.images).toEqual([{ file: "img-2.jpg" }]);
+
+        const partsMsg = calls[0].find(
+          (m) => m.role === "user" && Array.isArray(m.content)
+        )!;
+        const parts = partsMsg.content as {
+          type: string;
+          text?: string;
+          image_url?: { url: string };
+        }[];
+        expect(parts[0]).toEqual({ type: "text", text: "追问" });
+        expect(parts[1]).toEqual({
+          type: "image_url",
+          image_url: { url: "data:image/jpeg;base64,AQID" },
+        });
+
+        act(() => {
+          vi.runAllTimers();
+        });
+      } finally {
+        restore();
+      }
+    });
+  });
 });

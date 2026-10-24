@@ -115,6 +115,11 @@
     "askPlaceholder": "就当前文档向 AI 提问…",
     "askDisabledHint": "打开 PDF 后即可向 AI 提问",
     "askToolsHint": "开启「智能文档查阅」后，AI 可自行查阅当前文档原文作答",
+    "askAddImage": "插入图片（也可直接粘贴截图）",
+    "askImageLimit": "最多插入 {{max}} 张图片",
+    "askImageOnly": "请解读这张图片",
+    "imageLoadFailed": "图片加载失败，请换一张试试",
+    "removeImage": "移除图片",
     "copyAll": "复制全部",
     "copyMessage": "复制"
   },
@@ -124,6 +129,7 @@
     "exportMarkdown": "导出 Markdown 文件",
     "defaultTitle": "标准解读",
     "sourceRef": "—— {{fileName}} · P.{{page}}",
+    "imagesLine": "*[附 {{count}} 张图片]*",
     "followUpLine": "**追问**：{{content}}",
     "questionLine": "**提问**：{{content}}"
   },

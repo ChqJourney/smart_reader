@@ -237,6 +237,7 @@ pub fn run() {
             delete_session,
             save_session_image,
             read_session_image,
+            read_user_image,
             load_settings,
             save_settings,
             check_api_key,
@@ -806,6 +807,19 @@ struct StashItem {
     created_at: u64,
 }
 
+/// 会话图片引用：图片字节落盘在 sessions/{session_id}/ 目录，消息只存文件名。
+/// page 仅截图工具填写（来源页码），用户上传图片无页码概念不填。
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct SessionImageRef {
+    file: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    page: Option<u32>,
+    /// 归一化裁剪区域（截图工具 region 参数），结构由前端定义，后端不透明透传。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    region: Option<serde_json::Value>,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 struct InterpretationMessage {
@@ -834,6 +848,9 @@ struct InterpretationMessage {
     /// UI-facing summary of tool calls executed for this assistant message.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     tool_events: Option<Vec<serde_json::Value>>,
+    /// 图片引用：tool 消息的截图工具结果、user 消息的用户上传图片。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    images: Option<Vec<SessionImageRef>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -1509,6 +1526,45 @@ async fn read_session_image(
     .map_err(|e| format!("Task failed: {}", e))?
 }
 
+/// 用户图片原始字节上限 20MB（metadata 先查，超限不读内容）。
+const MAX_USER_IMAGE_BYTES: u64 = 20 * 1024 * 1024;
+/// 允许读取的图片扩展名（小写比对）。
+const USER_IMAGE_EXTENSIONS: [&str; 6] = ["png", "jpg", "jpeg", "webp", "gif", "bmp"];
+
+/// 读取用户经系统对话框选择的图片字节。不走 PDF 授权白名单：文件由用户
+/// 显式选定，信任级别同 export_text_file 的用户选定路径；以扩展名白名单 +
+/// 大小上限约束读取面。
+fn read_user_image_from_disk(file_path: &str) -> Result<Vec<u8>, String> {
+    let path = std::path::Path::new(file_path);
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_lowercase())
+        .unwrap_or_default();
+    if !USER_IMAGE_EXTENSIONS.contains(&ext.as_str()) {
+        return Err(format!("Unsupported image extension: {}", ext));
+    }
+    let meta = std::fs::metadata(path).map_err(|e| format!("Failed to stat image: {}", e))?;
+    if !meta.is_file() {
+        return Err("Not a regular file".to_string());
+    }
+    if meta.len() > MAX_USER_IMAGE_BYTES {
+        return Err(format!(
+            "Image too large: {} bytes (limit {})",
+            meta.len(),
+            MAX_USER_IMAGE_BYTES
+        ));
+    }
+    std::fs::read(path).map_err(|e| format!("Failed to read image: {}", e))
+}
+
+#[tauri::command]
+async fn read_user_image(file_path: String) -> Result<Vec<u8>, String> {
+    tauri::async_runtime::spawn_blocking(move || read_user_image_from_disk(&file_path))
+        .await
+        .map_err(|e| format!("Task failed: {}", e))?
+}
+
 #[tauri::command]
 async fn load_settings(
     app: tauri::AppHandle,
@@ -1726,6 +1782,7 @@ mod tests {
                 name: None,
                 tool_calls: None,
                 tool_events: None,
+                images: None,
             }],
             is_streaming: false,
             streaming_message_id: None,
@@ -1796,6 +1853,42 @@ mod tests {
         let serialized = serde_json::to_string(&session).unwrap();
         assert!(!serialized.contains("anchorFileHash"));
         assert!(!serialized.contains("anchorFileName"));
+    }
+
+    #[test]
+    fn session_message_images_roundtrip() {
+        // 带 images 引用的消息（tool 截图结果 / user 上传图片）经 save/load
+        // 往返后引用不丢失；page 缺省时回退 None 且不序列化。
+        let base = tempfile::tempdir().unwrap();
+        let mut session = sample_session("session-img");
+        session.messages[0].images = Some(vec![
+            SessionImageRef {
+                file: "a.jpg".to_string(),
+                page: Some(2),
+                region: Some(serde_json::json!({"x": 0.1, "y": 0.2, "width": 0.3, "height": 0.4})),
+            },
+            SessionImageRef {
+                file: "b.jpg".to_string(),
+                page: None,
+                region: None,
+            },
+        ]);
+        save_session_to_disk(base.path(), session.clone()).unwrap();
+        let loaded = load_session_from_disk(base.path(), "session-img").unwrap();
+        assert_eq!(loaded, session);
+        let raw = std::fs::read_to_string(session_path(base.path(), "session-img").unwrap()).unwrap();
+        assert!(raw.contains("\"images\""));
+        assert!(!raw.contains("\"page\":null"));
+    }
+
+    #[test]
+    fn session_old_format_message_without_images_deserializes() {
+        // 旧版本消息没有 images 字段，反序列化回退 None 且不再序列化。
+        let raw = r#"{"id":"m1","role":"user","content":"hi","createdAt":1}"#;
+        let message: InterpretationMessage = serde_json::from_str(raw).unwrap();
+        assert_eq!(message.images, None);
+        let serialized = serde_json::to_string(&message).unwrap();
+        assert!(!serialized.contains("images"));
     }
 
     #[test]
@@ -2191,6 +2284,69 @@ mod tests {
         let result = read_session_image_from_disk(base.path(), "session-1", "missing.jpg");
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Failed to read session image"));
+    }
+
+    #[test]
+    fn read_user_image_roundtrip() {
+        let base = tempfile::tempdir().unwrap();
+        let path = base.path().join("photo.PNG");
+        std::fs::write(&path, b"fake-png-bytes").unwrap();
+
+        let loaded = read_user_image_from_disk(path.to_str().unwrap()).unwrap();
+        assert_eq!(loaded, b"fake-png-bytes");
+    }
+
+    #[test]
+    fn read_user_image_rejects_unsupported_extension() {
+        let base = tempfile::tempdir().unwrap();
+        let path = base.path().join("notes.txt");
+        std::fs::write(&path, b"hello").unwrap();
+
+        let result = read_user_image_from_disk(path.to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported image extension"));
+        // 无扩展名同样拒绝
+        let no_ext = base.path().join("noext");
+        std::fs::write(&no_ext, b"hello").unwrap();
+        assert!(read_user_image_from_disk(no_ext.to_str().unwrap()).is_err());
+    }
+
+    #[test]
+    fn read_user_image_rejects_non_regular_file() {
+        let base = tempfile::tempdir().unwrap();
+        let dir = base.path().join("dir.png");
+        std::fs::create_dir(&dir).unwrap();
+
+        let result = read_user_image_from_disk(dir.to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Not a regular file"));
+    }
+
+    #[test]
+    fn read_user_image_rejects_oversized_file() {
+        let base = tempfile::tempdir().unwrap();
+        let path = base.path().join("big.jpg");
+        // 稀疏写：seek 到上限之外写一个字节即可，无需真正分配 20MB。
+        let file = std::fs::File::create(&path).unwrap();
+        use std::io::{Seek, SeekFrom, Write};
+        let mut file = std::io::BufWriter::new(file);
+        file.seek(SeekFrom::Start(MAX_USER_IMAGE_BYTES)).unwrap();
+        file.write_all(b"x").unwrap();
+        file.flush().unwrap();
+
+        let result = read_user_image_from_disk(path.to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Image too large"));
+    }
+
+    #[test]
+    fn read_user_image_missing_file_errors() {
+        let base = tempfile::tempdir().unwrap();
+        let path = base.path().join("missing.jpg");
+
+        let result = read_user_image_from_disk(path.to_str().unwrap());
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Failed to stat image"));
     }
 
     #[test]

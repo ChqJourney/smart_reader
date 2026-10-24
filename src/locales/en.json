@@ -115,6 +115,11 @@
     "askPlaceholder": "Ask AI about the current document…",
     "askDisabledHint": "Open a PDF to ask AI questions",
     "askToolsHint": "Enable Smart Document Lookup to let AI consult the current document",
+    "askAddImage": "Attach images (or paste a screenshot)",
+    "askImageLimit": "Up to {{max}} images",
+    "askImageOnly": "Please interpret this image",
+    "imageLoadFailed": "Failed to load the image. Please try another one",
+    "removeImage": "Remove image",
     "copyAll": "Copy all",
     "copyMessage": "Copy"
   },
@@ -124,6 +129,7 @@
     "exportMarkdown": "Export Markdown file",
     "defaultTitle": "Standard Interpretation",
     "sourceRef": "—— {{fileName}} · P.{{page}}",
+    "imagesLine": "*[{{count}} image(s) attached]*",
     "followUpLine": "**Follow-up**: {{content}}",
     "questionLine": "**Question**: {{content}}"
   },

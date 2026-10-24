@@ -568,23 +568,130 @@
   }
 }
 
-.follow-up-input {
-  display: flex;
-  gap: 8px;
+.follow-up-input-wrap {
   margin-top: 8px;
 }
 
-.follow-up-input textarea {
-  flex: 1;
-  padding: 8px 10px;
+.follow-up-input-wrap .follow-up-input {
+  margin-top: 0;
+}
+
+.attach-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 10px 0;
+}
+
+.attach-thumb {
+  position: relative;
+  width: 48px;
+  height: 48px;
   border: 1px solid var(--border-strong);
   border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.attach-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.attach-thumb-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+}
+
+.attach-thumb-remove:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.attach-inline-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.attach-inline-btn:hover {
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.1);
+}
+
+.ai-chat-msg-images {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+
+.ai-chat-msg-image {
+  width: 72px;
+  height: 72px;
+  object-fit: cover;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  display: block;
+}
+
+.ai-chat-msg-image.placeholder {
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--surface-hover, rgba(128, 128, 128, 0.15));
+  display: block;
+}
+
+/* 组合输入框：外框容器持边框与聚焦态，textarea 满宽无边框，
+   底部工具条左「+」右「发送」，文本区在工具条之上不会被遮挡 */
+.follow-up-input {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  /* UA 默认是白底黑字，暗色模式下必须显式走主题变量 */
+  background: var(--surface-content);
+}
+
+.follow-up-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.15);
+}
+
+.follow-up-input textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px 2px;
+  border: none;
   font-size: 0.85rem;
   resize: vertical;
   min-height: 40px;
   font-family: inherit;
-  /* UA 默认是白底黑字，暗色模式下必须显式走主题变量 */
-  background: var(--surface-content);
+  background: transparent;
   color: var(--text-content);
 }
 
@@ -594,12 +701,17 @@
 
 .follow-up-input textarea:focus {
   outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.15);
 }
 
-.follow-up-input button {
-  padding: 8px 14px;
+.composer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 6px 6px;
+}
+
+.follow-up-input .composer-send-btn {
+  padding: 5px 14px;
   background: var(--accent);
   color: var(--text-on-accent);
   border: none;
@@ -607,14 +719,13 @@
   cursor: pointer;
   font-size: 0.8rem;
   font-weight: 500;
-  align-self: flex-end;
 }
 
-.follow-up-input button:hover:not(:disabled) {
+.follow-up-input .composer-send-btn:hover:not(:disabled) {
   background: var(--accent-hover);
 }
 
-.follow-up-input button:disabled {
+.follow-up-input .composer-send-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }

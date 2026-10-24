@@ -104,6 +104,26 @@ describe("buildShareMarkdown", () => {
     expect(md).toContain("回答正文");
   });
 
+  it("带图片的 user 消息以占位行标注图片数量", () => {
+    const md = buildShareMarkdown(
+      makeSession({
+        sources: [],
+        messages: [
+          {
+            id: "m-1",
+            role: "user",
+            content: "请解读这张图片",
+            createdAt: 1,
+            images: [{ file: "a.jpg" }, { file: "b.jpg" }],
+          },
+          { id: "m-2", role: "assistant", content: "回答正文", createdAt: 2 },
+        ],
+      })
+    );
+    expect(md).toContain("*[附 2 张图片]*");
+    expect(md).toContain("**提问**：请解读这张图片");
+  });
+
   it("过滤 tool 消息与空内容消息", () => {
     const md = buildShareMarkdown(
       makeSession({

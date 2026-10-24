@@ -43,7 +43,13 @@ const outlineItems = targets.map((t) =>
   ctx.register(
     ctx.obj({
       Title: PDFString.of(`goto p${t.page + 1} line ${t.row}`),
-      Dest: [doc.getPage(t.page).ref, PDFName.of("XYZ"), 72, lines[t.page][t.row], 0],
+      Dest: [
+        doc.getPage(t.page).ref,
+        PDFName.of("XYZ"),
+        72,
+        lines[t.page][t.row],
+        0,
+      ],
     })
   )
 );
@@ -59,7 +65,8 @@ outlineItems.forEach((ref, i) => {
   const d = ctx.lookup(ref);
   d.set(PDFName.of("Parent"), outlineRoot);
   if (i > 0) d.set(PDFName.of("Prev"), outlineItems[i - 1]);
-  if (i < outlineItems.length - 1) d.set(PDFName.of("Next"), outlineItems[i + 1]);
+  if (i < outlineItems.length - 1)
+    d.set(PDFName.of("Next"), outlineItems[i + 1]);
 });
 doc.catalog.set(PDFName.of("Outlines"), outlineRoot);
 

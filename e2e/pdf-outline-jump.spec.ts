@@ -19,15 +19,20 @@ function expectedScrollTop(page: number, row: number): number {
 async function getScrollTop(page: import("@playwright/test").Page) {
   return page.evaluate(
     () =>
-      (document.querySelector(".pdf-canvas-container.continuous") as HTMLElement)
-        .scrollTop
+      (
+        document.querySelector(
+          ".pdf-canvas-container.continuous"
+        ) as HTMLElement
+      ).scrollTop
   );
 }
 
 test.describe("PDF outline jump", () => {
   test.beforeEach(async ({ page }) => {
     await setupTauriMock(page, {
-      pdfs: [{ path: "/test/sample-outline.pdf", fixture: "sample-outline.pdf" }],
+      pdfs: [
+        { path: "/test/sample-outline.pdf", fixture: "sample-outline.pdf" },
+      ],
     });
     await page.goto("/");
     await page.getByTestId("open-pdf-btn").click();

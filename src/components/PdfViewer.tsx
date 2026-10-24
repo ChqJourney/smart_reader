@@ -370,9 +370,7 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
     // so the active-match effect does NOT depend on its identity — breaking the
     // "pageViewports update → goToPage changes → effect re-runs → pulls user
     // back" loop (issue 10.2). The ref is populated after goToPage is defined.
-    const goToPageRef = useRef<(page: number, pdfY?: number) => void>(
-      () => {}
-    );
+    const goToPageRef = useRef<(page: number, pdfY?: number) => void>(() => {});
     const {
       searchOpen,
       setSearchOpen,

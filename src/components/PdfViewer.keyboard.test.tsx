@@ -84,7 +84,10 @@ describe("PdfViewer 键盘焦点（isFocused）", () => {
     const { container } = await renderViewerAndWaitForPdf();
 
     fireEvent.keyDown(window, { key: "f", ctrlKey: true });
-    expect(container.querySelector(".pdf-search-bar")).not.toBeNull();
+    // CI 上偶发 search 条尚未渲染：等待 keydown 触发的状态更新完成
+    await waitFor(() => {
+      expect(container.querySelector(".pdf-search-bar")).not.toBeNull();
+    });
 
     fireEvent.keyDown(window, { key: "Escape" });
 

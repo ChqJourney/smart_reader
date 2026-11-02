@@ -15,6 +15,7 @@
 ### Fixed
 
 - 将开发依赖树中的 `minimatch` 升级至 11.x，修复 `npm audit` 报告的 globparts 放大拒绝服务漏洞（GHSA-g3hv-75wg-m249）。
+- 将 `tauri-plugin-updater` 升级至 2.14.1，移除依赖树中存在高危漏洞的 `zip` 4.x（RUSTSEC-2026-0429）；Rust 最低版本相应提升至 1.90。
 
 ## [1.5.1] - 2026-10-24
 

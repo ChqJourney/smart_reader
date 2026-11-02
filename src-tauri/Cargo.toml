@@ -6,7 +6,7 @@ authors = ["SpecReader AI Team"]
 license = "GPL-3.0-or-later"
 repository = "https://github.com/ChqJourney/smart_reader"
 edition = "2021"
-rust-version = "1.77.2"
+rust-version = "1.90"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -25,7 +25,7 @@ tauri = { version = "2.11.3", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
-tauri-plugin-updater = "2"
+tauri-plugin-updater = "2.14.1"
 tauri-plugin-process = "2"
 sha2 = "0.10"
 hex = "0.4"

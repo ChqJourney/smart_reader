@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [1.5.3] - 2026-11-02
+
 ### Fixed
 
 - 对齐 Tauri NPM 包与 Rust crate 版本（API/CLI 2.12.x、updater 2.14.1），修复 Release 构建因前后端 major/minor 不一致而终止的问题。

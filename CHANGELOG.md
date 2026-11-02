@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- 设置「关于」页新增「联系我们」，展示定制或合作联系邮箱 `service@wetesting.cn`，点击即可复制。
+
 ## [1.5.1] - 2026-10-24
 
 ### Added

@@ -13,6 +13,7 @@ import Icon from "./Icon";
 import IconSelect from "./IconSelect";
 import WhatsNewModal from "./WhatsNewModal";
 import { extractVersionSection } from "../utils/changelog";
+import { copyToClipboard } from "../utils/clipboard";
 import changelogRaw from "../../CHANGELOG.md?raw";
 import {
   AppSettings,
@@ -1199,6 +1200,29 @@ export default function SettingsModal({
                         {t("settings.viewChangelog")}
                       </button>
                     )}
+                  </section>
+
+                  <section className="settings-section">
+                    <div className="settings-section-title">
+                      {t("settings.contactUs")}
+                    </div>
+                    <div className="settings-section-hint">
+                      {t("settings.contactUsHint")}
+                    </div>
+                    <button
+                      type="button"
+                      className="settings-text-btn"
+                      onClick={() => {
+                        void copyToClipboard("service@wetesting.cn").catch(
+                          (err) => {
+                            error(`Failed to copy contact email: ${err}`);
+                          }
+                        );
+                      }}
+                      title={t("settings.copyEmail")}
+                    >
+                      service@wetesting.cn
+                    </button>
                   </section>
 
                   <section className="settings-section">

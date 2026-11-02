@@ -24,6 +24,11 @@ const mockFetch = vi.hoisted(() => vi.fn());
 const mockCheckUpdate = vi.hoisted(() => vi.fn());
 const mockDownloadAndInstall = vi.hoisted(() => vi.fn());
 const mockRelaunch = vi.hoisted(() => vi.fn());
+const mockCopyToClipboard = vi.hoisted(() => vi.fn());
+
+vi.mock("../utils/clipboard", () => ({
+  copyToClipboard: mockCopyToClipboard,
+}));
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: mockInvoke,
@@ -88,6 +93,8 @@ describe("SettingsModal", () => {
     mockCheckUpdate.mockReset();
     mockDownloadAndInstall.mockReset();
     mockRelaunch.mockReset();
+    mockCopyToClipboard.mockReset();
+    mockCopyToClipboard.mockResolvedValue(undefined);
     mockListen.mockResolvedValue(() => {});
     mockGetVersion.mockResolvedValue("0.1.0");
     mockFetch.mockResolvedValue({
@@ -608,6 +615,27 @@ describe("SettingsModal", () => {
 
     // License text is loaded asynchronously.
     await screen.findByText("SpecReader AI Proprietary License");
+  });
+
+  it("shows contact email on about page and copies it when clicked", async () => {
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+
+    switchToAboutPage();
+
+    expect(screen.getByText("联系我们")).toBeInTheDocument();
+    expect(screen.getByText("定制或合作，联系")).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "service@wetesting.cn" })
+    );
+
+    await waitFor(() => {
+      expect(mockCopyToClipboard).toHaveBeenCalledWith("service@wetesting.cn");
+    });
   });
 
   it("renders check for updates button on about page", () => {

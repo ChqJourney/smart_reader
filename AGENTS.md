@@ -109,7 +109,7 @@ npm install
 │   │   ├── CommentPopup.tsx           # 批注浮层（拖动编辑、300ms 防抖保存、隐藏/删除）
 │   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录（页码/类型徽章/LLM 摘要/范围过滤/排序下拉/会话删除）、列表态底部自由提问输入框 AskInput、流式中止）
 │   │   ├── ContextWidget.tsx          # 会话上下文用量条（数据源 activeSession.lastPromptTokens，已接入 AiChatPanel）
-│   │   ├── MarkdownRenderer.tsx       # react-markdown + gfm/math/katex，自定义 sanitize schema，公式解析失败降级纯文本
+│   │   ├── MarkdownRenderer.tsx       # react-markdown + gfm/math/katex，自定义 sanitize schema；表格横向滚动/展开，内联与 fenced SVG 预览/源码/复制/导出/放大；公式解析失败降级纯文本
 │   │   ├── ThinkingIndicator.tsx      # 思考中/已思考 tokens 指示（可展开 reasoningContent）
 │   │   ├── SettingsModal.tsx          # 全局设置 Modal（左侧分页：模型设置 / 功能设置 / 系统设置 / 关于）
 │   │   ├── SetupWizard.tsx            # 首次启动配置向导（选平台 → 填 Key → 测试连接）
@@ -333,7 +333,7 @@ cd src-tauri && cargo test
 - `load_settings()` / `save_settings(settings: AppSettings)`：加载 / 保存应用设置（LLM 平台/模型 + 目标语言 + Agent Tools 总开关 + 联网搜索开关 + 悬停翻译开关 + 条款链接悬停预览开关 + 日志级别 + 解读记录排序方式 + 界面主题 + lastSeenVersion）；`load_settings` 返回前强制 `apiKey=""`，Key 只经系统钥匙串按平台读写。
 - `load_recent_files()` / `save_recent_files(files: RecentFile[])`：加载 / 保存最近打开文件列表（`RecentFile` 含 `pinned` 置顶与 `lastPage` 阅读页码字段，旧数据通过 `#[serde(default)]` 兼容）。
 - `check_files_exist(paths: string[])`：批量检查文件是否仍存在于磁盘，最近文件面板用它置灰已移动/删除的条目。
-- `export_text_file(file_path: string, content: string)`：把用户经系统保存对话框选定的路径写入文本文件（解读分享导出 .md 使用，原子写入，不走 PDF 授权白名单）；扩展名白名单 .md/.txt，拒绝写入 AppData 内部路径。
+- `export_text_file(file_path: string, content: string)`：把用户经系统保存对话框选定的路径写入文本文件（解读分享导出 .md、AI 回答 SVG 图导出 .svg 使用，原子写入，不走 PDF 授权白名单）；扩展名白名单 .md/.txt/.svg，拒绝写入 AppData 内部路径。
 - `export_binary_file(file_path: string, data: Vec<u8>)`：同上但写二进制（带批注打印 PDF 导出，扩展名白名单 .pdf）；data 经 serde_json 数组传输（前端 `Array.from(bytes)`，嵌套 Uint8Array 会被序列化成对象不能用）。
 - `open_print_file(request: ipc::Request)`：接收 IPC 原始字节（前端 `invoke(cmd, bytes)`），落盘 `<AppData>/SpecReader/print/`（文件名带纳秒+序号唯一后缀，先写新文件再清理 mtime 早于 10 分钟宽限期的旧 pdf，保护刚 spawn 给阅读器的文件）后用平台指定阅读器打开（macOS `open -a Preview` / Windows 经 `rundll32 url.dll,FileProtocolHandler` 调起 `microsoft-edge:` 协议打开 Edge——刻意不走 `cmd /c start`，cmd 的 %var% 变量扩展会吃掉 URL 中非 ASCII 用户名的百分号编码），不走系统默认 PDF 关联防止回环到本应用。
 - `open_path(path: string)`：仅允许打开 `http://` / `https://` URL，禁止本地文件路径与目录。

@@ -511,6 +511,17 @@
   "contextWidget": {
     "tooltip": "上下文用量：已用 {{percent}}%"
   },
+  "markdown": {
+    "table": "表格",
+    "expandTable": "展开表格",
+    "tableDialog": "表格详情",
+    "preview": "预览",
+    "source": "源代码",
+    "copySvg": "复制 SVG",
+    "downloadSvg": "下载 SVG",
+    "expandSvg": "放大 SVG",
+    "svgDialog": "SVG 图"
+  },
   "common": {
     "cancel": "取消",
     "save": "保存",

@@ -363,7 +363,7 @@ fn authorize_pdf_path_core(state: &AppState, file_path: &str) -> Result<(), Stri
 
 /// 导出用户可见文本文件（如分享出去的解读 Markdown）到系统保存对话框选定的
 /// 路径。与批注/会话写入不同，该路径由用户显式选择，不走 PDF 授权白名单；
-/// 但 webview 是半信任面，命令仍收窄：扩展名白名单（.md / .txt）+
+/// 但 webview 是半信任面，命令仍收窄：扩展名白名单（.md / .txt / .svg）+
 /// 拒绝 AppData 内部路径（防止覆写应用自身数据），见 export_target_guard。
 #[tauri::command]
 fn export_text_file(
@@ -380,7 +380,7 @@ fn export_text_file_core(
     content: &str,
     app_data_dir: &Path,
 ) -> Result<(), String> {
-    export_target_guard(file_path, &["md", "txt"], app_data_dir)?;
+    export_target_guard(file_path, &["md", "txt", "svg"], app_data_dir)?;
     atomic_write(&PathBuf::from(file_path), content.as_bytes())
         .map_err(|e| format!("Failed to export file: {}", e))
 }
@@ -2460,6 +2460,18 @@ mod tests {
 
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "# 标题\n\n正文");
         assert!(!path.with_extension("tmp").exists());
+    }
+
+    #[test]
+    fn export_text_file_writes_svg_to_user_selected_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let app_data = tempfile::tempdir().unwrap();
+        let path = dir.path().join("diagram.svg");
+        let svg = r#"<svg xmlns="http://www.w3.org/2000/svg"><circle r="4" /></svg>"#;
+
+        export_text_file_core(path.to_str().unwrap(), svg, app_data.path()).unwrap();
+
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), svg);
     }
 
     #[test]

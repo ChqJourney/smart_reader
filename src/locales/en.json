@@ -511,6 +511,17 @@
   "contextWidget": {
     "tooltip": "Context usage: {{percent}}% used"
   },
+  "markdown": {
+    "table": "Table",
+    "expandTable": "Expand table",
+    "tableDialog": "Table details",
+    "preview": "Preview",
+    "source": "Source",
+    "copySvg": "Copy SVG",
+    "downloadSvg": "Download SVG",
+    "expandSvg": "Enlarge SVG",
+    "svgDialog": "SVG diagram"
+  },
   "common": {
     "cancel": "Cancel",
     "save": "Save",

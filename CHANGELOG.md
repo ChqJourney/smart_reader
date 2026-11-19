@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [1.5.5] - 2026-11-19
+
 ### Fixed
 
 - 将 `rusqlite` 升级至 0.41（`libsqlite3-sys` 0.39.1，内置 SQLite 3.54.1），修复本地恶意 SQLite / WAL 文件可能导致未初始化内存泄露的漏洞（RUSTSEC-2026-0459）。

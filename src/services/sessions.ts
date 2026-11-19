@@ -87,6 +87,23 @@ export interface InterpretationSession {
   summary?: string;
 }
 
+/**
+ * 会话归属判定：常规会话靠 sources 里的 fileHash；无选区自由提问会话
+ * （空 sources）靠 anchorFileHash 锚点归属到创建时 focused tab 的文档。
+ */
+export function sessionBelongsToHashes(
+  session: InterpretationSession,
+  hashes: ReadonlySet<string>
+): boolean {
+  if (
+    session.anchorFileHash !== undefined &&
+    hashes.has(session.anchorFileHash)
+  ) {
+    return true;
+  }
+  return session.sources.some((item) => hashes.has(item.source.fileHash));
+}
+
 function createMessage(
   role: "user" | "assistant",
   content: string

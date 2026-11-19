@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { StashItem } from "../services/stash";
 import {
   InterpretationSession,
@@ -7,6 +8,7 @@ import {
   SessionSortMode,
   collectTurnProcess,
   readSessionImage,
+  sessionBelongsToHashes,
   sortSessions,
 } from "../services/sessions";
 import {
@@ -14,6 +16,7 @@ import {
   useImageAttachments,
 } from "../hooks/useImageAttachments";
 import { copyToClipboard } from "../utils/clipboard";
+import { useModal } from "../hooks/useModal";
 import { buildShareMarkdown, exportSessionMarkdown } from "../services/share";
 import { error } from "../services/logs";
 import Icon from "./Icon";
@@ -35,6 +38,8 @@ interface AiChatPanelProps {
   sessions: InterpretationSession[];
   /** 全部已加载会话：sessions tab 的「全部」过滤视图使用 */
   allSessions?: InterpretationSession[];
+  /** 所有仍打开的 tab（含休眠 tab）的文件 hash，用于「所有已打开 Tab」范围 */
+  openTabFileHashes?: string[];
   expandedSessionId?: string | null;
   onRemoveStash: (id: string) => void;
   onUpdateStash?: (id: string, text: string) => void;
@@ -74,6 +79,7 @@ export default function AiChatPanel({
   stashes,
   sessions,
   allSessions,
+  openTabFileHashes,
   expandedSessionId,
   onRemoveStash,
   onUpdateStash,
@@ -112,10 +118,10 @@ export default function AiChatPanel({
   const [selectedStashIds, setSelectedStashIds] = useState<Set<string>>(
     new Set()
   );
-  // 会话列表范围：当前可见文档 / 全部已加载会话（跨文档找回解读用）
-  const [sessionScope, setSessionScope] = useState<"current" | "all">(
-    "current"
-  );
+  // 会话列表范围：当前可见文档 / 所有已打开 tab / 全部已加载会话
+  const [sessionScope, setSessionScope] = useState<
+    "current" | "openTabs" | "all"
+  >("current");
   // 排序方式：优先受控于 App（持久化到 settings），未接时组件内部自持（测试场景）
   const [localSortMode, setLocalSortMode] =
     useState<SessionSortMode>("recentActivity");
@@ -315,15 +321,35 @@ export default function AiChatPanel({
     void exportSessionMarkdown(activeSession);
   };
 
+  const openTabSessions = useMemo(() => {
+    const hashes = new Set(openTabFileHashes ?? []);
+    return (allSessions ?? sessions).filter((session) =>
+      sessionBelongsToHashes(session, hashes)
+    );
+  }, [allSessions, sessions, openTabFileHashes]);
   const listedSessions =
-    sessionScope === "all" && allSessions ? allSessions : sessions;
-  // 跨文档的「全部文档」范围下页码排序没有意义，回退到最近活动；
+    sessionScope === "all" && allSessions
+      ? allSessions
+      : sessionScope === "openTabs"
+        ? openTabSessions
+        : sessions;
+  // 跨文档范围下页码排序没有意义，回退到最近活动；
   // 不落盘，切回「当前文档」后恢复用户原选择。
   const effectiveSortMode: SessionSortMode =
-    sessionScope === "all" && sortMode === "page" ? "recentActivity" : sortMode;
+    sessionScope !== "current" && sortMode === "page"
+      ? "recentActivity"
+      : sortMode;
   const sortedSessions = useMemo(
     () => sortSessions(listedSessions, effectiveSortMode),
     [listedSessions, effectiveSortMode]
+  );
+  const scopeOptions = useMemo(
+    () => [
+      { value: "current", label: t("session.scopeCurrent") },
+      { value: "openTabs", label: t("session.scopeOpenTabs") },
+      { value: "all", label: t("session.scopeAll") },
+    ],
+    [t]
   );
   const sortOptions = useMemo(
     () =>
@@ -840,21 +866,18 @@ export default function AiChatPanel({
             <>
               <div className="session-list-toolbar">
                 {allSessions && (
-                  <button
-                    type="button"
-                    className={`session-scope-switch${sessionScope === "all" ? " active" : ""}`}
-                    onClick={() =>
-                      setSessionScope(
-                        sessionScope === "current" ? "all" : "current"
-                      )
-                    }
-                    title={t("session.scopeSwitch")}
+                  <div
+                    className="session-scope-select"
+                    title={t("session.scopeLabel")}
                   >
-                    <Icon name="swap" size={13} />
-                    {sessionScope === "current"
-                      ? t("session.scopeCurrent")
-                      : t("session.scopeAll")}
-                  </button>
+                    <IconSelect
+                      value={sessionScope}
+                      options={scopeOptions}
+                      onChange={(value) =>
+                        setSessionScope(value as "current" | "openTabs" | "all")
+                      }
+                    />
+                  </div>
                 )}
                 <div
                   className="session-sort-select"
@@ -1044,7 +1067,7 @@ function UserMessageContent({
 
 /**
  * user 消息附带的图片缩略图组：按文件名引用从 AppData 读回字节转 object URL。
- * 读取失败的图显示占位块，不影响文本展示。
+ * 读取失败的图显示占位块，不影响文本展示；点击缩略图打开大图预览。
  */
 function MessageImages({
   sessionId,
@@ -1053,7 +1076,13 @@ function MessageImages({
   sessionId: string;
   images: SessionImageRef[];
 }) {
+  const { t } = useTranslation();
   const [urls, setUrls] = useState<Record<string, string>>({});
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const { contentRef } = useModal({
+    open: previewUrl !== null,
+    onClose: () => setPreviewUrl(null),
+  });
   useEffect(() => {
     let cancelled = false;
     const created: string[] = [];
@@ -1074,20 +1103,55 @@ function MessageImages({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, images.map((ref) => ref.file).join(",")]);
   return (
-    <div className="ai-chat-msg-images">
-      {images.map((ref) =>
-        urls[ref.file] ? (
-          <img
-            key={ref.file}
-            className="ai-chat-msg-image"
-            src={urls[ref.file]}
-            alt=""
-          />
-        ) : (
-          <span key={ref.file} className="ai-chat-msg-image placeholder" />
-        )
-      )}
-    </div>
+    <>
+      <div className="ai-chat-msg-images">
+        {images.map((ref) =>
+          urls[ref.file] ? (
+            <button
+              key={ref.file}
+              type="button"
+              className="ai-chat-msg-image-button"
+              onClick={() => setPreviewUrl(urls[ref.file])}
+              aria-label={t("chat.previewImage")}
+              title={t("chat.previewImage")}
+            >
+              <img className="ai-chat-msg-image" src={urls[ref.file]} alt="" />
+            </button>
+          ) : (
+            <span key={ref.file} className="ai-chat-msg-image placeholder" />
+          )
+        )}
+      </div>
+      {previewUrl &&
+        createPortal(
+          <div
+            className="ai-chat-image-preview-overlay"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) setPreviewUrl(null);
+            }}
+          >
+            <div
+              ref={contentRef}
+              className="ai-chat-image-preview"
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("chat.imagePreview")}
+            >
+              <button
+                type="button"
+                className="icon-btn ai-chat-image-preview-close"
+                onClick={() => setPreviewUrl(null)}
+                aria-label={t("common.close")}
+                title={t("common.close")}
+              >
+                <Icon name="close" size={18} />
+              </button>
+              <img src={previewUrl} alt={t("chat.imagePreview")} />
+            </div>
+          </div>,
+          document.body
+        )}
+    </>
   );
 }
 

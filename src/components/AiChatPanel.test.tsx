@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
 import AiChatPanel from "../components/AiChatPanel";
 import { StashItem, StashSource } from "../services/stash";
 import {
   InterpretationSession,
   InterpretationMessage,
 } from "../services/sessions";
+
+vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 
 vi.mock("../services/llm", async () => {
   const actual =
@@ -85,6 +88,10 @@ function makeSession(
 describe("AiChatPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === "read_session_image") throw new Error("image not found");
+      return null;
+    });
     mockAttachments.images = [];
     mockAttachments.canAdd = true;
   });
@@ -667,6 +674,7 @@ describe("AiChatPanel", () => {
     expect(screen.queryByText("另一文档的解读")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "当前文档" }));
+    fireEvent.click(screen.getByRole("option", { name: "全部文档" }));
 
     expect(screen.getByText("另一文档的解读")).toBeInTheDocument();
     // 从「全部」视图可以进入非当前文档的会话详情
@@ -674,6 +682,47 @@ describe("AiChatPanel", () => {
     expect(
       screen.getByRole("button", { name: /返回解读记录/i })
     ).toBeInTheDocument();
+  });
+
+  it("filters sessions to all open tabs without including closed documents", () => {
+    const current = makeSession({
+      id: "session-1",
+      summary: "当前 Tab 的解读",
+    });
+    const otherOpen = makeSession({
+      id: "session-2",
+      summary: "另一已打开 Tab 的解读",
+      sources: [
+        makeStash("stash-2", "other open", {
+          source: makeSource({ fileHash: "hash-open", fileName: "open.pdf" }),
+        }),
+      ],
+    });
+    const closed = makeSession({
+      id: "session-3",
+      summary: "已关闭文档的解读",
+      sources: [
+        makeStash("stash-3", "closed", {
+          source: makeSource({
+            fileHash: "hash-closed",
+            fileName: "closed.pdf",
+          }),
+        }),
+      ],
+    });
+
+    renderPanel({
+      sessions: [current],
+      allSessions: [current, otherOpen, closed],
+      openTabFileHashes: ["hash-file", "hash-open"],
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "当前文档" }));
+    fireEvent.click(screen.getByRole("option", { name: "所有已打开 Tab" }));
+
+    expect(screen.getByText("当前 Tab 的解读")).toBeInTheDocument();
+    expect(screen.getByText("另一已打开 Tab 的解读")).toBeInTheDocument();
+    expect(screen.queryByText("已关闭文档的解读")).not.toBeInTheDocument();
   });
 
   it("collapses long first user message and shows source cards", async () => {
@@ -886,6 +935,7 @@ describe("AiChatPanel", () => {
       });
 
       fireEvent.click(screen.getByRole("button", { name: "当前文档" }));
+      fireEvent.click(screen.getByRole("option", { name: "全部文档" }));
 
       // 排序下拉回退显示「最近活动」，且选项中不再提供「按页码」
       const trigger = screen.getByRole("button", { name: "最近活动" });
@@ -1133,6 +1183,48 @@ describe("AiChatPanel", () => {
       expect(
         container.querySelectorAll(".ai-chat-msg-image.placeholder")
       ).toHaveLength(2);
+    });
+
+    it("opens a large preview when a message image is clicked", async () => {
+      vi.mocked(invoke).mockImplementation(async (command) => {
+        if (command === "read_session_image") return [1, 2, 3];
+        return null;
+      });
+      Object.defineProperty(URL, "createObjectURL", {
+        configurable: true,
+        value: vi.fn(() => "blob:message-image"),
+      });
+      Object.defineProperty(URL, "revokeObjectURL", {
+        configurable: true,
+        value: vi.fn(),
+      });
+      renderPanel({
+        sessions: [
+          makeSession({
+            messages: [
+              makeMessage({
+                id: "msg-1",
+                role: "user",
+                content: "看下这张图",
+                images: [{ file: "a.jpg" }],
+              }),
+            ],
+          }),
+        ],
+        expandedSessionId: "session-1",
+      });
+
+      fireEvent.click(await screen.findByRole("button", { name: "查看图片" }));
+      expect(
+        screen.getByRole("dialog", { name: "图片预览" })
+      ).toBeInTheDocument();
+      expect(screen.getByRole("img", { name: "图片预览" })).toHaveAttribute(
+        "src",
+        "blob:message-image"
+      );
+
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.queryByRole("dialog", { name: "图片预览" })).toBeNull();
     });
   });
 });

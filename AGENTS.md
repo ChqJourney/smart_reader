@@ -26,10 +26,10 @@
 - 大纲 / 目录导航面板（PDF 自带 outline 时可用，点击跳转章节，复用 useLinkPreviews 的 resolveLinkDest 解析 dest：XYZ / FitH 取 Y 精确滚动到目标行，其余形态退化页首）。
 - 选中文本后浮动工具条：加入暂存、解读、自定义解读（暂存所选并直达弹窗）、翻译、复制、批注（comment 浮层，可拖动编辑）。
 - 翻译生成可拖动 / 隐藏 / 删除的浮层批注。
-- 解读生成蓝色标记（生成中带呼吸态），点击标记打开 InterpretPopup 内联展示解读结果（流式/错误态、原文折叠、查看解读/重新解读/删除）；发起解读 / 自定义解读发送 / 重新解读后右侧面板直接进入新会话 chatbox 观看流式输出（`expandSessionRequest`，与自由提问一致）；右侧面板展示可点击跳转的解读记录（页码+类型徽章+LLM 一句话摘要，支持「当前文档/全部文档」过滤、排序下拉（最近活动/创建时间/按页码，按页码仅当前文档范围可选，选择持久化到 settings）与面板内删除会话），支持多轮追问。
+- 解读生成蓝色标记（生成中带呼吸态），点击标记打开 InterpretPopup 内联展示解读结果（流式/错误态、原文折叠、查看解读/重新解读/删除）；发起解读 / 自定义解读发送 / 重新解读后右侧面板直接进入新会话 chatbox 观看流式输出（`expandSessionRequest`，与自由提问一致）；右侧面板展示可点击跳转的解读记录（页码+类型徽章+LLM 一句话摘要，支持「当前文档/所有已打开 Tab/全部文档」范围下拉、排序下拉（最近活动/创建时间/按页码，按页码仅当前文档范围可选，选择持久化到 settings）与面板内删除会话），支持多轮追问。
 - 自定义解读：把多个暂存片段一次性发给 LLM。暂存区按钮常驻显示片段数量并直达弹窗；解读要求弹窗内置可勾选片段清单（默认全选）与解读方式预设下拉（选中即把预定义 prompt 填入输入框，可继续编辑，手动编辑后回到「自由提问」，模板文案在 locales 的 `customInterpret.presets.*` 段），仅能通过「取消」/「发送」关闭；暂存不落盘为有意设计。
 - 无选区自由提问：解读记录 tab 列表态底部常驻提问输入框（Enter 发送，无打开 PDF 时禁用），创建 `action: "custom"` + 空 `sources` 的会话并直接切入 chatbox 流式输出；会话经 `anchorFileHash`/`anchorFileName`（创建时 focused tab 快照）锚定到当前文档——归属过滤（`sessionBelongsToHashes`）、sessionIds 持久化反查、列表「提问」徽章与来源行回退都认锚点；Agent Tools 门控天然放行（action 为 custom）。system prompt 走专用模板（`llm.askWithToolsPrompt` / `llm.askNoToolsPrompt`，按 toolsEnabled 分流）：开启时引导模型主动 `list_open_pdfs` / `search_in_pdf` 查证当前文档，关闭时声明无法访问文档并引导用户开启；tools 关闭时提问框下方还有一行 UI 提示（`chat.askToolsHint`）。
-- 提问 / 追问图片附件：仅当前平台模型 `modelSupportsVision()` 为 true 时提问框（AskInput）与追问框（FollowUpInput）显示图片入口（`visionCapable` prop，App 层计算）；支持系统对话框选择（png/jpg/jpeg/webp/gif/bmp，经 `read_user_image` 读字节）与剪贴板粘贴截图，最多 3 张，缩略图可单张删除，允许只发图（空文本用 `chat.askImageOnly` 兜底 prompt）。图片统一 canvas 转码 JPEG（铺白底、最长边 2048、quality 0.85，与截图工具参数一致），经 `save_session_image` 落盘 sessions 目录，user 消息持久化 `images` 文件名引用；发送时 `buildApiMessages` 的 userImageSpots 异步读盘把 content 改写为 parts（`hydrateUserImages`，图片只能出现在 user 消息），追问/重载同样回放；chatbox 中 user 消息渲染缩略图组（MessageImages），分享导出以 `share.imagesLine` 占位行标注数量。
+- 提问 / 追问图片附件：仅当前平台模型 `modelSupportsVision()` 为 true 时提问框（AskInput）与追问框（FollowUpInput）显示图片入口（`visionCapable` prop，App 层计算）；支持系统对话框选择（png/jpg/jpeg/webp/gif/bmp，经 `read_user_image` 读字节）与剪贴板粘贴截图，最多 3 张，缩略图可单张删除，允许只发图（空文本用 `chat.askImageOnly` 兜底 prompt）。图片统一 canvas 转码 JPEG（铺白底、最长边 2048、quality 0.85，与截图工具参数一致），经 `save_session_image` 落盘 sessions 目录，user 消息持久化 `images` 文件名引用；发送时 `buildApiMessages` 的 userImageSpots 异步读盘把 content 改写为 parts（`hydrateUserImages`，图片只能出现在 user 消息），追问/重载同样回放；chatbox 中 user 消息渲染缩略图组（MessageImages，点击打开大图预览，支持 Escape / 点击遮罩 / 关闭按钮退出），分享导出以 `share.imagesLine` 占位行标注数量。
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
 - 打印（工具栏按钮 / Ctrl/Cmd+P）：弹窗可选页码范围（全部 / 当前页 / 自定义范围）与上纸内容（翻译批注、批注，均可独立勾选，默认都开）；生成带批注贴图的新 PDF（优先矢量直绘保留原页面，pdf-lib 解析失败、源文件加密（pdf-lib 无解密能力，重存会带出密文与 /Encrypt 尾条款）或内容对象丢失时自动降级为 pdfjs 整页栅格化，保证任何能打开的 PDF 都能正确打印；批注按屏幕浮层样式与位置 canvas 光栅化贴入，含用户拖动过的位置），用平台指定阅读器打开打印（macOS 预览 / Windows Edge，刻意不走系统默认 PDF 关联——若默认阅读器是本应用自身会回环成新 tab），也可导出带批注的 PDF 文件。
 - 解读 / 自定义解读会话可分享：会话头部「分享」下拉支持复制结构化 Markdown 到剪贴板或导出 .md 文件（原文片段以引用块 + 来源行展示，有来源时跳过模板 prompt、无来源的自由提问会话保留首条提问，tool 消息 / 思考内容一律跳过，见 `services/share.ts`）。
@@ -430,7 +430,7 @@ PdfViewer.tsx（协调层：UI + 组合 hooks）
 └── PdfPage                             # 单页渲染组件；悬停取词（useWordLookup + WordTooltip）已下沉到 PdfPage
 
 AiChatPanel.tsx
-├── expandedId / expandedStashIds / sessionScope（「当前文档/全部文档」过滤）/ sortMode（排序方式，受控于 App 的 settings.sessionSortMode）
+├── expandedId / expandedStashIds / sessionScope（「当前文档/所有已打开 Tab/全部文档」过滤）/ sortMode（排序方式，受控于 App 的 settings.sessionSortMode）
 ├── tabRequest（App 传入的 tab 激活请求：PDF 侧加入暂存 → 暂存 tab，按 nonce 变化生效）
 ├── expandSessionRequest（App 传入的 chatbox 进入请求：发起解读 / 自定义解读发送 / 重新解读后直接进入新会话 chatbox 观看流式输出，含切到解读 tab；按 nonce 变化生效，与自由提问行为一致）
 └── 检测到 isStreaming 会话时启动流；一轮对话（含多个工具轮次）的 reasoningContent 与全部 `toolEvents` 由 `sessions.ts` 的 `collectTurnProcess` 归组到该轮最终 assistant 消息上——AI 侧一轮最多两个框：过程气泡（思考 + 工具调用，`.ai-chat-process`）与正文气泡；长 user 消息折叠 + 来源片段卡片（可跳原文）；assistant 气泡 hover 复制 / 头部复制全部 / 删除会话

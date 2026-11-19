@@ -1249,6 +1249,13 @@ function App() {
     () => tabs.tabs.map((tab) => tab.filePath),
     [tabs.tabs]
   );
+  const openTabFileHashes = useMemo(
+    () =>
+      tabs.tabs
+        .map((tab) => tab.fileHash)
+        .filter((hash): hash is string => !!hash),
+    [tabs.tabs]
+  );
 
   const activeTabInitialState = useMemo(() => {
     if (!tabs.activeTab) return undefined;
@@ -1498,6 +1505,7 @@ function App() {
                     stashes={persistence.visibleTabStashes}
                     sessions={persistence.visibleTabSessions}
                     allSessions={persistence.sessions}
+                    openTabFileHashes={openTabFileHashes}
                     expandedSessionId={persistence.findSessionIdByAnnotationId(
                       tabs.activeTab?.highlightedAnnotationId ?? ""
                     )}
@@ -1627,6 +1635,7 @@ function App() {
                   stashes={persistence.visibleTabStashes}
                   sessions={persistence.visibleTabSessions}
                   allSessions={persistence.sessions}
+                  openTabFileHashes={openTabFileHashes}
                   expandedSessionId={persistence.findSessionIdByAnnotationId(
                     tabs.activeTab?.highlightedAnnotationId ?? ""
                   )}

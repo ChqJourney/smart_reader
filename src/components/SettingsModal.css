@@ -638,3 +638,16 @@
   outline: none;
   box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.25);
 }
+
+.settings-backup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.settings-status-success {
+  font-size: 0.8rem;
+  color: var(--color-success, #237804);
+  overflow-wrap: anywhere;
+}

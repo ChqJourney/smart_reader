@@ -9,6 +9,7 @@ use tauri::Manager;
 const LOG_FILE_NAME: &str = "app";
 const MAX_LOG_FILE_SIZE: u128 = 10 * 1024 * 1024; // 10 MB
 
+mod backup;
 mod dictionary;
 mod llm_proxy;
 mod paths;
@@ -247,6 +248,8 @@ pub fn run() {
             check_files_exist,
             export_text_file,
             export_binary_file,
+            export_data_backup,
+            restore_data_backup,
             open_print_file,
             check_dictionary,
             download_dictionary,
@@ -406,6 +409,34 @@ fn export_binary_file_core(
     export_target_guard(file_path, &["pdf"], app_data_dir)?;
     atomic_write(&PathBuf::from(file_path), data)
         .map_err(|e| format!("Failed to export file: {}", e))
+}
+
+#[tauri::command]
+fn export_data_backup(
+    app: tauri::AppHandle,
+    file_path: String,
+) -> Result<backup::BackupSummary, String> {
+    let base_dir = paths::app_data_dir(&app)?;
+    export_target_guard(&file_path, &["zip"], &base_dir)?;
+    backup::export_backup(&base_dir, Path::new(&file_path))
+}
+
+#[tauri::command]
+fn restore_data_backup(
+    app: tauri::AppHandle,
+    file_path: String,
+) -> Result<backup::RestoreReport, String> {
+    let base_dir = paths::app_data_dir(&app)?;
+    let path = Path::new(&file_path);
+    if path.extension().and_then(|ext| ext.to_str()) != Some("zip") {
+        return Err("Backup file must have a .zip extension".to_string());
+    }
+    let metadata =
+        std::fs::metadata(path).map_err(|e| format!("Failed to inspect backup file: {}", e))?;
+    if !metadata.is_file() {
+        return Err("Backup source must be a regular file".to_string());
+    }
+    backup::restore_backup(&base_dir, path)
 }
 
 /// 导出目标的共同防线：父目录必须存在、扩展名在白名单内、目标不得落在
@@ -822,6 +853,31 @@ struct SessionImageRef {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
+struct SourceEvidence {
+    id: String,
+    file_hash: String,
+    file_name: String,
+    page: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    clause: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    quote: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pdf_y: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tool_call_id: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct CitationRef {
+    evidence_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    label: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
 struct InterpretationMessage {
     id: String,
     role: String,
@@ -851,6 +907,10 @@ struct InterpretationMessage {
     /// 图片引用：tool 消息的截图工具结果、user 消息的用户上传图片。
     #[serde(default, skip_serializing_if = "Option::is_none")]
     images: Option<Vec<SessionImageRef>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    evidence: Option<Vec<SourceEvidence>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    citations: Option<Vec<CitationRef>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -1783,6 +1843,8 @@ mod tests {
                 tool_calls: None,
                 tool_events: None,
                 images: None,
+                evidence: None,
+                citations: None,
             }],
             is_streaming: false,
             streaming_message_id: None,
@@ -1876,9 +1938,35 @@ mod tests {
         save_session_to_disk(base.path(), session.clone()).unwrap();
         let loaded = load_session_from_disk(base.path(), "session-img").unwrap();
         assert_eq!(loaded, session);
-        let raw = std::fs::read_to_string(session_path(base.path(), "session-img").unwrap()).unwrap();
+        let raw =
+            std::fs::read_to_string(session_path(base.path(), "session-img").unwrap()).unwrap();
         assert!(raw.contains("\"images\""));
         assert!(!raw.contains("\"page\":null"));
+    }
+
+    #[test]
+    fn session_citations_roundtrip() {
+        let base = tempfile::tempdir().unwrap();
+        let mut session = sample_session("session-citations");
+        session.messages[0].evidence = Some(vec![SourceEvidence {
+            id: "src-1".to_string(),
+            file_hash: "hash".to_string(),
+            file_name: "test.pdf".to_string(),
+            page: 1,
+            clause: Some("5.2.3".to_string()),
+            quote: Some("stash text".to_string()),
+            pdf_y: Some(20.0),
+            tool_call_id: Some("call-1".to_string()),
+        }]);
+        session.messages[0].citations = Some(vec![CitationRef {
+            evidence_id: "src-1".to_string(),
+            label: None,
+        }]);
+        save_session_to_disk(base.path(), session.clone()).unwrap();
+        assert_eq!(
+            load_session_from_disk(base.path(), "session-citations").unwrap(),
+            session
+        );
     }
 
     #[test]
@@ -1889,6 +1977,14 @@ mod tests {
         assert_eq!(message.images, None);
         let serialized = serde_json::to_string(&message).unwrap();
         assert!(!serialized.contains("images"));
+    }
+
+    #[test]
+    fn session_legacy_review_field_is_ignored() {
+        let raw = r#"{"id":"m1","role":"assistant","content":"hi","createdAt":1,"review":{"status":"confirmed","updatedAt":2}}"#;
+        let message: InterpretationMessage = serde_json::from_str(raw).unwrap();
+        let serialized = serde_json::to_string(&message).unwrap();
+        assert!(!serialized.contains("review"));
     }
 
     #[test]

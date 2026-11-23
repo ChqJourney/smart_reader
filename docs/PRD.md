@@ -1,7 +1,7 @@
 # SpecReader AI - 产品需求文档（PRD）
 
 > 版本：v1.0.0  
-> 状态：1.0 正式版已交付——多 Tab / 分屏对照（Tab 休眠内存预算调度）、全文搜索、大纲导航、最近文件面板、悬停取词（ECDict）、选区翻译 / 解读 / 暂存、自定义解读与追问、无选区自由提问、Agent Tools（list_open_pdfs / read_pdf_page / search_in_pdf + 视觉模型页面截图 screenshot_pdf_page，经 Rust 后端代理 llm_proxy.rs 调 LLM，API Key 存系统钥匙串）、条款链接悬停预览、带批注打印、多平台预设（默认 deepseek）、自动更新、自定义标题栏、首次启动向导、i18n 框架（界面当前固定中文）；条款索引、引用追踪、术语表、测试清单、表格多模态、License 校验仍延后  
+> 状态：1.0 正式版已交付——多 Tab / 分屏对照（Tab 休眠内存预算调度）、全文搜索、大纲导航、最近文件面板、悬停取词（ECDict）、选区翻译 / 解读 / 暂存、自定义解读与追问、无选区自由提问、Agent Tools（list_open_pdfs / read_pdf_page / search_in_pdf + 视觉模型页面截图 screenshot_pdf_page，经 Rust 后端代理 llm_proxy.rs 调 LLM，API Key 存系统钥匙串）、条款链接悬停预览、带批注打印、多平台预设（默认 deepseek）、自动更新、自定义标题栏、首次启动向导、结构化已验证引用与页码/条款/Table/Figure 精确跳转、完整数据 ZIP 备份与事务化恢复、i18n 框架（界面当前固定中文）；术语表、测试清单、表格多模态、License 校验仍延后
 > 目标：明确 MVP 及后续版本的功能边界、技术约束与商业化路径
 
 ---

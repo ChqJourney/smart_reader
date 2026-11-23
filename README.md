@@ -131,7 +131,9 @@ See [TESTING.md](./TESTING.md) for details.
 - Custom interpretation: send multiple stashed excerpts to the LLM in one request.
 - **Agent Tools for interpretation / custom interpretation / follow-ups**: the LLM can consult the currently open PDFs via Function Calling (`list_open_pdfs` / `read_pdf_page` / `search_in_pdf`) to verify clause references and cross-page content; round limit defaults to 20 with graceful fallback.
 - LLM requests are proxied through the Rust backend: API keys are stored per-platform in the system keychain and never exposed to the webview.
-- Annotations and interpretation history persist locally in AppData, keyed by the PDF file's SHA-256 hash.
+- Verified answer citations: selections and document-tool results produce real source evidence, with navigation to the cited PDF page/clause; shared Markdown includes verified sources.
+- Plain-text page, Clause/Section, Table, and Figure references (including Chinese captions and Annex numbering) navigate to locally indexed headings, with candidate selection for duplicates and rotated-page support. Page numbers default to physical PDF indices; compound printed/PDF references use the explicit PDF page, while printed labels are mapped through PageLabels. Scanned PDFs explicitly fall back to visual screenshots or OCR instead of reporting empty text as no matches.
+- Annotations and interpretation history persist locally in AppData, keyed by the PDF file's SHA-256 hash. System Settings exports/restores a full ZIP backup (including session images and settings, excluding PDF originals, API keys, and transient stashes), with an automatic pre-restore backup and failure rollback.
 - Recent files panel: pinning, search, grayed-out missing files, last-read page restore, open in split view.
 - Hover over an English word to look it up in a local ECDICT dictionary (toggleable; one-time offline dictionary download).
 - Context usage bar (ContextWidget), thinking-process display (ThinkingIndicator), Markdown rendering with KaTeX math.

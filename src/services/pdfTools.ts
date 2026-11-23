@@ -9,6 +9,7 @@ import {
 } from "./pdfToolsRegistry";
 import { loadPdfjs } from "./pdfjs";
 import { executeWebToolCall } from "./webTools";
+import { createEvidenceId, type SourceEvidence } from "./citations";
 
 /** 截图区域：归一化坐标（0-1），原点在页面左上角。 */
 export interface ToolImageRegion {
@@ -35,6 +36,8 @@ export interface ToolCallResult {
   result: string;
   /** 截图工具附带的图像；agent loop 负责落盘并作为 user 消息发给模型。 */
   images?: ToolImage[];
+  /** 本次工具调用实际取得的原文证据，供最终回答结构化引用。 */
+  evidence?: SourceEvidence[];
 }
 
 export interface ToolSession {
@@ -281,15 +284,32 @@ export function beginToolSession(): ToolSession {
             };
           }
           const fullText = await getFullPageText(fileHash, pageNumber);
+          if (!fullText.trim()) {
+            return {
+              summary: i18n.t("tools.callReadPage", { page: pageNumber }),
+              result:
+                `TEXT_LAYER_UNAVAILABLE: Page ${pageNumber} has no extractable text and may be scanned. ` +
+                `Do not describe it as an empty page. Use screenshot_pdf_page when available, OCR, or ask the user for a page image.`,
+            };
+          }
           // 截断只做在返回处，缓存与 search_in_pdf 始终用全文。
           const text =
             fullText.length > PAGE_TEXT_LIMIT
               ? fullText.slice(0, PAGE_TEXT_LIMIT) +
                 `\n... [truncated, page has ${fullText.length} chars total]`
               : fullText;
+          const sourceId = createEvidenceId();
+          const evidence: SourceEvidence = {
+            id: sourceId,
+            fileHash,
+            fileName: getOpenPdfMeta(fileHash)?.fileName ?? "",
+            page: pageNumber,
+            quote: fullText.trim().slice(0, 240) || undefined,
+          };
           return {
             summary: i18n.t("tools.callReadPage", { page: pageNumber }),
-            result: text,
+            result: `[Source: ${sourceId}]\nFile: ${evidence.fileName}\nPDF Page (1-based physical): ${pageNumber}\n\n${text}`,
+            evidence: [evidence],
           };
         } catch (err) {
           return {
@@ -313,13 +333,22 @@ export function beginToolSession(): ToolSession {
         try {
           const pdf = await loadDoc(fileHash);
           const lowerQuery = query.toLowerCase();
-          const results: { page: number; snippet: string }[] = [];
+          const results: {
+            sourceId: string;
+            page: number;
+            pageType: "pdf_physical";
+            snippet: string;
+          }[] = [];
+          const evidence: SourceEvidence[] = [];
+          const fileName = getOpenPdfMeta(fileHash)?.fileName ?? "";
+          let hasExtractableText = false;
           for (
             let i = 1;
             i <= pdf.numPages && results.length < maxResults;
             i++
           ) {
             const text = await getFullPageText(fileHash, i);
+            hasExtractableText ||= Boolean(text.trim());
             const lowerText = text.toLowerCase();
             const idx = lowerText.indexOf(lowerQuery);
             if (idx !== -1) {
@@ -328,18 +357,34 @@ export function beginToolSession(): ToolSession {
               let snippet = text.slice(start, end).replace(/\s+/g, " ");
               if (start > 0) snippet = "..." + snippet;
               if (end < text.length) snippet = snippet + "...";
-              results.push({ page: i, snippet });
+              const sourceId = createEvidenceId();
+              results.push({
+                sourceId,
+                page: i,
+                pageType: "pdf_physical",
+                snippet,
+              });
+              evidence.push({
+                id: sourceId,
+                fileHash,
+                fileName,
+                page: i,
+                quote: snippet,
+              });
             }
           }
           if (results.length === 0) {
             return {
               summary: i18n.t("tools.callSearch", { query }),
-              result: `No matches found for "${query}".`,
+              result: hasExtractableText
+                ? `No matches found for "${query}".`
+                : `TEXT_LAYER_UNAVAILABLE: No extractable text was found in "${fileName}". It may be a scanned PDF. Do not report this as "no matches". Use screenshot_pdf_page when available, OCR, or ask the user for page images.`,
             };
           }
           return {
             summary: i18n.t("tools.callSearch", { query }),
             result: JSON.stringify(results),
+            evidence,
           };
         } catch (err) {
           return {
@@ -376,12 +421,23 @@ export function beginToolSession(): ToolSession {
             pageNumber,
             region
           );
+          const sourceId = createEvidenceId();
           return {
             summary,
-            result: region
-              ? `Screenshot captured: page ${pageNumber} of "${image.fileName}", region (x=${region.x}, y=${region.y}, width=${region.width}, height=${region.height}, normalized from top-left). The image is attached as the following user message.`
-              : `Screenshot captured: full page ${pageNumber} of "${image.fileName}". The image is attached as the following user message.`,
+            result:
+              `[Source: ${sourceId}]\n` +
+              (region
+                ? `Screenshot captured: page ${pageNumber} of "${image.fileName}", region (x=${region.x}, y=${region.y}, width=${region.width}, height=${region.height}, normalized from top-left). The image is attached as the following user message.`
+                : `Screenshot captured: full page ${pageNumber} of "${image.fileName}". The image is attached as the following user message.`),
             images: [image],
+            evidence: [
+              {
+                id: sourceId,
+                fileHash,
+                fileName: image.fileName,
+                page: pageNumber,
+              },
+            ],
           };
         } catch (err) {
           return { summary, result: `Error: ${err}` };

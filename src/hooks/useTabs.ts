@@ -34,6 +34,7 @@ export interface PdfTab {
   selection?: SelectionState | null;
   highlightedAnnotationId?: string | null;
   pendingGotoPage?: number;
+  pendingGotoPdfY?: number;
   /** 休眠标记：viewer 已卸载、字节缓存已释放，仅保留状态记录（唤醒走冷启动恢复）。 */
   hibernated?: boolean;
   /** 文件字节数（addTab 时经 get_pdf_file_size 取得），供内存预算记账。 */
@@ -78,7 +79,7 @@ export interface UseTabsReturn {
   gotoTabPage: (
     tabId: string,
     page: number,
-    options?: { activate?: boolean }
+    options?: { activate?: boolean; pdfY?: number }
   ) => void;
   setTabSelection: (tabId: string, selection: SelectionState | null) => void;
   clearTabSelection: (tabId: string) => void;
@@ -207,6 +208,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
             return {
               ...tab,
               pendingGotoPage: tab.pageNum ?? 1,
+              pendingGotoPdfY: undefined,
               hibernated: false,
               lastActivatedAt: now,
             };
@@ -244,6 +246,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
           return {
             ...tab,
             pendingGotoPage: tab.pageNum ?? 1,
+            pendingGotoPdfY: undefined,
             hibernated: false,
             lastActivatedAt: now,
           };
@@ -487,7 +490,11 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
   );
 
   const gotoTabPage = useCallback(
-    (tabId: string, page: number, options?: { activate?: boolean }) => {
+    (
+      tabId: string,
+      page: number,
+      options?: { activate?: boolean; pdfY?: number }
+    ) => {
       const activate = options?.activate !== false;
       // 防御：调用方可能传入持久化数据里的旧 tabId（如已落盘会话的
       // sources），目标 tab 不存在时绝不能动 activeTabId——否则 keep-alive
@@ -521,6 +528,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
               ...tab,
               pageNum: page,
               pendingGotoPage: page,
+              pendingGotoPdfY: options?.pdfY,
               scrollTop: undefined,
               hibernated: false,
               ...(activate ? { lastActivatedAt: now } : {}),
@@ -567,7 +575,9 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
   const clearTabPendingGotoPage = useCallback((tabId: string) => {
     setTabs((prev) =>
       prev.map((tab) =>
-        tab.id === tabId ? { ...tab, pendingGotoPage: undefined } : tab
+        tab.id === tabId
+          ? { ...tab, pendingGotoPage: undefined, pendingGotoPdfY: undefined }
+          : tab
       )
     );
   }, []);

@@ -317,6 +317,28 @@ describe("useTabRestore", () => {
     expect(container.scrollTop).toBe(10);
   });
 
+  it("keeps a same-page pending goto when an exact citation Y is supplied", async () => {
+    const { opts } = makeOptions({
+      initialState: { scrollTop: 400 },
+      pageNum: 3,
+    });
+    const { rerender } = renderHook(
+      (props: { init?: Parameters<typeof useTabRestore>[0]["initialState"] }) =>
+        useTabRestore({ ...opts, initialState: props.init }),
+      { initialProps: { init: opts.initialState } }
+    );
+    await waitFor(() => {
+      expect(opts.continuousContainerRef.current!.scrollTop).toBe(400);
+    });
+
+    rerender({
+      init: { scrollTop: 400, pendingGotoPage: 3, pendingGotoPdfY: 180 },
+    });
+    await waitFor(() => {
+      expect(opts.goToPage).toHaveBeenCalledWith(3, 180);
+    });
+  });
+
   it("clears a post-mount pending goto targeting the CURRENT page without jumping (keep-alive activation)", async () => {
     // keep-alive 保活下 activateTab 每次激活都带回 pendingGotoPage=tab.pageNum；
     // viewer 已挂载且就在该页时，跳转只会把滚动位置吸附到页顶，必须跳过。

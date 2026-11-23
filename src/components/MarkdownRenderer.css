@@ -364,3 +364,35 @@
   overflow-x: auto;
   padding: 0.5em 0;
 }
+
+.markdown-content a.markdown-citation {
+  display: inline-block;
+  margin: 0 1px;
+  padding: 0 4px;
+  border: 1px solid var(--border-md-table);
+  border-radius: 4px;
+  line-height: 1.45;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.markdown-content a.markdown-citation.verified {
+  color: var(--color-success, #237804);
+  border-color: var(--color-success, #237804);
+  background: var(--surface-hover);
+}
+
+.markdown-content a.markdown-citation.unverified {
+  color: var(--blue-link);
+  border-style: dashed;
+}
+
+.markdown-content a.markdown-citation.invalid {
+  color: var(--color-error, #b42318);
+  border-color: var(--color-error, #b42318);
+}
+
+.markdown-content a.markdown-citation:hover {
+  background: var(--surface-hover);
+  text-decoration: none;
+}

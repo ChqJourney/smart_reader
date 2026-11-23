@@ -17,13 +17,13 @@
 - 自定义标题栏（无边框窗口 `decorations: false`）：品牌区拖动 + 最近文件 / 打开 PDF（Ctrl/Cmd+O）/ 快捷键（「?」按钮）/ 设置 + 窗口控制按钮；中部为快捷状态区（TitleBarToggles）：悬停查词开关（仅词典已下载可用时可见）、智能文档查阅开关（仅当前平台已配置 API Key 时可见，开启前弹确认框提示 token 消耗大增，portal 到 body 避开标题栏 backdrop-filter 的 fixed 包含块）、当前平台/模型纯展示（仅已配置 Key 时可见），切换即时持久化到 settings。
 - 键盘快捷键速查浮层（ShortcutsModal）：`Ctrl/Cmd+/` 或标题栏「?」按钮开合，按页面导航 / 搜索 / 视图 / 面板分组以 kbd 样式列出全部快捷键；清单在 `ShortcutsModal.tsx` 的 `GROUPS` 常量中维护，新增快捷键需同步。
 - 首次启动配置向导（SetupWizard）：选平台 → 填 Key → 测试连接，全部平台未配置 Key 时才自动弹出，设置里可重跑。
-- 多 PDF Tab 同时打开（数量不设固定上限，由内存预算调度休眠，见下），单视图下存活 tab 的 PdfViewer **常驻挂载（keep-alive）**：切 tab 仅切换 `display:none`，canvas 位图 / 滚动位置 / 页码 / 工具栏状态全部保留，切换瞬时完成；隐藏 viewer 通过 `isActive` prop 冻结 IO 可见性上报与滚动页码同步，激活时带回的同页 `pendingGotoPage` 由 useTabRestore 直接清除不跳转。**Tab 休眠（hibernation）**：打开新 tab 时若预测超预算（字节预算 = Σ存活文件大小×2 + 存活 viewer 数×52MB（canvas 位图估算，`BITMAP_BYTES_PER_ALIVE_VIEWER`），macOS 400MB / Windows 800MB；或存活 viewer 数 > 15，`services/memoryBudget.ts`），自动休眠最久未激活的隐藏 tab——卸载其 viewer、释放 `pdfCacheRef` 字节缓存，tab 外壳与状态记录（pageNum / scale / scrollTop / fileSize / lastActivatedAt）保留；active / 分屏 secondary / 5 分钟内激活过 / 有流式会话 / 共享路径的 tab 受保护，候选耗尽仍超预算则放行。唤醒透明：激活休眠 tab 时同拍复位 `hibernated` + `pendingGotoPage`，viewer 重新挂载走现有冷启动恢复路径（useTabRestore），唤醒同样会按预算顶替休眠他人；另有纯防御性硬上限 100 个 tab。支持左右并排对照两份 PDF。进入并排的入口：鼠标拖拽非激活 tab 到阅读区（带 drop-zone 遮罩，释放在阅读区外等于取消）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter（目标 tab 休眠时先经 `wakeTab` 唤醒）。首次同时打开 ≥2 个 PDF 时显示一次性并排对照引导气泡（`.split-coachmark`，点「知道了」或 12 秒超时后写入 localStorage 不再复现；气泡本身 `pointer-events:none` 不遮挡操作）。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
+- 多 PDF Tab 同时打开（数量不设固定上限，由内存预算调度休眠，见下），单视图下存活 tab 的 PdfViewer **常驻挂载（keep-alive）**：切 tab 仅切换 `display:none`，canvas 位图 / 滚动位置 / 页码 / 工具栏状态全部保留，切换瞬时完成；隐藏 viewer 通过 `isActive` prop 冻结 IO 可见性上报与滚动页码同步，激活时带回的同页 `pendingGotoPage` 由 useTabRestore 直接清除不跳转（若同时携带 `pendingGotoPdfY`，属于引用精确跳转，同页也执行）。**Tab 休眠（hibernation）**：打开新 tab 时若预测超预算（字节预算 = Σ存活文件大小×2 + 存活 viewer 数×52MB（canvas 位图估算，`BITMAP_BYTES_PER_ALIVE_VIEWER`），macOS 400MB / Windows 800MB；或存活 viewer 数 > 15，`services/memoryBudget.ts`），自动休眠最久未激活的隐藏 tab——卸载其 viewer、释放 `pdfCacheRef` 字节缓存，tab 外壳与状态记录（pageNum / scale / scrollTop / fileSize / lastActivatedAt）保留；active / 分屏 secondary / 5 分钟内激活过 / 有流式会话 / 共享路径的 tab 受保护，候选耗尽仍超预算则放行。唤醒透明：激活休眠 tab 时同拍复位 `hibernated` + `pendingGotoPage`，viewer 重新挂载走现有冷启动恢复路径（useTabRestore），唤醒同样会按预算顶替休眠他人；另有纯防御性硬上限 100 个 tab。支持左右并排对照两份 PDF。进入并排的入口：鼠标拖拽非激活 tab 到阅读区（带 drop-zone 遮罩，释放在阅读区外等于取消）、tab 栏「并排对照」按钮、最近文件面板的并排按钮、面板内 Alt+Enter（目标 tab 休眠时先经 `wakeTab` 唤醒）。首次同时打开 ≥2 个 PDF 时显示一次性并排对照引导气泡（`.split-coachmark`，点「知道了」或 12 秒超时后写入 localStorage 不再复现；气泡本身 `pointer-events:none` 不遮挡操作）。进入并排时两个屏自动 fit-to-width 一次（`autoFitToWidth`，在挂载恢复完成后执行，页码不变）。并排时两个 PDF 的暂存片段与解读记录合并显示在右侧面板，双屏均可选中文本暂存 / 解读（选区消费跟随产生选区的屏），可跨 PDF 勾选片段一起自定义解读。
 - PDF 本地渲染、文本选区、缩放、页码跳转、连续滚动阅读模式。
 - 拖拽 PDF 文件到窗口内直接打开（Tauri 系统级文件拖放，`hooks/useFileDrop.ts` 监听 `onDragDropEvent`，全窗口遮罩提示，非 PDF 静默忽略；复用 `openPdfByPath` 打开链路）。遮罩带看门狗：`enter`/`over` 事件喂定时器，事件流停顿 1.5s 或窗口 blur 时强制隐藏（慢网盘下原生 leave/drop 可能延迟或丢失）。打开链路为单遍读取：`addTab` 先 `read_pdf_bytes`（后端同遍算 SHA-256 预热 hash 缓存），随后 `get_pdf_hash` 仅 metadata 校验即命中，字节直接写入 App 级 `pdfCacheRef` 供 viewer 渲染——局域网文件从两遍网络传输降为一遍；路径去重优先于一切 I/O（重复拖入已打开文件零读盘）；在飞期间 `tabs.openingPaths` 驱动底部「正在打开」toast，失败经 `showMessage` 弹窗提示不再静默。注意：开启系统拖放后 WebView2 会接管页面内全部 HTML5 拖放事件，tab→分屏的拖拽因此是鼠标拖拽实现（mousedown + 阈值 + 全局 mousemove/mouseup，App.tsx 内局部实现），不是 HTML5 DnD。
 - 右侧页码滑轨（PageRail）：替代原生垂直滚动条（CSS 隐藏，水平滚动条保留），拖动 / 悬停时显示页码 tooltip；拖动直接驱动连续滚动的 scrollTop。
 - Cmd/Ctrl+G 跳页面板（PageJumpPanel）：手动输入页码回车跳转，跳转时阅读区中央闪现大数字页码闪卡（600ms 定时清除）；工具栏页码显示为按钮，点击同样打开跳页面板。
 - 全文搜索（Ctrl / Cmd + F，支持跨 text item 短语匹配，结果逐页高亮、Enter / Shift+Enter 前后跳转，跳转精确滚动到匹配所在行——goToPage 携带匹配 pdfY，目标已在视口内则不滚动）。
-- 大纲 / 目录导航面板（PDF 自带 outline 时可用，点击跳转章节，复用 useLinkPreviews 的 resolveLinkDest 解析 dest：XYZ / FitH 取 Y 精确滚动到目标行，其余形态退化页首）。
+- 大纲 / 目录导航面板（PDF 自带 outline 时可用，点击跳转章节，复用 useLinkPreviews 的 resolveLinkDest 解析 dest：XYZ 取完整 X/Y、FitH 取 Y 精确滚动到目标行，其余形态退化页首）。
 - 选中文本后浮动工具条：加入暂存、解读、自定义解读（暂存所选并直达弹窗）、翻译、复制、批注（comment 浮层，可拖动编辑）。
 - 翻译生成可拖动 / 隐藏 / 删除的浮层批注。
 - 解读生成蓝色标记（生成中带呼吸态），点击标记打开 InterpretPopup 内联展示解读结果（流式/错误态、原文折叠、查看解读/重新解读/删除）；发起解读 / 自定义解读发送 / 重新解读后右侧面板直接进入新会话 chatbox 观看流式输出（`expandSessionRequest`，与自由提问一致）；右侧面板展示可点击跳转的解读记录（页码+类型徽章+LLM 一句话摘要，支持「当前文档/所有已打开 Tab/全部文档」范围下拉、排序下拉（最近活动/创建时间/按页码，按页码仅当前文档范围可选，选择持久化到 settings）与面板内删除会话），支持多轮追问。
@@ -33,9 +33,11 @@
 - 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
 - 打印（工具栏按钮 / Ctrl/Cmd+P）：弹窗可选页码范围（全部 / 当前页 / 自定义范围）与上纸内容（翻译批注、批注，均可独立勾选，默认都开）；生成带批注贴图的新 PDF（优先矢量直绘保留原页面，pdf-lib 解析失败、源文件加密（pdf-lib 无解密能力，重存会带出密文与 /Encrypt 尾条款）或内容对象丢失时自动降级为 pdfjs 整页栅格化，保证任何能打开的 PDF 都能正确打印；批注按屏幕浮层样式与位置 canvas 光栅化贴入，含用户拖动过的位置），用平台指定阅读器打开打印（macOS 预览 / Windows Edge，刻意不走系统默认 PDF 关联——若默认阅读器是本应用自身会回环成新 tab），也可导出带批注的 PDF 文件。
 - 解读 / 自定义解读会话可分享：会话头部「分享」下拉支持复制结构化 Markdown 到剪贴板或导出 .md 文件（原文片段以引用块 + 来源行展示，有来源时跳过模板 prompt、无来源的自由提问会话保留首条提问，tool 消息 / 思考内容一律跳过，见 `services/share.ts`）。
+- 回答引用可追溯：用户选区与 PDF 工具结果生成程序分配的 `SourceEvidence`（`services/citations.ts`），模型只能以 `[[cite:evidenceId]]` 引用；最终 assistant 消息持久化 `citations`，工具消息持久化 `evidence`。`MarkdownRenderer` 将有效证据显示为「已验证引用」并支持 fileHash + page + pdfY 精确跳转（含跨 Tab / 分屏 / 休眠唤醒）；普通页码、Clause/Section、Table/Figure（含中文表/图与 Annex 编号）显示为未验证导航，经 `services/pdfReferences.ts` 的按文件缓存标题索引定位——跨 text item 合并标题、过滤目录、重复编号弹候选、旋转页使用完整坐标转换；无文本层明确降级，不与无匹配混淆。页码默认按 PDF 物理页解析，`印刷页（PDF 页）`复合引用以 PDF 页为准，显式印刷页经 PageLabels 换算，重复标签提供候选。未知或伪造 ID 为无效引用，不算验证通过。分享导出保留已验证来源并剥离内部引用标记。
+- 完整持久化数据备份：设置「系统设置」页可导出 / 恢复 ZIP（`services/backup.ts` + 后端 `backup.rs`），包含 annotations、会话及图片、settings（强制清空 apiKey）、recent_files；不含 PDF 原件、API Key、日志、词典、打印临时文件与有意不落盘的暂存片段。导出前 flush 防抖写入，流式中禁用；manifest 记录格式版本 / 文件大小 / SHA-256，恢复经路径白名单、JSON / 校验和检查、staging + rollback 替换，先生成恢复前备份，成功后重启。ZIP 未加密，UI 明示妥善保管。
 - 最近文件下拉面板：置顶常用标准、按文件名/路径搜索、显示目录/相对时间/上次读到的页码、失效文件置灰、单条移除与两段式清空、从列表直接在分屏打开对照（快捷键 Ctrl/Cmd+Shift+O 开合面板）。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
-- 条款链接悬停预览（画中画）：默认关闭，设置「功能设置」页开启。悬停在 PDF 自带的文档内链接（条款号引用，带内部 dest）上 2 秒弹出小窗，复用 viewer 的 PDF 代理渲染目标页并自动滚动到 dest Y 位置（XYZ / FitH 取 Y，其余形态退化页首）；小窗 portal 到 body，可拖动（复用 useDrag）、右下角调大小（拖动中 canvas CSS 拉伸、松手按新宽度重渲）、内容区原生滚动、内容可缩放（头部 ± 按钮或 Ctrl/Cmd+滚轮，0.5x–3x 步进 1.2、接近 1 时吸附回 1，缩放按内容比例锚定滚动位置；zoom=1 时 canvas CSS width:100% 跟随窗口拉伸，放大后按视口像素定宽走内容区滚动）、左键拖拽平移内容（复用 usePanScroll 常开，仅溢出时启动，grab/grabbing 手型）；右上角图钉固化后不随鼠标移出关闭，可多个并存（上限 10 个），未固化预览同时只保留一个、鼠标离开 400ms 宽限后自动关闭；同目标（页码+destY）去重，外部 url 链接不参与；悬停链接时抑制悬停查词 tooltip。状态管理在 `hooks/useLinkPreviews.ts`，窗口组件 `components/LinkPreviewPopup.tsx`，PdfPage 仅上报悬停目标（`onLinkHover`），PdfViewer 按 `settings.linkPreviewEnabled` 门控上报并在开关关闭时清空已弹出窗口。
+- 条款链接悬停预览（画中画）：默认关闭，设置「功能设置」页开启。悬停在 PDF 自带的文档内链接（条款号引用，带内部 dest）上 2 秒弹出小窗，复用 viewer 的 PDF 代理渲染目标页并自动滚动到 dest 位置（XYZ 取完整 X/Y、FitH 取 Y，其余形态退化页首）；小窗 portal 到 body，可拖动（复用 useDrag）、右下角调大小（拖动中 canvas CSS 拉伸、松手按新宽度重渲）、内容区原生滚动、内容可缩放（头部 ± 按钮或 Ctrl/Cmd+滚轮，0.5x–3x 步进 1.2、接近 1 时吸附回 1，缩放按内容比例锚定滚动位置；zoom=1 时 canvas CSS width:100% 跟随窗口拉伸，放大后按视口像素定宽走内容区滚动）、左键拖拽平移内容（复用 usePanScroll 常开，仅溢出时启动，grab/grabbing 手型）；右上角图钉固化后不随鼠标移出关闭，可多个并存（上限 10 个），未固化预览同时只保留一个、鼠标离开 400ms 宽限后自动关闭；同目标（页码+destX/destY）去重，外部 url 链接不参与；悬停链接时抑制悬停查词 tooltip。状态管理在 `hooks/useLinkPreviews.ts`，窗口组件 `components/LinkPreviewPopup.tsx`，PdfPage 仅上报悬停目标（`onLinkHover`），PdfViewer 按 `settings.linkPreviewEnabled` 门控上报并在开关关闭时清空已弹出窗口。
 - 解读 / 自定义解读 / 追问时启用 **Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文（`list_open_pdfs`、`read_pdf_page`、`search_in_pdf`），辅助验证条款引用与跨页内容；视觉模型额外提供 `screenshot_pdf_page` 页面截图工具（整页或归一化区域，图像作为合成 user 消息发给模型，见 6.5）。另有独立开关的联网工具 `web_search` / `web_fetch`（DeepSeek Search/Fetch API，按次计费，复用 DeepSeek 平台钥匙串 Key，与当前聊天平台无关；设置「功能设置」页开关，默认关闭）。
 - LLM 配置（Base URL、Model、目标语言等）保存于后端 AppData；API Key 按平台分条目存放于系统钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不再落入 `settings.json`。
 - LLM 请求整体后端代理化（`llm_proxy.rs`）：前端不再直接发起 HTTP 请求，API Key 不进入 webview。
@@ -109,6 +111,7 @@ npm install
 │   │   ├── CommentPopup.tsx           # 批注浮层（拖动编辑、300ms 防抖保存、隐藏/删除）
 │   │   ├── AiChatPanel.tsx            # 右侧面板（暂存区、解读记录（页码/类型徽章/LLM 摘要/范围过滤/排序下拉/会话删除）、列表态底部自由提问输入框 AskInput、流式中止）
 │   │   ├── ContextWidget.tsx          # 会话上下文用量条（数据源 activeSession.lastPromptTokens，已接入 AiChatPanel）
+│   │   ├── ReferenceCandidatesModal.tsx # 重复条款/Table/Figure 编号的页码与标题候选选择
 │   │   ├── MarkdownRenderer.tsx       # react-markdown + gfm/math/katex，自定义 sanitize schema；表格横向滚动/展开，内联与 fenced SVG 预览/源码/复制/导出/放大；公式解析失败降级纯文本
 │   │   ├── ThinkingIndicator.tsx      # 思考中/已思考 tokens 指示（可展开 reasoningContent）
 │   │   ├── SettingsModal.tsx          # 全局设置 Modal（左侧分页：模型设置 / 功能设置 / 系统设置 / 关于）
@@ -165,6 +168,9 @@ npm install
 │   │   └── path.ts                    # 路径工具（basename/dirname/中间省略）
 │   ├── services/                      # 业务逻辑与 Tauri 命令封装
 │   │   ├── annotations.ts             # Annotation 类型（含 "comment"）+ CRUD + 持久化调用
+│   │   ├── backup.ts                  # 完整持久化数据 ZIP 备份 / 恢复的对话框与命令封装
+│   │   ├── citations.ts               # SourceEvidence / CitationRef、引用校验与导航类型
+│   │   ├── pdfReferences.ts           # 条款/Table/Figure 标题索引（跨 item 合并、缓存、候选与无文本层降级）
 │   │   ├── settings.ts                # 应用设置 CRUD、PlatformId 联合类型、checkApiKey/deleteApiKey
 │   │   ├── memoryBudget.ts            # Tab 休眠内存预算：字节/存活数双预算线、按 filePath 去重记账、LRU 候选选择（纯函数）
 │   │   ├── dictionary.ts              # ECDICT 本地词典查询与下载进度监听
@@ -192,6 +198,7 @@ npm install
 ├── src-tauri/                         # Tauri Rust 后端
 │   ├── src/
 │   │   ├── lib.rs                     # Tauri 命令注册与数据持久化（见 6.1）
+│   │   ├── backup.rs                  # ZIP 备份 manifest / SHA-256 校验、staging 恢复与 rollback
 │   │   ├── llm_proxy.rs               # LLM 请求后端代理（chat_completions_stream 等）+ 工具 schema
 │   │   ├── web_tools.rs               # DeepSeek Search/Fetch API 代理（web_tools_search / web_tools_fetch）
 │   │   ├── dictionary.rs              # ECDICT 本地词典下载（断点续传）、解压、查询
@@ -220,6 +227,7 @@ npm install
 │   ├── gen-sample-long-pdf.mjs        # 生成 60 页大文档测试 PDF
 │   ├── gen-sample-link-pdf.mjs        # 生成带内部交叉引用链接的演示 PDF（画中画录制素材）
 │   ├── gen-sample-outline-pdf.mjs     # 生成带大纲（XYZ dest 指向已知行）的测试 PDF
+│   ├── gen-sample-references-pdf.mjs  # 生成条款 / Table / Figure 标题、重复编号与旋转页测试 PDF
 │   ├── bump-version.mjs               # 同步 package.json / Cargo.toml / Cargo.lock / tauri.conf.json 版本号
 │   └── prepare-release.mjs            # 发布前固化 CHANGELOG 版本段落并提取 Release notes
 ├── CHANGELOG.md                       # 版本变更记录（GitHub Release notes 来源）
@@ -335,6 +343,7 @@ cd src-tauri && cargo test
 - `check_files_exist(paths: string[])`：批量检查文件是否仍存在于磁盘，最近文件面板用它置灰已移动/删除的条目。
 - `export_text_file(file_path: string, content: string)`：把用户经系统保存对话框选定的路径写入文本文件（解读分享导出 .md、AI 回答 SVG 图导出 .svg 使用，原子写入，不走 PDF 授权白名单）；扩展名白名单 .md/.txt/.svg，拒绝写入 AppData 内部路径。
 - `export_binary_file(file_path: string, data: Vec<u8>)`：同上但写二进制（带批注打印 PDF 导出，扩展名白名单 .pdf）；data 经 serde_json 数组传输（前端 `Array.from(bytes)`，嵌套 Uint8Array 会被序列化成对象不能用）。
+- `export_data_backup(file_path)` / `restore_data_backup(file_path)`：导出 / 恢复完整持久化用户数据 ZIP。导出目标限 .zip 且拒绝 AppData 内部路径；备份含 annotations / sessions / 图片 / settings / recent_files，settings 的 apiKey 强制清空。恢复校验 manifest 格式版本、路径白名单、文件清单、JSON 和 SHA-256，先生成恢复前 ZIP，再经 staging + rollback 替换；不触碰 logs / dict / print。
 - `open_print_file(request: ipc::Request)`：接收 IPC 原始字节（前端 `invoke(cmd, bytes)`），落盘 `<AppData>/SpecReader/print/`（文件名带纳秒+序号唯一后缀，先写新文件再清理 mtime 早于 10 分钟宽限期的旧 pdf，保护刚 spawn 给阅读器的文件）后用平台指定阅读器打开（macOS `open -a Preview` / Windows 经 `rundll32 url.dll,FileProtocolHandler` 调起 `microsoft-edge:` 协议打开 Edge——刻意不走 `cmd /c start`，cmd 的 %var% 变量扩展会吃掉 URL 中非 ASCII 用户名的百分号编码），不走系统默认 PDF 关联防止回环到本应用。
 - `open_path(path: string)`：仅允许打开 `http://` / `https://` URL，禁止本地文件路径与目录。
 - `open_logs_dir()`：打开应用日志目录，供用户导出排查。
@@ -384,7 +393,7 @@ LLM 流量已整体改为 **Rust 后端代理**（`src-tauri/src/llm_proxy.rs`�
 - 前端 `services/llm.ts` 的 `streamChatCompletion` 通过 `invoke("chat_completions_stream", { params, onEvent: Channel })` 建立流，AsyncGenerator 桥接 Channel 事件；abort 走 `cancel_chat_completions`。
 - 后端从磁盘 settings 读 baseUrl / model、按 `platformId` 从钥匙串读 API Key，reqwest 流式 POST 后经 `tauri::ipc::Channel<StreamEvent>` 逐事件推给前端；SSE tool_call 片段按 `index` 累积，`finish_reason` 时一次性下发完整 toolCall。
 - **API Key 不暴露给 webview**：`load_settings` 返回前强制 `apiKey=""`，旧版明文 key 自动迁移进钥匙串后从磁盘清除；`save_settings` 收到非空 key 只写钥匙串，钥匙串不可用则拒绝保存。
-- Prompt 模板（`buildSelectionPrompt` 翻译/解读、`buildCustomInterpretPrompt` 自定义解读、`buildSystemPrompt`）仍在 `services/llm.ts`，已 i18n 化（走 `i18n.t`，模板文案在 locales JSON）；均接收 `targetLanguage` 参数。启用 Agent Tools 时 system prompt 追加 `llm.toolsSystemAddendum` 工具使用引导段（与用户可编辑 system prompt 解耦）。
+- Prompt 模板（`buildSelectionPrompt` 翻译/解读、`buildCustomInterpretPrompt` 自定义解读、`buildSystemPrompt`）仍在 `services/llm.ts`，已 i18n 化（走 `i18n.t`，模板文案在 locales JSON）；均接收 `targetLanguage` 参数。所有会话统一追加 `llm.pageNumberingAddendum`，规定页码默认为 PDF 从 1 开始的物理页序号、禁止自行推测印刷页换算。启用 Agent Tools 时 system prompt 追加 `llm.toolsSystemAddendum` 工具使用引导段（与用户可编辑 system prompt 解耦）；有选区证据或工具可用时另追加 `llm.citationSystemAddendum`，要求只用程序分配的来源 ID 输出 `[[cite:...]]`。
 - 用户可见的 LLM 错误文案统一由 `services/llmError.ts` 的 `llmErrorToMessage()` 产出（配置向导 / 设置页 / 解读 / 翻译共用同一份友好中文，文案在 locales 的 `llm.error.*` 段）；后端原始报错（常为英文）只经 `services/logs.ts` 写日志，不进 UI。新增 LlmError kind 时需同步 `llmError.ts` 与两边 locales。
 - LLM 配置与目标语言通过 `services/settings.ts` 持久化到后端 AppData；首次启动时会从旧的 `localStorage` 键 `standardread-llm-config` 迁移一次。
 - 平台预设集中在 `src/data/platformPresets.ts`（9 个：`deepseek` / `kimi` / `xiaomimimo` / `bailian` / `glm` / `volcengine` / `openrouter` / `openai` / `custom`，含 `supportsTools` / `supportsThinking` / `supportsVision` / `contextWindow` / `apiKeyHelpUrl` 等字段）；`PlatformId` 联合类型就在本文件定义，`services/settings.ts` re-export。`supportsVision` 为模型级标记（视觉能力），按各平台官方文档逐型号标记（2026-10 核对：deepseek-flash、kimi-k3/k2.6、mimo-v2.6 全系、qwen3.7-plus/qwen3.8-max、glm-5.3-flash/glm-4.6v、doubao-seed-2.1 全系、gpt-5.6 全系及 openrouter 收录型号均为视觉模型），决定 agent loop 是否注入页面截图工具；判定走 `modelSupportsVision()`。默认平台 `deepseek`、默认模型 `deepseek-flash`，默认目标语言为 `中文`。
@@ -433,7 +442,7 @@ AiChatPanel.tsx
 ├── expandedId / expandedStashIds / sessionScope（「当前文档/所有已打开 Tab/全部文档」过滤）/ sortMode（排序方式，受控于 App 的 settings.sessionSortMode）
 ├── tabRequest（App 传入的 tab 激活请求：PDF 侧加入暂存 → 暂存 tab，按 nonce 变化生效）
 ├── expandSessionRequest（App 传入的 chatbox 进入请求：发起解读 / 自定义解读发送 / 重新解读后直接进入新会话 chatbox 观看流式输出，含切到解读 tab；按 nonce 变化生效，与自由提问行为一致）
-└── 检测到 isStreaming 会话时启动流；一轮对话（含多个工具轮次）的 reasoningContent 与全部 `toolEvents` 由 `sessions.ts` 的 `collectTurnProcess` 归组到该轮最终 assistant 消息上——AI 侧一轮最多两个框：过程气泡（思考 + 工具调用，`.ai-chat-process`）与正文气泡；长 user 消息折叠 + 来源片段卡片（可跳原文）；assistant 气泡 hover 复制 / 头部复制全部 / 删除会话
+└── 检测到 isStreaming 会话时启动流；一轮对话（含多个工具轮次）的 reasoningContent 与全部 `toolEvents` 由 `sessions.ts` 的 `collectTurnProcess` 归组到该轮最终 assistant 消息上——AI 侧一轮最多两个框：过程气泡（思考 + 工具调用，`.ai-chat-process`）与正文气泡；长 user 消息折叠 + 来源片段卡片（可跳原文）；assistant 气泡 hover 复制 / 头部复制全部 / 删除会话；MarkdownRenderer 处理已验证 / 无效 / 普通未验证引用并回调 App 精确跳转，重复标题经 ReferenceCandidatesModal 选择
 
 ToolCallsIndicator.tsx
 └── 工具调用气泡：工具阶段（流式且最终正文未输出）自动展开全部调用明细，正文开始输出或流结束后自动收拢为一行摘要（可点击展开回看）
@@ -455,15 +464,15 @@ runSessionStream（usePersistence.ts）
 │   └── onToolCall 更新最终 assistant 消息的 toolEvents（running）
 ├── 轮次结束有 toolCalls 且未达 maxToolRounds：
 │   ├── 插入 assistant(toolCalls + reasoningContent) 消息并落盘
-│   ├── 执行 toolSession.executeToolCall（web_search / web_fetch 路由到 webTools.ts，其余走 PDF 工具；同参去重，错误转文本）
+│   ├── 执行 toolSession.executeToolCall（web_search / web_fetch 路由到 webTools.ts，其余走 PDF 工具；同参去重，错误转文本；PDF 工具返回程序分配的 SourceEvidence）
 │   ├── 更新 toolEvents 为 done
-│   └── 插入 tool(toolCallId, content) 消息并落盘 → 进入下一轮
-└── 无 toolCalls 或达轮次上限：收尾，写入累计 usage，finishStreaming
+│   └── 插入 tool(toolCallId, content, evidence) 消息并落盘 → 进入下一轮
+└── 无 toolCalls 或达轮次上限：提取最终回答的 [[cite:...]] 为 citations，收尾写入累计 usage，finishStreaming
 ```
 
 - PDF 文档实例为**瞬态**：每个 agent loop 内按需懒建 `PDFDocumentProxy`，loop 结束 `dispose` 销毁；不与 viewer 共享，避免切 tab 时生命周期耦合。
 - 授权边界：白名单由前端 `pdfToolsRegistry.ts` 执行，只保留当前打开 tab 的轻量元数据（`fileHash` / `fileName` / `filePath` / `numPages`），工具只服务登记在册的 hash；`getPdfBytes` 优先复用 App 级 bytes 缓存，未命中时回退 `read_pdf_bytes`。（后端 `StreamParams.authorized_file_hashes` 为保留字段，未启用。）
-- 工具消息（assistant-tool + tool result）会持久化到会话，追问时原样回放，并携带 `toolCalls` / `toolCallId` / `reasoningContent`。
+- 工具消息（assistant-tool + tool result）会持久化到会话，追问时原样回放，并携带 `toolCalls` / `toolCallId` / `reasoningContent`；PDF 工具消息另携带 `evidence`，最终回答的 `citations` 只引用这些程序生成的证据或 session.sources，前端校验失败即无效，不能人工确认。
 - 页面截图工具 `screenshot_pdf_page`（仅视觉模型，`modelSupportsVision` 门控，经 `StreamParams.enableVision` 让后端注入 schema）：前端把页面渲染成 JPEG（≤144 DPI、最长边 2048px、铺白底、quality 0.85，支持 0-1 归一化区域裁剪、原点左上），先 `save_session_image` 落盘，tool 消息只持久化 `images` 文件名引用；图片以合成 user 消息（content parts：`llm.toolImageContext` 文本 + base64 data URL）发给模型——各平台视觉 API 都只允许 user 消息带图，且同一批 toolCalls 的全部 tool 响应必须紧跟 assistant 消息（DeepSeek 会校验 adjacency），因此合成图片消息一律插在该批 tool 响应的末尾。合成消息不落盘，追问/重载时由 `buildApiMessages` + `read_session_image` 从引用重建（文件缺失则跳过图片）；同参去重命中只复用文本、不重复注入图片；落盘失败降级为纯文本结果。后端 `ChatMessage.content` 为 untagged enum（string 或 parts 数组），图片 parts 原样透传。
 - 轮次上限：`settings.maxToolRounds`（默认 **20**，见 `settings.ts` 的 `DEFAULT_SETTINGS`；UI 输入最小值 1）。
 - 联网工具 `web_search` / `web_fetch`：独立于「智能文档查阅」的开关 `settings.webSearchEnabled`（默认关闭），schema 由后端 `web_tools()` 在 `enable_web_search` 时注入（即使 `enable_tools=false`）；前端执行层 `services/webTools.ts` 经 `web_tools_search` / `web_tools_fetch` 命令走 DeepSeek Search/Fetch API（Key 固定取 deepseek 平台钥匙串条目，与当前聊天平台无关），结果截断（单条 content 4000 / 搜索整体 16000 / fetch 正文 12000 字符）后作为 tool 消息回喂；未配置 Key 或计费/限流等错误都转为引导性 result 文本，不中断会话。system prompt 按开关分别追加 `llm.toolsSystemAddendum`（PDF 工具）与 `llm.webSearchSystemAddendum`（联网工具）。
@@ -529,7 +538,7 @@ runSessionStream（usePersistence.ts）
 
 ### 8.2 E2E 测试
 
-- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 14 个 spec：
+- Playwright 启动 `npm run dev` 作为 webServer，访问 `http://localhost:1420`，共 15 个 spec：
   - `app.spec.ts`：主布局、顶部最近文件入口、设置 Modal、面板显隐。
   - `pdf-page-jump.spec.ts`：连续滚动模式下页码跳转正确性、Cmd/Ctrl+G 跳页面板（输入回车跳转 + 闪卡）、右侧滑轨拖动跳页，使用 mock 的 Tauri `invoke` 返回 PDF 字节。
   - `pdf-outline-jump.spec.ts`：大纲点击精确跳转到 dest 所在行（fixtures `sample-outline.pdf` 由 `gen-sample-outline-pdf.mjs` 生成，XYZ dest 指向已知行位置，断言 scrollTop = 页首 + pdfY×scale − 留白）。
@@ -538,6 +547,7 @@ runSessionStream（usePersistence.ts）
   - `pdf-rapid-zoom.spec.ts`：快速缩放回归。
   - `pdf-selection-translate.spec.ts`：选区翻译流程。
   - `pdf-interpret-stream.spec.ts`：发起解读后自动进入会话 chatbox 并流式输出回答。
+  - `pdf-reference-navigation.spec.ts`：AI 回复中的条款 / Table / Figure 标题精确跳转、重复编号候选与旋转页定位；复合页码以 PDF 物理页为准，印刷页经 PageLabels 跳转（fixtures `sample-references.pdf` 由 `gen-sample-references-pdf.mjs` 生成）。
   - `pdf-search.spec.ts`：全文搜索命中高亮并滚动到所在页、Enter / Shift+Enter 匹配间跳转、无匹配空态。
   - `pdf-link-preview.spec.ts`：条款链接悬停预览（悬停弹窗渲染目标页、移开自动关闭）。
   - `pdf-split-view.spec.ts`：并排对照（tab 栏按钮进入/退出分屏、拖拽 tab 到阅读区进入分屏、释放在阅读区外取消）。
@@ -603,11 +613,11 @@ runSessionStream（usePersistence.ts）
 ### 10.6 修改 Agent Tools
 
 - 工具 schema 与累积逻辑在后端 `src-tauri/src/llm_proxy.rs`；工具名固定 snake_case（`list_open_pdfs` / `read_pdf_page` / `search_in_pdf` / `screenshot_pdf_page` / `web_search` / `web_fetch`，前三个定义在 `builtin_tools()`，截图工具在 `vision_tools()` 且仅 `enable_vision` 时注入，联网工具在 `web_tools()` 且仅 `enable_web_search` 时注入），新增/修改工具需同步前端 `pdfTools.ts`（web 工具进一步路由到 `webTools.ts`）。
-- 前端工具实现在 `src/services/pdfTools.ts`（PDF 工具）与 `src/services/webTools.ts`（联网工具，后端命令在 `src-tauri/src/web_tools.rs`）；任何错误都应捕获并转为 result 文本，不得向 loop 抛异常。
+- 前端工具实现在 `src/services/pdfTools.ts`（PDF 工具）与 `src/services/webTools.ts`（联网工具，后端命令在 `src-tauri/src/web_tools.rs`）；任何错误都应捕获并转为 result 文本，不得向 loop 抛异常。`read_pdf_page` / `search_in_pdf` 对无文本层返回 `TEXT_LAYER_UNAVAILABLE`，引导视觉截图或 OCR，不得误报为空页或无匹配。
 - 授权与元数据在 `src/services/pdfToolsRegistry.ts`；`App.tsx` 通过 `syncOpenPdfs(tabs, getCachedBytes)` 同步当前打开 tab。修改注册表接口时需同步 `App.tsx` 调用点与 `pdfToolsRegistry.test.ts`。
 - Agent loop 在 `hooks/usePersistence.ts` 的 `runSessionStream`；修改轮次、去重、收尾逻辑时需同步 `usePersistence.test.tsx`。
 - UI 状态组件为 `components/ToolCallsIndicator.tsx`。
-- 相关 i18n key 在 `locales/zh-CN.json` / `en.json` 的 `tools.*`、`settings.webSearch*` 与 `llm.toolsSystemAddendum` / `llm.webSearchSystemAddendum` 段，修改后需两边同步。
+- 相关 i18n key 在 `locales/zh-CN.json` / `en.json` 的 `tools.*`、`settings.webSearch*` 与 `llm.toolsSystemAddendum` / `llm.webSearchSystemAddendum` / `llm.citationSystemAddendum` 段，修改后需两边同步。
 
 ## 11. 持续集成
 

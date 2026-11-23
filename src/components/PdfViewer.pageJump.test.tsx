@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createRef } from "react";
 import {
   render,
   screen,
@@ -10,6 +11,7 @@ import PdfViewer, {
   computeContinuousScrollTop,
   JUMP_TARGET_TOP_MARGIN,
   PageViewportInfo,
+  type PdfViewerHandle,
 } from "./PdfViewer";
 import { invoke } from "@tauri-apps/api/core";
 import { DEFAULT_SETTINGS } from "../services/settings";
@@ -306,6 +308,7 @@ describe("PdfViewer continuous mode page jump", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
     if (originalScrollToRef !== undefined) {
       (Element.prototype as any).scrollTo = originalScrollToRef;
@@ -617,6 +620,82 @@ describe("PdfViewer continuous mode page jump", () => {
     vi.useRealTimers();
   });
 
+  it("在已可见目标处连续精确跳转后仍释放滚动页码同步锁", async () => {
+    const ref = createRef<PdfViewerHandle>();
+    const { container } = render(
+      <PdfViewer
+        ref={ref}
+        filePath="/fake/test.pdf"
+        settings={DEFAULT_SETTINGS}
+      />
+    );
+
+    const pageInput = await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
+      if (!input || input.disabled) throw new Error("page input not ready yet");
+      return input;
+    });
+    await waitForViewportsReady(container);
+
+    const canvasContainer = container.querySelector(
+      ".pdf-canvas-container.continuous"
+    ) as HTMLDivElement;
+    Object.defineProperty(canvasContainer, "clientHeight", {
+      value: 800,
+      configurable: true,
+    });
+    vi.spyOn(canvasContainer, "getBoundingClientRect").mockReturnValue({
+      top: 0,
+      bottom: 800,
+      left: 0,
+      right: 400,
+      width: 400,
+      height: 800,
+      x: 0,
+      y: 0,
+      toJSON: () => "",
+    } as DOMRect);
+
+    vi.useFakeTimers();
+    const expectedTargetTop =
+      expectedScrollTopForPage(5) + 200 * SCALE - JUMP_TARGET_TOP_MARGIN;
+    act(() => ref.current!.goToPage(5, 200));
+    expect(canvasContainer.scrollTop).toBe(expectedTargetTop);
+    // 第二次目标恰好位于视口舒适区上沿，会走「不滚动」提前返回分支；
+    // 它不能取消第一次跳转的解锁定时器后把锁留在 true。
+    act(() => ref.current!.goToPage(5, 200));
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+
+    canvasContainer.scrollTop = 0;
+    const wrappers = Array.from(
+      container.querySelectorAll<HTMLDivElement>(".pdf-page-wrapper")
+    );
+    wrappers.forEach((wrapper, index) => {
+      const page = index + 1;
+      const top = 24 + expectedScrollTopForPage(page);
+      const height = PAGE_HEIGHTS[index] * SCALE;
+      vi.spyOn(wrapper, "getBoundingClientRect").mockReturnValue({
+        top,
+        bottom: top + height,
+        left: 0,
+        right: 300,
+        width: 300,
+        height,
+        x: 0,
+        y: top,
+        toJSON: () => "",
+      } as DOMRect);
+    });
+    fireEvent.scroll(canvasContainer);
+    await act(async () => {
+      vi.advanceTimersByTime(500);
+    });
+
+    expect(pageInput.textContent).toBe("1");
+  });
+
   it("opens the search bar with Ctrl+F and starts from the current page", async () => {
     const mockPdfWithText = {
       numPages: NUM_PAGES,
@@ -792,6 +871,66 @@ describe("PdfViewer continuous mode page jump", () => {
         expectedScrollTopForPage(5) +
           DEST_USER_Y * SCALE -
           JUMP_TARGET_TOP_MARGIN
+      );
+    });
+    expect(pageInput.textContent).toBe("5");
+  });
+
+  it("uses both XYZ coordinates when jumping to a rotated outline destination", async () => {
+    const DEST_LEFT = 120;
+    const DEST_USER_Y = 400;
+    const outlineItems = [
+      {
+        title: "Rotated Section",
+        dest: [{ num: 5, gen: 0 }, { name: "XYZ" }, DEST_LEFT, DEST_USER_Y, 0],
+        url: null,
+        items: [],
+      },
+    ];
+    const basePdf = createMockPdf();
+    const getPage = basePdf.getPage;
+    const mockPdfWithOutline = {
+      ...basePdf,
+      getOutline: vi.fn(() => Promise.resolve(outlineItems)),
+      getPageIndex: vi.fn(() => Promise.resolve(4)),
+      getPage: vi.fn(async (pageNum: number) => {
+        const page = await getPage(pageNum);
+        return {
+          ...page,
+          getViewport: ({ scale = 1 }: { scale?: number } = {}) => ({
+            ...page.getViewport({ scale }),
+            // 90° 旋转：viewport X 来自 user-space Y，viewport Y 来自 X。
+            convertToViewportPoint: (x: number, y: number) => [
+              y * scale,
+              x * scale,
+            ],
+          }),
+        };
+      }),
+    };
+    mockGetDocument.mockReturnValue({
+      promise: Promise.resolve(mockPdfWithOutline),
+    });
+
+    const { container } = render(
+      <PdfViewer filePath="/fake/test.pdf" settings={DEFAULT_SETTINGS} />
+    );
+    const pageInput = await waitFor<HTMLButtonElement>(() => {
+      const input = screen.getByLabelText("页码") as HTMLButtonElement;
+      if (!input || input.disabled) throw new Error("page input not ready yet");
+      return input;
+    });
+    await waitForViewportsReady(container);
+
+    fireEvent.click(screen.getByLabelText("目录"));
+    fireEvent.click(await screen.findByText("Rotated Section"));
+
+    const canvasContainer = container.querySelector(
+      ".pdf-canvas-container.continuous"
+    ) as HTMLDivElement;
+    await waitFor(() => {
+      expect(canvasContainer.scrollTop).toBe(
+        expectedScrollTopForPage(5) + DEST_LEFT * SCALE - JUMP_TARGET_TOP_MARGIN
       );
     });
     expect(pageInput.textContent).toBe("5");

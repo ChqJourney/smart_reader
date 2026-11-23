@@ -25,9 +25,29 @@ const mockCheckUpdate = vi.hoisted(() => vi.fn());
 const mockDownloadAndInstall = vi.hoisted(() => vi.fn());
 const mockRelaunch = vi.hoisted(() => vi.fn());
 const mockCopyToClipboard = vi.hoisted(() => vi.fn());
+const mockBackup = vi.hoisted(() => ({
+  chooseExport: vi.fn(),
+  chooseRestore: vi.fn(),
+  exportBackup: vi.fn(),
+  restoreBackup: vi.fn(),
+  confirm: vi.fn(),
+  message: vi.fn(),
+}));
 
 vi.mock("../utils/clipboard", () => ({
   copyToClipboard: mockCopyToClipboard,
+}));
+
+vi.mock("../services/backup", () => ({
+  chooseBackupExportPath: mockBackup.chooseExport,
+  chooseBackupRestorePath: mockBackup.chooseRestore,
+  exportDataBackup: mockBackup.exportBackup,
+  restoreDataBackup: mockBackup.restoreBackup,
+}));
+
+vi.mock("../services/dialog", () => ({
+  showConfirm: mockBackup.confirm,
+  showMessage: mockBackup.message,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -80,6 +100,10 @@ function switchToFeaturePage() {
   fireEvent.click(screen.getByRole("button", { name: /功能设置/i }));
 }
 
+function switchToSystemPage() {
+  fireEvent.click(screen.getByRole("button", { name: /系统设置/i }));
+}
+
 function switchToAboutPage() {
   fireEvent.click(screen.getByRole("button", { name: /关于/i }));
 }
@@ -94,6 +118,18 @@ describe("SettingsModal", () => {
     mockDownloadAndInstall.mockReset();
     mockRelaunch.mockReset();
     mockCopyToClipboard.mockReset();
+    Object.values(mockBackup).forEach((mock) => mock.mockReset());
+    mockBackup.chooseExport.mockResolvedValue("/tmp/backup.zip");
+    mockBackup.chooseRestore.mockResolvedValue("/tmp/backup.zip");
+    mockBackup.exportBackup.mockResolvedValue({ files: 5, bytes: 100 });
+    mockBackup.restoreBackup.mockResolvedValue({
+      files: 5,
+      bytes: 100,
+      safetyBackupPath: "/tmp/safety.zip",
+    });
+    mockBackup.confirm.mockResolvedValue(true);
+    mockBackup.message.mockResolvedValue(undefined);
+    mockRelaunch.mockResolvedValue(undefined);
     mockCopyToClipboard.mockResolvedValue(undefined);
     mockListen.mockResolvedValue(() => {});
     mockGetVersion.mockResolvedValue("0.1.0");
@@ -746,6 +782,58 @@ describe("SettingsModal", () => {
 
     await screen.findByText(/当前暂无适用于本系统的更新包/i);
     expect(screen.queryByText(/检查更新失败/i)).not.toBeInTheDocument();
+  });
+
+  it("flushes pending data before exporting a backup", async () => {
+    const onBeforeBackup = vi.fn().mockResolvedValue(undefined);
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+      onBeforeBackup,
+    });
+    switchToSystemPage();
+    fireEvent.click(screen.getByRole("button", { name: "导出备份" }));
+
+    await waitFor(() => {
+      expect(onBeforeBackup).toHaveBeenCalledTimes(1);
+      expect(mockBackup.exportBackup).toHaveBeenCalledWith("/tmp/backup.zip");
+    });
+    expect(onBeforeBackup.mock.invocationCallOrder[0]).toBeLessThan(
+      mockBackup.exportBackup.mock.invocationCallOrder[0]
+    );
+    await screen.findByText("备份完成，共 5 个文件。");
+  });
+
+  it("disables backup actions while responses are streaming", () => {
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+      backupDisabled: true,
+    });
+    switchToSystemPage();
+    expect(screen.getByRole("button", { name: "导出备份" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "从备份恢复" })).toBeDisabled();
+  });
+
+  it("confirms restore and relaunches after a successful import", async () => {
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave: vi.fn(),
+    });
+    switchToSystemPage();
+    fireEvent.click(screen.getByRole("button", { name: "从备份恢复" }));
+
+    await waitFor(() => {
+      expect(mockBackup.confirm).toHaveBeenCalled();
+      expect(mockBackup.restoreBackup).toHaveBeenCalledWith("/tmp/backup.zip");
+      expect(mockRelaunch).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("shows error message when update check fails", async () => {

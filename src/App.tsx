@@ -54,8 +54,16 @@ import {
 import { getVersion } from "@tauri-apps/api/app";
 import { error } from "./services/logs";
 import { syncOpenPdfs } from "./services/pdfToolsRegistry";
+import type { CitationNavigation } from "./services/citations";
+import {
+  prunePdfReferenceIndexes,
+  resolvePdfReference,
+  resolvePdfPageLabel,
+  type PdfReferenceTarget,
+} from "./services/pdfReferences";
 import { extractVersionSection } from "./utils/changelog";
 import WhatsNewModal from "./components/WhatsNewModal";
+import ReferenceCandidatesModal from "./components/ReferenceCandidatesModal";
 import changelogRaw from "../CHANGELOG.md?raw";
 import "./App.css";
 
@@ -134,6 +142,10 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [referenceChoices, setReferenceChoices] = useState<{
+    fileHash: string;
+    candidates: PdfReferenceTarget[];
+  } | null>(null);
   // 启动检查发现新版本时弹出带更新内容的确认弹窗。
   const [startupUpdate, setStartupUpdate] = useState<{
     update: UpdateInfo;
@@ -168,6 +180,7 @@ function App() {
       })),
       (filePath) => pdfCacheRef.current.get(filePath)
     );
+    prunePdfReferenceIndexes();
   }, [tabs.tabs]);
 
   // 休眠释放字节缓存：某 filePath 没有任何存活（非休眠）tab 引用时，
@@ -1223,6 +1236,96 @@ function App() {
     [tabs, splitView.isSplitView, splitView.secondaryTabId]
   );
 
+  const navigateToPdfTarget = useCallback(
+    async (fileHash: string, page: number, pdfY?: number) => {
+      const targetTab = tabs.tabs.find((tab) => tab.fileHash === fileHash);
+      if (!targetTab) {
+        await showMessage(t("common.notice"), t("citations.fileNotOpen"));
+        return;
+      }
+      const activate = !(
+        splitView.isSplitView && targetTab.id === splitView.secondaryTabId
+      );
+      tabs.gotoTabPage(targetTab.id, page, { activate, pdfY });
+      if (splitView.isSplitView) {
+        if (targetTab.id === splitView.secondaryTabId) {
+          setFocusedViewer("secondary");
+        } else if (targetTab.id === tabs.activeTabId) {
+          setFocusedViewer("primary");
+        }
+      }
+    },
+    [tabs, splitView.isSplitView, splitView.secondaryTabId, t]
+  );
+
+  const handleCitationClick = useCallback(
+    async (session: InterpretationSession, navigation: CitationNavigation) => {
+      if (navigation.citationId && !navigation.verified) {
+        await showMessage(t("common.notice"), t("citations.invalid"));
+        return;
+      }
+      const sourceHashes = new Set(
+        session.sources.map((source) => source.source.fileHash).filter(Boolean)
+      );
+      const fileHash =
+        navigation.fileHash ??
+        (sourceHashes.size === 1
+          ? Array.from(sourceHashes)[0]
+          : session.anchorFileHash);
+      if (!fileHash) {
+        await showMessage(t("common.notice"), t("citations.ambiguousFile"));
+        return;
+      }
+      let page = navigation.page;
+      let pdfY = navigation.pdfY;
+      if (!page && (navigation.printedPage || navigation.reference)) {
+        try {
+          const resolution = navigation.printedPage
+            ? await resolvePdfPageLabel(fileHash, navigation.printedPage)
+            : await resolvePdfReference(fileHash, navigation.reference!);
+          if (resolution.status === "found") {
+            page = resolution.target.page;
+            pdfY = resolution.target.pdfY;
+          } else if (resolution.status === "ambiguous") {
+            setReferenceChoices({
+              fileHash,
+              candidates: resolution.candidates,
+            });
+            return;
+          } else {
+            await showMessage(
+              t("common.notice"),
+              t(
+                resolution.status === "textUnavailable"
+                  ? "citations.textUnavailable"
+                  : navigation.printedPage
+                    ? "citations.pageLabelNotFound"
+                    : "citations.referenceNotFound"
+              )
+            );
+            return;
+          }
+        } catch (err) {
+          error(`Failed to resolve PDF reference: ${err}`);
+        }
+        if (!page) {
+          await showMessage(
+            t("common.notice"),
+            t(
+              navigation.printedPage
+                ? "citations.pageLabelNotFound"
+                : "citations.referenceNotFound"
+            )
+          );
+          return;
+        }
+      }
+      if (!page) return;
+      await navigateToPdfTarget(fileHash, page, pdfY);
+    },
+    [navigateToPdfTarget, t]
+  );
+
   const handleExplainClick = useCallback(
     (tabId: string, id: string) => {
       layout.openRightPanel();
@@ -1264,6 +1367,7 @@ function App() {
       scale: tabs.activeTab.scale,
       scrollTop: tabs.activeTab.scrollTop,
       pendingGotoPage: tabs.activeTab.pendingGotoPage,
+      pendingGotoPdfY: tabs.activeTab.pendingGotoPdfY,
     };
   }, [tabs.activeTab]);
 
@@ -1274,6 +1378,7 @@ function App() {
       scale: secondaryTab.scale,
       scrollTop: secondaryTab.scrollTop,
       pendingGotoPage: secondaryTab.pendingGotoPage,
+      pendingGotoPdfY: secondaryTab.pendingGotoPdfY,
     };
   }, [secondaryTab]);
 
@@ -1519,6 +1624,7 @@ function App() {
                     visionCapable={visionCapable}
                     onGotoStash={handleGotoStash}
                     onGotoSession={handleGotoSession}
+                    onCitationClick={handleCitationClick}
                     onFollowUp={persistence.handleFollowUp}
                     onInterrupt={persistence.handleInterruptSession}
                     onDeleteSession={persistence.handleDeleteSession}
@@ -1601,6 +1707,7 @@ function App() {
                           scale: tab.scale,
                           scrollTop: tab.scrollTop,
                           pendingGotoPage: tab.pendingGotoPage,
+                          pendingGotoPdfY: tab.pendingGotoPdfY,
                         }}
                         onStateChange={tabs.handleViewerStateChange}
                         annotations={
@@ -1649,6 +1756,7 @@ function App() {
                   visionCapable={visionCapable}
                   onGotoStash={handleGotoStash}
                   onGotoSession={handleGotoSession}
+                  onCitationClick={handleCitationClick}
                   onFollowUp={persistence.handleFollowUp}
                   onInterrupt={persistence.handleInterruptSession}
                   onDeleteSession={persistence.handleDeleteSession}
@@ -1680,6 +1788,10 @@ function App() {
           onClose={() => setSettingsOpen(false)}
           onSave={handleSaveSettings}
           onRunWizard={handleRunWizard}
+          onBeforeBackup={persistence.flushPendingSaves}
+          backupDisabled={persistence.sessions.some(
+            (session) => session.isStreaming
+          )}
         />
       )}
       {wizardOpen && (
@@ -1734,6 +1846,17 @@ function App() {
             name: getBasename(tabs.openingPaths[tabs.openingPaths.length - 1]),
           })}
         </div>
+      )}
+      {referenceChoices && (
+        <ReferenceCandidatesModal
+          candidates={referenceChoices.candidates}
+          onClose={() => setReferenceChoices(null)}
+          onSelect={(target) => {
+            const fileHash = referenceChoices.fileHash;
+            setReferenceChoices(null);
+            void navigateToPdfTarget(fileHash, target.page, target.pdfY);
+          }}
+        />
       )}
       {shortcutsOpen && (
         <ShortcutsModal onClose={() => setShortcutsOpen(false)} />

@@ -49,6 +49,10 @@ import { PdfTab } from "./useTabs";
 import { useStreaming } from "./useStreaming";
 import { beginToolSession, ToolSession } from "../services/pdfTools";
 import { getOpenFileHashes } from "../services/pdfToolsRegistry";
+import {
+  extractCitationRefs,
+  type SourceEvidence,
+} from "../services/citations";
 
 export type { SelectionState } from "../services/selection";
 
@@ -680,6 +684,9 @@ export function usePersistence({
       // 工具引导按开启的工具集分别追加：PDF 文档工具一段、联网搜索一段。
       const buildToolsAddendum = () => {
         const addenda: string[] = [];
+        if (sessionRef.current.sources.length > 0 || toolsEnabled) {
+          addenda.push(i18n.t("llm.citationSystemAddendum"));
+        }
         if (pdfToolsEnabled) addenda.push(i18n.t("llm.toolsSystemAddendum"));
         if (webSearchEnabled)
           addenda.push(i18n.t("llm.webSearchSystemAddendum"));
@@ -693,7 +700,9 @@ export function usePersistence({
             { targetLanguage: currentSettings.targetLanguage }
           );
           const addendum = buildToolsAddendum();
-          return addendum ? `${base}\n\n${addendum}` : base;
+          return [base, i18n.t("llm.pageNumberingAddendum"), addendum]
+            .filter(Boolean)
+            .join("\n\n");
         }
         const base = buildSystemPrompt(
           sessionRef.current.action ?? "explain",
@@ -1128,7 +1137,8 @@ export function usePersistence({
         toolCallId: string,
         name: string,
         result: string,
-        images?: SessionImageRef[]
+        images?: SessionImageRef[],
+        evidence?: SourceEvidence[]
       ) => {
         const toolMsg: InterpretationMessage = {
           id: crypto.randomUUID(),
@@ -1138,6 +1148,7 @@ export function usePersistence({
           toolCallId,
           name,
           images,
+          evidence,
         };
         setSessions((prev) =>
           prev.map((s) => {
@@ -1155,6 +1166,23 @@ export function usePersistence({
           })
         );
         return toolMsg;
+      };
+
+      const finalizeCitations = (content: string) => {
+        const citations = extractCitationRefs(content);
+        setSessions((prev) =>
+          prev.map((s) => {
+            if (s.id !== sessionRef.current.id) return s;
+            const updated = {
+              ...s,
+              messages: s.messages.map((m) =>
+                m.id === messageId ? { ...m, citations } : m
+              ),
+            };
+            sessionRef.current = updated;
+            return updated;
+          })
+        );
       };
 
       const finishStreaming = () => {
@@ -1266,6 +1294,7 @@ export function usePersistence({
           messages = await replaySessionImages(messages, built.imageSpots);
         }
         const seenCalls = new Map<string, string>();
+        const seenEvidence = new Map<string, SourceEvidence[]>();
         let totalUsage: TokenUsage | undefined;
         try {
           for (let round = 0; round <= maxRounds; round++) {
@@ -1331,6 +1360,7 @@ export function usePersistence({
                 );
               }
 
+              finalizeCitations(content);
               // Persist accumulated usage on the final assistant message.
               if (totalUsage) {
                 setSessions((prev) =>
@@ -1405,6 +1435,10 @@ export function usePersistence({
               const callKey = `${call.function.name}:${call.function.arguments}`;
               let result: string;
               let imageRefs: SessionImageRef[] | undefined;
+              let evidence = seenEvidence.get(callKey)?.map((item) => ({
+                ...item,
+                toolCallId: call.id,
+              }));
               if (seenCalls.has(callKey)) {
                 // 去重命中只复用文本：图像已在历史消息里，不重复注入。
                 result = seenCalls.get(callKey)!;
@@ -1415,6 +1449,13 @@ export function usePersistence({
                 );
                 result = toolResult.result;
                 seenCalls.set(callKey, result);
+                if (toolResult.evidence?.length) {
+                  seenEvidence.set(callKey, toolResult.evidence);
+                  evidence = toolResult.evidence.map((item) => ({
+                    ...item,
+                    toolCallId: call.id,
+                  }));
+                }
                 // 截图图片：先落盘拿文件名引用（失败降级为纯文本结果），
                 // 同时生成待发模型的合成 user 图片消息（loop 内使用，
                 // 不落盘；持久化回放由 buildApiMessages 从引用重建）。
@@ -1474,7 +1515,8 @@ export function usePersistence({
                 call.id,
                 call.function.name,
                 result,
-                imageRefs
+                imageRefs,
+                evidence
               );
               messages.push({
                 role: "tool",
@@ -1678,6 +1720,7 @@ export function usePersistence({
       const enrichedPrompt = buildCustomInterpretPrompt(
         prompt,
         visibleStashes.map((s) => ({
+          id: s.id,
           fileName: s.source.fileName,
           page: s.source.page,
           text: s.text,
@@ -1787,12 +1830,6 @@ export function usePersistence({
       });
 
       if (action === "explain") {
-        const prompt = buildSelectionPrompt(
-          "explain",
-          text,
-          settingsRef.current.targetLanguage,
-          { fileName: focusedTab.fileName, page: selection.page }
-        );
         const sourceStash = createStashItem(
           {
             tabId: focusedTab.id,
@@ -1804,6 +1841,16 @@ export function usePersistence({
             pdfY: selection.pdfY,
           },
           text
+        );
+        const prompt = buildSelectionPrompt(
+          "explain",
+          text,
+          settingsRef.current.targetLanguage,
+          {
+            fileName: focusedTab.fileName,
+            page: selection.page,
+            evidenceId: `stash-${sourceStash.id}`,
+          }
         );
         const { sessionId } = startSessionFromStashes(
           prompt,

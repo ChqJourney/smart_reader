@@ -23,14 +23,14 @@ describe("llm service", () => {
         "English",
         sampleSystemPrompts
       );
-      expect(prompt).toBe("Translate to English.");
+      expect(prompt).toContain("Translate to English.");
     });
 
     it("uses explain prompt for explain and custom actions", () => {
       const explain = buildSystemPrompt("explain", "中文", sampleSystemPrompts);
       const custom = buildSystemPrompt("custom", "中文", sampleSystemPrompts);
-      expect(explain).toBe("Explain in 中文.");
-      expect(custom).toBe("Explain in 中文.");
+      expect(explain).toContain("Explain in 中文.");
+      expect(custom).toContain("Explain in 中文.");
     });
 
     it("replaces all targetLanguage placeholders", () => {
@@ -38,7 +38,13 @@ describe("llm service", () => {
         translate: "Use {targetLanguage} and only {targetLanguage}.",
         explain: "Explain.",
       });
-      expect(prompt).toBe("Use English and only English.");
+      expect(prompt).toContain("Use English and only English.");
+    });
+
+    it("defines page numbers as physical PDF page indices", () => {
+      const prompt = buildSystemPrompt("explain", "中文", sampleSystemPrompts);
+      expect(prompt).toContain("物理页序号");
+      expect(prompt).toContain("不得自行加减偏移量");
     });
   });
 
@@ -84,8 +90,8 @@ describe("llm service", () => {
       const prompt = buildCustomInterpretPrompt(
         "解释这些片段",
         [
-          { fileName: "a.pdf", page: 1, text: "text a" },
-          { fileName: "b.pdf", page: 2, text: "text b" },
+          { id: "source-1", fileName: "a.pdf", page: 1, text: "text a" },
+          { id: "source-2", fileName: "b.pdf", page: 2, text: "text b" },
         ],
         "中文"
       );

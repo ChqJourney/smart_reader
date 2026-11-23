@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { getVersion } from "@tauri-apps/api/app";
+import { relaunch } from "@tauri-apps/plugin-process";
 import Icon from "./Icon";
 import IconSelect from "./IconSelect";
 import WhatsNewModal from "./WhatsNewModal";
@@ -37,6 +38,13 @@ import { testConnection } from "../services/llm";
 import { llmErrorToMessage } from "../services/llmError";
 import { useDictionaryStatus } from "../hooks/useDictionaryStatus";
 import { useModal } from "../hooks/useModal";
+import { showConfirm, showMessage } from "../services/dialog";
+import {
+  chooseBackupExportPath,
+  chooseBackupRestorePath,
+  exportDataBackup,
+  restoreDataBackup,
+} from "../services/backup";
 import { error, openLogsDir } from "../services/logs";
 import {
   checkUpdateInfo,
@@ -79,6 +87,10 @@ interface SettingsModalProps {
   onSave: (settings: AppSettings) => Promise<void>;
   /** 重新运行首次启动配置向导（可选） */
   onRunWizard?: () => void;
+  /** 导出备份前 flush 批注与会话的防抖写入。 */
+  onBeforeBackup?: () => Promise<void>;
+  /** 有流式会话时禁用备份，保证快照一致。 */
+  backupDisabled?: boolean;
 }
 
 const PAGE_LIST: SettingsPage[] = ["model", "feature", "system", "about"];
@@ -98,6 +110,8 @@ export default function SettingsModal({
   onClose,
   onSave,
   onRunWizard,
+  onBeforeBackup,
+  backupDisabled = false,
 }: SettingsModalProps) {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
@@ -127,6 +141,10 @@ export default function SettingsModal({
   >("idle");
   const [testResult, setTestResult] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [backupState, setBackupState] = useState<
+    "idle" | "working" | "success" | "error"
+  >("idle");
+  const [backupMessage, setBackupMessage] = useState("");
   /**
    * Per-platform user-typed API key drafts (in-memory, not persisted).
    * The real key is never loaded from the backend; this only stores what
@@ -154,6 +172,8 @@ export default function SettingsModal({
     setPendingUpdate(null);
     setTestState("idle");
     setTestResult(null);
+    setBackupState("idle");
+    setBackupMessage("");
     // The backend no longer returns plaintext API keys. Start with empty drafts.
     draftApiKeysRef.current = {
       [initialSettings.platformId]: "",
@@ -271,6 +291,60 @@ export default function SettingsModal({
       error(`Failed to open default apps settings: ${e}`);
     }
   }, []);
+
+  const handleExportBackup = useCallback(async () => {
+    if (backupDisabled || backupState === "working") return;
+    setBackupState("working");
+    setBackupMessage("");
+    try {
+      const path = await chooseBackupExportPath();
+      if (!path) {
+        setBackupState("idle");
+        return;
+      }
+      await onBeforeBackup?.();
+      const summary = await exportDataBackup(path);
+      setBackupState("success");
+      setBackupMessage(t("settings.backupExported", { files: summary.files }));
+    } catch (err) {
+      error(`[Settings] Backup export failed: ${err}`);
+      setBackupState("error");
+      setBackupMessage(t("settings.backupExportFailed"));
+    }
+  }, [backupDisabled, backupState, onBeforeBackup, t]);
+
+  const handleRestoreBackup = useCallback(async () => {
+    if (backupDisabled || backupState === "working") return;
+    try {
+      const confirmed = await showConfirm(
+        t("settings.backupRestoreTitle"),
+        t("settings.backupRestoreConfirm")
+      );
+      if (!confirmed) return;
+      const path = await chooseBackupRestorePath();
+      if (!path) return;
+      setBackupState("working");
+      setBackupMessage("");
+      await onBeforeBackup?.();
+      const report = await restoreDataBackup(path);
+      setBackupState("success");
+      setBackupMessage(
+        t("settings.backupRestored", {
+          files: report.files,
+          path: report.safetyBackupPath,
+        })
+      );
+      await showMessage(
+        t("settings.backupRestoreTitle"),
+        t("settings.backupRestartPrompt")
+      );
+      await relaunch();
+    } catch (err) {
+      error(`[Settings] Backup restore failed: ${err}`);
+      setBackupState("error");
+      setBackupMessage(t("settings.backupRestoreFailed"));
+    }
+  }, [backupDisabled, backupState, onBeforeBackup, t]);
 
   const handleCheckUpdate = useCallback(async () => {
     setUpdateState("checking");
@@ -1053,6 +1127,54 @@ export default function SettingsModal({
                         ))}
                       </select>
                     </div>
+                  </section>
+
+                  <section className="settings-section">
+                    <div className="settings-section-title">
+                      {t("settings.backupTitle")}
+                    </div>
+                    <div className="settings-section-hint">
+                      {t("settings.backupHint")}
+                    </div>
+                    <div className="settings-backup-actions">
+                      <button
+                        type="button"
+                        className="settings-action-btn"
+                        disabled={backupDisabled || backupState === "working"}
+                        onClick={() => void handleExportBackup()}
+                      >
+                        {t("settings.backupExport")}
+                      </button>
+                      <button
+                        type="button"
+                        className="settings-action-btn"
+                        disabled={backupDisabled || backupState === "working"}
+                        onClick={() => void handleRestoreBackup()}
+                      >
+                        {t("settings.backupRestore")}
+                      </button>
+                    </div>
+                    {backupDisabled && (
+                      <p className="settings-section-hint">
+                        {t("settings.backupStreamingDisabled")}
+                      </p>
+                    )}
+                    {backupState === "working" && (
+                      <p className="settings-status-info">
+                        {t("settings.backupWorking")}
+                      </p>
+                    )}
+                    {backupMessage && (
+                      <p
+                        className={
+                          backupState === "error"
+                            ? "settings-status-error"
+                            : "settings-status-success"
+                        }
+                      >
+                        {backupMessage}
+                      </p>
+                    )}
                   </section>
 
                   <section className="settings-section">

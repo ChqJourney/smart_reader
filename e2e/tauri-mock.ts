@@ -33,6 +33,8 @@ export interface TauriMockOptions {
   settingsOverrides?: Record<string, unknown>;
   /** 提供则启用 chat_completions_stream 流式 mock。 */
   streamChunks?: string[];
+  /** 从首个解读 prompt 中提取程序分配的来源 ID，返回有效结构化引用。 */
+  streamSourceCitation?: boolean;
   streamIntervalMs?: number;
 }
 
@@ -44,7 +46,13 @@ export async function setupTauriMock(page: Page, options: TauriMockOptions) {
   }));
 
   await page.addInitScript(
-    ({ pdfs, settingsOverrides, streamChunks, streamIntervalMs }) => {
+    ({
+      pdfs,
+      settingsOverrides,
+      streamChunks,
+      streamSourceCitation,
+      streamIntervalMs,
+    }) => {
       // 并排对照的一次性引导气泡（.split-coachmark）会在开 2 个 tab 时出现，
       // 提前标记已读，避免干扰 tab 栏交互与断言。
       try {
@@ -112,13 +120,20 @@ export async function setupTauriMock(page: Page, options: TauriMockOptions) {
         if (cmd === "delete_api_key") return undefined;
         if (cmd === "cancel_chat_completions") return undefined;
         if (cmd === "chat_completions_stream") {
-          if (!streamChunks) return undefined;
+          if (!streamChunks && !streamSourceCitation) return undefined;
           // args.onEvent 是前端 new Channel() 的实例（mock 环境不做 IPC
           // 序列化，对象原样到达），调用其 onmessage 即推流事件给前端。
           const channel = args?.onEvent as {
             onmessage: (msg: unknown) => void;
           };
-          const chunks = streamChunks;
+          const sourceId = streamSourceCitation
+            ? JSON.stringify(args?.params ?? {}).match(
+                /来源 ID：([A-Za-z0-9_-]+)/
+              )?.[1]
+            : undefined;
+          const chunks = sourceId
+            ? [`已核对原文[[cite:${sourceId}]]。`]
+            : (streamChunks ?? ["标准解读"]);
           const interval = streamIntervalMs;
           return new Promise<void>((resolve) => {
             let i = 0;
@@ -164,6 +179,7 @@ export async function setupTauriMock(page: Page, options: TauriMockOptions) {
       pdfs,
       settingsOverrides: options.settingsOverrides ?? null,
       streamChunks: options.streamChunks ?? null,
+      streamSourceCitation: options.streamSourceCitation ?? false,
       streamIntervalMs: options.streamIntervalMs ?? 50,
     }
   );

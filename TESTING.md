@@ -13,7 +13,7 @@
 │   └── test/                     # 测试工具与全局 mock
 │       ├── setup.ts              # Vitest 全局 setup
 │       └── mocks/tauri.ts        # Tauri invoke mock 辅助
-├── e2e/                          # Playwright E2E 测试（13 个 spec）
+├── e2e/                          # Playwright E2E 测试（15 个 spec）
 │   ├── fixtures/                 # 测试用 PDF（gen-sample-*.mjs 生成，含 60 页大文档与带大纲/内链的 PDF）
 │   ├── app.spec.ts
 │   ├── multi-tab-state.spec.ts
@@ -23,6 +23,7 @@
 │   ├── pdf-outline-jump.spec.ts
 │   ├── pdf-page-jump.spec.ts
 │   ├── pdf-rapid-zoom.spec.ts
+│   ├── pdf-reference-navigation.spec.ts
 │   ├── pdf-search.spec.ts
 │   ├── pdf-selection-translate.spec.ts
 │   ├── pdf-space-pan.spec.ts
@@ -134,6 +135,10 @@ E2E 测试通过 mock Tauri `invoke` 返回 PDF 字节，fixtures 目录包含 `
 `e2e/pdf-interpret-stream.spec.ts` 覆盖：
 
 - 发起解读后自动进入会话 chatbox 并流式输出回答。
+
+`e2e/pdf-reference-navigation.spec.ts` 覆盖：
+
+- AI 回复中的 Clause、Table、Figure 点击后精确定位到标题，重复编号展示候选，旋转页使用正确坐标；复合页码以 PDF 物理页为准，印刷页通过 PageLabels 跳转。
 
 `e2e/pdf-search.spec.ts` 覆盖：
 

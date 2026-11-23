@@ -106,6 +106,18 @@
   "panel": {
     "hide": "Hide Panel"
   },
+  "citations": {
+    "verified": "Verified citation: click to view the source evidence",
+    "unverified": "Unverified citation: navigation only; check the source",
+    "invalid": "This citation has no matching source evidence and cannot be verified.",
+    "ambiguousFile": "Cannot determine which PDF this citation belongs to. Use a verified citation instead.",
+    "referenceNotFound": "The corresponding heading was not found in the current document.",
+    "pageLabelNotFound": "The printed page could not be mapped to a physical PDF page using the document's page labels.",
+    "chooseTarget": "Choose a destination",
+    "targetPage": "Page {{page}}",
+    "textUnavailable": "This document has no usable text layer for automatic heading navigation. Use a vision model to inspect page screenshots instead.",
+    "fileNotOpen": "The cited PDF is not open. Open the corresponding file first."
+  },
   "chat": {
     "aiAssistant": "AI Assistant",
     "userLabel": "You",
@@ -133,7 +145,8 @@
     "sourceRef": "—— {{fileName}} · P.{{page}}",
     "imagesLine": "*[{{count}} image(s) attached]*",
     "followUpLine": "**Follow-up**: {{content}}",
-    "questionLine": "**Question**: {{content}}"
+    "questionLine": "**Question**: {{content}}",
+    "verifiedSources": "**Verified sources**"
   },
   "stash": {
     "tabLabel": "Stash ({{count}})",
@@ -316,6 +329,19 @@
     "licenseLoading": "Loading license…",
     "licenseError": "Unable to load license content",
     "resetAll": "Reset All Defaults",
+    "backupTitle": "Data Backup",
+    "backupHint": "Back up all annotations, interpretation sessions, images, settings, and recent files. PDF originals, API keys, logs, dictionary data, and transient stash snippets are excluded. The ZIP is not encrypted; store it securely.",
+    "backupExport": "Export Backup",
+    "backupRestore": "Restore from Backup",
+    "backupWorking": "Processing backup…",
+    "backupStreamingDisabled": "Wait for or stop active responses before performing a backup operation.",
+    "backupExported": "Backup completed with {{files}} files.",
+    "backupExportFailed": "Backup export failed. Existing data was not affected. Check the logs.",
+    "backupRestoreTitle": "Restore from Backup",
+    "backupRestoreConfirm": "Restoring replaces current annotations, sessions, settings, and recent files. The app will back up current data first. Continue?",
+    "backupRestored": "Restored {{files}} files. Pre-restore data was backed up to: {{path}}",
+    "backupRestoreFailed": "Backup restore failed or the restart did not complete. If restore failed, existing data is unchanged. Check the logs.",
+    "backupRestartPrompt": "Restore completed. The app will restart to load the restored data.",
     "openLogs": "Open Logs Directory",
     "logLevel": "Log Level",
     "logLevelHint": "For troubleshooting only; usually no need to change. Takes effect after restarting the app.",
@@ -395,12 +421,14 @@
       "requestFailed": "Request failed. Please try again later.",
       "streamReadError": "Unable to read the model response stream. Please try again."
     },
+    "citationSystemAddendum": "When citing document facts, append [[cite:SOURCE_ID]] immediately after the relevant statement. Use only source IDs explicitly supplied in user excerpts or tool results; never invent a source ID.",
+    "pageNumberingAddendum": "Page-number rules: every page number in the answer means the PDF's 1-based physical page index, not the page number printed in the document header or footer. Page/page values returned by PDF tools are physical page indices: use them verbatim without adding offsets or inferring conversions from covers, front matter, or contents. Do not provide both printed and PDF page numbers unless their mapping is explicitly evidenced. When both are necessary, write them unambiguously as 'printed page 96 (PDF page 100)', never calling both simply 'page N'.",
     "prompts": {
-      "explain": "The following excerpt comes from the standards document \"{{fileName}}\", page {{page}}. Explain this standard clause/paragraph in accessible {{targetLanguage}}, describing its requirements, significance, relationship to testing work, and any potentially related clauses:\n\n{{text}}",
+      "explain": "The following excerpt comes from the standards document \"{{fileName}}\", page {{page}} (source ID: {{evidenceId}}). Explain this standard clause/paragraph in accessible {{targetLanguage}}, describing its requirements, significance, relationship to testing work, and any potentially related clauses:\n\n{{text}}",
       "translate": "Translate the following content from the standards document \"{{fileName}}\", page {{page}}, into {{targetLanguage}}, keep professional terminology accurate, and retain the original text when key terms first appear:\n\n{{text}}"
     },
     "customInterpretPrompt": "Please answer the following question in {{targetLanguage}}:\n\n{{prompt}}\n\n{{sources}}",
-    "customInterpretSource": "Excerpt {{index}} ({{fileName}} page {{page}}):\n{{text}}",
+    "customInterpretSource": "Excerpt {{index}} ({{fileName}} page {{page}}, source ID: {{evidenceId}}):\n{{text}}",
     "toolsSystemAddendum": "You can use tools to look up content in currently open PDFs. When the excerpt refers to other clause numbers, tables, or definitions and accurate interpretation requires it, use search_in_pdf / read_pdf_page to check the source before answering. Cite sources as (page N) in your answer. Do not fabricate clauses that were not found.",
     "webSearchSystemAddendum": "You can use web_search to search the web and web_fetch to fetch the content of a specific page. When the question concerns the latest standard editions, revision news, or information not covered by the current document, search first, then answer; cite web sources with their links. Search and fetch are billed per call: avoid repeating identical queries and prefer fetching only the one or two most relevant pages.",
     "askWithToolsPrompt": "You are a reading assistant for testing & certification standards documents. The user is reading a currently open PDF standard and asking a question directly, without attaching any text excerpt. Proactively use the available tools (document lookup, web search) to verify content relevant to the question, then answer in {{targetLanguage}} based on what you find; cite document sources as (page N) and web sources with their links. If you cannot find relevant content after looking, say so explicitly and do not fabricate clauses. If the question is unrelated to the current document, you may answer briefly from general professional knowledge and note that.",

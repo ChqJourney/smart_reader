@@ -3,6 +3,7 @@ import { lazy, Suspense, useRef, useState } from "react";
 import { Annotation } from "../services/annotations";
 import { InterpretationSession } from "../services/sessions";
 import { llmErrorToMessage } from "../services/llmError";
+import { stripCitationMarkers } from "../services/citations";
 import Icon from "./Icon";
 import { useClampedPopupPosition } from "../hooks/useClampedPopupPosition";
 import "./InterpretPopup.css";
@@ -107,7 +108,7 @@ export default function InterpretPopup({
               <>
                 {answer ? (
                   <Suspense fallback={null}>
-                    <MarkdownRenderer content={answer} />
+                    <MarkdownRenderer content={stripCitationMarkers(answer)} />
                   </Suspense>
                 ) : null}
                 {isStreaming && (

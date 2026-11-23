@@ -157,6 +157,27 @@ describe("buildShareMarkdown", () => {
     expect(md).toContain("最终结论");
   });
 
+  it("导出已验证来源并移除内部引用标记", () => {
+    const md = buildShareMarkdown(
+      makeSession({
+        messages: [
+          { id: "m-1", role: "user", content: "模板", createdAt: 1 },
+          {
+            id: "m-2",
+            role: "assistant",
+            content: "试验要求[[cite:stash-st-1]]。",
+            createdAt: 2,
+          },
+        ],
+      })
+    );
+    expect(md).not.toContain("人工状态");
+    expect(md).toContain("试验要求。");
+    expect(md).not.toContain("[[cite:");
+    expect(md).toContain("**已验证来源**");
+    expect(md).toContain("IEC 61010-1.pdf · P.3");
+  });
+
   it("多片段按顺序生成多个引用块，多行文本逐行加引用前缀", () => {
     const md = buildShareMarkdown(
       makeSession({

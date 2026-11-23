@@ -8,7 +8,7 @@ import { error as logError } from "../services/logs";
  * 交互模型：
  * - PdfPage 命中带内部 dest 的链接注释时上报 hover（onLinkHover），
  *   持续悬停 LINK_PREVIEW_HOVER_DELAY_MS 后弹出预览小窗。
- * - 同一目标（页码 + dest Y）去重：已存在 pinned/transient 预览时不重复创建。
+ * - 同一目标（页码 + dest X/Y）去重：已存在 pinned/transient 预览时不重复创建。
  * - transient（未固化）预览同时只存在一个：弹新预览时关掉上一个；
  *   鼠标离开链接后 LINK_PREVIEW_CLOSE_GRACE_MS 宽限期内未进入窗口则关闭。
  * - pinned（固化）预览不随鼠标移出关闭，可多个并存，总数上限
@@ -33,13 +33,15 @@ export interface LinkHoverInfo {
 export interface LinkPreviewTarget {
   /** 目标页码（1-based）。 */
   page: number;
+  /** XYZ dest 的 X 坐标（PDF 用户空间）；null 表示未指定。 */
+  destX: number | null;
   /** dest 的 Y 坐标（PDF 用户空间，原点在左下）；null 表示页首。 */
   destY: number | null;
 }
 
 export interface LinkPreviewState extends LinkPreviewTarget {
   id: string;
-  /** 去重键：`${page}:${destY}`。 */
+  /** 去重键：`${page}:${destX}:${destY}`。 */
   key: string;
   /** 初始位置（client 坐标）与尺寸，弹出后由组件本地管理拖动/调大小。 */
   x: number;
@@ -47,6 +49,11 @@ export interface LinkPreviewState extends LinkPreviewTarget {
   width: number;
   height: number;
   pinned: boolean;
+}
+
+function extractDestX(dest: unknown[]): number | null {
+  const named = dest[1] as { name?: string } | undefined;
+  return named?.name === "XYZ" && typeof dest[2] === "number" ? dest[2] : null;
 }
 
 /**
@@ -66,7 +73,7 @@ export function extractDestY(dest: unknown[]): number | null {
 }
 
 /**
- * 解析链接 dest 为目标页 + Y 坐标。dest 可能是具名字符串（需
+ * 解析链接 dest 为目标页 + X/Y 坐标。dest 可能是具名字符串（需
  * getDestination 查表）或直接数组；解析失败（坏引用、外部文件跳转）返回 null。
  */
 export async function resolveLinkDest(
@@ -80,7 +87,11 @@ export async function resolveLinkDest(
     const ref = dest[0];
     if (ref === null || ref === undefined) return null;
     const pageIndex = await pdf.getPageIndex(ref);
-    return { page: pageIndex + 1, destY: extractDestY(dest) };
+    return {
+      page: pageIndex + 1,
+      destX: extractDestX(dest),
+      destY: extractDestY(dest),
+    };
   } catch (err) {
     logError(`Failed to resolve link preview destination: ${err}`);
     return null;
@@ -88,7 +99,9 @@ export async function resolveLinkDest(
 }
 
 function previewKey(target: LinkPreviewTarget): string {
-  return `${target.page}:${target.destY === null ? "top" : Math.round(target.destY)}`;
+  const x = target.destX === null ? "left" : Math.round(target.destX);
+  const y = target.destY === null ? "top" : Math.round(target.destY);
+  return `${target.page}:${x}:${y}`;
 }
 
 /** 初始位置：链接右下方，clamp 在视口内。 */

@@ -138,13 +138,19 @@ describe("pdfTools", () => {
   describe("read_pdf_page", () => {
     it("returns the requested page text", async () => {
       const session = beginToolSession();
-      const { result } = await session.executeToolCall(
+      const { result, evidence } = await session.executeToolCall(
         "read_pdf_page",
         JSON.stringify({ file_hash: "hash-a", page_number: 2 })
       );
       await session.dispose();
 
       expect(result).toContain("Page two content");
+      expect(result).toContain(`[Source: ${evidence?.[0].id}]`);
+      expect(evidence?.[0]).toMatchObject({
+        fileHash: "hash-a",
+        fileName: "a.pdf",
+        page: 2,
+      });
       expect(mocks.getPageSpy).toHaveBeenCalledWith(2);
       expect(mocks.setOpenPdfNumPages).toHaveBeenCalledWith("hash-a", 3);
     });
@@ -176,6 +182,20 @@ describe("pdfTools", () => {
       expect(tooHigh).toMatch(/out of range/);
     });
 
+    it("reports an unavailable text layer without creating empty evidence", async () => {
+      mocks.pdfjsPageText = { 1: [], 2: [], 3: [] };
+      const session = beginToolSession();
+      const { result, evidence } = await session.executeToolCall(
+        "read_pdf_page",
+        JSON.stringify({ file_hash: "hash-a", page_number: 2 })
+      );
+      await session.dispose();
+
+      expect(result).toContain("TEXT_LAYER_UNAVAILABLE");
+      expect(result).toContain("screenshot_pdf_page");
+      expect(evidence).toBeUndefined();
+    });
+
     it("truncates pages longer than the character limit", async () => {
       const longText = "a".repeat(9000);
       mocks.pdfjsPageText = {
@@ -196,7 +216,7 @@ describe("pdfTools", () => {
   describe("search_in_pdf", () => {
     it("returns matching page snippets", async () => {
       const session = beginToolSession();
-      const { result } = await session.executeToolCall(
+      const { result, evidence } = await session.executeToolCall(
         "search_in_pdf",
         JSON.stringify({ file_hash: "hash-a", query: "clause 6.2.2" })
       );
@@ -206,6 +226,8 @@ describe("pdfTools", () => {
       expect(parsed).toHaveLength(1);
       expect(parsed[0].page).toBe(2);
       expect(parsed[0].snippet).toContain("clause 6.2.2");
+      expect(parsed[0].sourceId).toBe(evidence?.[0].id);
+      expect(evidence?.[0]).toMatchObject({ fileHash: "hash-a", page: 2 });
     });
 
     it("finds matches beyond the read truncation limit", async () => {
@@ -254,6 +276,19 @@ describe("pdfTools", () => {
       await session.dispose();
 
       expect(result).toContain("No matches found");
+    });
+
+    it("distinguishes an unavailable text layer from a real no-match result", async () => {
+      mocks.pdfjsPageText = { 1: [], 2: [], 3: [] };
+      const session = beginToolSession();
+      const { result } = await session.executeToolCall(
+        "search_in_pdf",
+        JSON.stringify({ file_hash: "hash-a", query: "not-present" })
+      );
+      await session.dispose();
+
+      expect(result).toContain("TEXT_LAYER_UNAVAILABLE");
+      expect(result).not.toContain('No matches found for "not-present"');
     });
 
     it("returns error when file hash is not authorized", async () => {

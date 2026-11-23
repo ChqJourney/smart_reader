@@ -1,0 +1,69 @@
+.reference-candidates-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--backdrop-rgb), 0.4);
+}
+
+.reference-candidates-modal {
+  display: flex;
+  flex-direction: column;
+  width: 520px;
+  max-width: 90vw;
+  max-height: 70vh;
+  padding: 20px;
+  background: var(--surface-content);
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(var(--ink-rgb), 0.2);
+}
+
+.reference-candidates-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.reference-candidates-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.reference-candidates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.reference-candidate {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  color: var(--text-body);
+  text-align: left;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.reference-candidate:hover {
+  background: var(--surface-hover);
+  border-color: var(--blue-link);
+}
+
+.reference-candidate-page {
+  flex-shrink: 0;
+  color: var(--blue-link);
+  font-size: 0.8rem;
+}
+
+.reference-candidate-caption {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}

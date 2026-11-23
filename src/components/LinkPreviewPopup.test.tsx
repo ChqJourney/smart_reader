@@ -7,13 +7,14 @@ vi.mock("../services/logs", () => ({
   error: vi.fn(),
 }));
 
-function makePdf(overrides: { renderError?: boolean } = {}) {
+function makePdf(overrides: { renderError?: boolean; rotated?: boolean } = {}) {
   const page = {
     getViewport: ({ scale }: { scale: number }) => ({
       width: 100 * scale,
       height: 200 * scale,
       scale,
-      convertToViewportPoint: (x: number, y: number) => [x, y],
+      convertToViewportPoint: (x: number, y: number) =>
+        overrides.rotated ? [y, x] : [x, y],
     }),
     render: vi.fn(() =>
       overrides.renderError
@@ -30,8 +31,9 @@ function makePdf(overrides: { renderError?: boolean } = {}) {
 function makePreview(patch: Partial<LinkPreviewState> = {}): LinkPreviewState {
   return {
     id: "link-preview-1",
-    key: "95:700",
+    key: "95:72:700",
     page: 95,
+    destX: 72,
     destY: 700,
     x: 50,
     y: 50,
@@ -94,6 +96,16 @@ describe("LinkPreviewPopup", () => {
       ) as HTMLDivElement;
       // destY=700，convertToViewportPoint 恒等映射，顶部留 12px 边距。
       expect(body.scrollTop).toBe(700 - 12);
+    });
+  });
+
+  it("uses the XYZ left coordinate for a rotated destination", async () => {
+    renderPopup(makePdf({ rotated: true }));
+    await waitFor(() => {
+      const body = document.querySelector(
+        ".link-preview-body"
+      ) as HTMLDivElement;
+      expect(body.scrollTop).toBe(72 - 12);
     });
   });
 

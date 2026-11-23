@@ -51,17 +51,17 @@ describe("extractDestY", () => {
 });
 
 describe("resolveLinkDest", () => {
-  it("resolves array destinations to a 1-based page and Y", async () => {
+  it("resolves array destinations to a 1-based page and full XYZ coordinates", async () => {
     const pdf = makePdf();
     const target = await resolveLinkDest(pdf as never, ARRAY_DEST);
-    expect(target).toEqual({ page: 12, destY: 640 });
+    expect(target).toEqual({ page: 12, destX: 72, destY: 640 });
   });
 
   it("resolves named (string) destinations via getDestination", async () => {
     const pdf = makePdf();
     const target = await resolveLinkDest(pdf as never, "named-19.4");
     expect(pdf.getDestination).toHaveBeenCalledWith("named-19.4");
-    expect(target).toEqual({ page: 5, destY: 700 });
+    expect(target).toEqual({ page: 5, destX: 72, destY: 700 });
   });
 
   it("returns null for unresolvable destinations", async () => {
@@ -96,6 +96,7 @@ describe("useLinkPreviews", () => {
     expect(result.current.previews).toHaveLength(1);
     const preview = result.current.previews[0];
     expect(preview.page).toBe(12);
+    expect(preview.destX).toBe(72);
     expect(preview.destY).toBe(640);
     expect(preview.pinned).toBe(false);
   });

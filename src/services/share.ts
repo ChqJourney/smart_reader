@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 import { InterpretationSession } from "./sessions";
 import { error } from "./logs";
+import { stripCitationMarkers, validateMessageCitations } from "./citations";
 
 /**
  * 将会话（解读 / 自定义解读 / 自由提问）构建为可分享的结构化 Markdown：
@@ -36,8 +37,8 @@ export function buildShareMarkdown(session: InterpretationSession): string {
   const skipFirstUserMessage = session.sources.length > 0;
   let firstUserMessageSkipped = false;
   for (const message of session.messages) {
-    if (message.role === "tool") continue;
-    const content = message.content.trim();
+    if (message.role === "tool" || message.toolCalls?.length) continue;
+    const content = stripCitationMarkers(message.content).trim();
     if (content === "") continue;
     if (message.role === "user") {
       if (skipFirstUserMessage && !firstUserMessageSkipped) {
@@ -62,6 +63,22 @@ export function buildShareMarkdown(session: InterpretationSession): string {
       continue;
     }
     parts.push(content);
+    const citations = validateMessageCitations(session, message).filter(
+      (citation) => citation.status === "verified" && citation.evidence
+    );
+    if (citations.length > 0) {
+      const lines = citations.map((citation, index) => {
+        const evidence = citation.evidence!;
+        const location = evidence.clause
+          ? `${evidence.clause} · P.${evidence.page}`
+          : `P.${evidence.page}`;
+        const quote = evidence.quote?.trim();
+        return `${index + 1}. ${evidence.fileName} · ${location}${
+          quote ? `\n   > ${quote.replace(/\n/g, " ")}` : ""
+        }`;
+      });
+      parts.push(`${i18n.t("share.verifiedSources")}\n${lines.join("\n")}`);
+    }
   }
 
   return parts.join("\n\n") + "\n";

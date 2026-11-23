@@ -4,6 +4,9 @@ import { error } from "./logs";
 import { StashItem } from "./stash";
 import { SelectionAction } from "./llm";
 import type { LlmError, TokenUsage, ToolCall } from "../types/llm";
+import type { CitationRef, SourceEvidence } from "./citations";
+
+export type { CitationRef, SourceEvidence } from "./citations";
 
 export type SessionAction = SelectionAction | "custom";
 
@@ -63,6 +66,10 @@ export interface InterpretationMessage {
   toolEvents?: ToolEvent[];
   /** 图片引用：role === "tool" 的截图结果、role === "user" 的用户上传图片 */
   images?: SessionImageRef[];
+  /** 工具实际读取到的原文证据；最终 assistant 消息通过 evidenceId 引用。 */
+  evidence?: SourceEvidence[];
+  /** 最终 assistant 消息中的结构化引用。 */
+  citations?: CitationRef[];
 }
 
 export interface InterpretationSession {

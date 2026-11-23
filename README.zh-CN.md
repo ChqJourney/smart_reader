@@ -131,7 +131,9 @@ cd src-tauri && cargo test
 - 自定义解读：把多个暂存片段一次性发给 LLM。
 - **解读 / 自定义解读 / 追问时启用 Agent Tools**：LLM 可通过 Function Calling 查阅当前打开的 PDF 原文，辅助验证条款引用与跨页内容；轮次上限默认 20，超限优雅收尾并提示。
 - LLM 请求经 Rust 后端代理转发：API Key 只存系统钥匙串、按平台分条目，不再暴露给 webview；多平台预设（deepseek / kimi / xiaomimimo / bailian / glm / volcengine / openrouter / openai / custom）。
-- 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData。
+- 回答支持已验证引用：选区与文档工具生成真实来源证据，引用可跳转到对应 PDF 页码/条款位置；分享导出保留已验证来源。
+- AI 回复中的普通页码、Clause/Section、Table、Figure（含中文表/图与 Annex 编号）支持本地标题定位；重复编号提供候选，旋转页可精确定位。页码默认按 PDF 物理页解析，复合引用以明确的 PDF 页为准，印刷页经 PageLabels 换算。扫描件无文本层时明确降级到视觉截图或 OCR，不误报为无匹配。
+- 批注和解读记录按 PDF 文件 SHA-256 hash 持久化到本地 AppData；系统设置可导出/恢复完整 ZIP 备份（含会话图片与设置，不含 PDF 原件、API Key 和临时暂存片段），恢复前自动备份当前数据并支持失败回滚。
 - 最近文件面板：置顶、搜索、失效置灰、上次读到的页码回写、分屏对照打开。
 - 鼠标悬停英文单词显示本地 ECDICT 词典翻译（设置中可开关，首次启用需下载离线词典）。
 - 会话上下文用量条（ContextWidget）、思考过程展示（ThinkingIndicator）、Markdown 渲染（含 KaTeX 公式）。

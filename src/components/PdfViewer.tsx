@@ -82,7 +82,9 @@ interface PdfViewerProps {
       height?: number;
     }
   ) => void;
-  initialState?: Partial<PdfViewerState & { pendingGotoPage?: number }>;
+  initialState?: Partial<
+    PdfViewerState & { pendingGotoPage?: number; pendingGotoPdfY?: number }
+  >;
   /**
    * 上报 viewer 状态。keep-alive 下多个 viewer 同时挂载，必须携带 tabId，
    * 否则 App 侧无法区分上报来源（缺省会误写入当前激活 tab 的记录）。
@@ -791,6 +793,17 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
               targetTop >= viewTop + JUMP_TARGET_TOP_MARGIN &&
               targetTop <= viewBottom - JUMP_TARGET_TOP_MARGIN
             ) {
+              // 上面的 cleanup 已取消上一跳的解锁定时器；本次无需滚动时必须
+              // 同步释放锁，否则后续手动滚动的页码同步会一直被抑制。
+              isJumpingRef.current = false;
+              onStateChangeRef.current?.(
+                {
+                  pageNum: page,
+                  scale: scaleRef.current,
+                  scrollTop: container.scrollTop,
+                },
+                tabId
+              );
               return;
             }
             top = targetTop - JUMP_TARGET_TOP_MARGIN;
@@ -911,19 +924,19 @@ const PdfViewer = forwardRef<PdfViewerHandle, PdfViewerProps>(
         }
       } else if (item.dest && pdf) {
         try {
-          // 复用条款链接预览的 dest 解析（具名 dest 查表、XYZ/FitH 取 Y，
+          // 复用条款链接预览的 dest 解析（具名 dest 查表、XYZ/FitH 取坐标，
           // 坏引用返回 null），把跳转从页首精确到目标章节所在行。
           const target = await resolveLinkDest(pdf, item.dest);
           if (!target) return;
           let pdfY: number | undefined;
           if (target.destY !== null) {
-            // destY 是 PDF 用户空间坐标（原点左下），转成 scale=1 viewport
-            // 坐标（原点左上，与搜索匹配 / 批注同一坐标系）；
-            // convertToViewportPoint 已处理页面旋转。
+            // destX/destY 是 PDF 用户空间坐标（原点左下），转成 scale=1
+            // viewport 坐标（原点左上，与搜索匹配 / 批注同一坐标系）。旋转
+            // 90°/270° 时 viewport Y 依赖 destX，因此必须转换完整 XYZ 点。
             const page = await pdf.getPage(target.page);
             const [, vy] = page
               .getViewport({ scale: 1 })
-              .convertToViewportPoint(0, target.destY);
+              .convertToViewportPoint(target.destX ?? 0, target.destY);
             pdfY = vy;
           }
           goToPage(target.page, pdfY);

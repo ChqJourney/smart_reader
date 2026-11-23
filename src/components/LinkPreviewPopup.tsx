@@ -231,7 +231,10 @@ function LinkPreviewPopup({
           hasAutoScrolledRef.current = true;
           const [, vy] =
             preview.destY !== null
-              ? viewport.convertToViewportPoint(0, preview.destY)
+              ? viewport.convertToViewportPoint(
+                  preview.destX ?? 0,
+                  preview.destY
+                )
               : [0, 0];
           body.scrollTop = Math.max(0, vy - DEST_TOP_MARGIN);
         } else if (pendingScrollRatioRef.current !== null) {
@@ -256,7 +259,7 @@ function LinkPreviewPopup({
       isCancelled = true;
       renderTaskRef.current?.cancel();
     };
-  }, [pdf, preview.page, preview.destY, committedWidth, zoom]);
+  }, [pdf, preview.page, preview.destX, preview.destY, committedWidth, zoom]);
 
   return createPortal(
     <div

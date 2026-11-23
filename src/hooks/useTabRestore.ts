@@ -50,6 +50,7 @@ export interface UseTabRestoreOptions {
         scale: number;
         scrollTop?: number;
         pendingGotoPage?: number;
+        pendingGotoPdfY?: number;
       }> & { scrollTop?: number })
     | undefined;
   pdf: PDFDocumentProxy | null;
@@ -60,7 +61,7 @@ export interface UseTabRestoreOptions {
   pageViewports: Map<number, PageViewportInfo>;
   tabId?: string;
   /** Navigate to a page (PdfViewer's goToPage). */
-  goToPage: (page: number) => void;
+  goToPage: (page: number, pdfY?: number) => void;
   onClearPendingGotoPage?: (tabId: string) => void;
   continuousContainerRef: React.RefObject<HTMLDivElement | null>;
   /**
@@ -113,6 +114,9 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
   const pendingGotoPageRef = useRef<number | undefined>(
     initialState?.pendingGotoPage
   );
+  const pendingGotoPdfYRef = useRef<number | undefined>(
+    initialState?.pendingGotoPdfY
+  );
   const pendingScrollTopRef = useRef<number | undefined>(
     initialState?.scrollTop
   );
@@ -130,11 +134,13 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
       if (initialState?.scale !== undefined) setScale(initialState.scale);
     }
     pendingGotoPageRef.current = initialState?.pendingGotoPage;
+    pendingGotoPdfYRef.current = initialState?.pendingGotoPdfY;
     pendingScrollTopRef.current = initialState?.scrollTop;
   }, [
     initialState?.pageNum,
     initialState?.scale,
     initialState?.pendingGotoPage,
+    initialState?.pendingGotoPdfY,
     initialState?.scrollTop,
     setPageNum,
     setScale,
@@ -164,10 +170,16 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
       // 挂载恢复完成后若目标页即当前页，执行 goToPage 只会把连续模式的滚动
       // 位置吸附到页顶、丢失页内偏移——直接清除 pending 并保持原位。真正的
       // 跨页跳转（暂存/解读记录点击）目标页与当前页不同，不受影响；同页
-      // 点击保持原位，与 handleGotoSession 的同页早退语义一致。
-      if (hasRestoredRef.current && pending === pageNum) {
+      // 点击保持原位，与 handleGotoSession 的同页早退语义一致；若 pending
+      // 同时带 pdfY（引用精确跳转），即使同页也必须执行 goToPage。
+      if (
+        hasRestoredRef.current &&
+        pending === pageNum &&
+        pendingGotoPdfYRef.current === undefined
+      ) {
         onClearPendingGotoPage?.(tabId);
         pendingGotoPageRef.current = undefined;
+        pendingGotoPdfYRef.current = undefined;
         return;
       }
       // Wait until viewports for EVERY page up to the target are known, so the
@@ -183,9 +195,14 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
         isJumpingRef.current = true;
         return;
       }
-      goToPage(pending);
+      if (pendingGotoPdfYRef.current === undefined) {
+        goToPage(pending);
+      } else {
+        goToPage(pending, pendingGotoPdfYRef.current);
+      }
       onClearPendingGotoPage?.(tabId);
       pendingGotoPageRef.current = undefined;
+      pendingGotoPdfYRef.current = undefined;
       // goToPage holds the lock around its own scroll and
       // releases it once the jump settles, so nothing more is needed here.
       if (!hasRestoredRef.current) {
@@ -246,5 +263,6 @@ export function useTabRestore(options: UseTabRestoreOptions): void {
     // Re-run when a NEW pending goto arrives for the already-mounted viewer
     // (active-tab stash/annotation navigation).
     initialState?.pendingGotoPage,
+    initialState?.pendingGotoPdfY,
   ]);
 }

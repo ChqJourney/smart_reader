@@ -1,5 +1,5 @@
 import ReactMarkdown from "react-markdown";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -16,10 +16,19 @@ import { useModal } from "../hooks/useModal";
 import { copyToClipboard } from "../utils/clipboard";
 import Icon from "./Icon";
 import "./MarkdownRenderer.css";
+import {
+  citationNavigation,
+  type CitationNavigation,
+  type PdfReferenceKind,
+  type ValidatedCitation,
+} from "../services/citations";
+import { createCitationLinksPlugin } from "../utils/citationLinks";
 
 interface MarkdownRendererProps {
   content: string;
   className?: string;
+  citations?: ValidatedCitation[];
+  onCitationClick?: (navigation: CitationNavigation) => void;
 }
 
 interface ErrorBoundaryProps {
@@ -84,6 +93,20 @@ const sanitizeSchema: Schema = {
   attributes: {
     ...(defaultSchema.attributes ?? {}),
     "*": [...(defaultSchema.attributes?.["*"] ?? []), "className", "style"],
+    a: [
+      ...(defaultSchema.attributes?.a ?? []).filter((attribute) =>
+        Array.isArray(attribute)
+          ? attribute[0] !== "className"
+          : attribute !== "className"
+      ),
+      "className",
+      "dataCitationId",
+      "dataCitationPage",
+      "dataCitationPrintedPage",
+      "dataCitationKind",
+      "dataCitationReference",
+      "dataCitationReferenceId",
+    ],
     svg: [...(defaultSchema.attributes?.svg ?? []), ...svgAttributes],
     g: [...(defaultSchema.attributes?.g ?? []), ...svgAttributes],
     path: [...(defaultSchema.attributes?.path ?? []), ...svgAttributes],
@@ -387,10 +410,24 @@ class MarkdownErrorBoundary extends React.Component<
   }
 }
 
-// props 只有字符串（content / className），包一层 memo：流式输出时
-// AiChatPanel 每次状态更新都会重渲染，未变化的历史消息不必重跑
+// 包一层 memo：流式输出时 AiChatPanel 每次状态更新都会重渲染，
+// content、citations 与回调均未变化的历史消息不必重跑
 // react-markdown（解析 + KaTeX 渲染成本高）。
-function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
+function MarkdownRenderer({
+  content,
+  className = "",
+  citations = [],
+  onCitationClick,
+}: MarkdownRendererProps) {
+  const { t } = useTranslation();
+  const citationById = useMemo(
+    () => new Map(citations.map((citation) => [citation.evidenceId, citation])),
+    [citations]
+  );
+  const citationPlugin = useMemo(
+    () => createCitationLinksPlugin(citations, Boolean(onCitationClick)),
+    [citations, onCitationClick]
+  );
   return (
     <MarkdownErrorBoundary content={content} className={className}>
       <div className={`markdown-content ${className}`}>
@@ -398,13 +435,64 @@ function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
           remarkPlugins={[remarkGfm, remarkMath]}
           rehypePlugins={[
             rehypeRaw,
+            citationPlugin,
             [rehypeSanitize, sanitizeSchema],
             rehypeKatex,
           ]}
           components={{
-            a: ({ node: _node, ...props }) => (
-              <a target="_blank" rel="noopener noreferrer" {...props} />
-            ),
+            a: ({ node: _node, ...props }) => {
+              const citationData = props as Record<string, unknown>;
+              const citationId = citationData["data-citation-id"] as
+                string | undefined;
+              const page = Number(citationData["data-citation-page"]);
+              const printedPage = citationData["data-citation-printed-page"] as
+                string | undefined;
+              const referenceKind = citationData["data-citation-kind"] as
+                PdfReferenceKind | undefined;
+              const referenceLabel = citationData["data-citation-reference"] as
+                string | undefined;
+              const referenceId = citationData["data-citation-reference-id"] as
+                string | undefined;
+              const reference =
+                referenceKind && referenceLabel && referenceId
+                  ? {
+                      kind: referenceKind,
+                      label: referenceLabel,
+                      normalizedId: referenceId,
+                    }
+                  : undefined;
+              if (!citationId && !page && !printedPage && !reference) {
+                return (
+                  <a target="_blank" rel="noopener noreferrer" {...props} />
+                );
+              }
+              const citation = citationId
+                ? citationById.get(citationId)
+                : undefined;
+              const verified = citation?.status === "verified";
+              return (
+                <a
+                  {...props}
+                  title={t(
+                    verified ? "citations.verified" : "citations.unverified"
+                  )}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    if (citation) {
+                      onCitationClick?.(citationNavigation(citation));
+                    } else {
+                      onCitationClick?.({
+                        citationId,
+                        page: page || undefined,
+                        printedPage,
+                        reference,
+                        verified: false,
+                      });
+                    }
+                  }}
+                />
+              );
+            },
             table: ({ node: _node, ...props }) => <MarkdownTable {...props} />,
             svg: ({ node: _node, ...props }) => <SvgPreview {...props} />,
             p: ({ node: _node, children, ...props }) => {

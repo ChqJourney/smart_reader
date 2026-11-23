@@ -241,18 +241,20 @@ export function buildSystemPrompt(
 ): string {
   const raw =
     action === "translate" ? systemPrompts.translate : systemPrompts.explain;
-  return raw.replace(/\{targetLanguage\}/g, targetLanguage);
+  const base = raw.replace(/\{targetLanguage\}/g, targetLanguage);
+  return `${base}\n\n${i18n.t("llm.pageNumberingAddendum")}`;
 }
 
 export function buildCustomInterpretPrompt(
   prompt: string,
-  sources: { fileName: string; page: number; text: string }[],
+  sources: { id: string; fileName: string; page: number; text: string }[],
   targetLanguage: string
 ): string {
   const sourceText = sources
     .map((s, i) =>
       i18n.t("llm.customInterpretSource", {
         index: i + 1,
+        evidenceId: `stash-${s.id}`,
         fileName: s.fileName,
         page: s.page,
         text: s.text,
@@ -270,7 +272,7 @@ export function buildSelectionPrompt(
   action: "explain" | "translate",
   text: string,
   targetLanguage: string,
-  context: { fileName: string; page: number }
+  context: { fileName: string; page: number; evidenceId?: string }
 ): string {
   switch (action) {
     case "explain":
@@ -279,6 +281,7 @@ export function buildSelectionPrompt(
         text,
         fileName: context.fileName,
         page: context.page,
+        evidenceId: context.evidenceId ?? "",
       });
     case "translate":
       return i18n.t("llm.prompts.translate", {

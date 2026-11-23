@@ -12,6 +12,11 @@ import {
   sortSessions,
 } from "../services/sessions";
 import {
+  stripCitationMarkers,
+  validateMessageCitations,
+  type CitationNavigation,
+} from "../services/citations";
+import {
   ImageAttachments,
   useImageAttachments,
 } from "../hooks/useImageAttachments";
@@ -49,6 +54,10 @@ interface AiChatPanelProps {
   onOpenCustomInterpret: (preselectedIds: Set<string> | null) => void;
   onGotoStash?: (stash: StashItem) => void;
   onGotoSession?: (session: InterpretationSession) => void;
+  onCitationClick?: (
+    session: InterpretationSession,
+    navigation: CitationNavigation
+  ) => void;
   /** 无选区自由提问：返回新会话 id 供面板直接切入 chatbox；无可锚定文档时返回 null */
   onFreeQuestion?: (prompt: string, images: Uint8Array[]) => string | null;
   /** 是否可以发起自由提问（有已打开 PDF 可锚定） */
@@ -87,6 +96,7 @@ export default function AiChatPanel({
   onOpenCustomInterpret,
   onGotoStash,
   onGotoSession,
+  onCitationClick,
   onFreeQuestion,
   canAsk = true,
   agentToolsEnabled,
@@ -642,7 +652,16 @@ export default function AiChatPanel({
                           />
                         ) : (
                           <Suspense fallback={null}>
-                            <MarkdownRenderer content={message.content} />
+                            <MarkdownRenderer
+                              content={message.content}
+                              citations={validateMessageCitations(
+                                activeSession,
+                                message
+                              )}
+                              onCitationClick={(navigation) =>
+                                onCitationClick?.(activeSession, navigation)
+                              }
+                            />
                           </Suspense>
                         )}
                         {message.role === "assistant" &&
@@ -650,9 +669,10 @@ export default function AiChatPanel({
                             <button
                               className="ai-chat-copy-btn"
                               onClick={() =>
-                                void copyToClipboard(message.content).catch(
-                                  (err) =>
-                                    error(`Failed to copy message: ${err}`)
+                                void copyToClipboard(
+                                  stripCitationMarkers(message.content)
+                                ).catch((err) =>
+                                  error(`Failed to copy message: ${err}`)
                                 )
                               }
                               aria-label={t("chat.copyMessage")}

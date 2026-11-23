@@ -533,7 +533,7 @@ fn write_print_temp_file(dir: &Path, bytes: &[u8]) -> Result<PathBuf, String> {
     if let (Ok(entries), Some(cutoff)) = (std::fs::read_dir(dir), cutoff) {
         for entry in entries.flatten() {
             let old = entry.path();
-            if old == path || !old.extension().is_some_and(|ext| ext == "pdf") {
+            if old == path || old.extension().is_none_or(|ext| ext != "pdf") {
                 continue;
             }
             let too_old = entry
@@ -3031,13 +3031,13 @@ mod tests {
     fn check_api_key_reflects_secure_storage_state() {
         let storage: Arc<dyn secure_storage::ApiKeyStorage> =
             Arc::new(secure_storage::MemoryStorage::new());
-        assert!(!storage.retrieve("deepseek").unwrap().is_some());
+        assert!(storage.retrieve("deepseek").unwrap().is_none());
 
         storage.store("deepseek", "sk-test").unwrap();
         assert!(storage.retrieve("deepseek").unwrap().is_some());
 
         storage.delete("deepseek").unwrap();
-        assert!(!storage.retrieve("deepseek").unwrap().is_some());
+        assert!(storage.retrieve("deepseek").unwrap().is_none());
     }
 
     #[test]

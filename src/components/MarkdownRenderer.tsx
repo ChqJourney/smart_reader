@@ -1,4 +1,4 @@
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { invoke } from "@tauri-apps/api/core";
@@ -428,6 +428,120 @@ function MarkdownRenderer({
     () => createCitationLinksPlugin(citations, Boolean(onCitationClick)),
     [citations, onCitationClick]
   );
+  const contentRef = useRef(content);
+  contentRef.current = content;
+  const citationByIdRef = useRef(citationById);
+  citationByIdRef.current = citationById;
+  const onCitationClickRef = useRef(onCitationClick);
+  onCitationClickRef.current = onCitationClick;
+  const tRef = useRef(t);
+  tRef.current = t;
+  const components = useMemo<Components>(
+    () => ({
+      a: ({ node: _node, ...props }) => {
+        const citationData = props as Record<string, unknown>;
+        const citationId = citationData["data-citation-id"] as
+          string | undefined;
+        const page = Number(citationData["data-citation-page"]);
+        const printedPage = citationData["data-citation-printed-page"] as
+          string | undefined;
+        const referenceKind = citationData["data-citation-kind"] as
+          PdfReferenceKind | undefined;
+        const referenceLabel = citationData["data-citation-reference"] as
+          string | undefined;
+        const referenceId = citationData["data-citation-reference-id"] as
+          string | undefined;
+        const reference =
+          referenceKind && referenceLabel && referenceId
+            ? {
+                kind: referenceKind,
+                label: referenceLabel,
+                normalizedId: referenceId,
+              }
+            : undefined;
+        if (!citationId && !page && !printedPage && !reference) {
+          return <a target="_blank" rel="noopener noreferrer" {...props} />;
+        }
+        const citation = citationId
+          ? citationByIdRef.current.get(citationId)
+          : undefined;
+        const verified = citation?.status === "verified";
+        return (
+          <a
+            {...props}
+            title={tRef.current(
+              verified ? "citations.verified" : "citations.unverified"
+            )}
+            onClick={(event) => {
+              event.preventDefault();
+              if (citation) {
+                onCitationClickRef.current?.(citationNavigation(citation));
+              } else {
+                onCitationClickRef.current?.({
+                  citationId,
+                  page: page || undefined,
+                  printedPage,
+                  reference,
+                  verified: false,
+                });
+              }
+            }}
+          />
+        );
+      },
+      table: ({ node: _node, ...props }) => <MarkdownTable {...props} />,
+      svg: ({ node: _node, ...props }) => <SvgPreview {...props} />,
+      p: ({ node: _node, children, ...props }) => {
+        const onlyChild = React.Children.toArray(children)[0];
+        const isSvg =
+          React.isValidElement<{
+            node?: { tagName?: string };
+          }>(onlyChild) && onlyChild.props.node?.tagName === "svg";
+        return React.Children.count(children) === 1 && isSvg ? (
+          <>{children}</>
+        ) : (
+          <p {...props}>{children}</p>
+        );
+      },
+      pre: ({ node: _node, children, ...props }) => {
+        const onlyChild = React.Children.toArray(children)[0];
+        const isSvgCode =
+          React.isValidElement<{
+            node?: { tagName?: string };
+            className?: string;
+          }>(onlyChild) &&
+          onlyChild.props.node?.tagName === "code" &&
+          /language-svg\b/i.test(onlyChild.props.className ?? "");
+        return React.Children.count(children) === 1 && isSvgCode ? (
+          <>{children}</>
+        ) : (
+          <pre {...props}>{children}</pre>
+        );
+      },
+      code: ({ node, className, children, ...props }) => {
+        if (!/language-svg\b/i.test(className ?? "")) {
+          return (
+            <code className={className} {...props}>
+              {children}
+            </code>
+          );
+        }
+        const start = node?.position?.start.offset;
+        const end = node?.position?.end.offset;
+        const isComplete =
+          start === undefined || end === undefined
+            ? true
+            : contentRef.current.slice(start, end).trimEnd().endsWith("```");
+        return (
+          <SvgPreview
+            source={String(children).replace(/\n$/, "")}
+            isComplete={isComplete}
+          />
+        );
+      },
+    }),
+    []
+  );
   return (
     <MarkdownErrorBoundary content={content} className={className}>
       <div className={`markdown-content ${className}`}>
@@ -439,111 +553,7 @@ function MarkdownRenderer({
             [rehypeSanitize, sanitizeSchema],
             rehypeKatex,
           ]}
-          components={{
-            a: ({ node: _node, ...props }) => {
-              const citationData = props as Record<string, unknown>;
-              const citationId = citationData["data-citation-id"] as
-                string | undefined;
-              const page = Number(citationData["data-citation-page"]);
-              const printedPage = citationData["data-citation-printed-page"] as
-                string | undefined;
-              const referenceKind = citationData["data-citation-kind"] as
-                PdfReferenceKind | undefined;
-              const referenceLabel = citationData["data-citation-reference"] as
-                string | undefined;
-              const referenceId = citationData["data-citation-reference-id"] as
-                string | undefined;
-              const reference =
-                referenceKind && referenceLabel && referenceId
-                  ? {
-                      kind: referenceKind,
-                      label: referenceLabel,
-                      normalizedId: referenceId,
-                    }
-                  : undefined;
-              if (!citationId && !page && !printedPage && !reference) {
-                return (
-                  <a target="_blank" rel="noopener noreferrer" {...props} />
-                );
-              }
-              const citation = citationId
-                ? citationById.get(citationId)
-                : undefined;
-              const verified = citation?.status === "verified";
-              return (
-                <a
-                  {...props}
-                  title={t(
-                    verified ? "citations.verified" : "citations.unverified"
-                  )}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    if (citation) {
-                      onCitationClick?.(citationNavigation(citation));
-                    } else {
-                      onCitationClick?.({
-                        citationId,
-                        page: page || undefined,
-                        printedPage,
-                        reference,
-                        verified: false,
-                      });
-                    }
-                  }}
-                />
-              );
-            },
-            table: ({ node: _node, ...props }) => <MarkdownTable {...props} />,
-            svg: ({ node: _node, ...props }) => <SvgPreview {...props} />,
-            p: ({ node: _node, children, ...props }) => {
-              const onlyChild = React.Children.toArray(children)[0];
-              const isSvg =
-                React.isValidElement<{
-                  node?: { tagName?: string };
-                }>(onlyChild) && onlyChild.props.node?.tagName === "svg";
-              return React.Children.count(children) === 1 && isSvg ? (
-                <>{children}</>
-              ) : (
-                <p {...props}>{children}</p>
-              );
-            },
-            pre: ({ node: _node, children, ...props }) => {
-              const onlyChild = React.Children.toArray(children)[0];
-              const isSvgCode =
-                React.isValidElement<{
-                  node?: { tagName?: string };
-                  className?: string;
-                }>(onlyChild) &&
-                onlyChild.props.node?.tagName === "code" &&
-                /language-svg\b/i.test(onlyChild.props.className ?? "");
-              return React.Children.count(children) === 1 && isSvgCode ? (
-                <>{children}</>
-              ) : (
-                <pre {...props}>{children}</pre>
-              );
-            },
-            code: ({ node, className, children, ...props }) => {
-              if (!/language-svg\b/i.test(className ?? "")) {
-                return (
-                  <code className={className} {...props}>
-                    {children}
-                  </code>
-                );
-              }
-              const start = node?.position?.start.offset;
-              const end = node?.position?.end.offset;
-              const isComplete =
-                start === undefined || end === undefined
-                  ? true
-                  : content.slice(start, end).trimEnd().endsWith("```");
-              return (
-                <SvgPreview
-                  source={String(children).replace(/\n$/, "")}
-                  isComplete={isComplete}
-                />
-              );
-            },
-          }}
+          components={components}
         >
           {content}
         </ReactMarkdown>

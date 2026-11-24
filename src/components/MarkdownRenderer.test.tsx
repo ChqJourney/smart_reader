@@ -58,6 +58,58 @@ describe("MarkdownRenderer", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("preserves table expansion and scroll positions when citation props are recreated", () => {
+    const content = "| 项目 | 值 |\n|------|-----|\n| 第 2 页 | 1 |";
+    const initialCitationClick = vi.fn();
+    const latestCitationClick = vi.fn();
+    const { rerender } = render(
+      <MarkdownRenderer
+        content={content}
+        citations={[]}
+        onCitationClick={initialCitationClick}
+      />
+    );
+    const scroll = document.querySelector<HTMLElement>(
+      ".markdown-table-scroll"
+    );
+    expect(scroll).not.toBeNull();
+    scroll!.scrollLeft = 80;
+    fireEvent.click(screen.getByRole("button", { name: "展开表格" }));
+    const dialogScroll = document.querySelector<HTMLElement>(
+      ".markdown-table-dialog-scroll"
+    );
+    expect(dialogScroll).not.toBeNull();
+    dialogScroll!.scrollLeft = 60;
+
+    rerender(
+      <MarkdownRenderer
+        content={content}
+        citations={[]}
+        onCitationClick={latestCitationClick}
+      />
+    );
+
+    expect(
+      screen.getByRole("dialog", { name: "表格详情" })
+    ).toBeInTheDocument();
+    expect(document.querySelector(".markdown-table-scroll")).toBe(scroll);
+    expect(scroll!.scrollLeft).toBe(80);
+    expect(document.querySelector(".markdown-table-dialog-scroll")).toBe(
+      dialogScroll
+    );
+    expect(dialogScroll!.scrollLeft).toBe(60);
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "表格详情" })).getByRole(
+        "link",
+        { name: "第 2 页" }
+      )
+    );
+    expect(latestCitationClick).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 2 })
+    );
+    expect(initialCitationClick).not.toHaveBeenCalled();
+  });
+
   it("renders inline code and fenced code blocks", () => {
     const content = `使用 \`npm install\` 安装。\n\n\`\`\`\ncode line\n\`\`\``;
     render(<MarkdownRenderer content={content} />);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   RecentFile,
   loadRecentFiles,
@@ -32,47 +32,46 @@ export function normalizeRecentFiles(files: RecentFile[]): RecentFile[] {
     if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
     return b.openedAt - a.openedAt;
   });
-  const result: RecentFile[] = [];
-  let pinnedCount = 0;
-  let unpinnedCount = 0;
-  for (const file of sorted) {
-    if (file.pinned) {
-      pinnedCount += 1;
-      if (pinnedCount > MAX_PINNED_FILES) {
-        // 降级为最旧的未固定条目，继续占用未固定配额
-        unpinnedCount += 1;
-        if (unpinnedCount <= MAX_RECENT_FILES) {
-          result.push({ ...file, pinned: false });
-        }
-        continue;
-      }
-      result.push(file);
-    } else {
-      unpinnedCount += 1;
-      if (unpinnedCount <= MAX_RECENT_FILES) result.push(file);
-    }
-  }
-  return result;
+  const pinned = sorted
+    .filter((file) => file.pinned)
+    .slice(0, MAX_PINNED_FILES);
+  const demoted = sorted
+    .filter((file) => file.pinned)
+    .slice(MAX_PINNED_FILES)
+    .map((file) => ({ ...file, pinned: false }));
+  const unpinned = [...sorted.filter((file) => !file.pinned), ...demoted]
+    .sort((a, b) => b.openedAt - a.openedAt)
+    .slice(0, MAX_RECENT_FILES);
+  return [...pinned, ...unpinned];
 }
 
 export function useRecentFiles(): UseRecentFilesReturn {
   const [recentFiles, setRecentFiles] = useState<RecentFile[]>([]);
+  const recentFilesRef = useRef<RecentFile[]>([]);
   const [loaded, setLoaded] = useState(false);
+
+  const commitRecentFiles = useCallback((next: RecentFile[]) => {
+    recentFilesRef.current = next;
+    setRecentFiles(next);
+  }, []);
+  useEffect(() => {
+    recentFilesRef.current = recentFiles;
+  }, [recentFiles]);
 
   useEffect(() => {
     let cancelled = false;
     loadRecentFiles()
       .then((files) => {
         if (cancelled) return;
-        // 函数式合并：load 在飞期间的本地变更（addRecentFile 等）以 prev
-        // 为准不被覆盖丢失，loaded 只补齐 prev 中没有的条目。
-        setRecentFiles((prev) => {
-          const prevPaths = new Set(prev.map((f) => f.path));
-          return normalizeRecentFiles([
+        // load 在飞期间的本地变更优先，磁盘只补齐本地没有的路径。
+        const prev = recentFilesRef.current;
+        const prevPaths = new Set(prev.map((f) => f.path));
+        commitRecentFiles(
+          normalizeRecentFiles([
             ...prev,
             ...files.filter((f) => !prevPaths.has(f.path)),
-          ]);
-        });
+          ])
+        );
         setLoaded(true);
       })
       .catch(() => {
@@ -83,18 +82,19 @@ export function useRecentFiles(): UseRecentFilesReturn {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [commitRecentFiles]);
 
-  const update = useCallback((mutate: (prev: RecentFile[]) => RecentFile[]) => {
-    setRecentFiles((prev) => {
+  const update = useCallback(
+    (mutate: (prev: RecentFile[]) => RecentFile[]) => {
+      const prev = recentFilesRef.current;
       const mutated = mutate(prev);
-      // 无实际变更（如更新不存在条目的 lastPage）时跳过持久化与重渲染
-      if (mutated === prev) return prev;
+      if (mutated === prev) return;
       const next = normalizeRecentFiles(mutated);
-      saveRecentFiles(next);
-      return next;
-    });
-  }, []);
+      commitRecentFiles(next);
+      void saveRecentFiles(next);
+    },
+    [commitRecentFiles]
+  );
 
   const addRecentFile = useCallback(
     (path: string, fileName: string) => {
@@ -146,9 +146,9 @@ export function useRecentFiles(): UseRecentFilesReturn {
   );
 
   const clearRecentFiles = useCallback(() => {
-    setRecentFiles([]);
-    saveRecentFiles([]);
-  }, []);
+    commitRecentFiles([]);
+    void saveRecentFiles([]);
+  }, [commitRecentFiles]);
 
   // 返回对象用 useMemo 固定引用，避免 App 层依赖它的回调每次渲染重建。
   return useMemo(

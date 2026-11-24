@@ -45,6 +45,39 @@ describe("normalizeRecentFiles", () => {
     expect(demoted?.pinned).toBe(false);
     expect(result.indexOf(demoted!)).toBe(10);
   });
+  it("reinserts demoted entries by recency before ordering and capping unpinned files", () => {
+    const pinned = Array.from({ length: 11 }, (_, i) =>
+      entry(`/p${i}.pdf`, i, { pinned: true })
+    );
+    const unpinned = Array.from({ length: 19 }, (_, i) =>
+      entry(`/u${i}.pdf`, 100 + i)
+    );
+    const result = normalizeRecentFiles([...pinned, ...unpinned]);
+
+    expect(result.some((file) => file.path === "/p0.pdf")).toBe(true);
+    expect(result.some((file) => file.path === "/u0.pdf")).toBe(true);
+    expect(
+      result.filter((file) => !file.pinned).map((file) => file.path)
+    ).toEqual(
+      [...unpinned]
+        .reverse()
+        .map((file) => file.path)
+        .concat("/p0.pdf")
+    );
+  });
+
+  it("drops an older demoted entry before newer ordinary entries at the cap", () => {
+    const pinned = Array.from({ length: 11 }, (_, i) =>
+      entry(`/p${i}.pdf`, i, { pinned: true })
+    );
+    const unpinned = Array.from({ length: 20 }, (_, i) =>
+      entry(`/u${i}.pdf`, 100 + i)
+    );
+    const result = normalizeRecentFiles([...pinned, ...unpinned]);
+
+    expect(result.some((file) => file.path === "/p0.pdf")).toBe(false);
+    expect(result.some((file) => file.path === "/u0.pdf")).toBe(true);
+  });
 });
 
 describe("useRecentFiles", () => {

@@ -1494,6 +1494,14 @@ describe("usePersistence", () => {
       };
     }
 
+    function deferred<T>() {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    }
+
     function mockInvokeWithLoad(
       loadImpl: (args?: InvokeArgs) => Promise<unknown>
     ) {
@@ -1549,6 +1557,342 @@ describe("usePersistence", () => {
         ([cmd]) => cmd === "save_pdf_data"
       );
       expect(saveCalls).toHaveLength(0);
+    });
+
+    it("preserves edits during a shared initial load", async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const load = deferred<{ annotations: never[]; sessionIds: never[] }>();
+      let loadCalls = 0;
+      vi.mocked(invoke).mockImplementation((command: string) => {
+        if (command === "load_pdf_data") {
+          loadCalls += 1;
+          return load.promise;
+        }
+        return Promise.resolve(null);
+      });
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={{
+            ...propsFor(tabA),
+            secondaryTab: tabA,
+            isSplitView: true,
+          }}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+      act(() => {
+        hookRef!.handleAddComment(selection, "created during load");
+      });
+      await act(async () => {
+        load.resolve({ annotations: [], sessionIds: [] });
+        await load.promise;
+      });
+
+      expect(hookRef!.annotations.map((a) => a.text)).toEqual([
+        "created during load",
+      ]);
+      expect(loadCalls).toBe(1);
+    });
+
+    it("preserves edits made before a failed load is retried", async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      let tabALoads = 0;
+      vi.mocked(invoke).mockImplementation(
+        mockInvokeWithLoad((args) => {
+          if (
+            (args as { filePath?: string } | undefined)?.filePath === "/a.pdf"
+          ) {
+            tabALoads += 1;
+            if (tabALoads === 1) {
+              return Promise.reject(new Error("transient read failure"));
+            }
+          }
+          return Promise.resolve({ annotations: [], sessionIds: [] });
+        })
+      );
+
+      let hookRef: UsePersistenceReturn;
+      const { rerender } = render(
+        <ConfigurableHarness
+          props={propsFor(tabA)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+      await act(async () => {});
+      act(() => {
+        hookRef!.handleAddComment(selection, "created after failure");
+      });
+
+      rerender(
+        <ConfigurableHarness
+          props={propsFor(tabB)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+      await act(async () => {});
+      rerender(
+        <ConfigurableHarness
+          props={propsFor(tabA)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+      await act(async () => {});
+
+      expect(tabALoads).toBe(2);
+      expect(
+        hookRef!.annotations.some((a) => a.text === "created after failure")
+      ).toBe(true);
+    });
+
+    it("keeps edits dirty when an older save completes", async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const firstSave = deferred<null>();
+      let saveCount = 0;
+      const savedPayloads: { annotations: { text: string }[] }[] = [];
+      vi.mocked(invoke).mockImplementation(
+        (command: string, args?: InvokeArgs) => {
+          if (command === "load_pdf_data") {
+            return Promise.resolve({ annotations: [], sessionIds: [] });
+          }
+          if (command === "save_pdf_data") {
+            saveCount += 1;
+            savedPayloads.push(
+              (args as { data: { annotations: { text: string }[] } }).data
+            );
+            return saveCount === 1 ? firstSave.promise : Promise.resolve(null);
+          }
+          return Promise.resolve(null);
+        }
+      );
+
+      let hookRef: UsePersistenceReturn;
+      const { rerender } = render(
+        <ConfigurableHarness
+          props={propsFor(tabA)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+      await act(async () => {});
+      act(() => {
+        hookRef!.handleAddComment(selection, "first");
+      });
+      let flush!: Promise<void>;
+      act(() => {
+        flush = hookRef!.flushPendingSaves();
+      });
+      await waitFor(() => expect(saveCount).toBe(1));
+
+      act(() => {
+        hookRef!.handleAddComment(selection, "second");
+      });
+      await act(async () => {
+        firstSave.resolve(null);
+        await flush;
+      });
+      rerender(
+        <ConfigurableHarness
+          props={propsFor(tabB)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+      await act(async () => {
+        await hookRef!.flushPendingSaves();
+        vi.runAllTimers();
+      });
+
+      expect(
+        savedPayloads[savedPayloads.length - 1]?.annotations.map(
+          (annotation) => annotation.text
+        )
+      ).toEqual(["first", "second"]);
+    });
+
+    it("serializes older and newer session saves", async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const firstSave = deferred<null>();
+      let saveCount = 0;
+      let diskContent = "";
+      vi.mocked(invoke).mockImplementation(
+        (command: string, args?: InvokeArgs) => {
+          if (command === "load_pdf_data") {
+            return Promise.resolve({ annotations: [], sessionIds: [] });
+          }
+          if (command === "save_session") {
+            saveCount += 1;
+            const session = (
+              args as { session: { messages: { content: string }[] } }
+            ).session;
+            const content = session.messages[0].content;
+            if (saveCount === 1) {
+              return firstSave.promise.then((value) => {
+                diskContent = content;
+                return value;
+              });
+            }
+            diskContent = content;
+            return Promise.resolve(null);
+          }
+          return Promise.resolve(null);
+        }
+      );
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={propsFor(tabA)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+      await act(async () => {});
+      const original = makeExplainSession([
+        { id: "m1", role: "user", content: "old", createdAt: 1 },
+      ]);
+      act(() => {
+        hookRef!.setSessions([original]);
+      });
+      let firstFlush!: Promise<void>;
+      act(() => {
+        firstFlush = hookRef!.flushPendingSaves();
+      });
+      await waitFor(() => expect(saveCount).toBe(1));
+
+      act(() => {
+        hookRef!.setSessions([
+          {
+            ...original,
+            messages: [
+              { id: "m1", role: "user", content: "new", createdAt: 1 },
+            ],
+          },
+        ]);
+      });
+      let secondFlush!: Promise<void>;
+      act(() => {
+        secondFlush = hookRef!.flushPendingSaves();
+      });
+      await act(async () => {
+        firstSave.resolve(null);
+        await Promise.all([firstFlush, secondFlush]);
+      });
+
+      expect(diskContent).toBe("new");
+    });
+
+    it("bounds flush to two rounds while sessions keep changing", async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const saveResolvers: (() => void)[] = [];
+      vi.mocked(invoke).mockImplementation((command: string) => {
+        if (command === "load_pdf_data") {
+          return Promise.resolve({ annotations: [], sessionIds: [] });
+        }
+        if (command === "save_session") {
+          return new Promise<null>((resolve) => {
+            saveResolvers.push(() => resolve(null));
+          });
+        }
+        return Promise.resolve(null);
+      });
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={propsFor(tabA)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+      await act(async () => {});
+      const original = makeExplainSession();
+      act(() => {
+        hookRef!.setSessions([original]);
+      });
+      let flush!: Promise<void>;
+      act(() => {
+        flush = hookRef!.flushPendingSaves();
+      });
+      await waitFor(() => expect(saveResolvers).toHaveLength(1));
+
+      act(() => {
+        hookRef!.setSessions([{ ...original, summary: "v1" }]);
+        saveResolvers[0]();
+      });
+      await waitFor(() => expect(saveResolvers).toHaveLength(2));
+      act(() => {
+        hookRef!.setSessions([{ ...original, summary: "v2" }]);
+        saveResolvers[1]();
+      });
+      await act(async () => {
+        await flush;
+      });
+
+      expect(saveResolvers).toHaveLength(2);
+    });
+
+    it("does not recreate a deleted session from an older queued save", async () => {
+      const { invoke } = await import("@tauri-apps/api/core");
+      const firstSave = deferred<null>();
+      let diskExists = true;
+      vi.mocked(invoke).mockImplementation((command: string) => {
+        if (command === "load_pdf_data") {
+          return Promise.resolve({ annotations: [], sessionIds: [] });
+        }
+        if (command === "save_session") {
+          return firstSave.promise.then((value) => {
+            diskExists = true;
+            return value;
+          });
+        }
+        if (command === "delete_session") {
+          diskExists = false;
+          return Promise.resolve(null);
+        }
+        return Promise.resolve(null);
+      });
+
+      let hookRef: UsePersistenceReturn;
+      render(
+        <ConfigurableHarness
+          props={propsFor(tabA)}
+          onHook={(hook) => {
+            hookRef = hook;
+          }}
+        />
+      );
+      await act(async () => {});
+      act(() => {
+        hookRef!.setSessions([makeExplainSession()]);
+      });
+      let flush!: Promise<void>;
+      act(() => {
+        flush = hookRef!.flushPendingSaves();
+      });
+      let deletion!: Promise<void>;
+      act(() => {
+        deletion = hookRef!.handleDeleteSession("session-explain");
+      });
+      await act(async () => {
+        firstSave.resolve(null);
+        await Promise.all([flush, deletion]);
+      });
+
+      expect(diskExists).toBe(false);
     });
 
     it("flushes dirty annotations of the previous tab immediately on tab switch", async () => {

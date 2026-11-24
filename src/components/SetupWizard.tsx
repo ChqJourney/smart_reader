@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Icon from "./Icon";
 import {
@@ -91,6 +91,7 @@ export default function SetupWizard({
   const [testState, setTestState] = useState<TestState>("idle");
   const [testModel, setTestModel] = useState<string | null>(null);
   const [testError, setTestError] = useState<LlmError | null>(null);
+  const testSeqRef = useRef(0);
   // 各平台在钥匙串中是否已存在密钥。用于：① 卡片标注「已配置」；
   // ② 第 2 步允许留空密钥（沿用已保存的 key），方便已配过的用户换平台/改模型。
   const [existingKeys, setExistingKeys] = useState<Set<PlatformId>>(new Set());
@@ -122,6 +123,7 @@ export default function SetupWizard({
   const hasExistingKey = existingKeys.has(platformId);
 
   const selectPlatform = useCallback((id: PlatformId) => {
+    testSeqRef.current += 1;
     setPlatformId(id);
     // 切换平台后，之前的测试结果失效，回到待测试状态。
     setTestState("idle");
@@ -161,13 +163,19 @@ export default function SetupWizard({
 
   const handleTest = useCallback(async () => {
     if (!apiKey.trim() && !hasExistingKey) return;
+    const seq = ++testSeqRef.current;
     setTestState("testing");
     setTestError(null);
-    const settingsToSave = buildSettings(apiKey.trim());
+    const settingsToTest = buildSettings(apiKey.trim());
     try {
-      // saveSettings 会把 apiKey 写入系统钥匙串，其余写入 settings.json
-      await saveSettings(settingsToSave);
-      const result = await testConnection();
+      // 测试使用未保存参数；只有 handleStart 才写设置和钥匙串。
+      const result = await testConnection({
+        platformId: settingsToTest.platformId,
+        baseUrl: settingsToTest.llm.baseUrl,
+        model: settingsToTest.llm.model,
+        apiKey: settingsToTest.llm.apiKey,
+      });
+      if (seq !== testSeqRef.current) return;
       if (result.success) {
         setTestState("success");
         setTestModel(result.model);
@@ -179,12 +187,14 @@ export default function SetupWizard({
         setTestError({ kind: "unknown", status: 0, body: "未知错误" });
       }
     } catch (e) {
+      if (seq !== testSeqRef.current) return;
       setTestState("error");
       setTestError({ kind: "unknown", status: 0, body: String(e) });
     }
   }, [apiKey, buildSettings, hasExistingKey]);
 
   const handleStart = useCallback(async () => {
+    testSeqRef.current += 1;
     const finalSettings = buildSettings(apiKey.trim());
     try {
       await saveSettings(finalSettings);
@@ -298,6 +308,7 @@ export default function SetupWizard({
                 className="wizard-input"
                 value={apiKey}
                 onChange={(e) => {
+                  testSeqRef.current += 1;
                   setApiKey(e.target.value);
                   // 密钥变更后旧的测试结果失效（语义同 selectPlatform）。
                   setTestState("idle");

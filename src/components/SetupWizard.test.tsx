@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import {
+  act,
+  render,
+  screen,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import SetupWizard from "./SetupWizard";
 import type { AppSettings } from "../services/settings";
 
@@ -84,5 +90,92 @@ describe("SetupWizard", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "下一步" }));
     expect(screen.getByRole("button", { name: "开始使用" })).toBeDisabled();
+  });
+
+  it("ignores a connection result that arrives after the API key changed", async () => {
+    let finishTest!: (value: { success: boolean; model: string }) => void;
+    const testGate = new Promise<{ success: boolean; model: string }>(
+      (resolve) => {
+        finishTest = resolve;
+      }
+    );
+    mockInvoke.mockImplementation((command: string) => {
+      if (command === "check_api_key") return Promise.resolve(false);
+      if (command === "save_settings") return Promise.resolve(null);
+      if (command === "test_connection") return testGate;
+      return Promise.reject(new Error(command));
+    });
+    render(
+      <SetupWizard
+        open
+        initialSettings={defaultSettings}
+        onComplete={vi.fn()}
+        onSkip={vi.fn()}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    fireEvent.change(screen.getByLabelText("API 密钥"), {
+      target: { value: "sk-old" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    fireEvent.click(screen.getByRole("button", { name: "测试连接" }));
+    await waitFor(() => {
+      expect(mockInvoke).toHaveBeenCalledWith("test_connection", {
+        params: expect.objectContaining({ apiKey: "sk-old" }),
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "上一步" }));
+    fireEvent.change(screen.getByLabelText("API 密钥"), {
+      target: { value: "sk-new" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    await act(async () => {
+      finishTest({ success: true, model: "deepseek-flash" });
+      await testGate;
+    });
+
+    expect(screen.getByRole("button", { name: "开始使用" })).toBeDisabled();
+    expect(
+      mockInvoke.mock.calls.filter(([command]) => command === "save_settings")
+    ).toHaveLength(0);
+  });
+
+  it("saves settings only when starting, not when testing", async () => {
+    const onComplete = vi.fn();
+    render(
+      <SetupWizard
+        open
+        initialSettings={defaultSettings}
+        onComplete={onComplete}
+        onSkip={vi.fn()}
+      />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    fireEvent.change(screen.getByLabelText("API 密钥"), {
+      target: { value: "sk-test" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "下一步" }));
+    fireEvent.click(screen.getByRole("button", { name: "测试连接" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "开始使用" })).toBeEnabled();
+    });
+
+    expect(
+      mockInvoke.mock.calls.filter(([command]) => command === "save_settings")
+    ).toHaveLength(0);
+    expect(mockInvoke).toHaveBeenCalledWith("test_connection", {
+      params: expect.objectContaining({
+        platformId: "deepseek",
+        apiKey: "sk-test",
+      }),
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "开始使用" }));
+    await waitFor(() => expect(onComplete).toHaveBeenCalled());
+    expect(
+      mockInvoke.mock.calls.filter(([command]) => command === "save_settings")
+    ).toHaveLength(1);
   });
 });

@@ -33,9 +33,9 @@ export interface ImageAttachments {
  */
 export function useImageAttachments(): ImageAttachments {
   const [images, setImages] = useState<AttachedImage[]>([]);
-  // ref 跟踪最新值：卸载 cleanup 与添加时的上限判断都不能依赖闭包旧值
+  // 所有写操作同步维护 ref；不能在 render 期回写，避免并发渲染覆盖新值。
   const imagesRef = useRef<AttachedImage[]>([]);
-  imagesRef.current = images;
+  const limitNotifiedRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -43,7 +43,17 @@ export function useImageAttachments(): ImageAttachments {
     };
   }, []);
 
+  const commitImages = useCallback((next: AttachedImage[]) => {
+    imagesRef.current = next;
+    if (next.length < MAX_IMAGE_ATTACHMENTS) {
+      limitNotifiedRef.current = false;
+    }
+    setImages(next);
+  }, []);
+
   const notifyLimit = useCallback(() => {
+    if (limitNotifiedRef.current) return;
+    limitNotifiedRef.current = true;
     void showMessage(
       i18n.t("common.notice"),
       i18n.t("chat.askImageLimit", { max: MAX_IMAGE_ATTACHMENTS })
@@ -52,18 +62,17 @@ export function useImageAttachments(): ImageAttachments {
 
   const append = useCallback(
     (candidates: AttachedImage[]) => {
-      const room = MAX_IMAGE_ATTACHMENTS - imagesRef.current.length;
-      if (room <= 0) {
-        for (const c of candidates) URL.revokeObjectURL(c.previewUrl);
-        notifyLimit();
-        return;
+      const current = imagesRef.current;
+      const room = MAX_IMAGE_ATTACHMENTS - current.length;
+      const accepted = room > 0 ? candidates.slice(0, room) : [];
+      const rejected = room > 0 ? candidates.slice(room) : candidates;
+      if (accepted.length > 0) commitImages([...current, ...accepted]);
+      for (const candidate of rejected) {
+        URL.revokeObjectURL(candidate.previewUrl);
       }
-      const accepted = candidates.slice(0, room);
-      for (const c of candidates.slice(room)) URL.revokeObjectURL(c.previewUrl);
-      if (candidates.length > room) notifyLimit();
-      setImages((prev) => [...prev, ...accepted]);
+      if (rejected.length > 0) notifyLimit();
     },
-    [notifyLimit]
+    [commitImages, notifyLimit]
   );
 
   const addFromDialog = useCallback(async () => {
@@ -106,20 +115,22 @@ export function useImageAttachments(): ImageAttachments {
     [append]
   );
 
-  const remove = useCallback((id: string) => {
-    setImages((prev) => {
-      const target = prev.find((img) => img.id === id);
-      if (target) URL.revokeObjectURL(target.previewUrl);
-      return prev.filter((img) => img.id !== id);
-    });
-  }, []);
+  const remove = useCallback(
+    (id: string) => {
+      const current = imagesRef.current;
+      const target = current.find((img) => img.id === id);
+      if (!target) return;
+      commitImages(current.filter((img) => img.id !== id));
+      URL.revokeObjectURL(target.previewUrl);
+    },
+    [commitImages]
+  );
 
   const clear = useCallback(() => {
-    setImages((prev) => {
-      for (const img of prev) URL.revokeObjectURL(img.previewUrl);
-      return [];
-    });
-  }, []);
+    const current = imagesRef.current;
+    commitImages([]);
+    for (const img of current) URL.revokeObjectURL(img.previewUrl);
+  }, [commitImages]);
 
   return {
     images,

@@ -105,6 +105,52 @@ describe("useImageAttachments", () => {
     expect(showMessage).toHaveBeenCalled();
   });
 
+  it("并发粘贴同时完成时仍最多保留 3 张", async () => {
+    vi.mocked(normalizeImageFile).mockImplementation(async (file) => ({
+      data: new Uint8Array([1]),
+      previewUrl: `blob:${file.name}`,
+    }));
+    const { result } = renderHook(() => useImageAttachments());
+    const files = ["a", "b", "c", "d"].map(
+      (name) => new File([""], `${name}.png`)
+    );
+
+    await act(async () => {
+      await Promise.all(files.map((file) => result.current.addFromPaste(file)));
+    });
+
+    expect(result.current.images).toHaveLength(3);
+    expect(showMessage).toHaveBeenCalledTimes(1);
+    expect(revokeSpy).toHaveBeenCalledWith("blob:d.png");
+  });
+
+  it("达到上限后的重复添加只提示一次，移除后恢复提示资格", async () => {
+    mockDialogPick(["/a.png", "/b.png", "/c.png"]);
+    vi.mocked(normalizeImageFile).mockImplementation(async (file) => ({
+      data: new Uint8Array([1]),
+      previewUrl: `blob:${file.name}`,
+    }));
+    const { result } = renderHook(() => useImageAttachments());
+    await act(async () => {
+      await result.current.addFromDialog();
+    });
+
+    await act(async () => {
+      await result.current.addFromPaste(new File([""], "d.png"));
+      await result.current.addFromPaste(new File([""], "e.png"));
+    });
+    expect(showMessage).toHaveBeenCalledTimes(1);
+
+    act(() => result.current.remove(result.current.images[0].id));
+    await act(async () => {
+      await result.current.addFromPaste(new File([""], "f.png"));
+      await result.current.addFromPaste(new File([""], "g.png"));
+    });
+
+    expect(result.current.images).toHaveLength(3);
+    expect(showMessage).toHaveBeenCalledTimes(2);
+  });
+
   it("remove 释放 object URL 并移除对应图片", async () => {
     mockDialogPick(["/a.png", "/b.png"]);
     const { result } = renderHook(() => useImageAttachments());

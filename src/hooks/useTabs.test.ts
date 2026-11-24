@@ -121,6 +121,39 @@ describe("useTabs", () => {
     expect(mockInvoke).toHaveBeenCalledTimes(4); // authorize + bytes + hash + size，每个路径只各一次
   });
 
+  it("deduplicates identical content opened concurrently through different paths", async () => {
+    const { result } = renderHook(() => useTabs());
+    let releaseHash!: () => void;
+    const hashGate = new Promise<void>((resolve) => {
+      releaseHash = resolve;
+    });
+    mockInvoke.mockImplementation((command: string) => {
+      switch (command) {
+        case "authorize_pdf_path":
+          return Promise.resolve(undefined);
+        case "read_pdf_bytes":
+          return Promise.resolve(new ArrayBuffer(8));
+        case "get_pdf_hash":
+          return hashGate.then(() => "same-hash");
+        case "get_pdf_file_size":
+          return Promise.resolve(1024);
+        default:
+          return Promise.reject(new Error(command));
+      }
+    });
+
+    const [first, second] = await act(async () => {
+      const firstOpen = result.current.openPdfByPath("/one/copy.pdf");
+      const secondOpen = result.current.openPdfByPath("/two/copy.pdf");
+      releaseHash();
+      return Promise.all([firstOpen, secondOpen]);
+    });
+
+    expect(result.current.tabs).toHaveLength(1);
+    expect(first?.id).toBe(second?.id);
+    expect(result.current.activeTabId).toBe(first?.id);
+  });
+
   it("counts authorize and hash calls correctly for concurrent same-path opens", async () => {
     const { result } = renderHook(() => useTabs());
 

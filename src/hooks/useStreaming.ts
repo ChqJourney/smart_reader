@@ -98,7 +98,9 @@ export function useStreaming() {
           handlers.onError(String(err));
         }
       } finally {
-        controllersRef.current.delete(key);
+        if (controllersRef.current.get(key) === controller) {
+          controllersRef.current.delete(key);
+        }
       }
     },
     []

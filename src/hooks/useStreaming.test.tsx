@@ -110,4 +110,37 @@ describe("useStreaming", () => {
     expect(handlers.onAbort).toHaveBeenCalledTimes(1);
     expect(handlers.onDone).not.toHaveBeenCalled();
   });
+
+  it("旧流收尾不会删除同 key 新流的控制器", async () => {
+    let finishSecond!: () => void;
+    const signals: AbortSignal[] = [];
+    vi.mocked(streamChatCompletion).mockImplementation(
+      async function* (_messages, options) {
+        const signal = options!.signal!;
+        signals.push(signal);
+        if (signals.length === 1) {
+          await new Promise<void>((resolve) => {
+            signal.addEventListener("abort", () => resolve());
+          });
+        } else {
+          await new Promise<void>((resolve) => {
+            finishSecond = resolve;
+          });
+        }
+      }
+    );
+
+    const { result } = renderHook(() => useStreaming());
+    const first = result.current.run("shared", messages, makeHandlers());
+    await waitFor(() => expect(signals).toHaveLength(1));
+    const second = result.current.run("shared", messages, makeHandlers());
+    await first;
+    await waitFor(() => expect(signals).toHaveLength(2));
+
+    result.current.abort("shared");
+    finishSecond();
+    await second;
+
+    expect(signals[1].aborted).toBe(true);
+  });
 });

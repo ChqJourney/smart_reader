@@ -403,8 +403,8 @@ LLM 流量已整体改为 **Rust 后端代理**（`src-tauri/src/llm_proxy.rs`�
 
 ```
 App.tsx（编排层，具体状态已下沉到 hooks）
-├── useTabs：tabs / activeTabId / secondaryTabId   # PDF Tab 状态（单视图 + 并排视图）+ 休眠调度（addTab 唯一触发点、activateTab/wakeTab/gotoTabPage/关tab顶替时唤醒，`getHibernationContext` 由 App 以 ref 回填 secondary 与流式会话信息）
-├── usePersistence：annotations / sessions / stashes / selection（首轮成功收尾后 fire-and-forget 生成 `session.summary`（`summary-{id}` 流、thinking disabled）；`handleDeleteSession` 连带删除 PDF 标记与磁盘会话；`handleReinterpretSession` 沿用 sources+首条 prompt 另起新会话并重映射批注；`handleFreeQuestion` 创建空 sources 锚定会话并主动标脏锚定 hash——否则无批注变更时 sessionIds 永不写盘）
+├── useTabs：tabs / activeTabId / secondaryTabId   # PDF Tab 状态（单视图 + 并排视图）+ 休眠调度（addTab 唯一触发点、activateTab/wakeTab/gotoTabPage/关tab顶替时唤醒，`getHibernationContext` 由 App 以 ref 回填 secondary 与流式会话信息；所有 Tab 写入同步维护 tabsRef，hash 计算后的去重/预算/插入在无 await 的串行同步 commit 中完成）
+├── usePersistence：annotations / sessions / stashes / selection（首轮成功收尾后 fire-and-forget 生成 `session.summary`（`summary-{id}` 流、thinking disabled）；`handleDeleteSession` 连带删除 PDF 标记与磁盘会话；`handleReinterpretSession` 沿用 sources+首条 prompt 另起新会话并重映射批注；`handleFreeQuestion` 创建空 sources 锚定会话并主动标脏锚定 hash——否则无批注变更时 sessionIds 永不写盘；首次加载按 hash single-flight 并与本地编辑合并，保存按 hash/sessionId 分队列串行、按 revision 清脏，flush 最多两轮 best-effort）
 ├── useRightPanelLayout：rightVisible / rightPanelWidth
 ├── useRecentFiles：recentFiles
 ├── useSplitView：splitPct                         # 并排视图左右面板比例
@@ -441,7 +441,7 @@ PdfViewer.tsx（协调层：UI + 组合 hooks）
 AiChatPanel.tsx
 ├── expandedId / expandedStashIds / sessionScope（「当前文档/所有已打开 Tab/全部文档」过滤）/ sortMode（排序方式，受控于 App 的 settings.sessionSortMode）
 ├── tabRequest（App 传入的 tab 激活请求：PDF 侧加入暂存 → 暂存 tab，按 nonce 变化生效）
-├── expandSessionRequest（App 传入的 chatbox 进入请求：发起解读 / 自定义解读发送 / 重新解读后直接进入新会话 chatbox 观看流式输出，含切到解读 tab；按 nonce 变化生效，与自由提问行为一致）
+├── expandSessionRequest（App 传入的 chatbox 进入请求：发起解读 / 自定义解读发送 / 重新解读后直接进入新会话 chatbox 观看流式输出，点击主屏或副屏解读标记的「查看解读」也经同一入口展开；含切到解读 tab，按 nonce 变化生效，重复点击同一标记也可重新进入，与自由提问行为一致）
 └── 检测到 isStreaming 会话时启动流；一轮对话（含多个工具轮次）的 reasoningContent 与全部 `toolEvents` 由 `sessions.ts` 的 `collectTurnProcess` 归组到该轮最终 assistant 消息上——AI 侧一轮最多两个框：过程气泡（思考 + 工具调用，`.ai-chat-process`）与正文气泡；长 user 消息折叠 + 来源片段卡片（可跳原文）；assistant 气泡 hover 复制 / 头部复制全部 / 删除会话；MarkdownRenderer 处理已验证 / 无效 / 普通未验证引用并回调 App 精确跳转，重复标题经 ReferenceCandidatesModal 选择
 
 ToolCallsIndicator.tsx

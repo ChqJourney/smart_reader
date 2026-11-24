@@ -775,6 +775,29 @@ describe("AiChatPanel", () => {
     expect(onFollowUp).toHaveBeenCalledWith("session-1", "追问内容", []);
   });
 
+  it("does not send a follow-up when Enter confirms an IME composition", () => {
+    const onFollowUp = vi.fn();
+    const sessions = [
+      makeSession({
+        id: "session-1",
+        messages: [
+          makeMessage({ id: "msg-1", role: "user", content: "问题" }),
+          makeMessage({ id: "msg-2", role: "assistant", content: "回答" }),
+        ],
+      }),
+    ];
+    renderPanel({ sessions, onFollowUp });
+
+    fireEvent.click(screen.getByRole("tab", { name: /解读记录/i }));
+    fireEvent.click(screen.getByText(/source text/));
+    const input = screen.getByPlaceholderText(/继续追问/);
+    fireEvent.change(input, { target: { value: "组词内容" } });
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+
+    expect(onFollowUp).not.toHaveBeenCalled();
+    expect(input).toHaveValue("组词内容");
+  });
+
   it("shows interrupt button when session is streaming", () => {
     const onInterrupt = vi.fn();
     const sessions = [

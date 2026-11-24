@@ -134,6 +134,22 @@ export interface UsePersistenceReturn {
   flushPendingSaves: () => Promise<void>;
 }
 
+type KeyedTaskQueues = Map<string, Promise<void>>;
+
+function enqueueKeyedTask(
+  queues: KeyedTaskQueues,
+  key: string,
+  task: () => Promise<void>
+): Promise<void> {
+  const previous = queues.get(key) ?? Promise.resolve();
+  const run = previous.catch(() => undefined).then(task);
+  const tracked = run.finally(() => {
+    if (queues.get(key) === tracked) queues.delete(key);
+  });
+  queues.set(key, tracked);
+  return tracked;
+}
+
 export function usePersistence({
   activeTab,
   activeTabId,
@@ -152,6 +168,7 @@ export function usePersistence({
   // 任何批注变更都把对应 fileHash 标脏：防抖保存只落「脏 ∩ 已加载」的桶，
   // 切 tab/关 tab/退出时对脏 hash 做立即 flush，不再只看当前可见 tab。
   const dirtyHashesRef = useRef<Set<string>>(new Set());
+  const annotationRevisionsRef = useRef<Map<string, number>>(new Map());
   // hash → filePath 映射：保存时需要路径，但脏 hash 所属 tab 可能已切换
   // 或关闭，不能依赖当前 active/secondary tab 反查。
   const filePathByHashRef = useRef<Map<string, string>>(new Map());
@@ -162,21 +179,25 @@ export function usePersistence({
 
   const setAnnotationsByHash = useCallback(
     (value: React.SetStateAction<Record<string, Annotation[]>>) => {
-      setAnnotationsByHashState((prev) => {
-        const next = typeof value === "function" ? value(prev) : value;
-        if (next === prev) return prev;
-        // 在 updater 内标脏：StrictMode 会重复调用 updater，但 Set.add 幂等，
-        // 不会引入脏标记误判。
-        for (const hash of Object.keys(next)) {
-          if (next[hash] !== prev[hash]) dirtyHashesRef.current.add(hash);
-        }
-        return next;
-      });
+      const prev = annotationsByHashRef.current;
+      const next = typeof value === "function" ? value(prev) : value;
+      if (next === prev) return;
+      annotationsByHashRef.current = next;
+      const hashes = new Set([...Object.keys(prev), ...Object.keys(next)]);
+      for (const hash of hashes) {
+        if (next[hash] === prev[hash]) continue;
+        dirtyHashesRef.current.add(hash);
+        annotationRevisionsRef.current.set(
+          hash,
+          (annotationRevisionsRef.current.get(hash) ?? 0) + 1
+        );
+      }
+      setAnnotationsByHashState(next);
     },
     []
   );
   const [stashes, setStashes] = useState<StashItem[]>([]);
-  const [sessions, setSessions] = useState<InterpretationSession[]>([]);
+  const [sessions, setSessionsState] = useState<InterpretationSession[]>([]);
 
   // Backwards-compatible setter that re-buckets annotations by fileHash.
   // Primarily exposed for tests; prefer the bucket-aware helpers in production.
@@ -205,6 +226,35 @@ export function usePersistence({
   );
 
   const sessionsRef = useRef<InterpretationSession[]>(sessions);
+  const sessionRevisionsRef = useRef<Map<string, number>>(new Map());
+  const setSessions = useCallback(
+    (value: React.SetStateAction<InterpretationSession[]>) => {
+      const prev = sessionsRef.current;
+      const next = typeof value === "function" ? value(prev) : value;
+      if (next === prev) return;
+      sessionsRef.current = next;
+      const previousById = new Map(
+        prev.map((session) => [session.id, session])
+      );
+      const nextIds = new Set(next.map((session) => session.id));
+      for (const session of next) {
+        if (previousById.get(session.id) === session) continue;
+        sessionRevisionsRef.current.set(
+          session.id,
+          (sessionRevisionsRef.current.get(session.id) ?? 0) + 1
+        );
+      }
+      for (const session of prev) {
+        if (nextIds.has(session.id)) continue;
+        sessionRevisionsRef.current.set(
+          session.id,
+          (sessionRevisionsRef.current.get(session.id) ?? 0) + 1
+        );
+      }
+      setSessionsState(next);
+    },
+    []
+  );
   useEffect(() => {
     sessionsRef.current = sessions;
   }, [sessions]);
@@ -219,6 +269,8 @@ export function usePersistence({
   const lastPdfPersistAtRef = useRef(0);
   const lastSessionPersistAtRef = useRef(0);
   const savedSessionsRef = useRef<Record<string, InterpretationSession>>({});
+  const pdfSaveQueuesRef = useRef<KeyedTaskQueues>(new Map());
+  const sessionSaveQueuesRef = useRef<KeyedTaskQueues>(new Map());
   const settingsRef = useRef<AppSettings>(settings);
   const streaming = useStreaming();
   const { abortAll } = streaming;
@@ -317,6 +369,7 @@ export function usePersistence({
   }, [annotationsByHash, visibleFileHashes]);
 
   const loadedFileHashesRef = useRef<Set<string>>(new Set());
+  const pdfLoadsRef = useRef<Map<string, Promise<void>>>(new Map());
 
   // Maintain the set of file hashes considered "loaded". When a bucket is
   // removed (e.g. tab closed and hash no longer referenced), drop the hash so
@@ -334,66 +387,120 @@ export function usePersistence({
 
   // 把「脏 ∩ 已成功加载」的 hash 落盘；onlyHashes 用于定向 flush（如切 tab）。
   // 加载失败的 hash 不在 loadedFileHashes 中，永远不会被保存——这是防止
-  // 「加载失败 → 空数据覆盖写回」的关键门槛。
+  // 「加载失败 → 空数据覆盖写回」的关键门槛。同一 hash 串行写入，成功时只清
+  // 快照对应 revision 的脏标记，保存期间的新修改留给后续任务。
   const persistDirtyHashes = useCallback(
     async (onlyHashes?: ReadonlySet<string>) => {
       const shouldSaveAnnotation = (a: Annotation) =>
         (a.type !== "stash" || a.interpretedGroupSize !== undefined) &&
         a.fileHash;
+      const hashes = new Set([
+        ...dirtyHashesRef.current,
+        ...pdfSaveQueuesRef.current.keys(),
+      ]);
+      const pending: Promise<void>[] = [];
 
-      for (const fileHash of Array.from(dirtyHashesRef.current)) {
+      for (const fileHash of hashes) {
         if (onlyHashes && !onlyHashes.has(fileHash)) continue;
         if (!loadedFileHashesRef.current.has(fileHash)) continue;
         const filePath = filePathByHashRef.current.get(fileHash);
         if (!filePath) continue;
-
-        const fileAnnotations = annotationsByHashRef.current[fileHash] || [];
-        const fileSessionIds = sessionsRef.current
-          .filter((s) => sessionBelongsToHashes(s, new Set([fileHash])))
-          .map((s) => s.id);
-
-        try {
-          await savePdfData(filePath, {
-            annotations: fileAnnotations.filter(shouldSaveAnnotation),
-            sessionIds: fileSessionIds,
-          });
-          // 保存成功才清脏标记；失败保留，下次防抖/flush 时重试。
-          dirtyHashesRef.current.delete(fileHash);
-          info(
-            `savePdfData succeeded: fileHash=${fileHash} annotations=${fileAnnotations.length} sessions=${fileSessionIds.length}`
-          );
-        } catch (err) {
-          error(`savePdfData failed: ${err}`);
+        if (!dirtyHashesRef.current.has(fileHash)) {
+          const inFlight = pdfSaveQueuesRef.current.get(fileHash);
+          if (inFlight) pending.push(inFlight);
+          continue;
         }
+
+        pending.push(
+          enqueueKeyedTask(pdfSaveQueuesRef.current, fileHash, async () => {
+            if (!dirtyHashesRef.current.has(fileHash)) return;
+            const revision = annotationRevisionsRef.current.get(fileHash) ?? 0;
+            const fileAnnotations =
+              annotationsByHashRef.current[fileHash] || [];
+            const fileSessionIds = sessionsRef.current
+              .filter((s) => sessionBelongsToHashes(s, new Set([fileHash])))
+              .map((s) => s.id);
+            try {
+              await savePdfData(filePath, {
+                annotations: fileAnnotations.filter(shouldSaveAnnotation),
+                sessionIds: fileSessionIds,
+              });
+              if (
+                (annotationRevisionsRef.current.get(fileHash) ?? 0) === revision
+              ) {
+                dirtyHashesRef.current.delete(fileHash);
+              }
+              info(
+                `savePdfData succeeded: fileHash=${fileHash} annotations=${fileAnnotations.length} sessions=${fileSessionIds.length}`
+              );
+            } catch (err) {
+              error(`savePdfData failed: ${err}`);
+            }
+          })
+        );
       }
+      await Promise.all(pending);
     },
     []
   );
 
   const persistChangedSessions = useCallback(async () => {
-    // Save all sessions that have changed since last save.
-    // Note: we intentionally do NOT delete sessions from disk when they
-    // disappear from state — sessions removed due to tab close should
-    // persist on disk so they can be restored when the PDF is reopened.
+    // Tab 关闭造成的内存移除不删除磁盘会话；显式删除走同一队列的 delete。
     let savedSessionCount = 0;
-    for (const session of sessionsRef.current) {
-      const saved = savedSessionsRef.current[session.id];
-      if (!saved || JSON.stringify(saved) !== JSON.stringify(session)) {
-        try {
-          await saveSession(session);
-          savedSessionsRef.current[session.id] = session;
-          savedSessionCount += 1;
-        } catch (err) {
-          error(`saveSession failed: ${err}`);
-        }
+    const ids = new Set([
+      ...sessionsRef.current.map((session) => session.id),
+      ...sessionSaveQueuesRef.current.keys(),
+    ]);
+    const pending: Promise<void>[] = [];
+    for (const id of ids) {
+      const session = sessionsRef.current.find((item) => item.id === id);
+      if (!session) {
+        const inFlight = sessionSaveQueuesRef.current.get(id);
+        if (inFlight) pending.push(inFlight);
+        continue;
       }
+      const saved = savedSessionsRef.current[id];
+      if (saved && JSON.stringify(saved) === JSON.stringify(session)) continue;
+      pending.push(
+        enqueueKeyedTask(sessionSaveQueuesRef.current, id, async () => {
+          const latest = sessionsRef.current.find((item) => item.id === id);
+          if (!latest) return;
+          const latestSaved = savedSessionsRef.current[id];
+          if (
+            latestSaved &&
+            JSON.stringify(latestSaved) === JSON.stringify(latest)
+          ) {
+            return;
+          }
+          try {
+            await saveSession(latest);
+            savedSessionsRef.current[id] = latest;
+            savedSessionCount += 1;
+          } catch (err) {
+            error(`saveSession failed: ${err}`);
+          }
+        })
+      );
     }
+    await Promise.all(pending);
     if (savedSessionCount > 0) {
       info(`saveSession succeeded: count=${savedSessionCount}`);
     }
   }, []);
 
-  // 退出前立即落盘：清掉两个防抖定时器，同步保存所有脏 hash 与变更会话。
+  const deleteQueuedSession = useCallback(async (sessionId: string) => {
+    await enqueueKeyedTask(
+      sessionSaveQueuesRef.current,
+      sessionId,
+      async () => {
+        await deleteSessionOnDisk(sessionId);
+        delete savedSessionsRef.current[sessionId];
+      }
+    );
+  }, []);
+
+  // 退出/备份前做有界 best-effort flush：只追调用时的目标 revisions，
+  // 最多两轮，避免持续流式写入让关窗 drain 永不结束。
   const flushPendingSaves = useCallback(async () => {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -403,107 +510,105 @@ export function usePersistence({
       clearTimeout(sessionSaveTimeoutRef.current);
       sessionSaveTimeoutRef.current = null;
     }
-    await persistDirtyHashes();
-    await persistChangedSessions();
+    const pdfTargets = new Map(annotationRevisionsRef.current);
+    const sessionTargets = new Map(sessionRevisionsRef.current);
+    const hasAdvanced = (
+      targets: Map<string, number>,
+      current: Map<string, number>
+    ) =>
+      Array.from(targets).some(
+        ([id, revision]) => (current.get(id) ?? 0) > revision
+      );
+
+    for (let round = 0; round < 2; round++) {
+      await persistDirtyHashes();
+      await persistChangedSessions();
+      const pdfAdvanced = hasAdvanced(
+        pdfTargets,
+        annotationRevisionsRef.current
+      );
+      const sessionsAdvanced = hasAdvanced(
+        sessionTargets,
+        sessionRevisionsRef.current
+      );
+      if (!pdfAdvanced && !sessionsAdvanced) break;
+    }
     lastPdfPersistAtRef.current = Date.now();
     lastSessionPersistAtRef.current = Date.now();
   }, [persistDirtyHashes, persistChangedSessions]);
 
-  // Load annotations and sessions when active file changes.
-  // Skip if the current fileHash has already been loaded successfully.
-  useEffect(() => {
-    if (!activeTab?.filePath || !activeTab.fileHash) return;
-    const fileHash = activeTab.fileHash;
-    if (loadedFileHashesRef.current.has(fileHash)) return;
+  // 同一 hash 的首次加载 single-flight。磁盘数据只作基底，当前内存中的
+  // 同 id 项优先，加载期间（或此前加载失败后）的新批注不会被旧快照覆盖。
+  const loadPdfFile = useCallback(
+    async (filePath: string, fileHash: string) => {
+      if (loadedFileHashesRef.current.has(fileHash)) return;
+      const existing = pdfLoadsRef.current.get(fileHash);
+      if (existing) return existing;
 
-    let cancelled = false;
-    loadPdfData(activeTab.filePath)
-      .then(async (data) => {
-        if (cancelled) return;
-        // Mark as loaded before merging so concurrent StrictMode runs see it.
-        loadedFileHashesRef.current.add(fileHash);
-        // Replace the bucket for this fileHash. Backfill fileHash for legacy data.
-        // 用原始 setter：从磁盘加载不算用户改动，不应标脏触发回写。
-        setAnnotationsByHashState((prev) => {
+      const promise = (async () => {
+        try {
+          const data = await loadPdfData(filePath);
           const loaded = data.annotations
             .filter(
               (a) => a.type !== "stash" || a.interpretedGroupSize !== undefined
             )
             .map((a) => ({ ...a, fileHash: a.fileHash || fileHash }));
-          return { ...prev, [fileHash]: loaded };
-        });
+          const current = annotationsByHashRef.current[fileHash] ?? [];
+          const currentById = new Map(current.map((a) => [a.id, a]));
+          const loadedIds = new Set(loaded.map((a) => a.id));
+          const merged = [
+            ...loaded.map((a) => currentById.get(a.id) ?? a),
+            ...current.filter((a) => !loadedIds.has(a.id)),
+          ];
+          annotationsByHashRef.current = {
+            ...annotationsByHashRef.current,
+            [fileHash]: merged,
+          };
+          setAnnotationsByHashState(annotationsByHashRef.current);
+          loadedFileHashesRef.current.add(fileHash);
+          filePathByHashRef.current.set(fileHash, filePath);
 
-        const sessionIds = data.sessionIds || [];
-        const loadedSessions = await Promise.all(
-          sessionIds.map((id) => loadSession(id))
-        );
-        if (cancelled) return;
-        setSessions((prev) => {
-          const existingIds = new Set(prev.map((s) => s.id));
-          const newSessions = loadedSessions.filter(
-            (s): s is InterpretationSession =>
-              s !== null && !existingIds.has(s.id)
+          const loadedSessions = await Promise.all(
+            (data.sessionIds || []).map((id) => loadSession(id))
           );
-          return newSessions.length > 0 ? [...prev, ...newSessions] : prev;
-        });
-      })
-      .catch((err) => {
-        // 加载失败：不标记 loaded、不 setState 写空桶，否则后续防抖保存
-        // 会把空数据覆盖写回磁盘，静默清空该 PDF 的已有批注。
-        warn(
-          `Load PDF data failed, skip persistence for fileHash=${fileHash}: ${err}`
-        );
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab?.filePath, activeTab?.fileHash]);
+          setSessions((prev) => {
+            const existingIds = new Set(prev.map((s) => s.id));
+            const newSessions = loadedSessions.filter(
+              (s): s is InterpretationSession =>
+                s !== null && !existingIds.has(s.id)
+            );
+            return newSessions.length > 0 ? [...prev, ...newSessions] : prev;
+          });
+        } catch (err) {
+          // 加载失败不标记 loaded、不写空桶，后续重试仍需保留本地编辑。
+          warn(
+            `Load PDF data failed, skip persistence for fileHash=${fileHash}: ${err}`
+          );
+        } finally {
+          pdfLoadsRef.current.delete(fileHash);
+        }
+      })();
+      pdfLoadsRef.current.set(fileHash, promise);
+      return promise;
+    },
+    [setSessions]
+  );
 
-  // Load secondary PDF annotations and sessions when in split view.
+  useEffect(() => {
+    if (!activeTab?.filePath || !activeTab.fileHash) return;
+    void loadPdfFile(activeTab.filePath, activeTab.fileHash);
+  }, [activeTab?.filePath, activeTab?.fileHash, loadPdfFile]);
+
   useEffect(() => {
     if (!isSplitView || !secondaryTab?.filePath || !secondaryTab.fileHash)
       return;
-    const fileHash = secondaryTab.fileHash;
-    if (loadedFileHashesRef.current.has(fileHash)) return;
-
-    let cancelled = false;
-    loadPdfData(secondaryTab.filePath)
-      .then(async (data) => {
-        if (cancelled) return;
-        loadedFileHashesRef.current.add(fileHash);
-        setAnnotationsByHashState((prev) => {
-          const loaded = data.annotations
-            .filter(
-              (a) => a.type !== "stash" || a.interpretedGroupSize !== undefined
-            )
-            .map((a) => ({ ...a, fileHash: a.fileHash || fileHash }));
-          return { ...prev, [fileHash]: loaded };
-        });
-
-        const sessionIds = data.sessionIds || [];
-        const loadedSessions = await Promise.all(
-          sessionIds.map((id) => loadSession(id))
-        );
-        if (cancelled) return;
-        setSessions((prev) => {
-          const existingIds = new Set(prev.map((s) => s.id));
-          const newSessions = loadedSessions.filter(
-            (s): s is InterpretationSession =>
-              s !== null && !existingIds.has(s.id)
-          );
-          return newSessions.length > 0 ? [...prev, ...newSessions] : prev;
-        });
-      })
-      .catch((err) => {
-        // 同主屏加载失败处理：不标记 loaded、不写空桶，防止空数据覆盖磁盘。
-        warn(
-          `Load secondary PDF data failed, skip persistence for fileHash=${fileHash}: ${err}`
-        );
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [isSplitView, secondaryTab?.filePath, secondaryTab?.fileHash]);
+    void loadPdfFile(secondaryTab.filePath, secondaryTab.fileHash);
+  }, [
+    isSplitView,
+    secondaryTab?.filePath,
+    secondaryTab?.fileHash,
+    loadPdfFile,
+  ]);
 
   // Persist PDF data with debounce (annotations + session references).
   // 保存目标为「脏 ∩ 已加载」的 hash，而非仅当前可见 tab——否则切 tab/关 tab
@@ -556,8 +661,8 @@ export function usePersistence({
     }
   }, [visibleFileHashes, persistDirtyHashes]);
 
-  // Persist modified sessions with debounce, and delete sessions that have been
-  // removed from memory so that disk does not retain stale session files.
+  // Persist modified sessions with debounce. Tab 关闭只中断流、不删磁盘；
+  // 用户显式删除会话时经 deleteQueuedSession 与保存共用同一队列。
   useEffect(() => {
     if (sessionSaveTimeoutRef.current) {
       // 同上面的批注防抖：流式合批持续重置防抖时，到阈值强制落盘。
@@ -1541,7 +1646,7 @@ export function usePersistence({
       // Start the loop. Aborting the original messageId also cancels any round.
       runAgentLoop();
     },
-    [streaming, toolSummary]
+    [streaming, toolSummary, setSessions]
   );
 
   const startSessionFromStashes = useCallback(
@@ -1599,7 +1704,7 @@ export function usePersistence({
 
       return { sessionId, session: streamingSession };
     },
-    [openRightPanel, runSessionStream, setAnnotationsByHash]
+    [openRightPanel, runSessionStream, setAnnotationsByHash, setSessions]
   );
 
   const handleAddToStash = useCallback(
@@ -1911,7 +2016,7 @@ export function usePersistence({
         runSessionStream(streamingSession, streamingSession.streamingMessageId);
       }
     },
-    [runSessionStream, filterUserImages]
+    [runSessionStream, filterUserImages, setSessions]
   );
 
   const handleInterruptSession = useCallback(
@@ -1930,7 +2035,7 @@ export function usePersistence({
         )
       );
     },
-    [sessions, streaming]
+    [sessions, streaming, setSessions]
   );
 
   const handleSessionUpdate = useCallback(
@@ -1939,7 +2044,7 @@ export function usePersistence({
         prev.map((s) => (s.id === updatedSession.id ? updatedSession : s))
       );
     },
-    []
+    [setSessions]
   );
 
   const handleAnnotationUpdate = useCallback(
@@ -1983,7 +2088,7 @@ export function usePersistence({
           setSessions((prev) => deleteSession(prev, sessionId));
           // Explicitly delete the session file from disk (user-initiated delete)
           try {
-            await deleteSessionOnDisk(sessionId);
+            await deleteQueuedSession(sessionId);
           } catch (err) {
             error(`deleteSessionOnDisk failed: ${err}`);
           }
@@ -1997,7 +2102,14 @@ export function usePersistence({
         return next;
       });
     },
-    [annotationsByHash, sessions, handleInterruptSession, setAnnotationsByHash]
+    [
+      annotationsByHash,
+      sessions,
+      handleInterruptSession,
+      setAnnotationsByHash,
+      deleteQueuedSession,
+      setSessions,
+    ]
   );
 
   // 从右侧面板按 session 删除：中止进行中的流、删除会话（含磁盘文件），
@@ -2017,7 +2129,7 @@ export function usePersistence({
       }
       setSessions((prev) => deleteSession(prev, sessionId));
       try {
-        await deleteSessionOnDisk(sessionId);
+        await deleteQueuedSession(sessionId);
       } catch (err) {
         error(`deleteSessionOnDisk failed: ${err}`);
       }
@@ -2029,7 +2141,13 @@ export function usePersistence({
         return next;
       });
     },
-    [sessions, handleInterruptSession, setAnnotationsByHash]
+    [
+      sessions,
+      handleInterruptSession,
+      setAnnotationsByHash,
+      deleteQueuedSession,
+      setSessions,
+    ]
   );
 
   // 重新解读：沿用旧会话的来源片段与首条请求另起新会话并立即开始流式；
@@ -2055,7 +2173,7 @@ export function usePersistence({
           s.id === newSessionId ? { ...s, summary: session.summary } : s
         );
       });
-      void deleteSessionOnDisk(sessionId);
+      void deleteQueuedSession(sessionId);
       setAnnotationsByHash((prev) => {
         const next: Record<string, Annotation[]> = {};
         for (const [hash, list] of Object.entries(prev)) {
@@ -2067,7 +2185,13 @@ export function usePersistence({
       });
       return newSessionId;
     },
-    [sessions, startSessionFromStashes, setAnnotationsByHash]
+    [
+      sessions,
+      startSessionFromStashes,
+      setAnnotationsByHash,
+      deleteQueuedSession,
+      setSessions,
+    ]
   );
 
   // When a tab is closed, abort its streaming sessions but KEEP the sessions
@@ -2148,6 +2272,7 @@ export function usePersistence({
       setAnnotations,
       stashes,
       sessions,
+      setSessions,
       visibleTabStashes,
       visibleTabSessions,
       focusedTabStashes,

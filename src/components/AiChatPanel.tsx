@@ -1265,7 +1265,7 @@ function FollowUpInput({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       // 生成期间忽略 Enter，避免用户准备下一条问题或误按时中断长答案。
       // 需要停止可点击右侧“中止”按钮。

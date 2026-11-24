@@ -470,6 +470,7 @@ function App() {
     handleReinterpretSession: persistenceHandleReinterpretSession,
     abortSessionsForTab: persistenceAbortSessionsForTab,
     setStashes: persistenceSetStashes,
+    findSessionIdByAnnotationId: persistenceFindSessionIdByAnnotationId,
   } = persistence;
 
   // 回填休眠决策上下文：有进行中流式会话的 tab 不做休眠候选（§7.3），
@@ -1330,13 +1331,15 @@ function App() {
     (tabId: string, id: string) => {
       layout.openRightPanel();
       tabs.setTabHighlightedAnnotationId(tabId, id);
+      const sessionId = persistenceFindSessionIdByAnnotationId(id);
+      if (sessionId) requestExpandSession(sessionId);
       if (highlightTimeoutRef.current)
         clearTimeout(highlightTimeoutRef.current);
       highlightTimeoutRef.current = setTimeout(() => {
         tabs.setTabHighlightedAnnotationId(tabId, null);
       }, 2000);
     },
-    [layout, tabs]
+    [layout, tabs, persistenceFindSessionIdByAnnotationId, requestExpandSession]
   );
 
   const handlePdfLoaded = useCallback((filePath: string, bytes: Uint8Array) => {
@@ -1611,9 +1614,6 @@ function App() {
                     sessions={persistence.visibleTabSessions}
                     allSessions={persistence.sessions}
                     openTabFileHashes={openTabFileHashes}
-                    expandedSessionId={persistence.findSessionIdByAnnotationId(
-                      tabs.activeTab?.highlightedAnnotationId ?? ""
-                    )}
                     onRemoveStash={persistence.handleRemoveStash}
                     onUpdateStash={persistence.handleUpdateStash}
                     onClearStashes={persistence.handleClearStashes}
@@ -1743,9 +1743,6 @@ function App() {
                   sessions={persistence.visibleTabSessions}
                   allSessions={persistence.sessions}
                   openTabFileHashes={openTabFileHashes}
-                  expandedSessionId={persistence.findSessionIdByAnnotationId(
-                    tabs.activeTab?.highlightedAnnotationId ?? ""
-                  )}
                   onRemoveStash={persistence.handleRemoveStash}
                   onUpdateStash={persistence.handleUpdateStash}
                   onClearStashes={persistence.handleClearStashes}

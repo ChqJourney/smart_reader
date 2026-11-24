@@ -137,24 +137,32 @@ function logHibernations(toHibernate: readonly PdfTab[], reason: string) {
 }
 
 export function useTabs(options?: UseTabsOptions): UseTabsReturn {
-  const [tabs, setTabs] = useState<PdfTab[]>([]);
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+  const [tabs, setTabsState] = useState<PdfTab[]>([]);
+  const [activeTabId, setActiveTabIdState] = useState<string | null>(null);
   // In-flight open requests by path. Prevents duplicate tabs when the same PDF
   // is opened concurrently (e.g. rapid double-clicks or multiple listeners).
   const pendingOpens = useRef<Map<string, Promise<PdfTab | null>>>(new Map());
+  const openCommitQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [openingPaths, setOpeningPaths] = useState<string[]>([]);
 
-  // tabs 的最新镜像：activateTab / gotoTabPage 等长驻回调（deps 不含 tabs）
-  // 做休眠决策时从这里读取，避免闭包捕获过期状态。事件处理器总在 effect
-  // 刷新之后执行，镜像足够新；同批次刚新增的 tab 受 5 分钟窗口保护，不影响决策。
+  // 所有 Tab 写入都经 helper 同步镜像，hash 后的同步 commit 才能在同 tick
+  // 读到激活、关闭、状态上报等其他操作刚刚写入的最新集合。
   const tabsRef = useRef(tabs);
+  const updateTabs = useCallback((value: React.SetStateAction<PdfTab[]>) => {
+    const next = typeof value === "function" ? value(tabsRef.current) : value;
+    if (next === tabsRef.current) return;
+    tabsRef.current = next;
+    setTabsState(next);
+  }, []);
   useEffect(() => {
     tabsRef.current = tabs;
   }, [tabs]);
 
-  // activeTabId 的最新镜像：wakeTab / gotoTabPage 等长驻回调（deps 不含
-  // activeTabId）做休眠决策时需要保护当前真实激活的 tab。
   const activeTabIdRef = useRef(activeTabId);
+  const updateActiveTabId = useCallback((tabId: string | null) => {
+    activeTabIdRef.current = tabId;
+    setActiveTabIdState(tabId);
+  }, []);
   useEffect(() => {
     activeTabIdRef.current = activeTabId;
   }, [activeTabId]);
@@ -177,34 +185,76 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) || null;
 
-  const activateTab = useCallback((tabId: string | null) => {
-    setActiveTabId(tabId);
-    if (tabId) {
+  const activateTab = useCallback(
+    (tabId: string | null) => {
+      const prevActiveId = activeTabIdRef.current;
+      updateActiveTabId(tabId);
+      if (tabId) {
+        const now = Date.now();
+        // 唤醒休眠 tab：hibernated 复位与 pendingGotoPage 必须在同一次
+        // setTabs 里完成，保证挂载时 initialState 已就绪。
+        const { toHibernate } = planWake(
+          tabsRef.current,
+          tabId,
+          "active",
+          getHibernationCtx(),
+          prevActiveId,
+          now
+        );
+        logHibernations(toHibernate, "budget");
+        const hibernateIds = new Set(toHibernate.map((t) => t.id));
+        // 目标已是当前 active 且未休眠时跳过 pendingGotoPage 重写：重写会用
+        // 旧 pageNum 覆盖在飞的 gotoTabPage 跳转（useTabRestore 收到同页
+        // pending 会再次跳回），仅刷新 lastActivatedAt。
+        // Always set pendingGotoPage when switching to a tab so the viewer knows
+        // it should restore position. If no page has been saved yet, default to 1.
+        updateTabs((prev) =>
+          prev.map((tab) => {
+            if (tab.id === tabId) {
+              if (tabId === prevActiveId && !tab.hibernated) {
+                return { ...tab, lastActivatedAt: now };
+              }
+              return {
+                ...tab,
+                pendingGotoPage: tab.pageNum ?? 1,
+                pendingGotoPdfY: undefined,
+                hibernated: false,
+                lastActivatedAt: now,
+              };
+            }
+            if (hibernateIds.has(tab.id)) {
+              // 休眠时清空残留选区（§7.5）
+              return { ...tab, hibernated: true, selection: null };
+            }
+            return tab;
+          })
+        );
+      }
+    },
+    [updateActiveTabId, updateTabs]
+  );
+
+  const wakeTab = useCallback(
+    (tabId: string) => {
       const now = Date.now();
-      // 唤醒休眠 tab：hibernated 复位与 pendingGotoPage 必须在同一次
-      // setTabs 里完成，保证挂载时 initialState 已就绪。
       const { toHibernate } = planWake(
         tabsRef.current,
         tabId,
-        "active",
+        "secondary",
         getHibernationCtx(),
         activeTabIdRef.current,
         now
       );
+      if (toHibernate.length === 0) {
+        // 目标未休眠则无需任何状态变更；已休眠但无候选时只需复位自身。
+        const target = tabsRef.current.find((t) => t.id === tabId);
+        if (!target?.hibernated) return;
+      }
       logHibernations(toHibernate, "budget");
       const hibernateIds = new Set(toHibernate.map((t) => t.id));
-      // 目标已是当前 active 且未休眠时跳过 pendingGotoPage 重写：重写会用
-      // 旧 pageNum 覆盖在飞的 gotoTabPage 跳转（useTabRestore 收到同页
-      // pending 会再次跳回），仅刷新 lastActivatedAt。
-      const prevActiveId = activeTabIdRef.current;
-      // Always set pendingGotoPage when switching to a tab so the viewer knows
-      // it should restore position. If no page has been saved yet, default to 1.
-      setTabs((prev) =>
+      updateTabs((prev) =>
         prev.map((tab) => {
           if (tab.id === tabId) {
-            if (tabId === prevActiveId && !tab.hibernated) {
-              return { ...tab, lastActivatedAt: now };
-            }
             return {
               ...tab,
               pendingGotoPage: tab.pageNum ?? 1,
@@ -214,50 +264,14 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
             };
           }
           if (hibernateIds.has(tab.id)) {
-            // 休眠时清空残留选区（§7.5）
             return { ...tab, hibernated: true, selection: null };
           }
           return tab;
         })
       );
-    }
-  }, []);
-
-  const wakeTab = useCallback((tabId: string) => {
-    const now = Date.now();
-    const { toHibernate } = planWake(
-      tabsRef.current,
-      tabId,
-      "secondary",
-      getHibernationCtx(),
-      activeTabIdRef.current,
-      now
-    );
-    if (toHibernate.length === 0) {
-      // 目标未休眠则无需任何状态变更；已休眠但无候选时只需复位自身。
-      const target = tabsRef.current.find((t) => t.id === tabId);
-      if (!target?.hibernated) return;
-    }
-    logHibernations(toHibernate, "budget");
-    const hibernateIds = new Set(toHibernate.map((t) => t.id));
-    setTabs((prev) =>
-      prev.map((tab) => {
-        if (tab.id === tabId) {
-          return {
-            ...tab,
-            pendingGotoPage: tab.pageNum ?? 1,
-            pendingGotoPdfY: undefined,
-            hibernated: false,
-            lastActivatedAt: now,
-          };
-        }
-        if (hibernateIds.has(tab.id)) {
-          return { ...tab, hibernated: true, selection: null };
-        }
-        return tab;
-      })
-    );
-  }, []);
+    },
+    [updateTabs]
+  );
 
   const addTab = useCallback(
     async (path: string, initialPage?: number): Promise<PdfTab | null> => {
@@ -268,91 +282,94 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
 
       const promise = (async (): Promise<PdfTab | null> => {
         try {
-          if (tabs.length >= HARD_TAB_LIMIT) {
-            // 纯防御性硬上限，正常使用中预算调度会先触发休眠，到不了这里。
+          // 先按路径去重（无 I/O）：已打开的文件直接激活，避免重复全量读取。
+          const byPath = tabsRef.current.find((tab) => tab.filePath === path);
+          if (byPath) {
+            activateTab(byPath.id);
+            return byPath;
+          }
+          if (tabsRef.current.length >= HARD_TAB_LIMIT) {
             logError(
               `Tab hard limit (${HARD_TAB_LIMIT}) reached, refusing to open: ${path}`
             );
             return null;
           }
 
-          // 先按路径去重（无 I/O）：已打开的文件直接激活，避免重复全量
-          // 读取——慢网盘下这次读取是最大的等待来源。
-          const byPath = tabs.find((tab) => tab.filePath === path);
-          if (byPath) {
-            activateTab(byPath.id);
-            return byPath;
-          }
-
-          // Authorize the path before reading it. The backend maintains a whitelist
-          // of paths selected by the user to prevent arbitrary file access.
           await authorizePdfPath(path);
-
-          // 单遍读取：read_pdf_bytes 在后端读字节的同时算好 SHA-256 并预热
-          // hash 缓存，随后的 getPdfHash 只做 metadata 校验即命中——局域网
-          // 文件整条打开链路从两遍网络传输降为一遍。字节顺手写入 App 级
-          // 缓存，viewer 挂载后不再二次读盘。
           const bytes = await readPdfBytes(path);
           cachePdfBytesRef.current?.(path, bytes);
-
-          // 文件大小经 fs metadata 取得，供预算确定性记账。
           const [fileHash, fileSize] = await Promise.all([
             getPdfHash(path),
             getPdfFileSize(path),
           ]);
-          // 同内容不同路径的文件按 hash 去重（路径去重已在上面完成）。
-          const existing = tabs.find((tab) => tab.fileHash === fileHash);
-          if (existing) {
-            activateTab(existing.id);
-            return existing;
+
+          // I/O 可并行，hash 后的检查与插入必须串行；临界区内不再 await。
+          const previousCommit = openCommitQueueRef.current;
+          let releaseCommit!: () => void;
+          openCommitQueueRef.current = new Promise<void>((resolve) => {
+            releaseCommit = resolve;
+          });
+          await previousCommit;
+          let committed: PdfTab | null = null;
+          try {
+            const latest = tabsRef.current;
+            const existing = latest.find(
+              (tab) => tab.filePath === path || tab.fileHash === fileHash
+            );
+            if (existing) {
+              activateTab(existing.id);
+              committed = existing;
+            } else if (latest.length >= HARD_TAB_LIMIT) {
+              logError(
+                `Tab hard limit (${HARD_TAB_LIMIT}) reached, refusing to open: ${path}`
+              );
+            } else {
+              const now = Date.now();
+              const ctx = getHibernationCtx();
+              const candidates = selectHibernateCandidates(
+                latest,
+                {
+                  activeTabId: activeTabIdRef.current,
+                  secondaryTabId: ctx.secondaryTabId,
+                  streamingTabIds: ctx.streamingTabIds,
+                  now,
+                },
+                { filePath: path, fileSize }
+              );
+              const toHibernate = latest.filter((t) =>
+                candidates.includes(t.id)
+              );
+              logHibernations(toHibernate, "budget");
+              const hibernateIds = new Set(candidates);
+              const newTab: PdfTab = {
+                id: crypto.randomUUID(),
+                filePath: path,
+                fileName: getBasename(path),
+                fileHash,
+                fileSize,
+                lastActivatedAt: now,
+                ...(initialPage && initialPage > 0
+                  ? { pageNum: Math.floor(initialPage) }
+                  : {}),
+              };
+              updateTabs((prev) => [
+                ...prev.map((tab) =>
+                  hibernateIds.has(tab.id)
+                    ? { ...tab, hibernated: true, selection: null }
+                    : tab
+                ),
+                newTab,
+              ]);
+              activateTab(newTab.id);
+              info(`pdfOpened: tabId=${newTab.id} fileHash=${newTab.fileHash}`);
+              committed = newTab;
+            }
+          } finally {
+            releaseCommit();
           }
-
-          const now = Date.now();
-          // 唯一的休眠触发点：打开前预测，超限则休眠最久未用的隐藏 tab。
-          const ctx = getHibernationCtx();
-          const candidates = selectHibernateCandidates(
-            tabs,
-            {
-              activeTabId,
-              secondaryTabId: ctx.secondaryTabId,
-              streamingTabIds: ctx.streamingTabIds,
-              now,
-            },
-            { filePath: path, fileSize }
-          );
-          const toHibernate = tabs.filter((t) => candidates.includes(t.id));
-          logHibernations(toHibernate, "budget");
-          const hibernateIds = new Set(candidates);
-
-          const newTab: PdfTab = {
-            id: crypto.randomUUID(),
-            filePath: path,
-            fileName: getBasename(path),
-            fileHash,
-            fileSize,
-            lastActivatedAt: now,
-            // 从最近文件入口打开时带上上次读到的页码，activateTab 会把它
-            // 转成 pendingGotoPage，viewer 挂载后自动恢复到该页。
-            ...(initialPage && initialPage > 0
-              ? { pageNum: Math.floor(initialPage) }
-              : {}),
-          };
-
-          setTabs((prev) => [
-            ...prev.map((tab) =>
-              hibernateIds.has(tab.id)
-                ? { ...tab, hibernated: true, selection: null }
-                : tab
-            ),
-            newTab,
-          ]);
-          activateTab(newTab.id);
-          info(`pdfOpened: tabId=${newTab.id} fileHash=${newTab.fileHash}`);
-          return newTab;
+          return committed;
         } catch (error) {
           logError(`Failed to open PDF: ${error}`);
-          // 失败必须可见：慢网盘读取中断时静默返回 null 会让用户以为应用
-          // 卡死。dialog 自身失败（如无窗口环境）不影响主流程。
           void showMessage(
             i18n.t("common.notice"),
             i18n.t("tab.openFailed", { name: getBasename(path) })
@@ -370,7 +387,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
         setOpeningPaths((prev) => prev.filter((p) => p !== path));
       }
     },
-    [tabs, activeTabId, activateTab]
+    [activateTab, updateTabs]
   );
 
   const handleOpenPdf = useCallback(async (): Promise<PdfTab | null> => {
@@ -432,7 +449,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
         }
         // Set pendingGotoPage atomically with the tab removal so the next
         // active tab restores its previous page when its viewer mounts.
-        setTabs(
+        updateTabs(
           nextTabs.map((tab) => {
             if (tab.id === nextActive?.id) {
               return {
@@ -448,15 +465,15 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
             return tab;
           })
         );
-        setActiveTabId(nextActive?.id ?? null);
+        updateActiveTabId(nextActive?.id ?? null);
       } else {
-        setTabs(nextTabs);
+        updateTabs(nextTabs);
       }
 
       info(`pdfClosed: tabId=${tabId} remainingTabs=${nextTabs.length}`);
       onClose?.();
     },
-    [tabs, activeTabId]
+    [tabs, activeTabId, updateActiveTabId, updateTabs]
   );
 
   const handleTabClick = useCallback(
@@ -469,9 +486,9 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
 
   const handleViewerStateChange = useCallback(
     (state: PdfViewerState, tabId?: string) => {
-      const targetId = tabId ?? activeTabId;
+      const targetId = tabId ?? activeTabIdRef.current;
       if (!targetId) return;
-      setTabs((prev) =>
+      updateTabs((prev) =>
         prev.map((tab) =>
           tab.id === targetId
             ? {
@@ -486,7 +503,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
         )
       );
     },
-    [activeTabId]
+    [updateTabs]
   );
 
   const gotoTabPage = useCallback(
@@ -503,7 +520,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
       // activate=false 用于分屏下跳转到副屏 tab：只跳页不激活，
       // 否则副屏会被提升为 active，导致两个面板渲染同一 PDF（塌缩）。
       if (activate) {
-        setActiveTabId(tabId);
+        updateActiveTabId(tabId);
       }
       const now = Date.now();
       // 目标可能处于休眠（如从解读记录跳转）：唤醒后才能看到内容。
@@ -517,7 +534,7 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
       );
       logHibernations(toHibernate, "budget");
       const hibernateIds = new Set(toHibernate.map((t) => t.id));
-      setTabs((prev) =>
+      updateTabs((prev) =>
         prev.map((tab) => {
           if (tab.id === tabId) {
             // Clear scrollTop: this is intentional navigation to a page, and a
@@ -541,27 +558,32 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
         })
       );
     },
-    []
+    [updateActiveTabId, updateTabs]
   );
 
   const setTabSelection = useCallback(
     (tabId: string, selection: SelectionState | null) => {
-      setTabs((prev) =>
+      updateTabs((prev) =>
         prev.map((tab) => (tab.id === tabId ? { ...tab, selection } : tab))
       );
     },
-    []
+    [updateTabs]
   );
 
-  const clearTabSelection = useCallback((tabId: string) => {
-    setTabs((prev) =>
-      prev.map((tab) => (tab.id === tabId ? { ...tab, selection: null } : tab))
-    );
-  }, []);
+  const clearTabSelection = useCallback(
+    (tabId: string) => {
+      updateTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === tabId ? { ...tab, selection: null } : tab
+        )
+      );
+    },
+    [updateTabs]
+  );
 
   const setTabHighlightedAnnotationId = useCallback(
     (tabId: string, annotationId: string | null) => {
-      setTabs((prev) =>
+      updateTabs((prev) =>
         prev.map((tab) =>
           tab.id === tabId
             ? { ...tab, highlightedAnnotationId: annotationId }
@@ -569,18 +591,21 @@ export function useTabs(options?: UseTabsOptions): UseTabsReturn {
         )
       );
     },
-    []
+    [updateTabs]
   );
 
-  const clearTabPendingGotoPage = useCallback((tabId: string) => {
-    setTabs((prev) =>
-      prev.map((tab) =>
-        tab.id === tabId
-          ? { ...tab, pendingGotoPage: undefined, pendingGotoPdfY: undefined }
-          : tab
-      )
-    );
-  }, []);
+  const clearTabPendingGotoPage = useCallback(
+    (tabId: string) => {
+      updateTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === tabId
+            ? { ...tab, pendingGotoPage: undefined, pendingGotoPdfY: undefined }
+            : tab
+        )
+      );
+    },
+    [updateTabs]
+  );
 
   // 返回对象用 useMemo 固定引用：否则 App 每次渲染都拿到新对象，
   // 依赖它的 useCallback 会跟着重建，一路击穿 PdfPage 的 React.memo。

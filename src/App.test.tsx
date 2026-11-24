@@ -86,6 +86,7 @@ vi.mock("./components/PdfViewer", () => ({
         initialState,
         annotations,
         onAnnotationDelete,
+        onExplainClick,
       }: {
         tabId?: string;
         filePath?: string;
@@ -104,6 +105,7 @@ vi.mock("./components/PdfViewer", () => ({
           interpretedGroupSize?: number;
         }[];
         onAnnotationDelete?: (id: string) => void;
+        onExplainClick?: (tabId: string, id: string) => void;
       },
       ref: React.Ref<HTMLDivElement>
     ) => {
@@ -147,7 +149,11 @@ vi.mock("./components/PdfViewer", () => ({
                         : "已解读暂存"
                   }
                   data-testid={`annotation-${a.type}-${a.id ?? a.stashId}`}
-                  onClick={() => {}}
+                  onClick={() => {
+                    if (a.id && tabId && onExplainClick) {
+                      onExplainClick(tabId, a.id);
+                    }
+                  }}
                 >
                   {a.type}
                 </button>
@@ -1086,6 +1092,21 @@ describe("App", () => {
     ).toHaveLength(1);
   });
 
+  it("deduplicates same-content PDFs buffered together during a cold start", async () => {
+    setupMockInvoke({
+      take_pending_open_pdfs: () => ["/one/copy.pdf", "/two/copy.pdf"],
+      get_pdf_hash: () => "same-hash",
+    });
+
+    renderApp();
+
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("button", { name: /关闭 copy.pdf/i })
+      ).toHaveLength(1);
+    });
+  });
+
   it("shows a drop-zone overlay while dragging a tab over the main area", async () => {
     (open as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce("/test/file-a.pdf")
@@ -1279,6 +1300,55 @@ describe("App", () => {
     });
     const activeTabEl = document.querySelector(".tab-item.active");
     expect(activeTabEl?.textContent).toContain("file-b.pdf");
+  });
+
+  it("expands and re-expands a session from a secondary-viewer annotation", async () => {
+    (open as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce("/test/file-a.pdf")
+      .mockResolvedValueOnce("/test/file-b.pdf");
+
+    renderApp();
+    await openPdf("/test/file-a.pdf");
+    fireEvent.click(screen.getByTestId("open-pdf-btn"));
+    await waitFor(() => {
+      expect(screen.getByText("file-b.pdf")).toBeInTheDocument();
+    });
+    triggerPdfSelection();
+    fireEvent.click(screen.getByRole("button", { name: "解读" }));
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /返回解读记录/i })
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole("button", { name: /返回解读记录/i }));
+
+    fireEvent.click(screen.getByText("file-a.pdf"));
+    fireEvent.click(screen.getByLabelText("并排对照"));
+    await waitFor(() => {
+      expect(screen.getAllByTestId("pdf-viewer")).toHaveLength(2);
+    });
+
+    const secondaryViewer = screen.getAllByTestId("pdf-viewer")[1];
+    expect(secondaryViewer.getAttribute("data-filepath")).toBe(
+      "/test/file-b.pdf"
+    );
+    const marker = secondaryViewer.querySelector(
+      "[data-testid^='annotation-explain-']"
+    ) as HTMLButtonElement;
+    fireEvent.click(marker);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /返回解读记录/i })
+      ).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /返回解读记录/i }));
+    fireEvent.click(marker);
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /返回解读记录/i })
+      ).toBeInTheDocument();
+    });
   });
 
   it("shows a notice when a recent file cannot be opened side by side", async () => {

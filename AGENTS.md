@@ -568,7 +568,7 @@ runSessionStream（usePersistence.ts）
 - **PDF 不上传云端**：文件仅在本地读取和渲染。
 - **仅主动选择的内容发送给 LLM**：翻译 / 解读只发送用户选中的文本片段，不会自动上传整篇文档。
 - **API Key 存储**：API Key 通过 Rust `keyring` crate 按平台分条目存入系统钥匙串（`llm_api_key_{platform_id}`，旧单条目自动迁移，迁移确认新条目写入成功后才删旧条目）；`settings.json` 中只保留空占位，且 `load_settings` 返回前强制 `apiKey=""`，Key 不回传 webview（LLM 请求走后端代理）。钥匙串不可用时 `save_settings` 会明确拒绝保存并返回错误，不回退明文存储。
-- **Base URL 强制 https**：后端发 LLM 请求前校验 baseUrl scheme，明文 `http://` 仅放行 localhost / 127.0.0.1 / ::1（本地网关），其余拒绝并以 `insecureBaseUrl` 错误提示（见 §6.3 与 `llmError.ts`）。
+- **Base URL 强制 https**：后端发 LLM 请求前校验 baseUrl scheme，明文 `http://` 仅放行 localhost / 127.0.0.1 / ::1（本地网关），其余拒绝并以 `insecureBaseUrl` 错误提示（见 §6.3 与 `llmError.ts`）。空 `apiKey` 沿用钥匙串 Key 时，目标只能是平台官方端点或当前已保存配置的同源地址；切换到新的自定义源必须重新输入 Key，防止被污染的 webview 改 Base URL 后经后端代理外发已有 Key。
 - **不要在前端日志中打印 API Key 或完整文件内容**；`services/logs.ts` 的 `redactSensitiveInfo` 会统一脱敏 `sk-` / `Bearer` / 主目录路径。
 - Tauri CSP 已配置（`tauri.conf.json`：`default-src 'self'`；`connect-src 'self'` + localhost，不含 `https:`——webview 无任何外联需求，引入新的外部资源时需同步收紧）。webview 视为半信任面：导出命令限扩展名白名单 + 拒绝 AppData 内部路径，PDF 授权要求文件真实存在且按 canonicalize 路径比对。联网搜索/抓取请求同样只经后端 `web_tools.rs` 代理发出（DeepSeek Key 不进 webview），webview CSP 无需放开。
 

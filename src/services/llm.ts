@@ -222,7 +222,7 @@ export interface TestConnectionParams {
  *   settings (used by SetupWizard after saving).
  * - When `params` is provided, the backend tests the given platform/baseUrl/model
  *   without persisting anything. An empty `apiKey` falls back to the keyring key
- *   for that platform.
+ *   only for an official endpoint or the same origin as the saved configuration.
  *
  * Returns success or a structured error.
  */

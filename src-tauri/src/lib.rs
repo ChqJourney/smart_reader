@@ -1087,6 +1087,43 @@ impl Default for AppSettings {
     }
 }
 
+fn same_url_origin(left: &reqwest::Url, right: &reqwest::Url) -> bool {
+    left.scheme() == right.scheme()
+        && left.host_str() == right.host_str()
+        && left.port_or_known_default() == right.port_or_known_default()
+}
+
+/// 已保存的 Key 只能发往平台官方端点，或当前配置已经信任的同源自定义网关。
+/// 否则被污染的 webview 可以先改 Base URL，再借后端代理把 Key 发到任意主机。
+fn stored_key_base_url_allowed(platform_id: &str, base_url: &str, current: &AppSettings) -> bool {
+    let Ok(candidate) = reqwest::Url::parse(base_url) else {
+        return false;
+    };
+    if candidate.host_str().is_none() {
+        return false;
+    }
+    let official_endpoint = candidate.scheme() == "https"
+        && matches!(
+            (platform_id, candidate.host_str().unwrap_or_default()),
+            ("deepseek", "api.deepseek.com")
+                | ("kimi", "api.moonshot.cn")
+                | ("xiaomimimo", "api.xiaomimimo.com")
+                | ("bailian", "dashscope.aliyuncs.com")
+                | ("glm", "open.bigmodel.cn")
+                | ("volcengine", "ark.cn-beijing.volces.com")
+                | ("openrouter", "openrouter.ai")
+                | ("openai", "api.openai.com")
+        );
+    if official_endpoint {
+        return true;
+    }
+    if current.platform_id != platform_id {
+        return false;
+    }
+    reqwest::Url::parse(&current.llm.base_url)
+        .is_ok_and(|current_url| same_url_origin(&candidate, &current_url))
+}
+
 fn parse_log_level(level: &str) -> Option<log::LevelFilter> {
     match level.to_lowercase().as_str() {
         "trace" => Some(log::LevelFilter::Trace),
@@ -1445,9 +1482,9 @@ fn load_settings_with_storage(
 /// Persist settings. Non-sensitive fields are written to disk with an empty
 /// apiKey field. If the incoming `llm.api_key` is non-empty it is stored in
 /// secure storage; if it is empty the existing secure-storage entry is left
-/// untouched (so the frontend never needs to hold the plaintext key). If
-/// secure storage fails, the entire save is rejected so the key is never
-/// silently written to disk.
+/// untouched (so the frontend never needs to hold the plaintext key). Reusing
+/// that key with a new, non-official URL origin is rejected. If secure storage
+/// fails, the entire save is rejected so the key is never silently written to disk.
 fn save_settings_with_storage(
     base_dir: &std::path::Path,
     mut settings: AppSettings,
@@ -1455,6 +1492,13 @@ fn save_settings_with_storage(
 ) -> Result<(), String> {
     if !settings.llm.api_key.is_empty() {
         storage.store(&settings.platform_id, &settings.llm.api_key)?;
+    } else {
+        let current = load_settings_from_disk(base_dir)?;
+        if !stored_key_base_url_allowed(&settings.platform_id, &settings.llm.base_url, &current)
+            && storage.retrieve(&settings.platform_id)?.is_some()
+        {
+            return Err("更换 Base URL 后需要重新输入 API Key".to_string());
+        }
     }
     settings.llm.api_key = String::new();
     save_settings_to_disk(base_dir, settings)
@@ -3025,6 +3069,51 @@ mod tests {
         );
         let from_disk = load_settings_from_disk(base.path()).unwrap();
         assert_eq!(from_disk.llm.api_key, "");
+    }
+
+    #[test]
+    fn save_settings_rejects_retargeting_existing_key_to_untrusted_origin() {
+        let base = tempfile::tempdir().unwrap();
+        let storage: Arc<dyn secure_storage::ApiKeyStorage> =
+            Arc::new(secure_storage::MemoryStorage::new());
+        save_settings_with_storage(base.path(), sample_settings(), storage.as_ref()).unwrap();
+
+        let mut attempted = sample_settings();
+        attempted.llm.api_key = String::new();
+        attempted.llm.base_url = "https://api.deepseek.com.attacker.example/v1".to_string();
+        let result = save_settings_with_storage(base.path(), attempted, storage.as_ref());
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("重新输入 API Key"));
+        let unchanged = load_settings_from_disk(base.path()).unwrap();
+        assert_eq!(unchanged.llm.base_url, "https://api.example.com/v1");
+        assert_eq!(
+            storage.retrieve("deepseek").unwrap(),
+            Some("sk-test".to_string())
+        );
+    }
+
+    #[test]
+    fn save_settings_allows_official_platform_switch_with_existing_key() {
+        let base = tempfile::tempdir().unwrap();
+        let storage: Arc<dyn secure_storage::ApiKeyStorage> =
+            Arc::new(secure_storage::MemoryStorage::new());
+        save_settings_with_storage(base.path(), sample_settings(), storage.as_ref()).unwrap();
+        storage.store("kimi", "sk-kimi").unwrap();
+
+        let mut switched = sample_settings();
+        switched.platform_id = "kimi".to_string();
+        switched.llm.base_url = "https://api.moonshot.cn/v1".to_string();
+        switched.llm.api_key = String::new();
+        save_settings_with_storage(base.path(), switched, storage.as_ref()).unwrap();
+
+        let saved = load_settings_from_disk(base.path()).unwrap();
+        assert_eq!(saved.platform_id, "kimi");
+        assert_eq!(saved.llm.base_url, "https://api.moonshot.cn/v1");
+        assert_eq!(
+            storage.retrieve("kimi").unwrap(),
+            Some("sk-kimi".to_string())
+        );
     }
 
     #[test]

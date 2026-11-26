@@ -1030,6 +1030,8 @@ pub struct TestConnectionParams {
 
 /// Test connection with current settings or the provided parameters.
 /// Sends a minimal request and reports success or a structured error.
+/// Falling back to a stored key is only allowed for an official endpoint or
+/// the same URL origin as the currently saved configuration.
 #[tauri::command]
 pub async fn test_connection(
     app: tauri::AppHandle,
@@ -1041,6 +1043,21 @@ pub async fn test_connection(
             let api_key = if let Some(key) = p.api_key.filter(|k| !k.is_empty()) {
                 Some(key)
             } else {
+                let base_dir = crate::paths::app_data_dir(&app)?;
+                let current = tauri::async_runtime::spawn_blocking(move || {
+                    crate::load_settings_from_disk(&base_dir)
+                })
+                .await
+                .map_err(|e| format!("Failed to load settings: {}", e))??;
+                if !crate::stored_key_base_url_allowed(&p.platform_id, &p.base_url, &current) {
+                    return Ok(serde_json::json!({
+                        "success": false,
+                        "model": p.model,
+                        "error": LlmError::Auth {
+                            detail: "更换 Base URL 后需重新输入 API Key".into(),
+                        },
+                    }));
+                }
                 state
                     .api_key_storage
                     .retrieve(&p.platform_id)
@@ -1168,6 +1185,40 @@ mod tests {
     fn validate_base_url_scheme_rejects_invalid_or_exotic() {
         assert!(validate_base_url_scheme("not-a-url").is_err());
         assert!(validate_base_url_scheme("ftp://example.com/v1").is_err());
+    }
+
+    #[test]
+    fn stored_key_base_url_policy_covers_test_connection_fallback() {
+        let current = crate::AppSettings {
+            platform_id: "custom".to_string(),
+            llm: crate::LlmConfig {
+                base_url: "https://gateway.example.com/v1".to_string(),
+                api_key: String::new(),
+                model: String::new(),
+            },
+            ..crate::AppSettings::default()
+        };
+
+        assert!(crate::stored_key_base_url_allowed(
+            "custom",
+            "https://gateway.example.com/another-path",
+            &current
+        ));
+        assert!(!crate::stored_key_base_url_allowed(
+            "custom",
+            "https://attacker.example/v1",
+            &current
+        ));
+        assert!(crate::stored_key_base_url_allowed(
+            "deepseek",
+            "https://api.deepseek.com/v1",
+            &current
+        ));
+        assert!(!crate::stored_key_base_url_allowed(
+            "deepseek",
+            "https://api.deepseek.com.attacker.example/v1",
+            &current
+        ));
     }
 
     #[test]

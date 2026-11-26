@@ -116,7 +116,8 @@
     "chooseTarget": "选择跳转位置",
     "targetPage": "第 {{page}} 页",
     "textUnavailable": "当前文档没有可用文本层，无法自动定位该标题；可使用视觉模型查看页面截图。",
-    "fileNotOpen": "引用所属 PDF 尚未打开，请先打开对应文件。"
+    "fileNotOpen": "引用所属 PDF 尚未打开，请先打开对应文件。",
+    "fileNotOpenNamed": "引用所属 PDF《{{name}}》尚未打开，请先打开对应文件后重试。"
   },
   "chat": {
     "aiAssistant": "AI 助手",

@@ -374,7 +374,12 @@ function SvgPreview({
                   <Icon name="close" size={14} />
                 </button>
               </div>
-              <div className="markdown-svg-dialog-stage">{graphic}</div>
+              <div
+                className="markdown-svg-dialog-stage"
+                onScroll={(event) => event.stopPropagation()}
+              >
+                {graphic}
+              </div>
             </div>
           </div>,
           document.body

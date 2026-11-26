@@ -230,6 +230,21 @@ describe("MarkdownRenderer", () => {
     ).toHaveLength(2);
   });
 
+  it("keeps expanded SVG scroll events out of the chat scroll container", () => {
+    const onScroll = vi.fn();
+    render(
+      <div onScroll={onScroll}>
+        <MarkdownRenderer content='<svg><circle r="4" /></svg>' />
+      </div>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "放大 SVG" }));
+    const stage = document.querySelector(".markdown-svg-dialog-stage")!;
+
+    fireEvent.scroll(stage);
+
+    expect(onScroll).not.toHaveBeenCalled();
+  });
+
   it("opens links in a new tab", () => {
     render(<MarkdownRenderer content="[链接](https://example.com)" />);
     const link = screen.getByRole("link", { name: "链接" });

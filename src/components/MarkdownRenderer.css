@@ -314,8 +314,11 @@
 }
 
 .markdown-svg-dialog-stage {
+  min-height: 0;
   padding: 24px;
   overflow: auto;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
 }
 
 .markdown-content .markdown-svg-dialog-stage svg,

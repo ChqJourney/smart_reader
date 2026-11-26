@@ -1238,10 +1238,20 @@ function App() {
   );
 
   const navigateToPdfTarget = useCallback(
-    async (fileHash: string, page: number, pdfY?: number) => {
+    async (
+      fileHash: string,
+      page: number,
+      pdfY?: number,
+      fileName?: string
+    ) => {
       const targetTab = tabs.tabs.find((tab) => tab.fileHash === fileHash);
       if (!targetTab) {
-        await showMessage(t("common.notice"), t("citations.fileNotOpen"));
+        await showMessage(
+          t("common.notice"),
+          fileName
+            ? t("citations.fileNotOpenNamed", { name: fileName })
+            : t("citations.fileNotOpen")
+        );
         return;
       }
       const activate = !(
@@ -1277,6 +1287,13 @@ function App() {
         await showMessage(t("common.notice"), t("citations.ambiguousFile"));
         return;
       }
+      const fileName =
+        navigation.fileName ??
+        session.sources.find((source) => source.source.fileHash === fileHash)
+          ?.source.fileName ??
+        (session.anchorFileHash === fileHash
+          ? session.anchorFileName
+          : undefined);
       let page = navigation.page;
       let pdfY = navigation.pdfY;
       if (!page && (navigation.printedPage || navigation.reference)) {
@@ -1296,13 +1313,17 @@ function App() {
           } else {
             await showMessage(
               t("common.notice"),
-              t(
-                resolution.status === "textUnavailable"
-                  ? "citations.textUnavailable"
-                  : navigation.printedPage
-                    ? "citations.pageLabelNotFound"
-                    : "citations.referenceNotFound"
-              )
+              resolution.status === "fileNotOpen" && fileName
+                ? t("citations.fileNotOpenNamed", { name: fileName })
+                : t(
+                    resolution.status === "fileNotOpen"
+                      ? "citations.fileNotOpen"
+                      : resolution.status === "textUnavailable"
+                        ? "citations.textUnavailable"
+                        : navigation.printedPage
+                          ? "citations.pageLabelNotFound"
+                          : "citations.referenceNotFound"
+                  )
             );
             return;
           }
@@ -1322,7 +1343,7 @@ function App() {
         }
       }
       if (!page) return;
-      await navigateToPdfTarget(fileHash, page, pdfY);
+      await navigateToPdfTarget(fileHash, page, pdfY, fileName);
     },
     [navigateToPdfTarget, t]
   );

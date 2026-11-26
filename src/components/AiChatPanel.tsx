@@ -172,7 +172,7 @@ export default function AiChatPanel({
   }, [activeSession?.messages, activeSession?.isStreaming, autoScroll]);
 
   const handleMessagesScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    if (programmaticScrollRef.current) return;
+    if (e.target !== e.currentTarget || programmaticScrollRef.current) return;
     const el = e.currentTarget;
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
     const nearBottom = distance < 32;

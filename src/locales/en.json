@@ -116,7 +116,8 @@
     "chooseTarget": "Choose a destination",
     "targetPage": "Page {{page}}",
     "textUnavailable": "This document has no usable text layer for automatic heading navigation. Use a vision model to inspect page screenshots instead.",
-    "fileNotOpen": "The cited PDF is not open. Open the corresponding file first."
+    "fileNotOpen": "The cited PDF is not open. Open the corresponding file first.",
+    "fileNotOpenNamed": "The cited PDF “{{name}}” is not open. Open the file and try again."
   },
   "chat": {
     "aiAssistant": "AI Assistant",

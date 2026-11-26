@@ -142,6 +142,24 @@ describe("PDF reference index", () => {
     expect(unavailable.status).toBe("textUnavailable");
   });
 
+  it("distinguishes an unopened PDF from a missing reference", async () => {
+    mocks.getOpenPdfMeta.mockReturnValue(undefined);
+
+    expect(
+      (
+        await resolvePdfReference("hash-closed", {
+          kind: "clause",
+          label: "Clause A.1",
+          normalizedId: "A.1",
+        })
+      ).status
+    ).toBe("fileNotOpen");
+    expect((await resolvePdfPageLabel("hash-closed", "II")).status).toBe(
+      "fileNotOpen"
+    );
+    expect(mocks.getDocument).not.toHaveBeenCalled();
+  });
+
   it("maps printed labels to physical pages and reports duplicate labels", async () => {
     pdf.getPageLabels.mockResolvedValue(["i", "ii", "1", "1", "2"]);
     const roman = await resolvePdfPageLabel("hash-1", "II");

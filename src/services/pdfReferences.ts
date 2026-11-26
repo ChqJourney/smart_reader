@@ -13,7 +13,7 @@ export interface PdfReferenceTarget extends PdfReference {
 export type PdfReferenceResolution =
   | { status: "found"; target: PdfReferenceTarget }
   | { status: "ambiguous"; candidates: PdfReferenceTarget[] }
-  | { status: "notFound" | "textUnavailable" };
+  | { status: "fileNotOpen" | "notFound" | "textUnavailable" };
 
 interface PdfReferenceIndex {
   references: PdfReferenceTarget[];
@@ -191,7 +191,7 @@ export async function resolvePdfReference(
   fileHash: string,
   reference: PdfReference
 ): Promise<PdfReferenceResolution> {
-  if (!getOpenPdfMeta(fileHash)) return { status: "notFound" };
+  if (!getOpenPdfMeta(fileHash)) return { status: "fileNotOpen" };
   const index = await loadReferenceIndex(fileHash);
   const matches = index.references.filter(
     (candidate) =>
@@ -241,7 +241,7 @@ export async function resolvePdfPageLabel(
   fileHash: string,
   printedPage: string
 ): Promise<PdfReferenceResolution> {
-  if (!getOpenPdfMeta(fileHash)) return { status: "notFound" };
+  if (!getOpenPdfMeta(fileHash)) return { status: "fileNotOpen" };
   const labels = await loadPageLabels(fileHash);
   const normalized = printedPage.trim().toLowerCase();
   const pages = (labels ?? [])

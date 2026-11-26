@@ -301,7 +301,7 @@
     "agentToolsHint": "Allow AI to automatically look up content in currently open PDFs during interpretation, to verify referenced clauses, tables, or definitions.",
     "enableAgentTools": "Enable Smart Document Lookup",
     "maxToolRounds": "Max Tool Call Rounds",
-    "maxToolRoundsHint": "0 means the default of 20. Maximum rounds for the AI to read PDF content.",
+    "maxToolRoundsHint": "Set 5–200 rounds (default: 20). Maximum rounds for the AI to read PDF content.",
     "webSearch": "Web Search",
     "webSearchHint": "Allow AI to search the web for up-to-date information and fetch web page content during interpretation. Provided by DeepSeek's Search/Fetch API, billed per call (~¥5/1k calls), using the DeepSeek platform's API key regardless of the chat platform.",
     "enableWebSearch": "Enable Web Search",

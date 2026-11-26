@@ -30,7 +30,7 @@ export interface AppSettings {
   platformId: PlatformId;
   /** Thinking mode preference */
   thinking: ThinkingMode;
-  /** Max tool call rounds (0 = use default 20) */
+  /** Max tool call rounds (UI range 5–200; legacy 0 uses runtime fallback) */
   maxToolRounds: number;
   /** Whether the agent can use PDF tools during interpretation */
   agentToolsEnabled: boolean;

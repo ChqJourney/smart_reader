@@ -94,6 +94,14 @@ interface SettingsModalProps {
 }
 
 const PAGE_LIST: SettingsPage[] = ["model", "feature", "system", "about"];
+const MIN_TOOL_ROUNDS = 5;
+const MAX_TOOL_ROUNDS = 200;
+
+function normalizeToolRounds(value: string): number {
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed)) return MIN_TOOL_ROUNDS;
+  return Math.max(MIN_TOOL_ROUNDS, Math.min(MAX_TOOL_ROUNDS, parsed));
+}
 
 function isNoPlatformUpdateError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
@@ -115,6 +123,9 @@ export default function SettingsModal({
 }: SettingsModalProps) {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
+  const [maxToolRoundsDraft, setMaxToolRoundsDraft] = useState(
+    String(initialSettings.maxToolRounds)
+  );
   const [activePromptTab, setActivePromptTab] =
     useState<PromptTab>("translate");
   const [activePage, setActivePage] = useState<SettingsPage>("model");
@@ -160,6 +171,7 @@ export default function SettingsModal({
 
   useEffect(() => {
     setSettings(initialSettings);
+    setMaxToolRoundsDraft(String(initialSettings.maxToolRounds));
     setActivePromptTab("translate");
     setActivePage("model");
     setShowDownloadConfirm(false);
@@ -401,8 +413,14 @@ export default function SettingsModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaveError(null);
+    const normalizedSettings = {
+      ...settings,
+      maxToolRounds: normalizeToolRounds(maxToolRoundsDraft),
+    };
+    setSettings(normalizedSettings);
+    setMaxToolRoundsDraft(String(normalizedSettings.maxToolRounds));
     try {
-      await onSave(settings);
+      await onSave(normalizedSettings);
     } catch (err) {
       // 原始错误（如钥匙串 OS 报错）只进日志，UI 显示友好中文。
       error(`[Settings] 保存设置失败: ${String(err)}`);
@@ -531,6 +549,7 @@ export default function SettingsModal({
 
   const resetAll = () => {
     setSettings(DEFAULT_SETTINGS);
+    setMaxToolRoundsDraft(String(DEFAULT_SETTINGS.maxToolRounds));
   };
 
   const currentPrompt = settings.systemPrompts[activePromptTab];
@@ -596,6 +615,7 @@ export default function SettingsModal({
           id="settings-form"
           className="settings-modal-body"
           onSubmit={handleSubmit}
+          noValidate
         >
           <div className="settings-modal-layout">
             <nav
@@ -965,18 +985,21 @@ export default function SettingsModal({
                         {t("settings.maxToolRounds")}
                         <input
                           type="number"
-                          min={0}
-                          max={20}
-                          value={settings.maxToolRounds}
+                          min={MIN_TOOL_ROUNDS}
+                          max={MAX_TOOL_ROUNDS}
+                          value={maxToolRoundsDraft}
                           onChange={(e) =>
+                            setMaxToolRoundsDraft(e.target.value)
+                          }
+                          onBlur={() => {
+                            const normalized =
+                              normalizeToolRounds(maxToolRoundsDraft);
+                            setMaxToolRoundsDraft(String(normalized));
                             setSettings((s) => ({
                               ...s,
-                              maxToolRounds: Math.max(
-                                0,
-                                Math.min(20, parseInt(e.target.value) || 0)
-                              ),
-                            }))
-                          }
+                              maxToolRounds: normalized,
+                            }));
+                          }}
                         />
                         <p className="settings-field-hint">
                           {t("settings.maxToolRoundsHint")}

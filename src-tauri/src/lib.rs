@@ -981,7 +981,7 @@ struct AppSettings {
     /// Thinking mode: "enabled" | "disabled" | "auto"
     #[serde(default = "default_thinking")]
     thinking: String,
-    /// Max tool call rounds (0 = use global default of 20)
+    /// Max tool call rounds (UI range 5–200; legacy 0 uses frontend runtime fallback)
     #[serde(default = "default_max_tool_rounds")]
     max_tool_rounds: u32,
     /// Whether the agent can use PDF tools during interpretation.

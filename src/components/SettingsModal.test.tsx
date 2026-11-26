@@ -546,6 +546,39 @@ describe("SettingsModal", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("limits max tool rounds to 5-200 and saves the normalized value", () => {
+    const onSave = vi.fn();
+    renderModal({
+      open: true,
+      initialSettings: defaultSettings,
+      onClose: vi.fn(),
+      onSave,
+    });
+
+    switchToFeaturePage();
+    const input = screen.getByLabelText(/^最大工具调用次数/);
+    expect(input).toHaveAttribute("min", "5");
+    expect(input).toHaveAttribute("max", "200");
+
+    fireEvent.change(input, { target: { value: "1" } });
+    fireEvent.change(input, { target: { value: "12" } });
+    expect(input).toHaveValue(12);
+
+    fireEvent.change(input, { target: { value: "201" } });
+    fireEvent.blur(input);
+    expect(input).toHaveValue(200);
+
+    fireEvent.change(input, { target: { value: "4" } });
+    fireEvent.blur(input);
+    expect(input).toHaveValue(5);
+
+    fireEvent.change(input, { target: { value: "201" } });
+    fireEvent.click(screen.getByText("保存"));
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ maxToolRounds: 200 })
+    );
+  });
+
   it("shows download confirm when toggling hover translate on without dictionary", () => {
     const onSave = vi.fn();
     renderModal({
